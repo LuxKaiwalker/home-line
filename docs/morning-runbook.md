@@ -1,5 +1,7 @@
 # 🌅 Morning runbook — Sat 14 Nov, 08:15–11:00
 
+> ⏸️ **2026-11-14 14:19 (user, D19):** WS9 position work (F21/F22) and WS10 (X8/X9) are now **optional add-ons**. Start no new sessions on them; merged work stays.
+
 > ⏰ **Goal:** by 10:00 every workstream has an agent session running on the right machine with a named reviewer; by 11:00 G0 is reported and the visual-odometry go/no-go is decided. Nothing below starts before 09:00 except setup checks.
 
 # 1. Machines and how sessions share data
