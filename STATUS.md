@@ -167,11 +167,18 @@ All numbers from today's fresh downloads (`data/raw/terrain/`, cache index `cach
   each levelled to MOLA-HRSC by its median; **70.8% of the 33.7 km disc valid**, NaN elsewhere: use
   MOLA-HRSC there). One item rejected by QA (P22_009505__P22_009571: median -55.3 m vs MOLA-HRSC).
   Details in `farfield.json`.
-- Downloads so far: 982 MB (DEM 722, HiRISE DTM windows 178, CTX 71, CRISM 9, MOLA 2).
+- Ortho for **WS8**: `ortho_lrgb_1m.tif` (Gale HiRISE LRGB COG, RGBA on the dem_1m grid);
+  registration check vs DEM hillshade in 3 boxes: shifts <= 2 px (1 m).
+- Basemap: `data/interim/terrain/tiles/basemap/{z}/{x}/{y}.png`, XYZ z13-z18 (10 m to 0.32 m/px on
+  Mars lon/lat, D4); z13-16 from the 1 m LRGB over the DEM window, z17-18 from 0.25 m over the focus
+  area. **2,760 tiles, 292 MB** (largest tile < 1 MB). `basemap.json` has per-zoom counts.
+  Source is the LRGB colour mosaic (100% focus coverage), not `ESP_019698_1750_RED` (84.6%).
+- Downloads total: **1,050 MB** (DEM 722, HiRISE DTMs 178, CTX 71, LRGB 47, CRISM 9, MOLA 2).
+- KATs: 27 pass (`tests/test_coverage.py`, `tests/test_coreg.py`); ruff clean; interim contracts OK.
 
 ### Doing
 
-- LRGB ortho (1 m over the DEM window for WS8, 0.25 m over the focus area) and basemap tiles.
+- Waiting for G0 sign-off (S) and decisions below.
 
 ### Next
 
@@ -183,6 +190,8 @@ All numbers from today's fresh downloads (`data/raw/terrain/`, cache index `cach
 - Pad-check reading (S/C): "assessed" = known data (pass, 100%) or state 0 only (fail, 58.77%)?
 - `pad_default`: keep 137.382, -4.806 or move to a stated centroid (numbers above)? User decides.
 - S3, S5 hand picks (S): positions not yet in `stations.yaml`.
+- Basemap size (C): 292 MB of PNG tiles is a lot for git/Pages. Options: drop z18 (1,406 tiles),
+  or switch to JPEG/WebP tiles (needs a brief/contract change; brief says PNG).
 - Provenance: WS6 `manifest.py` not on main; entries go to
   `data/interim/terrain/manifest_pending.json` via `pipeline/terrain/prov.py`; re-run when it lands.
 
