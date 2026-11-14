@@ -164,7 +164,7 @@ def test_traverse_plan_and_timeline(plane_world, tmp_path):
     validate(res.timeline, "timeline.schema.json")
     validate(res.route, "route.schema.json")
     tl = res.timeline
-    assert tl[0]["event"] == "depart" and tl[0]["o2_left_L"] == mi.o2_capacity_l
+    assert tl[0]["event"] == "depart" and tl[0]["o2_left_L"] == round(mi.o2_capacity_l, 2)
     ret = [e for e in tl if e["event"] == "return"][0]
     assert ret["t_min"] == pytest.approx(res.total_min, abs=0.01)
     # T_home on arrival equals the return field at the station (HUD consistency)

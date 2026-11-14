@@ -1,7 +1,8 @@
 formulas:
   level_slope_a: "a(M) = a_anchor * a_mult + alpha * (M - anchor.carried_kg)"
   a_anchor: "a_anchor = (anchor.vo2 - V0) / anchor.speed      # mL/kg/min per m/s"
-  alpha: "alpha = ist2.level_increment / (ist2.delta_mass_kg * anchor.speed)"
+  alpha: "alpha = ist2.level_increment / (span_kg * anchor.speed)"
+  ist2_span_kg: "span_kg = (g_frac[1] - g_frac[0]) * g_earth_ms2 * (system_kg + subject_kg) / crew.g_mars   # IST-2 weight span (ist2.weight_span) as carried mass at Mars g"
   uphill_k: "k = (m_b + M) * g * sin(theta) / (eta * m_b) * 60 / 20.1   # theta > 0"
   vo2_uphill: "VO2 = V0 + a(M) * v + k * v"
   vo2_downhill: "VO2 = V0 + a(M) * v * clamp(f(i) / f(0), 0.4, 3.0)    # i = tan(theta) < 0"
@@ -10,8 +11,12 @@ formulas:
   o2_litres: "O2 = integral(VO2 * m_b dt) / 1000"
 ist2:
   level_increment_ml_kg_min: 1.9  # lightest -> heaviest weight condition, 0% grade
-  delta_mass_kg: 60               # mass span of those conditions
-  verify_at_h0: true              # S reads the IST-2 table; correct delta_mass_kg
+  level_span: weight_span         # the 1.9 spans the same IST-2 weight conditions as the uphill check: a gravity change 0.12 -> 0.32 g on 121 + 80.7 kg, not extra mass
+  alpha_encoding:                 # decision 2026-11-14 15:40 (user for S, STATUS Decision log "WS2 Q (alpha encoding, review C-note 1)"): switch to the IST-2 weight-span encoding
+    span_mars_equiv_kg: 106.6     # derived, = (0.32 - 0.12) * 9.80665 * (121 + 80.7) / 3.71 = 395.6 N / 3.71; KAT recomputes (formulas.ist2_span_kg)
+    alpha: 0.01818                # derived, = 1.9 / (106.6 * 0.98) mL/kg/min per m/s per kg; KAT recomputes
+    replaces: "delta_mass_kg: 60 (alpha 0.03231), withdrawn 2026-11-14 15:40"
+    source: "Norcross et al. 2010, IST-2 (NTRS 20110003409); docs/review/2026-11-14-ist2-and-o2-margin.md C-note 1"
   uphill_check_ml_kg_min: {grade_20pct: 8.7, grade_30pct: 17.0}   # heaviest - lightest WEIGHT condition at a fixed grade (S review 2026-11-14), not level -> grade
   weight_span:                     # added by WS2 2026-11-14 per docs/review/2026-11-14-ist2-and-o2-margin.md (S, binding); source: Norcross et al. 2010, IST-2 (NTRS 20110003409)
     g_frac: [0.12, 0.32]           # lightest / heaviest suited-weight condition, fraction of Earth g (series 0.12-0.32 g)

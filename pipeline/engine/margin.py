@@ -48,9 +48,25 @@ class MarginInputs:
         return out
 
 
-def o2_capacity_l() -> float:
+_BUDGET_KEYS = {"primary_L": ("primary_design_eva_h", "primary_design_rate_btu_h"),
+                "secondary_L": ("secondary_eva_h", "secondary_design_rate_btu_h")}
+
+
+def o2_budget_l(which: str = "primary_L") -> float:
+    """crew.yaml o2_budget computed from config (decision 14 Nov 15:40, ICES-2026-127):
+    O2_L = hours * rate_btu_h / btu_per_kcal / kcal_per_L_O2 (RER 0.85, 5.0225 kcal/L).
+    Primary: 8 h x 1,200 BTU/h = 481.99 L; secondary: 1 h x 3,000 BTU/h = 150.62 L."""
     b = load("crew")["o2_budget"]
-    return float(b[b["margin_uses"]])
+    if b["conversion"] != "o2_margin.conversion":
+        raise ValueError("crew.o2_budget.conversion must point at o2_margin.conversion")
+    h_key, r_key = _BUDGET_KEYS[which]
+    c = load("crew")["o2_margin"]["conversion"]
+    return float(b[h_key]) * float(b[r_key]) / float(c["btu_per_kcal"]) / kcal_per_l_o2()
+
+
+def o2_capacity_l() -> float:
+    """O2 planned against (crew.o2_budget.margin_uses = primary_L), computed from config."""
+    return o2_budget_l(load("crew")["o2_budget"]["margin_uses"])
 
 
 def kcal_per_l_o2() -> float:

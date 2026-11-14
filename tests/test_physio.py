@@ -58,18 +58,42 @@ def test_anchor_nominal_exact():
     assert physio.vo2(p, a["speed_ms"], 0.0) == pytest.approx(a["vo2_ml_kg_min"], rel=1e-12)
 
 
+def test_alpha_weight_span_encoding_by_hand():
+    """Decision 14 Nov 15:40: alpha uses the IST-2 weight span (gravity change 0.12 -> 0.32 g on
+    121 + 80.7 kg), as carried mass at Mars g: 0.20 * 9.80665 * 201.7 / 3.71 = 106.63 kg.
+    alpha = 1.9 / (106.63 * 0.98) = 0.018182 (was 1.9 / (60 * 0.98) = 0.032313)."""
+    span = 0.20 * 9.80665 * (121 + 80.7) / 3.71
+    assert span == pytest.approx(106.6308, abs=1e-3)
+    assert physio.ist2_span_mars_kg() == pytest.approx(span, rel=1e-12)
+    alpha = 1.9 / (span * 0.98)
+    assert alpha == pytest.approx(0.0181821, abs=1e-6)
+    assert physio.alpha_level() == pytest.approx(alpha, rel=1e-12)
+    assert physio.params("nominal", suit_kg=104).alpha == pytest.approx(alpha, rel=1e-12)
+    # the documented derived values in variants.yaml match the computation
+    enc = VAR["ist2"]["alpha_encoding"]
+    assert enc["span_mars_equiv_kg"] == pytest.approx(span, abs=0.05)
+    assert enc["alpha"] == pytest.approx(alpha, abs=5e-6)
+    assert "delta_mass_kg" not in VAR["ist2"] and VAR["ist2"]["level_span"] == "weight_span"
+
+
 def test_alpha_and_a_formula():
-    """alpha = ist2.level_increment / (ist2.delta_mass_kg * anchor.speed); a(M) linear."""
-    ist2, a = VAR["ist2"], CREW["anchor"]
-    alpha = ist2["level_increment_ml_kg_min"] / (ist2["delta_mass_kg"] * a["speed_ms"])
+    """a(M) = a_anchor * a_mult + alpha * (M - anchor.carried_kg); alpha only scales the mass
+    term (a_mult multiplies a_anchor). Level VO2 at 0.98 m/s, nominal: 18.47 / 18.89 / 19.18
+    at 80 / 104 / 120 kg suit."""
+    a = CREW["anchor"]
+    alpha = physio.alpha_level()
     p = _p("nominal", 114.0)
-    assert p.alpha == pytest.approx(alpha)
     a_anchor = (a["vo2_ml_kg_min"] - 6.0) / a["speed_ms"]
     assert physio.a_of_m(p) == pytest.approx(a_anchor + alpha * (114.0 - a["carried_kg"]))
     # Conservative multiplies a_anchor by 1.1
     pc = _p("conservative", 114.0)
     a_anchor_c = (a["vo2_ml_kg_min"] - 7.0) / a["speed_ms"]
     assert physio.a_of_m(pc) == pytest.approx(1.1 * a_anchor_c + alpha * (114.0 - 120.0))
+    # level VO2 at the anchor speed, nominal suits 80 / 104 / 120 kg (+ 10 kg tools), by hand
+    for suit, want in ((80, 18.4654), (104, 18.8931), (120, 19.1782)):
+        hand = 6.0 + (a_anchor + alpha * (suit + 10 - 120)) * 0.98
+        assert hand == pytest.approx(want, abs=1e-4)
+        assert physio.vo2(physio.params("nominal", suit_kg=suit), 0.98, 0.0) == pytest.approx(hand)
 
 
 def test_carried_mass_is_suit_plus_tools():
@@ -264,14 +288,32 @@ def test_grade_table_impassable_beyond_nogo():
 
 
 def test_o2_budget_formula_recomputes():
-    """crew.yaml o2_budget: primary_L and secondary_L recompute from their formula (+-1 L)."""
+    """Decision 14 Nov 15:40: the O2 budget converts energy with ICES-2026-127 (MetRate
+    kcal/min = 4.039 VO2 + 1.157 VCO2, RER 0.85 -> 5.02245 kcal per L O2), not 20.1 J/mL.
+    Primary 8 h x 1,200 BTU/h = 481.99 L (was 504); secondary 1 h x 3,000 BTU/h = 150.62 L."""
+    from pipeline.engine import margin
+
     b = CREW["o2_budget"]
-    btu_w = 0.29307  # unit conversion BTU/h -> W, from the formula text in crew.yaml
-    assert str(btu_w) in b["formula"]
-    prim = b["primary_design_eva_h"] * b["primary_design_rate_btu_h"] * btu_w * 3600 / 20.1 / 1000
-    sec = b["secondary_eva_h"] * b["secondary_design_rate_btu_h"] * btu_w * 3600 / 20.1 / 1000
-    assert prim == pytest.approx(b["primary_L"], abs=1.0)
-    assert sec == pytest.approx(b["secondary_L"], abs=1.0)
+    assert b["conversion"] == "o2_margin.conversion" and "20.1" not in b["formula"]
+    kcal_per_l = 4.039 + 1.157 * 0.85
+    prim = 8 * 1200 / 3.96567 / kcal_per_l
+    sec = 1 * 3000 / 3.96567 / kcal_per_l
+    assert prim == pytest.approx(481.99, abs=0.01) and sec == pytest.approx(150.62, abs=0.01)
+    assert margin.o2_budget_l("primary_L") == pytest.approx(prim, rel=1e-12)
+    assert margin.o2_budget_l("secondary_L") == pytest.approx(sec, rel=1e-12)
+    assert margin.o2_capacity_l() == pytest.approx(prim, rel=1e-12)  # margin_uses: primary_L
+    # the rounded values documented in crew.yaml (read by the web scorecard) match
+    assert b["primary_L"] == round(prim) == 482 and b["secondary_L"] == round(sec) == 151
+    # the old conversion gave 504 L: 22 L less O2 to plan against now
+    old = 8 * 1200 * 0.29307 * 3600 / 20.1 / 1000
+    assert old == pytest.approx(504, abs=0.5) and old - prim == pytest.approx(22.0, abs=0.5)
+
+
+def test_uphill_k_keeps_20_1_j_per_ml():
+    """The physiology constant 20.1 J/mL (k, heat, haul power) is not the budget conversion
+    and is unchanged by the 15:40 decision (flagged for S in STATUS)."""
+    assert CREW["o2_energy_j_per_ml"] == 20.1
+    assert physio.params("nominal", suit_kg=104).j_per_ml == 20.1
 
 
 def test_level_to_grade_increment_not_validated():
@@ -292,12 +334,18 @@ G0 = VAR["ist2"]["g_earth_ms2"]
 
 
 def _span_by_hand(eta, grade_pct, v):
-    """(VO2 at 0.32 g - VO2 at 0.12 g) per kg subject mass, same grade and speed: only k
-    depends on g, so the difference is (m_b + M) dg sin(theta) / (eta m_b) * 60 / 20.1 * v."""
+    """(VO2 at 0.32 g - VO2 at 0.12 g) per kg subject mass, same grade and speed, vertical term:
+    (m_b + M) dg sin(theta) / (eta m_b) * 60 / 20.1 * v."""
     th = math.atan(grade_pct / 100)
     dg = (W["g_frac"][1] - W["g_frac"][0]) * G0
     m_b, m = W["subject_kg"], W["system_kg"]
     return (m_b + m) * dg * math.sin(th) / (eta * m_b) * 60 / 20.1 * v
+
+
+def _level_by_hand(v):
+    """Level term of the weight span: alpha * span_kg * v = 1.9 * v / 0.98 (alpha is defined on
+    the IST-2 weight span, decision 14 Nov 15:40); the same in every variant."""
+    return 1.9 / 0.98 * v
 
 
 def test_ist2_weight_span_config():
@@ -312,24 +360,36 @@ def test_ist2_weight_span_config():
 def test_ist2_weight_span_hand_calculation(variant):
     eta = VAR["variants"][variant]["eta"]
     span = physio.ist2_weight_span(variant)
+    assert span["level_term_band"] == pytest.approx([_level_by_hand(0.56), _level_by_hand(0.97)])
     for g in (20, 30):
         lo, hi = span[f"grade_{g}pct"]["band"]
-        assert lo == pytest.approx(_span_by_hand(eta, g, 0.56), rel=1e-9)
-        assert hi == pytest.approx(_span_by_hand(eta, g, 0.97), rel=1e-9)
+        assert lo == pytest.approx(_span_by_hand(eta, g, 0.56) + _level_by_hand(0.56), rel=1e-9)
+        assert hi == pytest.approx(_span_by_hand(eta, g, 0.97) + _level_by_hand(0.97), rel=1e-9)
+        klo, khi = span[f"grade_{g}pct"]["band_vertical_only"]
+        assert klo == pytest.approx(_span_by_hand(eta, g, 0.56), rel=1e-9)
+        assert khi == pytest.approx(_span_by_hand(eta, g, 0.97), rel=1e-9)
 
 
 def test_ist2_weight_span_nominal_contains_reported():
     """S review pass rule: IST-2's 8.7 (20 %) and 17.0 (30 %) inside the band from the speed
-    sweep 0.56-0.97 m/s. Nominal (eta 0.225): 7.14-12.37 and 10.47-18.13 -> both inside."""
+    sweep 0.56-0.97 m/s. Nominal (eta 0.225) with the level term: 8.23-14.25 and
+    11.55-20.01 -> both inside (vertical term alone: 7.14-12.37, 10.47-18.13, also inside)."""
     span = physio.ist2_weight_span("nominal")
     assert span["grade_20pct"]["inside"] and span["grade_30pct"]["inside"]
+    assert span["grade_20pct"]["band"] == pytest.approx([8.228, 14.253], abs=1e-3)
+    assert span["grade_30pct"]["band"] == pytest.approx([11.551, 20.008], abs=1e-3)
     assert span["grade_20pct"]["reported"] == 8.7 and span["grade_30pct"]["reported"] == 17.0
 
 
 def test_ist2_weight_span_by_variant_reported_honestly():
-    """Optimistic (eta 0.25) tops out at 16.31 at 30 %: 17.0 is outside (reported, not tuned).
-    Conservative (eta 0.20) contains both."""
-    assert physio.ist2_weight_span("optimistic")["grade_20pct"]["inside"]
-    assert not physio.ist2_weight_span("optimistic")["grade_30pct"]["inside"]
+    """With the level term (alpha on the weight span): optimistic (eta 0.25) 30 % band
+    10.50-18.20 now contains 17.0 (vertical only: 16.31, outside); conservative (eta 0.20)
+    20 % band 9.12-15.80 no longer contains 8.7 (vertical only: 8.04-13.92, inside). Reported,
+    not tuned."""
+    opt = physio.ist2_weight_span("optimistic")
+    assert opt["grade_20pct"]["inside"] and opt["grade_30pct"]["inside"]
+    assert not opt["grade_30pct"]["inside_vertical_only"]
     con = physio.ist2_weight_span("conservative")
-    assert con["grade_20pct"]["inside"] and con["grade_30pct"]["inside"]
+    assert not con["grade_20pct"]["inside"] and con["grade_30pct"]["inside"]
+    assert con["grade_20pct"]["inside_vertical_only"]
+    assert con["grade_20pct"]["band"][0] == pytest.approx(9.121, abs=1e-3)

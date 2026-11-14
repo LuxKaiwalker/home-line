@@ -12,11 +12,14 @@ CREW = load("crew")
 OM = CREW["o2_margin"]
 P = physio.params("nominal", suit_kg=104)
 RES = 30 * 1.35  # fixed reserve: 30 min at the effort cap = 40.5 L
+# O2 budget (decision 14 Nov 15:40): 8 h x 1,200 BTU/h / 3.96567 / (4.039 + 1.157 * 0.85) L
+CAP = 8 * 1200 / 3.96567 / (4.039 + 1.157 * 0.85)  # 481.99 L
 
 
 def test_inputs_from_config():
     mi = margin.inputs(P)
-    assert mi.o2_capacity_l == CREW["o2_budget"]["primary_L"]  # margin_uses: primary_L
+    assert mi.o2_capacity_l == pytest.approx(CAP, rel=1e-12)  # margin_uses: primary_L
+    assert round(mi.o2_capacity_l) == CREW["o2_budget"]["primary_L"] == 482
     cap = CREW["effort_cap_frac"] * CREW["vo2max_ml_kg_min"]
     assert mi.o2_rate_l_min == pytest.approx(cap * CREW["body_mass_kg"] / 1000)  # 1.35 L/min
     assert mi.o2_rate_l_min == pytest.approx(1.35)
@@ -39,23 +42,23 @@ def test_btu_conversion_matches_review():
 
 def test_margin_o2_term_by_hand():
     mi = margin.inputs(P)
-    # used 100 L, walk home costs 20 L: (504 - 100 - 20 - 40.5) / 1.35 = 254.44 min
+    # used 100 L, walk home costs 20 L: (481.99 - 100 - 20 - 40.5) / 1.35 = 237.84 min
     m, b = margin.margin(mi, 120.0, 100.0, 15.0, 20.0)
     assert b == "O2"
-    assert m == pytest.approx((504 - 100 - 20 - RES) / 1.35)
+    assert m == pytest.approx((CAP - 100 - 20 - RES) / 1.35)
     # 15 min of station tasks still to do: minus 15 * 0.84 = 12.6 L
     m2, _ = margin.margin(mi, 120.0, 100.0, 15.0, 20.0, tasks_l=15 * 0.84)
-    assert m2 == pytest.approx((504 - 100 - 20 - 12.6 - RES) / 1.35)
+    assert m2 == pytest.approx((CAP - 100 - 20 - 12.6 - RES) / 1.35)
     # same O2 slack at the 1,200 BTU/hr planning rate
     assert margin.o2_margin_min(mi, 100.0, 20.0, rate_l_min=mi.planning_rate_l_min) == (
-        pytest.approx((504 - 100 - 20 - RES) / mi.planning_rate_l_min))
+        pytest.approx((CAP - 100 - 20 - RES) / mi.planning_rate_l_min))
 
 
 def test_legacy_inputs_reproduce_session1_formula():
     """For the before/after comparison only: (O2_left - 1.2 O2_home) / 1.35, dwell at V0."""
     old = margin.legacy_inputs(P)
     m, _ = margin.margin(old, 120.0, 100.0, 15.0, 20.0)
-    assert m == pytest.approx((504 - 100 - 1.2 * 20) / 1.35)
+    assert m == pytest.approx((CAP - 100 - 1.2 * 20) / 1.35)
     assert old.dwell_rate_l_min == pytest.approx(6 * 75 / 1000) and old.reserve_l == 0.0
 
 
@@ -76,7 +79,7 @@ def test_latest_departure_solves_each_term():
     th = np.array([20.0, 10.0, 0.0])
     oh = np.array([27.0, 13.5, 0.0])
     # daylight: 300 - tau - th = 280 at every vertex; O2 (u0 = 0, rate 1.35):
-    # min(504 - o2p - oh - 40.5) / 1.35 = (504 - 27 - 40.5) / 1.35 = 323.3 -> daylight binds
+    # min(CAP - o2p - oh - 40.5) / 1.35 = (481.99 - 27 - 40.5) / 1.35 = 307.0 -> daylight binds
     t = margin.latest_departure(mi, 0.0, 0.0, mi.o2_rate_l_min, tau, o2p, th, oh)
     assert t == pytest.approx(280.0)
     for k in range(3):
@@ -84,7 +87,7 @@ def test_latest_departure_solves_each_term():
         assert m >= -1e-9
     mi2 = margin.inputs(P)
     t2 = margin.latest_departure(mi2, 0.0, 0.0, mi2.o2_rate_l_min, tau, o2p, th, oh)
-    assert t2 == pytest.approx((504 - 27 - RES) / 1.35)
+    assert t2 == pytest.approx((CAP - 27 - RES) / 1.35)
     m, b = margin.margin(mi2, t2 + tau[2], 1.35 * t2 + o2p[2], th[2], oh[2])
     assert (m, b) == (pytest.approx(0.0, abs=1e-9), "O2")
 
