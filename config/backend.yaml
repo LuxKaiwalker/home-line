@@ -4,7 +4,7 @@
 # Defaults that already live in another config file are referenced as "<file>.<key>" (`*_ref`),
 # never copied. This file is NOT part of the result hash (docs/backend.md "Result hash"): changing a
 # limit must not invalidate computed plans.
-contract_version: "1.0.0"          # contracts/backend/ family
+contract_version: "1.0.1"          # contracts/backend/ family
 
 api:
   prefix: /api/v1

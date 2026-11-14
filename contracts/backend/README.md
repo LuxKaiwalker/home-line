@@ -1,4 +1,4 @@
-# Backend contracts (F23–F36) — v1.0.0
+# Backend contracts (F23–F36) — v1.0.1
 
 **Frozen 2026-11-14 at backend gate P0 (D50).** Owner C. Versioned on its own, like the simulator
 bundle family (`contracts/bundle/`, v1.0.0); the web contracts in `contracts/` keep their 1.1.x line.
@@ -66,5 +66,7 @@ uv run --no-sync --with openapi-spec-validator pytest tests/test_backend_contrac
 
 ## Changes
 
+- 1.0.1 (2026-11-14, decision 9): `openapi.yaml` quotes `"on"`/`"off"` (`heavy_jobs` enums) so
+  YAML 1.1 readers such as PyYAML read strings, not booleans. No other change.
 - 1.0.0 (2026-11-14, P0): first version. The state event (`session_state` in the pre-P0 draft) is
   part of `telemetry.schema.json` (backend spec F31, WS14 brief: "sample + state event").

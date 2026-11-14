@@ -188,7 +188,7 @@ def test_engine_version_known_answers(instant_client, server_data):
     assert v["engine_tree"] == git("rev-parse", "HEAD:pipeline")
     assert v["config_hash"] == config_hash()  # D57: backend.yaml left out
     assert v["terrain_hash"] == "sha256:" + hashlib.sha256(manifest).hexdigest()
-    assert v["backend_contract_version"] == OPENAPI["info"]["version"] == "1.0.0"
+    assert v["backend_contract_version"] == OPENAPI["info"]["version"]
     assert v["backend_contract_version"] == settings().contract_version
     assert v["bundle_contract_version"] == BUNDLE_VERSION
     # web family = the newest x-contract-version of contracts/*.schema.json, and it is the newest
@@ -224,7 +224,7 @@ def test_defaults_known_answers(instant_client):
     assert_valid(d, "/defaults")
     inp = d["inputs"]
     assert "title" not in inp
-    assert inp["contract_version"] == "1.0.0"
+    assert inp["contract_version"] == settings().contract_version == OPENAPI["info"]["version"]
     # F26 table (spec §3): 75 kg, 104 kg, 10 kg, 36 mL/kg/min, 50 %
     assert inp["crew"] == {"body_mass_kg": 75, "suit_kg": 104, "tools_kg": 10,
                            "vo2max_ml_kg_min": 36, "effort_cap_frac": 0.5}

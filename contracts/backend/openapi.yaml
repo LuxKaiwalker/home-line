@@ -1,13 +1,13 @@
 openapi: 3.1.0
 info:
   title: HOMELINE live API
-  version: 1.0.0
+  version: 1.0.1
   description: |
     Optional live layer of HOMELINE (F23-F36, D40, D48). The static app works without it.
     Every live result carries the label "Computed live · not part of the validated scorecard".
     Auth: G = guest (no security), U = Supabase login (Bearer JWT), K = session key (X-HL-Key
     header), T = team token (X-HL-Team header). Limits, ranges and timeouts come from
-    config/backend.yaml. Backend contract family v1.0.0 (contracts/backend/, frozen at P0, D50).
+    config/backend.yaml. Backend contract family v1.0.1 (contracts/backend/, frozen at P0, D50).
     Source: backend spec §5 (docs/backend.md).
   license: {name: Apache-2.0, identifier: Apache-2.0}
 servers:
@@ -83,7 +83,7 @@ components:
         ok: {type: boolean}
         engine_warm: {type: boolean, description: true only after the Numba warm-up}
         queue_length: {type: integer, minimum: 0}
-        heavy_jobs: {enum: [on, off], description: off when the kill switch HL_HEAVY_JOBS_OFF is set}
+        heavy_jobs: {enum: ["on", "off"], description: off when the kill switch HL_HEAVY_JOBS_OFF is set}
     EngineVersion:
       type: object
       required: [engine_tree, commit, config_hash, web_contract_version, backend_contract_version, terrain_hash]
@@ -259,7 +259,7 @@ components:
         job_seconds_p50: {type: number}
         cache_gb: {type: number}
         errors_last_h: {type: integer}
-        heavy_jobs: {enum: [on, off]}
+        heavy_jobs: {enum: ["on", "off"]}
 paths:
   /health:
     get:
