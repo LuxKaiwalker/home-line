@@ -357,3 +357,366 @@ def test_manifest_records_to_tmp_fragment(tmp_path, medium_straight):
     assert frag["nav.r95_fit.medium.a"]["units"] == "1"
 
 
+
+
+# --------------------------------------------------------------------------------------------
+# F21 fix-interval map (fixinterval.py)
+# --------------------------------------------------------------------------------------------
+
+from pipeline.navigation import fixinterval as fi  # noqa: E402
+
+FIT_MEDIUM = {"a": 0.09, "b": 1.2e-5}  # synthetic coefficients (shape of the medium set)
+
+
+def cone_field(res_m=10.0, half_m=2500.0):
+    """T_home = flat-ground walking time from the pad (min): a cone, edge of the homeline at
+    limit * 60 * v metres."""
+    n = int(round(2 * half_m / res_m)) + 1
+    c = (np.arange(n) - (n - 1) / 2) * res_m
+    X, Y = np.meshgrid(c, -c)
+    R = np.hypot(X, Y)
+    return R / SPEED / 60.0, R, res_m
+
+
+def test_homeline_limit_from_config():
+    crew = dr.crew_config()
+    assert fi.homeline_limit_min() == pytest.approx(
+        crew["walkback_budgets_min"][0] - NAV["fix_interval_ws9"]["reserve_min"])
+
+
+def test_margin_radius_edt_on_cone():
+    T, R, res = cone_field()
+    lim = fi.homeline_limit_min()
+    edge = lim * 60.0 * SPEED
+    r_m = fi.margin_radius_edt(T, res, lim)
+    inside = R < edge - 2 * res
+    # exact distance to the edge, to one grid cell
+    assert np.allclose(r_m[inside], edge - R[inside], atol=res * 1.01)
+    assert np.all(r_m[R > edge + res] == 0.0)
+
+
+def test_margin_radius_edt_matches_worst_field_interpolation():
+    from scipy.ndimage import maximum_filter
+    T, R, res = cone_field(res_m=5.0, half_m=2000.0)
+    lim = fi.homeline_limit_min()
+    radii = dr._yaml("hud")["worst_case_radii_m"]
+    worst = {}
+    for rad in radii:
+        k = int(rad // res)
+        yy, xx = np.mgrid[-k:k + 1, -k:k + 1]
+        worst[rad] = maximum_filter(T, footprint=(np.hypot(xx, yy) * res <= rad))
+    r_w, censored = fi.margin_radius_from_worst(T, worst, lim)
+    r_e = fi.margin_radius_edt(T, res, lim)
+    sel = (~censored) & (r_w > 0)
+    assert sel.sum() > 100
+    assert np.allclose(r_w[sel], r_e[sel], atol=1.5 * res)
+    assert np.all(r_w[censored] == max(radii))
+
+
+def test_dmax_zero_outside_and_smaller_near_edge():
+    T, R, res = cone_field()
+    lim = fi.homeline_limit_min()
+    edge = lim * 60.0 * SPEED
+    d = fi.fix_interval(T, res, FIT_MEDIUM, limit_min=lim)
+    assert np.all(d[R > edge + res] == 0.0)
+    assert np.all(d[R < edge - 2 * res] > 0.0)
+    # monotone: smaller towards the edge along a ray from the pad
+    row = T.shape[0] // 2
+    prof = d[row, T.shape[1] // 2:]
+    rr = R[row, T.shape[1] // 2:]
+    inside = rr < edge
+    assert np.all(np.diff(prof[inside]) <= 1e-9)
+    # equals the inverse of the r95 fit at the margin radius
+    r_m = fi.margin_radius_edt(T, res, lim)
+    assert np.allclose(d, mc.inverse_r95(FIT_MEDIUM, r_m))
+
+
+def test_dmax_unknown_cells_stay_unknown_and_shrink_neighbours():
+    T, R, res = cone_field()
+    lim = fi.homeline_limit_min()
+    T2 = T.copy()
+    hole = (np.abs(R - 600.0) < 30.0)  # unknown ring segment
+    hole &= np.indices(T.shape)[1] > T.shape[1] // 2
+    T2[hole] = np.nan
+    d1 = fi.fix_interval(T, res, FIT_MEDIUM, limit_min=lim)
+    d2 = fi.fix_interval(T2, res, FIT_MEDIUM, limit_min=lim)
+    assert np.all(np.isnan(d2[hole]))
+    assert np.all(d2[~hole] <= d1[~hole] + 1e-9)
+    assert np.any(d2[~hole] < d1[~hole] - 1.0)
+
+
+def test_fix_interval_summary_contract_and_classes(tmp_path):
+    T, R, res = cone_field()
+    lim = fi.homeline_limit_min()
+    d = fi.fix_interval(T, res, FIT_MEDIUM, limit_min=lim)
+    s = fi.summarise(d, T, "medium", limit_min=lim)
+    _validate(s, "fix_interval_summary.schema.json")
+    assert list(s["class_area_pct"]) == ["<100", "100-300", "300-1000", ">1000"]
+    assert sum(s["class_area_pct"].values()) == pytest.approx(100.0, abs=0.01)
+    inside = T <= lim
+    assert s["median_m"] == pytest.approx(float(np.median(d[inside])), abs=0.05)
+    p = NAV["fix_interval_ws9"]["edge_percentile"]
+    assert s["edge_p10_m"] == pytest.approx(float(np.percentile(d[inside], p)), abs=0.05)
+    assert s["edge_p10_m"] < s["median_m"]
+
+
+def test_fix_interval_png_round_trip(tmp_path):
+    T, R, res = cone_field()
+    d = fi.fix_interval(T, res, FIT_MEDIUM)
+    d[0, 0] = np.nan
+    path = fi.write_png(d, tmp_path / "fields" / "fix_interval_medium.png")
+    back = fi.read_png(path)
+    per = dr._yaml("hud")["field_scales"]["fix_interval"]["per_count"]
+    ok = np.isfinite(d)
+    assert np.isnan(back[0, 0])
+    assert np.all(np.abs(back[ok] - np.minimum(d[ok], 65535 * per)) <= per / 2 + 1e-9)
+
+
+def test_fix_interval_manifest_to_tmp(tmp_path):
+    T, R, res = cone_field()
+    d = fi.fix_interval(T, res, FIT_MEDIUM)
+    s = fi.summarise(d, T, "medium")
+    keys = fi.record_manifest(s, "data/interim/nav/fix_interval_medium.png", fragment_dir=tmp_path)
+    frag = json.loads(next(tmp_path.rglob("*.json")).read_text())
+    assert set(keys) <= set(frag)
+    assert frag["nav.fix_interval.medium.median_m"]["units"] == "m"
+
+
+# --------------------------------------------------------------------------------------------
+# Synthetic end-to-end export (run.py) -> tmp only
+# --------------------------------------------------------------------------------------------
+
+def test_synthetic_export_writes_contract_valid_nav_files(tmp_path):
+    from pipeline.navigation import run as nav_run
+    written = nav_run.synthetic(tmp_path, runs=50, sets=["low", "medium"])
+    names = sorted(p.relative_to(tmp_path).as_posix() for p in written)
+    assert names == ["nav/fixes.json", "nav/montecarlo_low.json", "nav/montecarlo_medium.json",
+                     "nav/tracks_low.geojson", "nav/tracks_medium.geojson"]
+    schema = {"montecarlo": "montecarlo.schema.json", "tracks": "tracks.schema.json",
+              "fixes": "fixes.schema.json"}
+    for p in written:
+        _validate(json.loads(p.read_text()), schema[p.stem.split("_")[0]])
+    fixes = json.loads((tmp_path / "nav" / "fixes.json").read_text())
+    assert fixes[0]["type"] == "rover" and fixes[0]["t_eva_min"] == 0
+    assert {f["station"] for f in fixes if f["type"] == "station"} == {"SYN1", "SYN2", "SYN3"}
+    m = json.loads((tmp_path / "nav" / "montecarlo_medium.json").read_text())
+    assert m["route"].startswith("synthetic")
+    # error resets at each station fix: dist_since_fix returns to 0 there
+    zeros = [r["t_eva_min"] for r in m["per_minute"] if r["dist_since_fix_m"] == 0]
+    assert len(zeros) > 4
+
+
+def test_run_refuses_public_data_dir():
+    from pipeline.navigation import run as nav_run
+    with pytest.raises(ValueError):
+        nav_run.synthetic(dr.REPO / "web" / "public" / "data", runs=2, sets=["low"])
+
+
+# --------------------------------------------------------------------------------------------
+# Real-route run (real.py) on a synthetic data/interim tree in tmp (inputs shaped like WS2/WS1)
+# --------------------------------------------------------------------------------------------
+
+from pathlib import Path  # noqa: E402
+
+from pipeline.navigation import real as nav_real  # noqa: E402
+
+LEG_M = 600.0  # pad -> station distance of the tmp route (docs/dummy.md S1 geometry)
+
+
+def _route_fc(timed: bool = True) -> tuple[dict, list]:
+    """Pad -> S1 600 m north at SPEED, 30 min dwell (stations.yaml), back; WS2 leg format."""
+    px, py = dr.pad_xy()
+    n = 13
+    ys = np.linspace(0.0, LEG_M, n)
+    t1 = LEG_M / SPEED / 60.0
+    dwell = float(dr._yaml("stations")["dwell_min"])
+    t2 = t1 + dwell
+    t3 = t2 + t1
+    out_ll = [list(map(float, dr.xy_to_lonlat(px, py + v))) for v in ys]
+    back_ll = out_ll[::-1]
+    tm = np.linspace(0.0, t1, n)
+    legs = [
+        {"leg": 1, "from": "pad", "to": "S1", "t_start_min": 0.0, "t_end_min": t1,
+         "times_min": tm.tolist()},
+        {"leg": 2, "from": "S1", "to": "pad", "t_start_min": t2, "t_end_min": t3,
+         "times_min": (t2 + tm).tolist()},
+    ]
+    if not timed:
+        for leg in legs:
+            leg.pop("times_min")
+    fc = {"type": "FeatureCollection", "features": [
+        {"type": "Feature", "geometry": {"type": "LineString", "coordinates": c}, "properties": p}
+        for c, p in zip([out_ll, back_ll], legs, strict=True)]}
+    timeline = [
+        {"t_min": 0.0, "event": "depart", "station": None, "o2_left_L": None, "t_home_min": 0.0,
+         "margin_min": None},
+        {"t_min": t1, "event": "arrive", "station": "S1", "o2_left_L": None, "t_home_min": t1,
+         "margin_min": None},
+        {"t_min": t2, "event": "leave", "station": "S1", "o2_left_L": None, "t_home_min": t1,
+         "margin_min": None},
+        {"t_min": t3, "event": "return", "station": None, "o2_left_L": None, "t_home_min": 0.0,
+         "margin_min": None},
+    ]
+    return fc, timeline
+
+
+def _write_tif(path, arr, x0, y0, res):
+    import rasterio
+    from rasterio.transform import from_origin
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with rasterio.open(path, "w", driver="GTiff", height=arr.shape[0], width=arr.shape[1],
+                       count=1, dtype="float32", crs=dr.site_config()["crs"]["analysis_proj"],
+                       transform=from_origin(x0, y0, res, res), nodata=float("nan")) as ds:
+        ds.write(arr.astype(np.float32), 1)
+
+
+@pytest.fixture
+def real_tree(tmp_path):
+    """tmp data/interim with WS2 route/timeline/T_home and WS1 slope for scenario nom_104."""
+    interim = tmp_path / "data" / "interim"
+    fc, tl = _route_fc()
+    pub = interim / "engine" / "public"
+    pub.mkdir(parents=True)
+    (pub / "route_nom_104.geojson").write_text(json.dumps(fc))
+    (pub / "timeline_nom_104.json").write_text(json.dumps(tl))
+    px, py = dr.pad_xy()
+    res, half = 6.0, 2400.0
+    n = int(2 * half / res)
+    xc = px - half + res * (np.arange(n) + 0.5)
+    yc = py + half - res * (np.arange(n) + 0.5)
+    gx, gy = np.meshgrid(xc, yc)
+    t_home = np.hypot(gx - px, gy - py) / SPEED / 60.0  # flat world: distance / speed
+    t_home[:5, :5] = np.nan  # an unknown corner
+    _write_tif(interim / "engine" / "nom_104" / "t_home.tif", t_home, px - half, py + half, res)
+    slope = np.where(gy > py + LEG_M / 2, 15.0, 2.0)  # steep (slip) on the northern half
+    _write_tif(interim / "terrain" / "slope_1m.tif", slope, px - half, py + half, res)
+    return interim
+
+
+def test_route_knots_follow_per_vertex_times_and_dwell():
+    fc, tl = _route_fc()
+    traj, _ = nav_real.route_trajectory(fc)
+    t1 = tl[1]["t_min"] * 60.0
+    t2 = tl[2]["t_min"] * 60.0
+    d = np.hypot(traj.x, traj.y)
+    i1, i2 = np.searchsorted(traj.t_s, [t1 + 1, t2 - 1])
+    assert np.allclose(d[i1:i2], LEG_M, atol=1e-6)  # dwelling at S1
+    assert traj.t_s[-1] == pytest.approx(tl[3]["t_min"] * 60.0, abs=1.0)
+    assert d[-1] == pytest.approx(0.0, abs=1e-6) and d[0] == 0.0
+    assert traj.distance_m[-1] == pytest.approx(2 * LEG_M, rel=1e-6)
+    # speed on the legs = the leg times (WS2 times_min)
+    walk = traj.step_dist_m[: int(t1) - 1]
+    assert np.allclose(walk, SPEED, rtol=1e-6)
+
+
+def test_route_knots_uniform_speed_without_vertex_times():
+    fc, _ = _route_fc(timed=False)
+    k = nav_real.route_knots(fc)
+    assert k["timed_legs"] == 0 and k["n_legs"] == 2
+    a, _ = nav_real.route_trajectory(_route_fc()[0])
+    b, _ = nav_real.route_trajectory(fc)
+    assert np.allclose(a.x, b.x, atol=1e-6) and np.allclose(a.y, b.y, atol=1e-6)
+
+
+def test_route_knots_refuse_mismatched_times():
+    fc, _ = _route_fc()
+    fc["features"][0]["properties"]["times_min"] = [0.0, 1.0]
+    with pytest.raises(ValueError, match="times_min"):
+        nav_real.route_knots(fc)
+
+
+def test_fixes_from_timeline_and_skyline_replacement(monkeypatch):
+    _, tl = _route_fc()
+    fx = nav_real.fixes_from_timeline(tl)
+    assert [(f.type, f.station) for f in fx] == [("rover", None), ("station", "S1"),
+                                                 ("rover", None)]
+    assert fx[0].sigma_m == NAV["fix_sigma_m"]["rover"]
+    assert fx[1].sigma_m == NAV["fix_sigma_m"]["station"]
+    sky = {"S1": {"image_id": "NLB_X", "error_m": 42.0}}
+    fx = nav_real.fixes_from_timeline(tl, skyline=sky)
+    assert [(f.type, f.station, f.sigma_m) for f in fx][1] == ("skyline", "S1", 42.0)
+    assert len(fx) == 3  # replace (nav.yaml default)
+    monkeypatch.setitem(NAV["real_run_ws9"], "skyline_station_fix", "add")
+    fx = nav_real.fixes_from_timeline(tl, skyline=sky)
+    assert [f.type for f in fx] == ["rover", "station", "skyline", "rover"]
+
+
+def test_pick_station_fix_uses_rms_never_the_error():
+    rows = [{"status": "ok", "station": "S1", "image_id": "a", "rms_deg": 0.9, "error_m": 5.0},
+            {"status": "ok", "station": "S1", "image_id": "b", "rms_deg": 0.3, "error_m": 80.0},
+            {"status": "failed", "station": "S1", "image_id": "c", "error_m": None}]
+    assert nav_real.pick_station_fixes(rows)["S1"]["image_id"] == "b"
+
+
+def test_dry_run_lists_missing_inputs_with_owners(tmp_path):
+    rep = nav_real.dry_run("nom_104", interim=tmp_path / "data" / "interim", log=lambda *a: None)
+    owners = {i["name"]: (i["owner"], i["exists"]) for i in rep["inputs"]}
+    assert owners["route"] == ("WS2", False) and owners["t_home"] == ("WS2", False)
+    assert owners["slope"] == ("WS1", False) and owners["navcam_frames"] == ("WS3", False)
+    assert len(rep["problems"]) == 8  # route, timeline, t_home, slope, frames, 3 DEM bands
+    rep = nav_real.dry_run("nom_104", interim=tmp_path / "data" / "interim", skyline=False,
+                           log=lambda *a: None)
+    assert len(rep["problems"]) == 4
+
+
+def test_real_run_refuses_missing_inputs_and_public_out(tmp_path):
+    with pytest.raises(SystemExit):
+        nav_real.run("nom_104", out=tmp_path / "o", interim=tmp_path / "x", skyline=False,
+                     log=lambda *a: None)
+    with pytest.raises(ValueError):
+        nav_real.run("nom_104", out=dr.REPO / "web" / "public" / "data", skyline=False,
+                     log=lambda *a: None)
+
+
+def test_real_run_end_to_end_contracts_and_manifest(real_tree, tmp_path):
+    from pipeline.navigation import fixinterval as fi
+    out = real_tree / "navigation"
+    frag = tmp_path / "frag"
+    (out / "nav").mkdir(parents=True)
+    (out / "nav" / "stale.json").write_text("{}")  # cleared before the run
+    rep = nav_real.run("nom_104", out=out, interim=real_tree, sets=["low", "medium"], runs=60,
+                       skyline=False, record=True, fragment_dir=frag, log=lambda *a: None)
+    assert not (out / "nav" / "stale.json").exists()
+    names = sorted(rep["written"])
+    assert names == ["fields/fix_interval_low.png", "fields/fix_interval_medium.png",
+                     "nav/fix_interval_summary.json", "nav/fixes.json",
+                     "nav/montecarlo_low.json", "nav/montecarlo_medium.json",
+                     "nav/tracks_low.geojson", "nav/tracks_medium.geojson"]
+    schema = {"montecarlo": "montecarlo.schema.json", "tracks": "tracks.schema.json",
+              "fixes": "fixes.schema.json", "fix": "fix_interval_summary.schema.json"}
+    for n in names:
+        if n.startswith("nav/"):
+            _validate(json.loads((out / n).read_text()), schema[Path(n).stem.split("_")[0]])
+    m = json.loads((out / "nav" / "montecarlo_medium.json").read_text())
+    assert m["route"] == "route_nom_104" and m["runs"] == 60 and m["scenario"] == "nom_104"
+    # fix at the station: the error resets there (dist_since_fix = 0 during the dwell)
+    t1 = LEG_M / SPEED / 60.0
+    dwell = [r for r in m["per_minute"] if t1 + 1 <= r["t_eva_min"] <= t1 + 29]
+    assert dwell and all(r["dist_since_fix_m"] == 0 for r in dwell)
+    # one summary file (contracts v1.0.0), for the default set; every set in the report
+    s = json.loads((out / fi.SUMMARY_PATH).read_text())
+    assert s["set"] == NAV["default_set"] and s["median_m"] > 0
+    assert set(rep["fix_interval"]) == {"low", "medium"}
+    assert rep["fix_interval"]["low"]["median_m"] > s["median_m"]  # less drift: fix less often
+    # D_max on the HUD field grid (pad +/- planning radius at field_png.res_m)
+    idx = json.loads((out / "fields_index_nav.json").read_text())
+    g = nav_real.field_grid()
+    d = fi.read_png(out / "fields" / "fix_interval_medium.png")
+    assert d.shape == (idx["height"], idx["width"]) == (g["height"], g["width"])
+    assert idx["res_m"] == dr._yaml("hud")["field_png"]["res_m"]
+    e = idx["fields"]["fix_interval_medium"]
+    _validate({"dummy": False, **{k: idx[k] for k in ("bounds", "width", "height", "res_m")},
+               "fields": {"fix_interval_medium": e}}, "fields_index.schema.json")
+    assert e["file"] == "fields/fix_interval_medium.png" and e["scenario"] == "nom_104"
+    c = g["height"] // 2
+    assert d[c, c] > 0 and np.isnan(d[0, 0])  # the T_home raster is smaller than the grid
+    # manifest: nav.* keys with the file values
+    entries = {}
+    for f in frag.glob("*.json"):
+        entries.update(json.loads(f.read_text()))
+    assert entries["nav.montecarlo.medium.runs"]["value"] == 60
+    assert entries["nav.r95_fit.medium.a"]["value"] == m["r95_fit"]["a"]
+    assert entries["nav.fix_interval.medium.median_m"]["value"] == s["median_m"]
+    assert entries["nav.fix_interval.medium.median_m"]["file"] == fi.SUMMARY_PATH
+    assert "nav.fix_interval.low.median_m" not in entries  # not shown: not in a web file
+    assert entries["nav.fixes.1.sigma_m"]["value"] == NAV["fix_sigma_m"]["station"]

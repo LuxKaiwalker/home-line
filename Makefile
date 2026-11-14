@@ -20,8 +20,8 @@ horizons:    ## WS3
 	@echo "horizons: stub (WS3 adds pipeline/horizon CLI)"
 conditions:  ## WS4
 	@echo "conditions: stub (WS4 adds pipeline/conditions CLI)"
-nav:         ## WS9
-	@echo "nav: stub (WS9 adds pipeline/navigation CLI)"
+nav:         ## WS9: F21 Monte Carlo + fix-interval map, F22 skyline fixes -> data/interim/navigation/
+	$(PY) -m pipeline.navigation.run real $(NAV_ARGS)
 web:         ## C: copy data/interim -> web/public/data, validate
 	@echo "web: stub (C adds tools/make_web.py)"
 dummy:       ## M0: tools/make_dummy.py -> web/public/data-dummy

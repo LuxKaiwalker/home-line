@@ -50,3 +50,14 @@ fix_interval_ws9:
   unknown_cells: exceed              # unknown T_home counts as over the limit (conservative)
   edge_percentile: 10                # edge_p10_m in fix_interval_summary.json
   assumed: true
+real_run_ws9:                      # run.py real (WS2 route + timeline + T_home, WS1 slope, WS3 Navcam); conventions, flagged for N
+  scenario_from: "variants.yaml scenarios.default"   # the route the Monte Carlo walks (override: --scenario)
+  fix_events: {rover: [depart, return, arrive_home], station: [arrive]}   # timeline event -> fix type (SPEC F21 fix events)
+  skyline_station_fix: replace     # a station with an F22 result: the skyline fix (sigma = measured error) replaces the surveyed-station fix; "add" keeps both
+  skyline_frames: paired           # F22 frames = navcam_frames.json frames whose "station" is a route station
+  skyline_frame_pick: min_rms      # frame used for the fix among a station's frames: lowest skyline RMS (never the error, which needs the truth)
+  skyline_prior: standalone        # SPEC F22 standalone prior (true + standalone_prior_offset_m, random direction, monte_carlo.seed)
+  unknown_slope: no_slip           # route samples on unknown slope get no slip term (fraction reported)
+  field_grid: "pad_default +/- site.yaml planning_radius_m at hud.yaml field_png.res_m"   # fix_interval PNG grid (SPEC §6.1 planning extent); D_max sampled nearest from the T_home grid
+  skyline_bands: {dem_1m: data/interim/terrain/dem_1m.tif, ctx_20m: data/interim/horizon/bands/ctx_20m.tif, mola_hrsc_200m: data/interim/horizon/bands/mola_hrsc_200m.tif}   # WS1 / WS3 bands.py outputs
+  assumed: true

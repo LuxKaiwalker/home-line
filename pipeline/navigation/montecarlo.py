@@ -248,3 +248,16 @@ def record_manifest(summary: dict, file, *, fragment_dir=None) -> list[str]:
     for key, value, units in items:
         record(key, value, units, file, __file__, fragment_dir=fragment_dir)
     return [k for k, _, _ in items]
+
+
+def record_fixes_manifest(fixes, file, *, fragment_dir=None) -> list[str]:
+    """Record the fix times and sigmas shown on the HUD and /nav (same keys as the M0 dummy)."""
+    from pipeline.provenance.manifest import record  # noqa: PLC0415
+
+    keys = []
+    for i, f in enumerate(sorted(fixes, key=lambda f: f.t_eva_min)):
+        for k, v, u in ((f"nav.fixes.{i}.t_eva_min", f.t_eva_min, "min"),
+                        (f"nav.fixes.{i}.sigma_m", f.sigma_m, "m")):
+            record(k, v, u, file, __file__, fragment_dir=fragment_dir)
+            keys.append(k)
+    return keys
