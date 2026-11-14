@@ -121,6 +121,10 @@ export const CITED = {
   anchorSpeed: cite<number>('crew.yaml', crewRaw, 'anchor.speed_ms'),
   o2PrimaryL: cite<number>('crew.yaml', crewRaw, 'o2_budget.primary_L'),
   o2SecondaryL: cite<number>('crew.yaml', crewRaw, 'o2_budget.secondary_L'),
+  /** F8 siting rule (site.yaml siting): steepest cell allowed in a pad block, block size, routing grid. */
+  sitingMaxSlopeDeg: cite<number>('site.yaml', siteRaw, 'siting.max_slope_deg'),
+  sitingBlockM: cite<number>('site.yaml', siteRaw, 'siting.block_m'),
+  routeGridM: cite<number>('site.yaml', siteRaw, 'grids_m.route'),
   nogoNominalDeg: cite<number>('site.yaml', siteRaw, 'slope.nogo_deg.nominal'),
   nogoOptimisticDeg: cite<number>('site.yaml', siteRaw, 'slope.nogo_deg.optimistic'),
   flagBeyondTestedDeg: cite<number>('site.yaml', siteRaw, 'slope.flag_beyond_tested_deg'),
