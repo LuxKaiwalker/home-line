@@ -6,8 +6,8 @@ failure or skip reason. Nothing is filtered: collection errors and errors count 
 as skipped (reason prefixed ``xfail:``), xpass as passed. Optionally adds vitest rows from a
 ``vitest run --reporter=json`` file (web tests).
 
-Schema: ``contracts/kats.schema.json`` once C adds it; until then the WS6 proposal
-``pipeline/provenance/kats.schema.proposed.json``. Manifest keys: ``kats.summary.{total,passed,
+Schema: ``contracts/kats.schema.json`` (adopted by C from the WS6 proposal).
+Manifest keys: ``kats.summary.{total,passed,
 failed,skipped}`` (file ``validation/kats.json``).
 
 CLI::
@@ -41,7 +41,6 @@ REPO = Path(__file__).resolve().parents[2]
 DEFAULT_OUT = REPO / "data" / "interim" / "validation" / "kats.json"
 WEB_PATH = "validation/kats.json"  # under web/public/data/ (`make web` copies it unchanged)
 CONTRACT = REPO / "contracts" / "kats.schema.json"
-PROPOSED = Path(__file__).with_name("kats.schema.proposed.json")
 
 # Test file -> (SPEC §9 area, feature IDs): a classification of the test files named in SPEC §4.3
 # and the briefs, not a constant. Unlisted files are "other" with no feature, never guessed.
@@ -74,7 +73,7 @@ NAME_RULES: list[tuple[str, re.Pattern[str], str, list[str]]] = [
 
 
 def schema() -> dict[str, Any]:
-    return json.loads((CONTRACT if CONTRACT.exists() else PROPOSED).read_text())
+    return json.loads(CONTRACT.read_text())
 
 
 def classify(test_id: str) -> tuple[str, list[str]]:

@@ -68,6 +68,7 @@ SCHEMA_MAP: list[tuple[str, str]] = [
     ("validation/v2.json", "v2.schema.json"),
     ("validation/coverage.json", "coverage.schema.json"),
     ("validation/coreg.json", "coreg.schema.json"),
+    ("validation/kats.json", "kats.schema.json"),
     ("conditions/rems.json", "rems.schema.json"),
     ("conditions/clock.json", "clock.schema.json"),
     ("conditions/donki.json", "donki.schema.json"),

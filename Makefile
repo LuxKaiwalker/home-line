@@ -1,6 +1,6 @@
 # HOMELINE pipeline entry points. Stub targets print a message until the owning workstream
 # adds its CLI (ownership: AGENTS.md "Folder ownership"; this file is owned by C).
-.PHONY: all terrain engine horizons conditions nav web dummy test lint validate clean
+.PHONY: all terrain engine horizons conditions nav web dummy test lint validate kats h0 clean
 
 PY := uv run --no-sync python
 
@@ -29,6 +29,12 @@ lint:
 	uv run --no-sync ruff check .
 validate:
 	$(PY) tools/validate_contracts.py
+
+kats:        ## WS6: test run -> data/interim/validation/kats.json (never fails the build)
+	$(PY) -m pipeline.provenance.kats --exit-zero
+
+h0:          ## WS6: no provenance time before H0
+	$(PY) -m pipeline.provenance.check_h0
 
 clean:
 	rm -rf data/interim/* web/dist .pytest_cache .ruff_cache
