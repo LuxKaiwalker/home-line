@@ -1,6 +1,6 @@
 # HOMELINE pipeline entry points. Stub targets print a message until the owning workstream
 # adds its CLI (ownership: AGENTS.md "Folder ownership"; this file is owned by C).
-.PHONY: all terrain engine horizons conditions conditions-fetch nav web dummy test lint validate kats h0 clean
+.PHONY: all terrain engine horizons conditions conditions-fetch nav web web-plan dummy test lint validate kats h0 clean
 
 PY := uv run --no-sync python
 
@@ -26,8 +26,10 @@ conditions-fetch:  ## WS4: download/refresh data/raw/conditions/ (needs NASA_API
 	$(PY) -m pipeline.conditions.fetch all
 nav:         ## WS9
 	@echo "nav: stub (WS9 adds pipeline/navigation CLI)"
-web:         ## C: copy data/interim -> web/public/data, validate
-	@echo "web: stub (C adds tools/make_web.py)"
+web:         ## C: copy/transform data/interim -> web/public/data, merge manifest, validate, H0 check
+	$(PY) tools/make_web.py
+web-plan:    ## C: what make web would copy, and what is missing per owner (no writes)
+	$(PY) tools/make_web.py --plan
 dummy:       ## M0: tools/make_dummy.py -> web/public/data-dummy
 	$(PY) tools/make_dummy.py --quiet
 
