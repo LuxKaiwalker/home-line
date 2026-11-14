@@ -32,7 +32,7 @@ def test_schema_is_valid_draft_2020_12(path):
     Draft202012Validator.check_schema(schema)
     assert schema["$schema"] == "https://json-schema.org/draft/2020-12/schema"
     assert schema["$id"] == f"homeline/contracts/{path.name}"
-    assert schema["x-contract-version"] in ("1.0.0", "1.1.0", "1.1.1", "1.1.2")  # 1.1.x is additive
+    assert schema["x-contract-version"] in ("1.0.0", "1.1.0", "1.1.1", "1.1.2", "1.1.3")  # 1.1.x is additive
     for key in ("title", "description", "x-source"):
         assert schema.get(key)
 

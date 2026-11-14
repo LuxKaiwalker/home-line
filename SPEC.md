@@ -869,6 +869,20 @@ Keep the partner line, the storm, the scorecard and any near-field number out of
 > | D23 | Conservative no-go | **2026-11-14 16:16 CET, user:** conservative `nogo_deg` = 17° (replaces "20 − v1_rmse_deg"); `flag_beyond_tested_deg` stays 17. V1 is a validation, not a margin |
 > | D24 | O₂ reserve | **2026-11-14 16:16 CET, user:** reserve = 30 min × effort-cap rate (1.35 L/min = 40.5 L), derived in config, labelled "30 min at the effort cap (EMU precedent)" (same value as before) |
 > | D25 | Flat-disc denominator | **2026-11-14 16:16 CET, user:** headline denominator = assessed cells within 0.98 m/s × budget (1,764 m / 3,528 m), identical for all variants and suit masses |
+> | D26 | Stations | **2026-11-14 16:20 CET, user:** re-place S1/S2/S4 after D22; drop S3/S5 unless S picks by 19:00; add up to 3 F7-scored stations (walkable, in the focus area, ≥ 300 m from every station), named by the score's finding |
+> | D27 | Access radius | **2026-11-14 16:20 CET, user:** 50 m (was assumed) |
+> | D28 | Turn-back | **2026-11-14 16:20 CET, user:** turn-back = min over all constraints incl. EVA budget − T_home (binding term "EVA duration") |
+> | D29 | O₂ energy equivalent | **2026-11-14 16:20 CET, user:** one config key `o2_energy_j_per_ml` = 21.0 for the uphill term, heat, haul and the O₂ budget |
+> | D30 | IST-2 check | **2026-11-14 16:20 CET, user:** no tuning; IST-2 pass/miss per variant written to the manifest |
+> | D31 | EVA start | **2026-11-14 16:20 CET, user:** 09:00 LMST |
+> | D32 | Station scoring | **2026-11-14 16:20 CET, user:** weights unchanged; minimum spacing 300 m |
+> | D33 | Hidden landmarks | **2026-11-14 16:20 CET, user:** bearing-only ticks "below skyline" on panorama and compass |
+> | D34 | RAD column | **2026-11-14 16:20 CET, user:** TOTAL_DOSE_E, labelled "dose in plastic (E)" |
+> | D35 | RAD time tag | **2026-11-14 16:20 CET, user:** tag = observation start; use midpoints; "± 8 min" on tripwire times |
+> | D36 | Storm window | **2026-11-14 16:20 CET, user:** fixed window; excess reported as a lower bound plus the end-of-window rate vs baseline |
+> | D37 | REMS ground temperature | **2026-11-14 16:20 CET, user:** dropped |
+> | D38 | 3D config | **2026-11-14 16:20 CET, user:** fp3d.yaml accepted; the quality preset may drop after the human fps check |
+> | D39 | HUD / storm timing | **2026-11-14 16:20 CET, user:** one shared storm-timing key in conditions.yaml, tripwire at the route's max T_home, read by WS2 and WS7; HUD no-route skip accepted; drift radius = max(5 m, 2 % of distance) |
 >
 > Decided items are removed from the open table below and written into the plan. **Still open:** D3, D7, D8, D16 and D17 are settled at the event by the rules in their rows.
 >
