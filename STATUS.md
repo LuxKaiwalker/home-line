@@ -229,17 +229,45 @@ Branch: `ws5-web`
 
 Branch: `ws6-provenance`
 
+> **Manifest API for every workstream (F16, AGENTS.md rule 6).** Use it for every number the app
+> shows:
+>
+> ```python
+> from pipeline.provenance.manifest import record
+> record("rad.storm_2024.peak_uGy_day", 8250.0, "uGy/day", "conditions/rad.json", __file__)
+> #      key (dotted, unique, no spaces) value  units (None if not numeric)  web file  script
+> ```
+>
+> - `record` adds `commit` (HEAD, `-dirty` if uncommitted code) and `utc` (ISO 8601 Z), validates
+>   against `contracts/manifest.schema.json`, and writes a per-script fragment to
+>   `data/interim/manifest/<script>.json`. Re-running your script overwrites your own keys.
+> - Values: numpy is converted; NaN/inf are refused, so pass `None` for unknown.
+> - `file`: the path under `web/public/data/` the number is shown from (e.g. `validation/v1.json`).
+> - Prefix keys with your topic (`v1.`, `rad.`, `nav.`, `reachable_pct.` ...). Two scripts writing
+>   the same key make the merge fail.
+> - Merge (C / `make web`): `uv run python -m pipeline.provenance.manifest merge [--out PATH] [--dummy]`
+>   writes `web/public/data/manifest.json`.
+> - Tests: set `HOMELINE_MANIFEST_DIR` to a tmp dir (monkeypatch) so test records never land in
+>   the shared `data/interim/manifest/`.
+> - `record` refuses to write if the clock reads before H0. CI runs
+>   `python -m pipeline.provenance.check_h0` (fails on any manifest `utc` or data mtime in
+>   `web/public/data/` before H0 from `config/event.yaml`); add `--fragments data/interim/manifest`
+>   to check the fragments locally.
+
 ### Done
 
-- —
+- 2026-11-14T09:44Z: M1 manifest API (`pipeline/provenance/manifest.py`: `record`, `merge`, CLI) and
+  `pipeline/provenance/check_h0.py` (H0 from `config/event.yaml`), H0 step in
+  `.github/workflows/ci.yml`; 23 KATs in `tests/test_provenance.py` pass (F16).
 
 ### Doing
 
-- —
+- V1 tilt-check code with KATs on synthetic data (F13).
 
 ### Next
 
-- —
+- KAT collector (`validation/kats.json` for the scorecard), figures scaffolding.
+- H4–H8: V1 on WS1 slope + co-registered drive ends; RMSE to WS1.
 
 ### Blocked
 
