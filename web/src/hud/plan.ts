@@ -11,6 +11,7 @@ import type { Binding, LonLat, RouteFC, TimelineEvent } from './types'
 
 const START_EVENTS = new Set(['depart', 'leave'])
 const END_EVENTS = new Set(['arrive', 'return', 'arrive_home'])
+const ANNOTATION_EVENTS = new Set(['turn_back'])
 
 export interface Metric {
   mPerDegLon: number
@@ -85,6 +86,11 @@ export class Plan {
   readonly legs: Leg[] = []
   readonly dwells: Dwell[] = []
   readonly events: TimelineEvent[]
+  /**
+   * WS2 `turn_back` rows: the latest time to leave each station (margin 0). They are annotations
+   * after the return, not steps of the walk, so they never enter the walk, the series or tEnd.
+   */
+  readonly turnBacks: TimelineEvent[]
   readonly tEnd: number
   readonly start: LonLat
   private readonly headroom: [number, number][]
@@ -94,7 +100,9 @@ export class Plan {
   /** `home` = where an empty plan stays (the pad); defaults to the first route vertex. */
   constructor(route: RouteFC, timeline: TimelineEvent[], metric: Metric, home?: LonLat) {
     this.metric = metric
-    this.events = [...timeline].sort((a, b) => a.t_min - b.t_min)
+    const sorted = [...timeline].sort((a, b) => a.t_min - b.t_min)
+    this.events = sorted.filter((e) => !ANNOTATION_EVENTS.has(e.event))
+    this.turnBacks = sorted.filter((e) => e.event === 'turn_back')
     const feats = [...route.features]
     if (feats.every((f) => typeof f.properties?.leg === 'number')) {
       feats.sort((a, b) => (a.properties.leg as number) - (b.properties.leg as number))

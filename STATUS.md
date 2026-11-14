@@ -583,23 +583,83 @@ Branch: `ws7-hud`
 
 ### Done
 
-- —
+- 2026-11-14T11:00Z: **Field PNG codec** `pipeline/export/fields_png.py` + TS decoder
+  `web/src/hud/fields.ts` (contracts v1.1.0: counts = R·256 + G, A = 0 unknown, refuses values
+  outside 0..65535 counts). Round trip exact for every count and every `hud.yaml field_scales`
+  scale; the committed M0 dummy PNGs decode to the same values in Python and TS (mirrored KAT).
+- 2026-11-14T11:00Z: **HUD on dummy data** (`/hud` slot, `web/src/hud/index.ts` `mount(el, ctx)`):
+  two-level helmet panel (D14 minimal default), alarm rules 1–5 in order, playback clock
+  1/30/60/300× (default 60×, D13), scrubber, route-following marker with dwell ring, band
+  colouring by margin while playing, minimap, drag-anywhere ("From here: home in N min
+  (conservative M), O₂ needed X L", σ slider 0–100 m), storm switch, fallback drift (2 %, D12)
+  with fix resets, worst-case lookup (smallest radius ≥ σ), uncertainty circle and alarm 3.
+  "Simulated EVA · real terrain and data" label always shown. Reusable for WS8:
+  `loadHudData`, `computeReadout`, `createHudPanel`, `PlaybackClock` (exported from index.ts).
+- 2026-11-14T11:05Z: **Real fields grid (C request) = WS1 `grid.json fields_5m`**: 1,480 × 1,480
+  px at 5 m, north-up in the analysis CRS, pixel edges at pad ± 3,700 m (the pad is a pixel
+  corner, NW corner xy (−4172.5345, −281174.1963)), bounds [137.319359, −4.868421, 137.444641,
+  −4.743579]; values are for pixel centres. **WS9's `field_grid()` is identical** (KAT
+  `test_ws1_and_ws9_field_grids_agree`), so WS9 changes nothing. `make fields` merges
+  `data/interim/navigation/fields_index_nav.json` (`fix_interval_{set}` entries) into
+  `fields/index.json` when its grid is exactly this one, and refuses (reports, adds nothing)
+  otherwise. The dummy grid (1,481 px centred on the pad) stays as it is.
+- 2026-11-14T11:08Z: **`make fields` on WS2's real rasters** (WS2 files of 10:55Z; opt/nom ×
+  80/104/120; con_* wait on V1): 20 PNGs, **28.4 MB** in `data/interim/export/fields/` (largest
+  `shared/slope.png` 4.1 MB; t_home 0.9 MB, o2_home 1.8–2.1 MB each). `fields/index.json` validates;
+  manifest fragment `pipeline__export__fields_png.json` (60 keys: `fields.<key>.sha256`, `.max`,
+  `.known_pct`; commit edbcd3c). nom_104: T_home max 296.7 min, known 58.95 % of the grid.
+  Worst-case fields (nom_104, 10/50/100 m) computed on the native 3 m grid (radius 4/17/34 cells).
+- 2026-11-14T11:10Z: **Real route KAT** (`web/src/hud/real.test.ts`, skipped without data/): on
+  WS2's new `route_nom_104` (pad → S4 → S2 → pad, 209.7 min) the HUD's T_home = 0 at the pad and
+  matches every timeline row (depart, arrive, leave, O₂ checkpoints, return) within ±0.5 min (max
+  0.27 min); margins likewise; the tightest HUD margin along the walk equals the tightest row
+  (14.9 min at S2, dose-bound), so alarms 1/4 do not fire on this plan.
+- KATs: `tests/test_fields_png.py` 48 pass; `web/src/hud/*.test.ts` 59 pass (5 on real data).
 
 ### Doing
 
-- —
+- WS9 integration (ellipse replaces the circle, "next fix due in M m" from `web/src/nav/`).
 
 ### Next
 
-- —
+- Bind the HUD to WS2's `route_nom_104` once `make web` publishes it (already works on data/interim).
+- con_* fields when V1 lands (`make fields` again; worst-case + bearing unchanged).
+- 60 fps check at 60× on the real fields (capture).
 
 ### Blocked
 
-- —
+- **Way-home path (F18 drag-anywhere), C:** the pointer field is **not in contracts v1.1.0**. A
+  pointer cannot be resampled to 5 m (moves are grid-relative), so it needs its own grid.
+  Proposal (implemented behind `--with-pointer`, off by default; TS follower `wayhome.ts` ready):
+  `fields/{scenario}/pointer.png`, `scale` 1, `units` "move", plus entry keys `bounds`, `width`,
+  `height`, `res_m` (WS2 route_3m grid) and `stencil` (WS2 `pointer_offsets.json`). nom_104 only,
+  ≈ 0.3–0.6 MB. Until then drag-anywhere shows the numbers but no path.
+- **Fields size, C:** all opt/nom suits = 28.4 MB (con_* will add ≈ 8 MB → ≈ 37 MB), over the
+  20 MB target, under 50 MB per file. PNG optimisation gains < 2 %; the scales are fixed by the
+  contract. The HUD reads only the active scenario (nom_104 + worst/bearing), its conservative
+  twin and slope (≈ 17 MB with opt_104/con_104). C to choose: all 9 scenarios (contract table) or
+  only the 104 kg suits in the web tree (`make fields --scenarios …`).
+- **WS2 question:** `turn_back` rows (t 409 / 439 min, after the return, margin 0, binding O₂)
+  are read as annotations "latest time to leave each station" and kept out of the walk; their
+  O₂ binding differs from the dose-bound margins of the same stations (storm τ 85.9 min). Confirm
+  the meaning.
 
 ### Assumptions added
 
-- —
+- A-WS7-1: within a leg the marker follows the route's `times_min`; without them, uniform speed.
+- A-WS7-2: worst-case fields and the alarm-3 circle skip cells with no T_home (blocked > no-go,
+  unreached): the crew cannot be there on the plan. Unknown only if no reachable cell is in the
+  disc. (The M0 dummy used "any unknown → unknown".) Disc radius rounded up to whole 3 m cells
+  (12 / 51 / 102 m).
+- A-WS7-3: HUD margin = (timeline `margin_min` + `t_home_min`, interpolated in t) − T_home at the
+  position (worst case within σ); turn-back countdown = that margin.
+- A-WS7-4: storm switch puts the 2024 onset at the EVA minute the switch is turned on; the
+  tripwire fires after the real onset→tripwire delay (rad.json); the dose budget then counts down
+  from `leash.tau_min_at_peak`; alarm 2 when T_home ≥ budget left.
+- A-WS7-5: drift σ = fix σ at the fix, else max(fix σ, floor 5 m, 2 % of distance since the fix).
+- 5 m sampling: each 5 m pixel takes the 3 m cell under its centre (no ties on these grids);
+  slope = the 1 m `slope_5m` cell at the 5 m pixel centre; `home_bearing` = geometric bearing to
+  the pad (grid.json), known everywhere.
 
 ## WS8 3D
 
