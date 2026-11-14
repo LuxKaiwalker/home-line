@@ -16,6 +16,8 @@ export interface PanelExtras {
   sources?: Partial<Record<PanelRow, RowSource>>
   /** true while a nav panel (mounted in navSlot, WS9) replaces the position line */
   navActive?: boolean
+  /** F21 position line from WS9 navLine ("Odometry ±N m · next fix due in M m · last fix …") */
+  navLine?: string | null
   /** storm switch state (F18): tripwire fired on the EVA clock, minutes since, tau_dose */
   storm?: { on: boolean; fired: boolean; tauDoseMin: number | null; doseLeftMin: number | null } | null
   /** way home from the dragged position: drawn on the map; false = no path known from here */
@@ -201,7 +203,9 @@ export function createHudPanel(host: HTMLElement, cfg: HudConfig): HudPanel {
       const nav = !!x.navActive && pos.source !== 'drag'
       posLine.hidden = nav
       navSlot.hidden = !nav
-      posLine.textContent = `Position: ${src} · ±${Math.round(pos.sigma_m)} m${fix} · ${fmtEva(pos.t_eva_min)}`
+      posLine.textContent = x.navLine && pos.source !== 'drag'
+        ? `${x.navLine} · ${fmtEva(pos.t_eva_min)}`
+        : `Position: ${src} · ±${Math.round(pos.sigma_m)} m${fix} · ${fmtEva(pos.t_eva_min)}`
       // F18 drag-anywhere: "From here: home in N min (conservative M), O2 needed X L"
       if (pos.source === 'drag') {
         fromHere.hidden = false

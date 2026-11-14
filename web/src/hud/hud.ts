@@ -13,10 +13,14 @@ import type { HudConfig } from './config'
 import { driftPosition, planFixes, type Fix } from './drift'
 import { decodeRGBA, FieldGrid, loadField, loadFieldRGBA } from './fields'
 import { HudMap } from './map'
+import { hudFrame, takeFixTime, type HudNav } from './navhud'
+import { NAV } from '../nav/config'
+import { createNavLoader, slotFetcher } from '../nav/load'
+import type { Fix as NavFix } from '../nav/types'
 import { createHudPanel, fmtEva, type HudPanel } from './panel'
 import { Plan } from './plan'
 import { readoutSources } from './provenance'
-import { computeReadout, playbackPosition, type HudContext, type HudFields } from './readout'
+import { playbackPosition, type HudContext, type HudFields } from './readout'
 import { radiationInput, stormReplay, stormState, type StormReplay } from './storm'
 import type { Bounds, FieldsIndex, HudPosition, LonLat, PadFile, PolygonFC, Rad, RouteFC, ScenariosIndex, Station, TimelineEvent } from './types'
 import { loadPointer, type PointerField } from './wayhome'
@@ -46,6 +50,8 @@ export interface HudData {
   padFromFile: boolean
   partnerFile: string | null
   fixes: Fix[]
+  /** F21 nav data for config/nav.yaml default_set (null = no nav/montecarlo file) */
+  nav: HudNav | null
 }
 
 export interface HudHandle {
@@ -114,6 +120,14 @@ export async function loadHudData(opts: MountHudOptions): Promise<HudData> {
     optional('terrain/cellstate', loadCellstate(dataUrl)),
     index.fields[`${sc}/pointer`]?.stencil ? optional('way-home pointer', loadPointer(index, `${sc}/pointer`, dataUrl)) : Promise.resolve(null),
   ])
+  const navLoader = createNavLoader(slotFetcher(dataUrl), dummy ? 'dummy' : 'real')
+  const set = NAV.defaultSet
+  const [mc, navFixes, dMax] = await Promise.all([
+    optional(`nav/montecarlo_${set}.json`, navLoader.optional(() => navLoader.montecarlo(set))),
+    optional('nav/fixes.json', navLoader.optional(() => navLoader.fixes())),
+    index.fields[`fix_interval_${set}`] ? optional(`fix_interval_${set}`, loadField(index, `fix_interval_${set}`, dataUrl)) : Promise.resolve(null),
+  ])
+  const nav: HudNav | null = mc ? { set, mc, fixes: (navFixes as NavFix[] | null) ?? [], dMax, ellipseVertices: NAV.ellipseVertices } : null
   const fields: HudFields = { tHome: tHome!, tHomeCons, o2Home, homeBearing, slope, worst: new Map(worstLoaded) }
   const padLL: LonLat | undefined = padFile ? [padFile.pad.lon, padFile.pad.lat] : undefined
   const plan = new Plan(route, timeline, tHome!, padLL)
@@ -121,7 +135,7 @@ export async function loadHudData(opts: MountHudOptions): Promise<HudData> {
   const ctx: HudContext = { cfg: config, fields, plan, budgetMin: opts.budgetMin ?? config.walkbackBudgetsMin[0], pad, partner }
   return {
     ctx, index, scenario: sc, consScenario: tHomeCons && cons ? cons.id : null, stations: stations ?? [], rad, dummy,
-    pointer, cellstate, padFromFile: !!padFile, partnerFile, fixes: planFixes(plan, config),
+    pointer, cellstate, padFromFile: !!padFile, partnerFile, fixes: planFixes(plan, config), nav,
   }
 }
 
@@ -190,9 +204,15 @@ export async function mountHud(container: HTMLElement, opts: MountHudOptions): P
   // storm switch (F18) and fallback drift (F19, D12)
   const stormBtn = button('hl-hud-toggle-btn', 'Storm replay: off')
   stormBtn.title = 'Replay the 20 May 2024 storm during this EVA (onset now)'
-  const driftBtn = button('hl-hud-toggle-btn', 'Drift: off')
-  driftBtn.title = `Simulated dead reckoning: ±${cfg.fallbackDrift.pctOfDistance}% of distance since the last fix (assumed)`
-  controls.append(scrub, timeLbl, stormBtn, driftBtn, fpsLbl)
+  // F21 Monte Carlo ellipses when WS9's files exist, else the fallback 2 % drift (D12)
+  const driftName = data.nav ? `Odometry (F21, ${data.nav.set})` : 'Drift'
+  const driftBtn = button('hl-hud-toggle-btn', `${driftName}: off`)
+  driftBtn.title = data.nav
+    ? `Dead-reckoning uncertainty from nav/montecarlo_${data.nav.set}.json (95 % ellipse)`
+    : `Simulated dead reckoning: ${cfg.fallbackDrift.pctOfDistance}% of distance since the last fix (assumed, fallback)`
+  const fixBtn = button('hl-hud-toggle-btn', 'Take fix')
+  fixBtn.hidden = true
+  controls.append(scrub, timeLbl, stormBtn, driftBtn, fixBtn, fpsLbl)
   root.append(controls)
 
   let storm: StormReplay | null = null
@@ -206,8 +226,14 @@ export async function mountHud(container: HTMLElement, opts: MountHudOptions): P
   let drift = false
   driftBtn.addEventListener('click', () => {
     drift = !drift
-    driftBtn.textContent = drift ? 'Drift: on' : 'Drift: off'
+    driftBtn.textContent = `${driftName}: ${drift ? 'on' : 'off'}`
     driftBtn.classList.toggle('active', drift)
+    fixBtn.hidden = !(drift && data.nav)
+    dirty = true
+  })
+  fixBtn.addEventListener('click', () => {
+    const t = takeFixTime(data.nav, clock.t)
+    if (t !== null) clock.seek(t)
     dirty = true
   })
 
@@ -302,18 +328,20 @@ export async function mountHud(container: HTMLElement, opts: MountHudOptions): P
       dirty = false
       const state = ctx.plan.stateAt(clock.t)
       if (state.headingDeg !== null) lastHeading = state.headingDeg
-      const pos: HudPosition = drag
+      const base: HudPosition = drag
         ? { lon: drag[0], lat: drag[1], sigma_m: Number(sigma.value), source: 'drag', t_eva_min: clock.t, last_fix: null }
-        : drift
+        : drift && !data.nav
           ? driftPosition(ctx.plan, cfg, data.fixes, clock.t)
           : playbackPosition(ctx.plan, clock.t)
       const st = stormState(storm, clock.t)
-      const r = computeReadout(pos, { ...ctx, radiation: radiationInput(st) })
+      const f = hudFrame(base, { ...ctx, radiation: radiationInput(st) }, drift ? data.nav : null)
+      const pos = f.pos
+      const r = f.readout
       const way = drag && data.pointer ? data.pointer.pathFrom(drag[0], drag[1], ctx.pad) : null
       const pr = panel.el.getBoundingClientRect()
       const sr = stage.getBoundingClientRect()
       map.insetRightPx = pr.width && pr.right <= sr.right + 1 && getComputedStyle(panel.el).position === 'absolute' ? sr.right - pr.left : 0
-      const mf = { state, lon: pos.lon, lat: pos.lat, sigmaM: pos.sigma_m, wayHome: way ? { coords: way.coords, reachesPad: way.reachesPad } : null, dragging: !!drag }
+      const mf = { state, lon: pos.lon, lat: pos.lat, sigmaM: pos.sigma_m, ring: f.ring, wayHome: way ? { coords: way.coords, reachesPad: way.reachesPad } : null, dragging: !!drag }
       map.draw({ ...mf, band: clock.playing ? r.band : 'unknown' })
       if (panel.level === 'expanded') mini.draw({ ...mf, band: r.band })
       panel.update(r, pos, {
@@ -326,6 +354,7 @@ export async function mountHud(container: HTMLElement, opts: MountHudOptions): P
         sources: readoutSources(r, { scenario: data.scenario, consScenario: data.consScenario, padFromFile: data.padFromFile, partnerFile: data.partnerFile }),
         wayHome: drag && data.pointer ? (way ? { reachesPad: way.reachesPad, startKnown: way.startKnown } : null) : undefined,
         storm: st,
+        navLine: f.line,
       })
       playBtn.textContent = clock.playing ? '❚❚' : '▶'
       for (const [s, b] of speedBtns) b.classList.toggle('active', s === clock.speed)

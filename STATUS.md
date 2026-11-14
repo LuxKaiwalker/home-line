@@ -661,13 +661,22 @@ Branch: `ws7-hud`
   matches every timeline row (depart, arrive, leave, O₂ checkpoints, return) within ±0.5 min (max
   0.27 min); margins likewise; the tightest HUD margin along the walk equals the tightest row
   (14.9 min at S2, dose-bound), so alarms 1/4 do not fire on this plan.
-- KATs: `tests/test_fields_png.py` 48 pass; `web/src/hud/*.test.ts` 59 pass (5 on real data).
+- KATs: `tests/test_fields_png.py` 48 pass; `web/src/hud/*.test.ts` 65 pass (5 on real data).
 - 2026-11-14T11:20Z: browser check of `/hud` on data-dummy: playback 300×, band shading,
   dwell ring, expanded panel + minimap, drag-anywhere readout; layout fixed to fit the outlet.
 
+- 2026-11-14T11:35Z: **WS9 F21 in the HUD** (`web/src/hud/navhud.ts`, WS9's `navReading` /
+  `navLine` / ellipse geometry): when `nav/montecarlo_{default_set}.json` exists the "Odometry"
+  toggle replaces the 2 % fallback: σ = ellipse semi-major axis (worst case by the smallest radius
+  ≥ it), the 95 % ellipse replaces the circle on map and minimap, alarm 3 fires when the ellipse
+  reaches the homeline ("POSITION UNCERTAIN: TAKE A FIX OR HEAD TOWARD ROVER"), the position line
+  reads "Odometry ±N m · next fix due in M m · last fix: type, K min ago" (D_max from
+  `fields/fix_interval_{set}.png`), and "Take fix" jumps to the next fix event. KATs
+  `navhud.test.ts` (6; exact ellipse/band crossing). Checked in the browser on data-dummy.
+
 ### Doing
 
-- WS9 integration (ellipse replaces the circle, "next fix due in M m" from `web/src/nav/`).
+- —
 
 ### Next
 
