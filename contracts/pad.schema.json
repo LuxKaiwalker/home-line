@@ -2,8 +2,8 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "homeline/contracts/pad.schema.json",
   "title": "pad.json",
-  "description": "Pad siting result (F8, added 13 Nov). Carries \"dummy\" per SPEC §6.",
-  "x-contract-version": "1.0.0",
+  "description": "Pad in use (F8, added 13 Nov). Carries \"dummy\" per SPEC §6. v1.1.2 (C decision 2026-11-14 14:58): `pad` is the pad in use (config/site.yaml pad_default, user 11:24), never the siting result; the F8 siting result goes in the optional `proposal` block (adopted: false) with its own alternatives, hop options and rule; optional pad.source.",
+  "x-contract-version": "1.1.2",
   "x-source": "SPEC §6",
   "type": "object",
   "properties": {
@@ -65,6 +65,10 @@
             "max_slope_deg",
             "rule_passed"
           ]
+        },
+        "source": {
+          "type": "string",
+          "description": "where the pad position comes from, e.g. config/site.yaml pad_default (v1.1.2)"
         }
       },
       "required": [
@@ -148,6 +152,161 @@
       "type": [
         "string",
         "integer"
+      ]
+    },
+    "proposal": {
+      "type": "object",
+      "description": "F8 siting proposal (WS2 pipeline/engine/siting.py) for S to accept or reject; not the pad in use (v1.1.2)",
+      "properties": {
+        "adopted": {
+          "const": false,
+          "description": "a proposal is never the pad in use; adopting one changes config/site.yaml pad_default"
+        },
+        "note": {
+          "type": "string"
+        },
+        "pad": {
+          "type": "object",
+          "properties": {
+            "lon": {
+              "type": "number",
+              "minimum": -180,
+              "maximum": 360,
+              "description": "longitude, deg east (Mars 2000 planetocentric)"
+            },
+            "lat": {
+              "type": "number",
+              "minimum": -90,
+              "maximum": 90,
+              "description": "latitude, deg (Mars 2000 planetocentric)"
+            },
+            "elev_m": {
+              "type": [
+                "number",
+                "null"
+              ]
+            },
+            "score": {
+              "type": [
+                "number",
+                "null"
+              ]
+            },
+            "checks": {
+              "type": "object",
+              "properties": {
+                "assessed_pct_30min": {
+                  "type": [
+                    "number",
+                    "null"
+                  ]
+                },
+                "max_slope_deg": {
+                  "type": [
+                    "number",
+                    "null"
+                  ]
+                },
+                "rule_passed": {
+                  "type": [
+                    "boolean",
+                    "null"
+                  ]
+                }
+              },
+              "required": [
+                "assessed_pct_30min",
+                "max_slope_deg",
+                "rule_passed"
+              ]
+            }
+          },
+          "required": [
+            "lon",
+            "lat",
+            "elev_m",
+            "score",
+            "checks"
+          ]
+        },
+        "alternatives": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "rank": {
+                "type": "integer"
+              },
+              "lon": {
+                "type": "number",
+                "minimum": -180,
+                "maximum": 360,
+                "description": "longitude, deg east (Mars 2000 planetocentric)"
+              },
+              "lat": {
+                "type": "number",
+                "minimum": -90,
+                "maximum": 90,
+                "description": "latitude, deg (Mars 2000 planetocentric)"
+              },
+              "elev_m": {
+                "type": [
+                  "number",
+                  "null"
+                ]
+              },
+              "score": {
+                "type": [
+                  "number",
+                  "null"
+                ]
+              }
+            },
+            "required": [
+              "rank",
+              "lon",
+              "lat",
+              "elev_m",
+              "score"
+            ]
+          }
+        },
+        "hop_options": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "pads": {
+                "type": "array",
+                "items": {
+                  "type": "array",
+                  "items": {
+                    "type": "number"
+                  },
+                  "minItems": 2,
+                  "maxItems": 3,
+                  "description": "[lon, lat] deg"
+                }
+              },
+              "note": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "pads",
+              "note"
+            ]
+          }
+        },
+        "site_rule_version": {
+          "type": [
+            "string",
+            "integer"
+          ]
+        }
+      },
+      "required": [
+        "pad"
       ]
     }
   },

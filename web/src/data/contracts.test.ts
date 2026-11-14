@@ -34,7 +34,7 @@ describe('SCHEMA_MAP mirrors tools/validate_contracts.py', () => {
     })
   })
   it('contracts are v1.x (v1.1.x is additive; untouched schemas keep their version)', () => {
-    expect(contractVersions().sort()).toEqual(['1.0.0', '1.1.0', '1.1.1'])
+    expect(contractVersions().sort()).toEqual(['1.0.0', '1.1.0', '1.1.1', '1.1.2'])
   })
 })
 

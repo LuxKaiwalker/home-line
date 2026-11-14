@@ -103,12 +103,12 @@ def write_tile(path: Path, rgb=(120, 90, 60)) -> None:
     Image.fromarray(arr, "RGB").save(path)
 
 
-def write_cellstate_tif(path: Path) -> None:
+def write_cellstate_tif(path: Path, blocked_rows: int = 10) -> None:
     import rasterio
     from rasterio.transform import Affine
 
     state = np.zeros((40, 50), dtype=np.uint8)
-    state[:10, :] = 1
+    state[:blocked_rows, :] = 1
     state[30:, 40:] = 2
     path.parent.mkdir(parents=True, exist_ok=True)
     with rasterio.open(path, "w", driver="GTiff", height=40, width=50, count=1, dtype="uint8",
@@ -220,6 +220,96 @@ def test_run_end_to_end(tree):
     src_t = (tree["interim"] / "conditions/rad.json").stat().st_mtime
     assert (pub / "conditions/rad.json").stat().st_mtime == pytest.approx(src_t)
     assert any(line.startswith("  WS2: 0 files present") for line in lines)
+
+
+def test_run_conservative_cellstate_own_web_path(tree):
+    """WS1's cellstate_3m_conservative.tif -> terrain/cellstate_conservative.{png,json}
+    (variant from the file name, own manifest keys); the nominal files are unchanged."""
+    write_cellstate_tif(tree["interim"] / "terrain" / "cellstate_3m_conservative.tif", 20)
+    rc, lines = run(tree)
+    assert rc == 0, "\n".join(lines)
+    pub = tree["public"]
+    nom = json.loads((pub / mw.CELLSTATE_JSON).read_text())
+    con = json.loads((pub / mw.CELLSTATE_CONS_JSON).read_text())
+    assert errors("cellstate.schema.json", con) == []
+    assert (nom["variant"], nom["image"]) == ("nominal", mw.CELLSTATE_PNG)
+    assert (con["variant"], con["image"]) == ("conservative", mw.CELLSTATE_CONS_PNG)
+    assert nom["pct"] == {"assessed": 70.0, "blocked": 25.0, "unknown": 5.0}
+    assert con["pct"] == {"assessed": 45.0, "blocked": 50.0, "unknown": 5.0}
+    assert con["bounds"] == nom["bounds"]
+    rgba = decode((pub / mw.CELLSTATE_CONS_PNG).read_bytes())
+    assert (rgba[:20, :, 1] == 1).all() and (rgba[20:30, :, 1] == 0).all()
+    m = json.loads((pub / "manifest.json").read_text())
+    assert m["terrain.cellstate.pct.blocked"]["value"] == 25.0
+    assert m["terrain.cellstate_conservative.pct.blocked"]["value"] == 50.0
+    assert m["terrain.cellstate_conservative.pct.blocked"]["file"] == mw.CELLSTATE_CONS_JSON
+    assert not any(line.startswith("DANGLING") for line in lines)
+
+
+def test_run_records_cellstate_keys_before_clearing_public(tree, monkeypatch):
+    """git_commit() is '-dirty' once make web has rewritten the tracked public tree, so the
+    cell-state keys are recorded first (WS6 audit 1: terrain.cellstate.pct.* were dirty)."""
+    seen = {}
+    real_clear = mw.clear_public
+
+    def spy(public):
+        f = tree["rec"] / "tools__make_web.json"
+        seen["keys"] = set(json.loads(f.read_text())) if f.is_file() else set()
+        return real_clear(public)
+
+    monkeypatch.setattr(mw, "clear_public", spy)
+    rc, lines = run(tree)
+    assert rc == 0, "\n".join(lines)
+    assert {"terrain.cellstate.pct.assessed", "terrain.cellstate.pct.blocked",
+            "terrain.cellstate.pct.unknown"} <= seen["keys"]
+
+
+def test_run_without_conservative_drops_its_keys(tree):
+    """A stale conservative key in make_web's own fragment never cites an unwritten file."""
+    (tree["rec"]).mkdir()
+    (tree["rec"] / "tools__make_web.json").write_text(json.dumps({
+        "terrain.cellstate_conservative.pct.blocked": entry(mw.CELLSTATE_CONS_JSON, 50.0)}))
+    (tree["frags"] / "tools__make_web.json").write_text(json.dumps({
+        "terrain.cellstate_conservative.pct.blocked": entry(mw.CELLSTATE_CONS_JSON, 50.0)}))
+    rc, lines = run(tree)
+    assert rc == 0, "\n".join(lines)
+    m = json.loads((tree["public"] / "manifest.json").read_text())
+    assert "terrain.cellstate.pct.blocked" in m
+    assert "terrain.cellstate_conservative.pct.blocked" not in m
+    assert ("WS1", "terrain/cellstate_conservative.json",
+            "data/interim/terrain/cellstate_3m_conservative.tif") in mw.plan(
+        tree["interim"], settings=SETTINGS, dummy_tree=tree["dummy"], h0=H0).missing
+
+
+def test_run_withholds_pad_json(tree):
+    """C decision 14:58: WS2's pad.json carries the F8 proposal as the pad, so it is withheld
+    (reported, never copied; its manifest entries left out); siting files publish as normal."""
+    pub_src = tree["interim"] / "engine" / "public"
+    pub_src.mkdir(parents=True)
+    (pub_src / "pad.json").write_text(json.dumps({"dummy": False, "pad": {}}))
+    (pub_src / "siting.png").write_bytes(b"png")
+    (pub_src / "siting_png.json").write_text(json.dumps(
+        {"image": "siting.png", "coordinates": [[0, 1], [1, 1], [1, 0], [0, 0]]}))
+    (tree["frags"] / "pipeline__engine__siting.json").write_text(json.dumps({
+        "pad.lon": entry("pad.json", 137.4), "siting.x": entry("siting_png.json", 1.0)}))
+    p = mw.plan(tree["interim"], settings=SETTINGS, dummy_tree=tree["dummy"], h0=H0)
+    assert "pad.json" not in {c.dst.as_posix() for c in p.copies}
+    assert not any(w == "pad.json" for _, w, _ in p.missing)
+    assert any(s.startswith("withheld: data/interim/engine/public/pad.json") for s in p.skipped)
+    rc, lines = run(tree)
+    pub = tree["public"]
+    assert not (pub / "pad.json").exists() and (pub / "siting.png").is_file()
+    m = json.loads((pub / "manifest.json").read_text())
+    assert "pad.lon" not in m and "siting.x" in m
+
+
+def test_plan_ws8_far_texture_rule(tree):
+    """WS8 STATUS: far texture fp3d/far_tex.jpg (8 m ortho over the far mesh)."""
+    src = tree["interim"] / "export" / "fp3d" / "far_tex.jpg"
+    src.parent.mkdir(parents=True)
+    src.write_bytes(b"\xff\xd8jpg")
+    p = mw.plan(tree["interim"], settings=SETTINGS, dummy_tree=tree["dummy"], h0=H0)
+    assert any(c.owner == "WS8" and c.dst.as_posix() == "fp3d/far_tex.jpg" for c in p.copies)
 
 
 def test_run_drops_top_zoom_over_budget(tree):
@@ -450,6 +540,21 @@ def test_run_skip_ws2_builds_no_card(tree):
     assert not (tree["public"] / "cards").exists()
     assert "skipped: cards/S2.json not built (WS2 skipped)" in lines
     assert not any(line.startswith("  WS2:") for line in lines)
+
+
+def test_dangling_fp3d_index(tmp_path):
+    (tmp_path / "fp3d" / "near").mkdir(parents=True)
+    (tmp_path / "fp3d" / "near" / "1_2.f32.gz").write_bytes(b"x")
+    (tmp_path / "fp3d" / "far.f32.gz").write_bytes(b"x")
+    (tmp_path / "fp3d" / "index.json").write_text(json.dumps({
+        "dummy": False, "horizon_ring": "fp3d/horizon_ring.json",
+        "far": {"file": "fp3d/far.f32.gz", "tex": "fp3d/far_tex.jpg"},
+        "chunk_grid": {"chunks": [{"i": 1, "j": 2, "file": "fp3d/near/1_2.f32.gz",
+                                   "tex": "fp3d/near_tex/1_2.jpg"}]}}))
+    assert mw.dangling(tmp_path) == [
+        "fp3d/near_tex/1_2.jpg (named in fp3d/index.json chunk 1_2)",
+        "fp3d/far_tex.jpg (named in fp3d/index.json far)",
+        "fp3d/horizon_ring.json (named in fp3d/index.json)"]
 
 
 def test_dangling_card_images(tmp_path):

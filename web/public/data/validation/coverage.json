@@ -32,10 +32,10 @@
   "3": "HRSC/MOLA (not used: not separable)"
  },
  "d3": {
-  "status": "recommended default applied, awaiting confirmation at G0",
+  "status": "decided: A (STAC footprint quads), user 2026-11-14 11:24 CET",
   "applied": "STAC footprint quads (mro_hirise_socet_dtms) of the HiRISE pairs the merged DEM's Astropedia page lists",
   "note": "mosaic footprints are not published (D0 2.2); CTX vs HRSC cannot be told apart, non-HiRISE valid cells are coded 2",
-  "decided": false,
+  "decided": true,
   "stac_items": [
    {
     "id": "DTEEC_040770_1755_039280_1755_A01",
@@ -138,36 +138,13 @@
    "unknown_frac": 0.0
   }
  },
- "discs": [
-  {
-   "budget_min": 30,
-   "radius_m": 1764.0,
-   "assessed_pct": 58.77,
-   "blocked_pct": 41.23,
-   "unknown_pct": 0.0
-  },
-  {
-   "budget_min": 60,
-   "radius_m": 3528.0,
-   "assessed_pct": 68.64,
-   "blocked_pct": 31.36,
-   "unknown_pct": 0.0
-  }
- ],
  "source_fractions_pct": {
   "hirise": 100.0,
   "ctx": 0.0,
   "hrsc_mola": 0.0,
   "nodata": 0.0
  },
- "source_mask_origin": "D3 recommended default applied, awaiting confirmation at G0: STAC footprint quads (mro_hirise_socet_dtms) of the HiRISE pairs the merged DEM's Astropedia page lists, intersected with valid DEM cells; the mosaic publishes no footprints (docs/discovery.md 2.2)",
- "pad_check": {
-  "budget_min": 30,
-  "min_assessed_pct": 90,
-  "pass": true,
-  "known_pct": 100.0,
-  "basis": "data coverage: assessed + blocked cells (state != unknown) of the flat 30-min disc >= min_assessed_pct (SPEC F1 acceptance; blocked terrain is assessed data, only unknown cells fail the check)"
- },
+ "source_mask_origin": "D3 decided: A (STAC footprint quads), user 2026-11-14 11:24 CET: STAC footprint quads (mro_hirise_socet_dtms) of the HiRISE pairs the merged DEM's Astropedia page lists, intersected with valid DEM cells; the mosaic publishes no footprints (docs/discovery.md 2.2)",
  "map": {
   "png": "validation/coverage.png",
   "bounds": [
@@ -187,5 +164,103 @@
   "source": "data/interim/terrain/cellstate_3m.tif (3 m cell states)"
  },
  "source_fractions_note": "share of the planning extent (disc of planning_radius_m around the pad) on the 1 m source mask; 'ctx' = code 2 = any non-HiRISE source (CTX or HRSC, not separable without mosaic footprints), 'hrsc_mola' (code 3) is never assigned",
- "discs_note": "cell states of cellstate_3m.tif inside each flat disc (radius = crew.yaml anchor.speed_ms x budget); assessed + blocked + unknown = 100"
+ "discs_note": "cell states of cellstate_3m.tif inside each flat disc (radius = crew.yaml anchor.speed_ms x budget); assessed + blocked + unknown = 100",
+ "discs": [
+  {
+   "budget_min": 30,
+   "radius_m": 1764.0,
+   "assessed_pct": 58.77,
+   "blocked_pct": 41.23,
+   "unknown_pct": 0.0
+  },
+  {
+   "budget_min": 60,
+   "radius_m": 3528.0,
+   "assessed_pct": 68.64,
+   "blocked_pct": 31.36,
+   "unknown_pct": 0.0
+  }
+ ],
+ "pad_check": {
+  "budget_min": 30,
+  "min_assessed_pct": 90,
+  "reading": "data_coverage",
+  "pass": true,
+  "known_pct": 100.0,
+  "assessed_pct": 58.77,
+  "readings": {
+   "data_coverage": {
+    "pct": 100.0,
+    "pass": true,
+    "definition": "assessed + blocked cells (state != unknown): blocked terrain is assessed data, only unknown cells count against the pad"
+   },
+   "state0_only": {
+    "pct": 58.77,
+    "pass": false,
+    "definition": "assessed cells only (state 0: known and within the nominal slope limit); blocked cells count against the pad"
+   }
+  },
+  "basis": "SPEC F1 acceptance: the pad's 30-min flat disc is >= 90 % assessed. Two readings of 'assessed' are shown; the decided reading is 'data_coverage'."
+ },
+ "terrain_checks": {
+  "note": "WS1 terrain checks without a web file of their own (manifest keys cite validation/coverage.json); the HiRISE DTMs are never used for routing",
+  "hirise_xcheck": {
+   "definition": "diff = merged DEM - HiRISE DTM on the dem_1m grid (bilinear); P90 is of |diff|",
+   "items": {
+    "DTEEC_009149_1750_009294_1750_U01": {
+     "median_m": -14.543,
+     "p90_abs_m": 36.572
+    },
+    "DTEEC_019698_1750_019988_1750_U01": {
+     "median_m": -9.426,
+     "p90_abs_m": 15.34
+    }
+   }
+  },
+  "slope_compare": {
+   "median_abs_diff_deg": 0.341,
+   "definition": "slope_5m - slope_1m (Horn) over HiRISE cells, deg"
+  },
+  "blocked_pct_of_known": {
+   "30": 41.23,
+   "60": 31.357
+  },
+  "conservative": {
+   "nogo_deg": 14.553,
+   "v1_rmse_deg": 5.447,
+   "rule": "3 m cell blocked if its max 1 m slope > nogo_deg = 20 - V1 RMSE (config/site.yaml slope.nogo_deg.conservative); unknown cells unchanged",
+   "v1_source": "validation/v1.json rmse_deg",
+   "raster": "data/interim/terrain/cellstate_3m_conservative.tif",
+   "discs": [
+    {
+     "budget_min": 30,
+     "radius_m": 1764.0,
+     "assessed_pct": 41.25,
+     "blocked_pct": 58.75,
+     "unknown_pct": 0.0,
+     "nominal_blocked_pct": 41.23,
+     "newly_blocked_pct": 17.52
+    },
+    {
+     "budget_min": 60,
+     "radius_m": 3528.0,
+     "assessed_pct": 53.69,
+     "blocked_pct": 46.31,
+     "unknown_pct": 0.0,
+     "nominal_blocked_pct": 31.36,
+     "newly_blocked_pct": 14.95
+    }
+   ],
+   "grid_pct": {
+    "assessed": 54.14,
+    "blocked": 45.86,
+    "unknown": 0.0
+   },
+   "nominal_grid_pct": {
+    "assessed": 68.78,
+    "blocked": 31.22,
+    "unknown": 0.0
+   }
+  }
+ }
 }

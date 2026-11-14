@@ -10,6 +10,7 @@
  "margin_binding": null,
  "margin_min": null,
  "contingency": "No access cell within 50 m (38 assessed cells within 50 m, none with a walk home in this scenario): no walk home or partner haul computed for this station.",
+ "drag_note": "One astronaut cannot drag a suited crewmate on Mars without a cart or sled: the pull needed exceeds boot grip even on flat ground.",
  "t_home_min": null,
  "o2_home_L": null,
  "science": {
@@ -70,7 +71,7 @@
   "WS3": {
    "source": "data/interim/horizon/public/cards/S1.json",
    "producer": "WS3 pipeline/horizon/cards.py",
-   "built_utc": "2026-11-14T11:04:16Z"
+   "built_utc": "2026-11-14T13:31:04Z"
   },
   "WS2": {
    "source": "data/interim/engine/public/cards/S1.timeline.json",

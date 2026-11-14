@@ -10,6 +10,7 @@
  "margin_binding": "dose",
  "margin_min": 14.89,
  "contingency": "Partner down: haul home by cart from the access cell, 108 min (casualty 179 kg; haul parameters assumed); outside the 60-min partner line.",
+ "drag_note": "One astronaut cannot drag a suited crewmate on Mars without a cart or sled: the pull needed exceeds boot grip even on flat ground.",
  "t_home_min": 71.01,
  "o2_home_L": 95.56,
  "science": {
@@ -73,7 +74,7 @@
   "WS3": {
    "source": "data/interim/horizon/public/cards/S2.json",
    "producer": "WS3 pipeline/horizon/cards.py",
-   "built_utc": "2026-11-14T11:04:16Z"
+   "built_utc": "2026-11-14T13:31:04Z"
   },
   "WS2": {
    "source": "data/interim/engine/public/cards/S2.timeline.json",

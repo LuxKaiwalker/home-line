@@ -2,8 +2,8 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "homeline/contracts/card.schema.json",
   "title": "cards/{station}.json",
-  "description": "Station card (F12, F15). Landmark names come from config/landmarks.yaml, coordinates verified at H0; never typed by hand. make web (C) merges WS3's horizon/public/cards/{S}.json (navcam, skyline_error_deg, panorama_png, landmarks) with WS2's engine/public/cards/{S}.timeline.json (timeline, margin_binding, contingency, access block); a station missing either part gets no card. v1.1.1: margin_binding may be null (no route or no access cell); optional access block and producer extras.",
-  "x-contract-version": "1.1.1",
+  "description": "Station card (F12, F15). Landmark names come from config/landmarks.yaml, coordinates verified at H0; never typed by hand. make web (C) merges WS3's horizon/public/cards/{S}.json (navcam, skyline_error_deg, panorama_png, landmarks) with WS2's engine/public/cards/{S}.timeline.json (timeline, margin_binding, contingency, access block); a station missing either part gets no card. v1.1.1: margin_binding may be null (no route or no access cell); optional access block and producer extras. v1.1.2: optional drag_note (D20, WS2 timeline part).",
+  "x-contract-version": "1.1.2",
   "x-source": "SPEC §6",
   "type": "object",
   "properties": {
@@ -171,6 +171,10 @@
     },
     "contingency": {
       "type": "string"
+    },
+    "drag_note": {
+      "type": "string",
+      "description": "D20: dragging a suited crewmate is infeasible (finding text from config/haul.yaml drag_note; WS2) (v1.1.2)"
     },
     "station": {
       "type": "string",

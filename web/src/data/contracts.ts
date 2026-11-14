@@ -1,5 +1,5 @@
 // Data path pattern -> contract schema, mirroring SCHEMA_MAP in tools/validate_contracts.py
-// (contracts v1.1.1; contracts.test.ts checks the two tables match row by row). Schemas are
+// (contracts v1.1.2; contracts.test.ts checks the two tables match row by row). Schemas are
 // imported from contracts/ at build time, so the browser checks the frozen contract itself.
 import bandsSchema from '../../../contracts/bands.schema.json'
 import cardSchema from '../../../contracts/card.schema.json'
@@ -72,6 +72,7 @@ export const SCHEMA_MAP: [pattern: string, schema: JsonSchema][] = [
   ['siting_png.json', sitingPngSchema],
   ['tiles/basemap/tilejson.json', tilejsonSchema],
   ['terrain/cellstate.json', cellstateSchema],
+  ['terrain/cellstate_conservative.json', cellstateSchema],
 ]
 
 /** fnmatch-style match where `*` does not cross `/` (one glob per path segment, as in Python). */

@@ -1,9 +1,9 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "homeline/contracts/cellstate.schema.json",
-  "title": "terrain/cellstate.json",
-  "description": "Placement and legend of terrain/cellstate.png, the routing-grid cell states (F1: assessed / blocked / unknown) for hatching unknown terrain. PNG encoding as the field PNGs: 8-bit RGBA, counts = R*256 + G (0 assessed, 1 blocked), B = 0, A = 255 known, A = 0 unknown (state 2, incl. non-HiRISE and no data). One PNG pixel per routing cell, rows north to south. Written by make web from WS1's cellstate_3m.tif (tools/make_web.py). Added in v1.1.0.",
-  "x-contract-version": "1.1.0",
+  "title": "terrain/cellstate.json, terrain/cellstate_conservative.json",
+  "description": "Placement and legend of terrain/cellstate.png, the routing-grid cell states (F1: assessed / blocked / unknown) for hatching unknown terrain. PNG encoding as the field PNGs: 8-bit RGBA, counts = R*256 + G (0 assessed, 1 blocked), B = 0, A = 255 known, A = 0 unknown (state 2, incl. non-HiRISE and no data). One PNG pixel per routing cell, rows north to south. Written by make web from WS1's cellstate_3m.tif (tools/make_web.py). Added in v1.1.0. v1.1.2: the same schema for terrain/cellstate_conservative.json (+ .png), from WS1's cellstate_3m_conservative.tif (variant conservative: blocked = max 1 m slope > 20 - V1 RMSE deg); manifest keys terrain.cellstate_conservative.pct.*.",
+  "x-contract-version": "1.1.2",
   "x-source": "SPEC §2.2 F1 (unknown drawn hatched); brief WS1 (cellstate_3m.tif); WS5 STATUS (no cell-state web file)",
   "type": "object",
   "properties": {
@@ -13,7 +13,7 @@
     },
     "image": {
       "type": "string",
-      "description": "PNG path relative to the data root (terrain/cellstate.png)"
+      "description": "PNG path relative to the data root (terrain/cellstate.png or terrain/cellstate_conservative.png)"
     },
     "bounds": {
       "type": "array",
