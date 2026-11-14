@@ -4,6 +4,7 @@
 // from those files (WS5's provenance resolves them by file + value). The panel puts the keys and
 // files on each row (data-manifest-key, data-source-files, tooltip).
 import type { Readout } from './readout'
+import type { StormState } from './storm'
 
 export type PanelRow = 'tHome' | 'margin' | 'o2' | 'binding' | 'turn' | 'rover' | 'next' | 'slope' | 'partner' | 'sun' | 'dose' | 'trip'
 
@@ -19,6 +20,8 @@ export interface KeyContext {
   partnerFile?: string | null
   /** sun row (sun.ts sunSources: the observers actually shown); default t_dark_min + sun_series */
   sunSources?: RowSource | null
+  /** storm switch state: when on, the trip row cites the tripwire time, ± label and the route T_home (D39) */
+  storm?: StormState | null
 }
 
 export function readoutSources(r: Readout, k: KeyContext): Record<PanelRow, RowSource> {
@@ -41,6 +44,13 @@ export function readoutSources(r: Readout, k: KeyContext): Record<PanelRow, RowS
     partner: file(k.partnerFile ?? `scenarios/${scenario}/partner.geojson`),
     sun: k.sunSources ?? { keys: ['clock.eva.t_dark_min', 'clock.eva.sun_series'], files: ['conditions/clock.json'] },
     dose: file('conditions/rad.json'),
-    trip: file('conditions/rad.json'),
+    trip: tripSources(k.storm ?? null, scenario),
   }
+}
+
+function tripSources(st: StormState | null, scenario: string): RowSource {
+  if (!st?.on) return { keys: ['rad.leash.tau_min_at_peak'], files: ['conditions/rad.json'] }
+  const keys = ['rad.storm_2024.tripwire_utc', 'rad.leash.tau_min_at_peak', `fields.${scenario}/t_home.sha256`]
+  if (st.halfwidthLabel) keys.splice(1, 0, 'rad.storm_2024.tripwire_halfwidth_label')
+  return { keys, files: ['conditions/rad.json', `route_${scenario}.geojson`, `fields/${scenario}/t_home.png`, 'config/conditions.yaml'] }
 }

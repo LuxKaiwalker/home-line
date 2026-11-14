@@ -4,7 +4,8 @@
 // Definitions (assumption A-WS7-3, see STATUS.md):
 //   headroom H(t)  = timeline margin_min + t_home_min, interpolated in t (WS2's margin terms)
 //   margin         = H(t) - T_home at the position (worst case within sigma)
-//   turn-back in   = margin (standing still, H falls one minute per minute)
+//   turn-back in   = margin (standing still, H falls one minute per minute); its binding term is
+//                    the timeline row's margin_binding, incl. "EVA duration" (D28, contract v1.1.3)
 import { evaluateAlarm, marginBand, type Alarm } from './alarms'
 import { vSafeAt, type HudConfig } from './config'
 import type { FieldGrid } from './fields'
@@ -52,6 +53,8 @@ export interface Readout {
   alarm: Alarm | null
   /** binding term of the timeline row in force (undefined = timeline has none) */
   binding: Binding | undefined
+  /** during a station dwell: WS2's turn_back row for that station (latest leave, binding; D28) */
+  latestLeave: { station: string; t_min: number; binding: Binding } | null
 }
 
 /** Smallest precomputed radius >= sigma (F19); 0 for an exact position; null if none is large enough. */
@@ -138,7 +141,15 @@ export function computeReadout(pos: HudPosition, ctx: HudContext): Readout {
     band: marginBand(margin, cfg.marginAmberMin),
     alarm,
     binding: plan.bindingAt(pos.t_eva_min),
+    latestLeave: latestLeaveAt(plan, pos),
   }
+}
+
+/** The dwell station's turn_back row (playback / drift on the route only; not for a dragged spot). */
+function latestLeaveAt(plan: Plan, pos: HudPosition): Readout['latestLeave'] {
+  if (pos.source === 'drag') return null
+  const s = plan.stateAt(pos.t_eva_min)
+  return s.phase === 'dwell' && s.station ? plan.turnBackAt(s.station) : null
 }
 
 /** Playback position (F19 source "playback"): on the planned route, sigma 0. */

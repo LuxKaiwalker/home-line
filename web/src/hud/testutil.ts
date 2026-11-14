@@ -17,9 +17,15 @@ export function readJson<T>(rel: string, root = DUMMY): T {
   return JSON.parse(readFileSync(resolve(root, rel), 'utf8')) as T
 }
 
+const yamlConfig = (f: string): unknown => parse(readFileSync(resolve(REPO, 'config', f), 'utf8'))
+
+/** config/conditions.yaml (D39 storm_replay key, WS4). */
+export function loadConditionsYaml(): unknown {
+  return yamlConfig('conditions.yaml')
+}
+
 export function loadConfig(): HudConfig {
-  const y = (f: string) => parse(readFileSync(resolve(REPO, 'config', f), 'utf8'))
-  return parseHudConfig(y('hud.yaml'), y('crew.yaml'))
+  return parseHudConfig(yamlConfig('hud.yaml'), yamlConfig('crew.yaml'), loadConditionsYaml())
 }
 
 /** Minimal PNG reader: 8-bit RGBA, non-interlaced (the field contract). Returns raw RGBA. */
