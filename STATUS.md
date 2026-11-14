@@ -159,11 +159,19 @@ All numbers from today's fresh downloads (`data/raw/terrain/`, cache index `cach
   `dataedge_3m.tif` (all 0: no unknown cells), `ridge_3m.tif`; plus `slope_1m.tif`, `slope_5m.tif`,
   `roughness_5m.tif`, `ridge_index.tif` (WS6 V1 can use `slope_1m.tif`). 2,468 x 2,468 at 3 m.
 - `hirise_xcheck.json`; `crism_d2300_18m.tif`, `crism_sindex2_18m.tif` (89.2% valid).
-- Downloads: 909 MB total (DEM 722, HiRISE DTM windows 178, CRISM bands 9).
+- `stations.json` (values part, `data/interim/terrain/`): S1 137.391523, -4.810007 (value 0.8683);
+  S2 137.383058, -4.776687 (0.7443); S4 = MMGIS 107_2484, sol 4200, 137.408864, -4.785707 (0.4750);
+  S3, S5 null until S picks. Scoring normalisation in `stations.yaml scoring_assumptions` (assumed).
+- Far field for **WS3**: `mola_hrsc_200m.tif` (pad +/- 83.8 km, 200 m, 100% valid, fetched with
+  GTIFF_DIRECT_IO, 2.3 MB) and `ctx_20m.tif` (pad +/- 33.7 km, 20 m; 3 geoid-adjusted CTX items,
+  each levelled to MOLA-HRSC by its median; **70.8% of the 33.7 km disc valid**, NaN elsewhere: use
+  MOLA-HRSC there). One item rejected by QA (P22_009505__P22_009571: median -55.3 m vs MOLA-HRSC).
+  Details in `farfield.json`.
+- Downloads so far: 982 MB (DEM 722, HiRISE DTM windows 178, CTX 71, CRISM 9, MOLA 2).
 
 ### Doing
 
-- Stations (S1, S2, S4), CTX/MOLA-HRSC windows for WS3, ortho + basemap tiles.
+- LRGB ortho (1 m over the DEM window for WS8, 0.25 m over the focus area) and basemap tiles.
 
 ### Next
 
@@ -180,6 +188,9 @@ All numbers from today's fresh downloads (`data/raw/terrain/`, cache index `cach
 
 ### Assumptions added
 
+- `site.yaml`: `ctx_qa` (reject |median vs MOLA-HRSC| > 50 m, level to MOLA) assumed.
+- `stations.yaml`: `scoring_assumptions` (normalisation, per-station CRISM index, 25 m pick cells,
+  S2 300 m separation and same domain as S1) assumed; S to confirm before D8.
 - `site.yaml`: `raw_fetch_margin_m` 200, `raw_fetch_chunk_rows` 400, `download_budget_bytes` 3 GB,
   `texture_check` (D3 evidence only) - all `assumed: true`; `dem_window_buffer_m` 200 (brief).
 - Non-HiRISE valid cells are coded 2 (CTX and HRSC are not separable without footprints); code 3
