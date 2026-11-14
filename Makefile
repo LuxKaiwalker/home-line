@@ -16,8 +16,10 @@ terrain:     ## WS1: fetch raw (cached) then build data/interim/terrain/
 	$(PY) -m pipeline.terrain.build all
 engine:      ## WS2: return fields, isochrones, bands, edges, partner, stations, route, trade
 	$(PY) -m pipeline.engine.scenarios
-horizons:    ## WS3
-	@echo "horizons: stub (WS3 adds pipeline/horizon CLI)"
+horizons:    ## WS3: far-field bands, Navcam frames + stop horizons, V2 (needs WS1 dem_1m.tif)
+	$(PY) -m pipeline.horizon.bands
+	$(PY) -m pipeline.horizon.navcam fetch
+	$(PY) -m pipeline.validation.v2_skyline
 conditions:  ## WS4: rad, clock, rems, donki -> data/interim/conditions/ (cache: make conditions-fetch)
 	$(PY) -m pipeline.conditions
 conditions-fetch:  ## WS4: download/refresh data/raw/conditions/ (needs NASA_API_KEY for DONKI)
