@@ -3443,14 +3443,6 @@
     "utc": "2026-11-14T13:16:57Z",
     "value": "b53e99b483834d6d729a7aa3b9020bcae1d303352e3b0714b6ff0424a63203f9"
   },
-  "file.pad.json": {
-    "commit": "054ced5587d789b3947528df342d2dd1a1965c07",
-    "file": "pad.json",
-    "script": "pipeline/engine/siting.py",
-    "units": "sha256",
-    "utc": "2026-11-14T13:45:47Z",
-    "value": "5b772fac264579014fa17a76c7f2142b575b4f233e4b8a75f399e8475175c069"
-  },
   "file.route_nom_104.geojson": {
     "commit": "054ced5587d789b3947528df342d2dd1a1965c07",
     "file": "route_nom_104.geojson",
@@ -3746,6 +3738,54 @@
     "units": null,
     "utc": "2026-11-14T10:09:11Z",
     "value": "17cdb50ecdd7e2a95e319f2a2f77709a5b7e763bea3a5fdc47e33a8df6700f6c"
+  },
+  "fp3d.corridor_half_width_m": {
+    "commit": "a0d76eca83898d6690f1e6abb3f6e7de763b58ae",
+    "file": "data/interim/export/fp3d/index.json",
+    "script": "pipeline/export/terrain_chunks.py",
+    "units": "m",
+    "utc": "2026-11-14T13:51:23Z",
+    "value": 150
+  },
+  "fp3d.download_mb": {
+    "commit": "a0d76eca83898d6690f1e6abb3f6e7de763b58ae",
+    "file": "data/interim/export/fp3d/index.json",
+    "script": "pipeline/export/terrain_chunks.py",
+    "units": "MB",
+    "utc": "2026-11-14T13:51:23Z",
+    "value": 10.85
+  },
+  "fp3d.far_extent_m": {
+    "commit": "a0d76eca83898d6690f1e6abb3f6e7de763b58ae",
+    "file": "data/interim/export/fp3d/index.json",
+    "script": "pipeline/export/terrain_chunks.py",
+    "units": "m",
+    "utc": "2026-11-14T13:51:23Z",
+    "value": 12032.0
+  },
+  "fp3d.far_res_m": {
+    "commit": "a0d76eca83898d6690f1e6abb3f6e7de763b58ae",
+    "file": "data/interim/export/fp3d/index.json",
+    "script": "pipeline/export/terrain_chunks.py",
+    "units": "m",
+    "utc": "2026-11-14T13:51:23Z",
+    "value": 8.0
+  },
+  "fp3d.near_chunks": {
+    "commit": "a0d76eca83898d6690f1e6abb3f6e7de763b58ae",
+    "file": "data/interim/export/fp3d/index.json",
+    "script": "pipeline/export/terrain_chunks.py",
+    "units": null,
+    "utc": "2026-11-14T13:51:23Z",
+    "value": 41
+  },
+  "fp3d.near_res_m": {
+    "commit": "a0d76eca83898d6690f1e6abb3f6e7de763b58ae",
+    "file": "data/interim/export/fp3d/index.json",
+    "script": "pipeline/export/terrain_chunks.py",
+    "units": "m",
+    "utc": "2026-11-14T13:51:23Z",
+    "value": 1.0
   },
   "haul.drag.flat.boot_mu": {
     "commit": "054ced5587d789b3947528df342d2dd1a1965c07",
@@ -5651,38 +5691,6 @@
     "utc": "2026-11-14T13:31:04Z",
     "value": 4164
   },
-  "pad.checks.max_slope_deg": {
-    "commit": "054ced5587d789b3947528df342d2dd1a1965c07",
-    "file": "pad.json",
-    "script": "pipeline/engine/siting.py",
-    "units": "deg",
-    "utc": "2026-11-14T13:45:47Z",
-    "value": 3.95
-  },
-  "pad.lat": {
-    "commit": "054ced5587d789b3947528df342d2dd1a1965c07",
-    "file": "pad.json",
-    "script": "pipeline/engine/siting.py",
-    "units": "deg",
-    "utc": "2026-11-14T13:45:47Z",
-    "value": -4.769028
-  },
-  "pad.lon": {
-    "commit": "054ced5587d789b3947528df342d2dd1a1965c07",
-    "file": "pad.json",
-    "script": "pipeline/engine/siting.py",
-    "units": "deg",
-    "utc": "2026-11-14T13:45:47Z",
-    "value": 137.402443
-  },
-  "pad.score": {
-    "commit": "054ced5587d789b3947528df342d2dd1a1965c07",
-    "file": "pad.json",
-    "script": "pipeline/engine/siting.py",
-    "units": "score",
-    "utc": "2026-11-14T13:45:47Z",
-    "value": 0.475
-  },
   "rad.baseline_uGy_day": {
     "commit": "1a98e90f274acdbc021c057bcc5f3b2b47a7de34",
     "file": "conditions/rad.json",
@@ -7016,51 +7024,51 @@
     "value": 31.357
   },
   "terrain.cellstate.pct.assessed": {
-    "commit": "a8239565ddaa44ddecfbab3b82f159ce01f3d066",
+    "commit": "148e091b22238193fb6adc4810cec32ac585fdb0",
     "file": "terrain/cellstate.json",
     "script": "tools/make_web.py",
     "units": "%",
-    "utc": "2026-11-14T14:01:24Z",
+    "utc": "2026-11-14T14:05:28Z",
     "value": 68.78
   },
   "terrain.cellstate.pct.blocked": {
-    "commit": "a8239565ddaa44ddecfbab3b82f159ce01f3d066",
+    "commit": "148e091b22238193fb6adc4810cec32ac585fdb0",
     "file": "terrain/cellstate.json",
     "script": "tools/make_web.py",
     "units": "%",
-    "utc": "2026-11-14T14:01:24Z",
+    "utc": "2026-11-14T14:05:28Z",
     "value": 31.22
   },
   "terrain.cellstate.pct.unknown": {
-    "commit": "a8239565ddaa44ddecfbab3b82f159ce01f3d066",
+    "commit": "148e091b22238193fb6adc4810cec32ac585fdb0",
     "file": "terrain/cellstate.json",
     "script": "tools/make_web.py",
     "units": "%",
-    "utc": "2026-11-14T14:01:24Z",
+    "utc": "2026-11-14T14:05:28Z",
     "value": 0.0
   },
   "terrain.cellstate_conservative.pct.assessed": {
-    "commit": "a8239565ddaa44ddecfbab3b82f159ce01f3d066",
+    "commit": "148e091b22238193fb6adc4810cec32ac585fdb0",
     "file": "terrain/cellstate_conservative.json",
     "script": "tools/make_web.py",
     "units": "%",
-    "utc": "2026-11-14T14:01:28Z",
+    "utc": "2026-11-14T14:05:31Z",
     "value": 54.14
   },
   "terrain.cellstate_conservative.pct.blocked": {
-    "commit": "a8239565ddaa44ddecfbab3b82f159ce01f3d066",
+    "commit": "148e091b22238193fb6adc4810cec32ac585fdb0",
     "file": "terrain/cellstate_conservative.json",
     "script": "tools/make_web.py",
     "units": "%",
-    "utc": "2026-11-14T14:01:28Z",
+    "utc": "2026-11-14T14:05:31Z",
     "value": 45.86
   },
   "terrain.cellstate_conservative.pct.unknown": {
-    "commit": "a8239565ddaa44ddecfbab3b82f159ce01f3d066",
+    "commit": "148e091b22238193fb6adc4810cec32ac585fdb0",
     "file": "terrain/cellstate_conservative.json",
     "script": "tools/make_web.py",
     "units": "%",
-    "utc": "2026-11-14T14:01:28Z",
+    "utc": "2026-11-14T14:05:31Z",
     "value": 0.0
   },
   "terrain.conservative.disc_30.assessed_pct": {
