@@ -4,8 +4,8 @@ fragments (F12).
     python -m pipeline.horizon.cards
 
 Observers (eye height ``horizon.yaml eye_height_m``):
-  * pad: WS2 ``engine/public/pad.json`` if present, else WS1 ``terrain/grid.json`` pad, else
-    ``site.yaml pad_default`` (kept unchanged, user decision 11:24).
+  * pad: WS2 ``engine/public/pad.json`` if present and its pad is pad_default (C 14:58), else
+    WS1 ``terrain/grid.json`` pad, else ``site.yaml pad_default`` (kept, user decision 11:24).
   * stations: WS2 ``engine/public/stations.json``. Access-cell rule (user decision 11:40): the
     observer stands at the station's access cell once WS2 publishes it; until then at the science
     coordinate, and the card is marked ``provisional``.
@@ -95,19 +95,33 @@ def observer_from_station(rec: dict) -> dict:
 
 
 def pad_observer(engine_public: Path = ENGINE_PUBLIC, terrain: Path = TERRAIN) -> dict:
-    """Pad position: WS2 pad.json, else WS1 grid.json pad, else site.yaml pad_default."""
+    """Pad position: WS2 pad.json, else WS1 grid.json pad, else site.yaml pad_default.
+
+    C 14:58: pad.json ``pad`` is the pad in use = ``pad_default`` (user 11:24); the F8 siting
+    result is only a proposal. A pad.json whose ``pad`` differs from pad_default at the file's
+    6-decimal precision (SPEC §6) is therefore ignored, with a ``source_note``."""
+    default = hcfg.site()["pad_default"]
+    note = None
     p = Path(engine_public) / "pad.json"
     if p.exists():
         d = json.loads(p.read_text())["pad"]
-        return {"id": "pad", "lon": d["lon"], "lat": d["lat"], "source": f"WS2 {_rel(p)}"}
+        if (round(float(d["lon"]), 6), round(float(d["lat"]), 6)) == \
+                (round(float(default["lon"]), 6), round(float(default["lat"]), 6)):
+            return {"id": "pad", "lon": d["lon"], "lat": d["lat"], "source": f"WS2 {_rel(p)}"}
+        note = (f"WS2 {_rel(p)} pad ({d['lon']}, {d['lat']}) ignored: not pad_default "
+                f"(C 14:58, the F8 siting result is a proposal, not the pad in use)")
+    out = None
     g = Path(terrain) / "grid.json"
     if g.exists():
         d = json.loads(g.read_text()).get("pad")
         if d and d.get("lon") is not None:
-            return {"id": "pad", "lon": d["lon"], "lat": d["lat"],
-                    "source": f"WS1 {_rel(g)} pad"}
-    d = hcfg.site()["pad_default"]
-    return {"id": "pad", "lon": d["lon"], "lat": d["lat"], "source": "config/site.yaml pad_default"}
+            out = {"id": "pad", "lon": d["lon"], "lat": d["lat"], "source": f"WS1 {_rel(g)} pad"}
+    if out is None:
+        out = {"id": "pad", "lon": default["lon"], "lat": default["lat"],
+               "source": "config/site.yaml pad_default"}
+    if note:
+        out["source_note"] = note
+    return out
 
 
 # --------------------------------------------------------------------------------------------
@@ -450,7 +464,10 @@ def run(*, engine=None, stations_json: Path | None = None, public: Path = PUBLIC
                  "position": pad["source"]}
     prof.write_json(horizons_dir / "pad.json", observer_id="pad")
     validate(json.loads((horizons_dir / "pad.json").read_text()), "horizon.schema.json")
-    report["observers"]["pad"] = {k: pad[k] for k in ("lon", "lat", "source")}
+    report["observers"]["pad"] = {k: pad[k] for k in ("lon", "lat", "source", "source_note")
+                                  if k in pad}
+    if pad.get("source_note"):
+        log(f"pad: {pad['source_note']}")
     ring = ring_doc(engine, pad)
     validate(ring, "horizon_ring.schema.json")
     rp = public / "fp3d" / "horizon_ring.json"

@@ -437,9 +437,16 @@ def test_pad_observer_prefers_ws2_pad_then_ws1_grid(tmp_path):
     (ter / "grid.json").write_text(json.dumps({"pad": {"lon": 137.383, "lat": -4.807}}))
     o = pad_observer(eng, ter)
     assert (o["lon"], o["lat"]) == (137.383, -4.807) and "grid.json" in o["source"]
+    # C 14:58: pad.json `pad` = the pad in use = pad_default; a WS2 pad.json whose pad is the F8
+    # siting proposal (anything else) is ignored, so the pad horizon stays at pad_default
     (eng / "pad.json").write_text(json.dumps({"pad": {"lon": 137.384, "lat": -4.808}}))
     o = pad_observer(eng, ter)
-    assert (o["lon"], o["lat"]) == (137.384, -4.808) and "pad.json" in o["source"]
+    assert (o["lon"], o["lat"]) == (137.383, -4.807) and "grid.json" in o["source"]
+    assert "ignored" in o["source_note"] and "pad_default" in o["source_note"]
+    (eng / "pad.json").write_text(json.dumps({"pad": {"lon": pad["lon"] + 4e-7,
+                                                      "lat": pad["lat"]}}))
+    o = pad_observer(eng, ter)
+    assert "pad.json" in o["source"] and o["lon"] == pytest.approx(pad["lon"])
 
 
 IAU_CSV = hcfg.REPO / "data/raw/discovery/iau_mars.csv"
