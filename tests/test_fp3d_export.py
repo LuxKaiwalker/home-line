@@ -776,3 +776,31 @@ def test_prune_removes_chunk_files_the_index_does_not_list(tmp_path):
     assert sorted(removed) == ["fp3d/near/2_2.f32.gz", "fp3d/near_tex/2_2.jpg"]
     assert sorted(p.name for p in (tmp_path / "fp3d").rglob("*") if p.is_file()) == \
         ["1_1.f32.gz", "1_1.jpg", "far.f32.gz"]
+
+
+def test_grid_snaps_to_the_dem_lattice_within_half_a_pixel():
+    """The official pad (D21) is not on WS1's dem_1m lattice (built on pad_default): an unsnapped
+    pad-centred grid would resample every near chunk half a pixel off (bilinear smoothing of
+    1 m features). The grid moves by < res/2 per axis onto the lattice; nothing else changes."""
+    g = pad_centred_grid((695.984, -283183.682), SITE["planning_radius_m"], 256, 1.0)
+    tr = Affine(1.0, 0, -4372.5345, 0, -1.0, -280974.1963)
+    s = terrain_chunks.snap_grid_to_lattice(g, tr)
+    assert (s.n, s.chunk_px, s.res_m) == (g.n, g.chunk_px, g.res_m)
+    assert abs(s.x0 - g.x0) <= 0.5 and abs(s.y0 - g.y0) <= 0.5
+    for off in ((s.x0 - tr.c) / tr.a, (tr.f - s.y0) / -tr.e):
+        assert off == pytest.approx(round(off), abs=1e-6)
+    assert s.chunk_of(695.984, -283183.682) == (g.n // 2, g.n // 2)
+    # a lattice of another resolution is refused (no silent resampling)
+    with pytest.raises(ValueError):
+        terrain_chunks.snap_grid_to_lattice(g, Affine(2.0, 0, 0, 0, -2.0, 0))
+
+
+def test_snapped_grid_exports_dem_values_exactly(tmp_path):
+    g0 = ChunkGrid(x0=-1000.4, y0=-279999.7, chunk_px=32, res_m=1.0, n=3)
+    dem, tr = _synthetic_dem(ChunkGrid(x0=-1000.0, y0=-280000.0, chunk_px=32, res_m=1.0, n=3))
+    g = terrain_chunks.snap_grid_to_lattice(g0, tr)
+    (e,) = terrain_chunks.export_near(dem, tr, g, [(1, 1)], tmp_path, Q)
+    h = decode_heights((tmp_path / e["file"]).read_bytes(), (32, 32))
+    c0 = int(round(g.x0 - tr.c)) + 32
+    r0 = int(round(tr.f - g.y0)) + 32
+    assert np.abs(h - dem[r0:r0 + 32, c0:c0 + 32]).max() <= Q / 2 + 1e-3

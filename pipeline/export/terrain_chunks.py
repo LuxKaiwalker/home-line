@@ -166,6 +166,19 @@ def pad_centred_grid(pad_xy: tuple[float, float], planning_radius_m: float, chun
                      chunk_px=int(chunk_px), res_m=float(res_m), n=n)
 
 
+def snap_grid_to_lattice(grid: ChunkGrid, transform: Affine) -> ChunkGrid:
+    """Move ``grid`` by less than half a pixel per axis so its pixel centres are the DEM's
+    (``transform``, same resolution, north-up). The official pad (D21) is not on WS1's dem_1m
+    lattice; without this every near chunk would be a half-pixel bilinear resample (smoothed)."""
+    t = transform
+    same_res = math.isclose(t.a, grid.res_m) and math.isclose(-t.e, grid.res_m)
+    if t.b != 0 or t.d != 0 or not same_res:
+        raise ValueError(f"DEM lattice {tuple(t)[:6]} is not north-up at {grid.res_m} m")
+    x0 = t.c + round((grid.x0 - t.c) / t.a) * t.a
+    y0 = t.f - round((t.f - grid.y0) / -t.e) * -t.e
+    return ChunkGrid(x0=x0, y0=y0, chunk_px=grid.chunk_px, res_m=grid.res_m, n=grid.n)
+
+
 def grid_from_config(geo: Geo, cfg: dict | None = None) -> ChunkGrid:
     cfg = cfg or load_config()
     near = cfg["fp3d"]["near"]
@@ -581,7 +594,8 @@ def main(argv: list[str] | None = None) -> int:
     f3 = cfg["fp3d"]
     pad = official_pad(args.pad_json)
     geo = Geo(cfg["site"], pad=pad)
-    grid = grid_from_config(geo, cfg)
+    dem, tr = _read_raster(args.dem_1m)
+    grid = snap_grid_to_lattice(grid_from_config(geo, cfg), tr)
     q = f3["height"]["quantum_m"]
     fc = json.loads(args.route.read_text())
     if fc.get("dummy") or fc.get("synthetic"):
@@ -593,7 +607,6 @@ def main(argv: list[str] | None = None) -> int:
     st_xy = [geo.xy(s["lon"], s["lat"]) for s in stations]
     chunks = corridor_chunks(grid, lines, f3["near"]["corridor_half_width_m"], st_xy)
 
-    dem, tr = _read_raster(args.dem_1m)
     near = export_near(dem, tr, grid, chunks, args.out, q)
     far_sources = [(dem, tr)] + [_read_raster(p) for p in far_sources_p]
     fgrid = far_mesh.far_grid(grid, f3["far"].get("half_extent_m"))
