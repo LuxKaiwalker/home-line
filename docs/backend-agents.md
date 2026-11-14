@@ -93,7 +93,7 @@
 
 | Order | Session | Starts when | First deliverable |
 | --- | --- | --- | --- |
-| 1 | WS2 support | Now (bootstrap step 6) | `build_plan(inputs, grids, out_dir)` with zero diff in `web/public/data/` |
+| 1 | WS2 support | Now (bootstrap step 6) | `build_plan(grid, *, pad_lonlat, scenario_ids, settings, out_dir, public_dir, …)` with zero diff in `web/public/data/` |
 | 2 | WS11 Engine service | After bootstrap steps 3–5; real work after WS2 0.5 is merged | `/health` warm only after Numba warm-up; canonical hash; `/results/{hash}` for the official pad |
 | 2 | WS12 Accounts and ops | After bootstrap steps 3–5 | `docker compose up` serves `/health` locally; SQL migrations with RLS |
 | 3 | WS13 Live UI | After B0′, on mocks (needs steps 4 and 7) | API client, health check, offline banner; every static test passes with the API down |
@@ -178,7 +178,7 @@ Current time and gate: {time}, next gate {gate}.
 | From | To | What | When |
 | --- | --- | --- | --- |
 | C | All | Contracts v1.0.0, `config/backend.yaml` + loader, OpenAPI | P0 |
-| WS2 | WS11 | `build_plan(inputs, grids, out_dir)`, `station_fields(sid, params)`, file list (K8), determinism report (K9) | P0 (0.5), then 0.6 |
+| WS2 | WS11 | `pipeline.engine.plan.build_plan(grid, *, pad_lonlat, scenario_ids, settings, out_dir, public_dir=None, terrain_dir=None, stations_list=None, stations_missing=None, ridge=None, cond=None, dose_fn=None, route_scenarios=None, partner=True, siting=False, d21=None, crew=None, skipped=None, rmse=None, manifest_dir=None, on_stage=None, timing_cb=None, timing=None, verbose=True) -> dict` (run summary), `pipeline.engine.padpick.station_fields(grid, station, scenario='nom_104', settings=None, *, crew=None, tmax_min=None) -> (forward, reverse)` (committed signatures stand, team lead 20:59; WS11 codes against `pipeline/engine`), file list (K8), determinism report (K9) | P0 (0.5), then 0.6 |
 | WS2 | WS11, WS14 | `physio_core` and crew as a parameter (0.7) | Before WS11 task F26 and before WS14 sessions |
 | C / WS5 | WS13 | Loader base URL `dataUrl(path, mode, base?)` | P0 |
 | C | WS14 | `build_plan_bundle(result_dir)` | P0 |
