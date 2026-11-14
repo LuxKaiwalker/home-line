@@ -27,3 +27,14 @@ stations:
     rule: "hand pick by S on HiRISE ortho before H2"
     manual_priority: 0.5
 extra_from_scoring: {max: 3, decide_by: "Sat 23:00 (D8)"}
+# --- WS1 scoring assumptions (assumed: true; S to confirm before D8, Sat 23:00) ---
+scoring_assumptions:
+  crism_normalisation: "linear between the p2 and p98 of valid 18 m cells in the dem window, clipped to [0, 1]"
+  crism_norm_percentiles: [2, 98]
+  crism_combine: "mean of the overlapping MTRDR observations (FRT000058A3, FRT0000B6F1)"
+  ridge_density_normalisation: "fraction of ridge 1 m cells within ridge_density_radius_m, divided by its p98 over the dem window, clipped to [0, 1]"
+  station_crism_index: {S1: D2300, S2: max, S3: max, S4: SINDEX2, S5: max}   # S1 rule (clay); S4 sulfur -> sulfate; others max of both
+  pick_cell_m: 25                        # S1 rule: "25 m cell"
+  s2_min_separation_m: 300               # S2 rule text
+  s1_s2_domain: "focus area and flat 30-min disc"   # S1 rule; S2 assumed to use the same domain
+  assumed: true

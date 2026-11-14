@@ -8,8 +8,12 @@ PY := uv run --no-sync python
 # -> WS9 nav -> copy to web/public/data (C).
 all: terrain engine horizons conditions nav web
 
-terrain:     ## WS1
-	@echo "terrain: stub (WS1 adds pipeline/terrain CLI)"
+terrain:     ## WS1: fetch raw (cached) then build data/interim/terrain/
+	$(PY) -m pipeline.terrain.fetch dem
+	$(PY) -m pipeline.terrain.fetch hirise
+	$(PY) -m pipeline.terrain.fetch crism
+	$(PY) -m pipeline.terrain.fetch lrgb
+	$(PY) -m pipeline.terrain.build all
 engine:      ## WS2: return fields, isochrones, bands, edges, partner, stations, route, trade
 	$(PY) -m pipeline.engine.scenarios
 horizons:    ## WS3
