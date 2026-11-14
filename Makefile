@@ -10,8 +10,8 @@ all: terrain engine horizons conditions nav web
 
 terrain:     ## WS1
 	@echo "terrain: stub (WS1 adds pipeline/terrain CLI)"
-engine:      ## WS2
-	@echo "engine: stub (WS2 adds pipeline/engine CLI)"
+engine:      ## WS2: return fields, isochrones, bands, edges, partner, stations, route, trade
+	$(PY) -m pipeline.engine.scenarios
 horizons:    ## WS3
 	@echo "horizons: stub (WS3 adds pipeline/horizon CLI)"
 conditions:  ## WS4

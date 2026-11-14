@@ -30,6 +30,8 @@ outputs:                           # added 13 Nov (gap found by WS2)
 route:                             # added by WS2 2026-11-14 (values from SPEC F9; flagged in STATUS)
   o2_checkpoint_min: 30            # SPEC F9: "O2 checkpoints every 30 min"
   budget: "crew.eva_h"             # SPEC F9: sum(walk + dwell) <= 6.5 h
+  o2_margin_rate: "effort_cap * VO2max * m_b / 1000"   # L/min that turns the O2 term of m(t) (L) into minutes (SPEC F4 mixes L and min); S to confirm
+  dwell_vo2: "V0"                  # VO2 while dwelling at a station = model VO2 at v = 0; S to confirm
   assumed: true
 numerics:                          # added by WS2 2026-11-14; numerical resolution, not a model parameter
   grade_table_step_deg: 0.01       # router pace/O2 lookup table step (linear interpolation; KAT rel err < 1e-4)
