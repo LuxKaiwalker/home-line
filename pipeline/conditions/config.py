@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from datetime import UTC, datetime, timedelta
 from functools import cache
 from pathlib import Path
@@ -34,12 +35,38 @@ def h0_utc() -> datetime:
     return parse_utc(str(load("event")["h0_utc"]))
 
 
+PAD_JSON = INTERIM / "engine" / "public" / "pad.json"
+
+
+def pad_site(pad_json: Path | None = None) -> dict[str, Any]:
+    """The pad the sun is computed at (D21): ``pad.json`` top-level ``pad`` (WS2's official pad).
+
+    Falls back to ``config/site.yaml pad_default`` only if ``pad.json`` is missing, and says so
+    (``fallback`` true, ``note``). A ``pad.json`` without a ``pad`` lat/lon raises (no silent
+    fallback). Returns {lat, lon, id, source, fallback, note}.
+    """
+    ck = load_conditions()["clock"]
+    if ck["site"] != "data/interim/engine/public/pad.json pad":
+        raise NotImplementedError("clock.site must be 'data/interim/engine/public/pad.json pad'")
+    path = PAD_JSON if pad_json is None else Path(pad_json)
+    if path.exists():
+        pad = json.loads(path.read_text())["pad"]
+        return {"lat": float(pad["lat"]), "lon": float(pad["lon"]), "id": pad.get("id"),
+                "source": "data/interim/engine/public/pad.json pad (D21 official pad)",
+                "fallback": False, "note": None}
+    if ck["site_fallback"] != "config/site.yaml pad_default":
+        raise NotImplementedError("clock.site_fallback must be 'config/site.yaml pad_default'")
+    pd = load("site")["pad_default"]
+    return {"lat": float(pd["lat"]), "lon": float(pd["lon"]), "id": "pad_default",
+            "source": "config/site.yaml pad_default (fallback)", "fallback": True,
+            "note": (f"{path.name} missing ({path}): fell back to site.yaml pad_default; "
+                     "not the D21 official pad")}
+
+
 def site_latlon() -> tuple[float, float]:
-    """(lat, lon_east) of the Gale site for the sun: config/site.yaml pad_default."""
-    if load_conditions()["clock"]["site"] != "config/site.yaml pad_default":
-        raise NotImplementedError("clock.site must be 'config/site.yaml pad_default'")
-    pad = load("site")["pad_default"]
-    return float(pad["lat"]), float(pad["lon"])
+    """(lat, lon_east) of the pad for the sun (``pad_site()``)."""
+    s = pad_site()
+    return s["lat"], s["lon"]
 
 
 def eva_min() -> float:
