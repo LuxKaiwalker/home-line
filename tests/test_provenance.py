@@ -81,6 +81,18 @@ def test_record_rejects_bad_keys_and_units(frag_dir):
         manifest.record("k.u", 1, 5, "f", "s.py")
 
 
+def test_drop_removes_only_own_keys(frag_dir):
+    """drop() retires keys from the calling script's own fragment; other scripts are untouched."""
+    manifest.record("a.keep", 1, None, "x.json", "pipeline/a.py")
+    manifest.record("a.old", 2, None, "x.json", "pipeline/a.py")
+    manifest.record("b.old", 3, None, "x.json", "pipeline/b.py")
+    assert manifest.drop(["a.old", "a.never", "b.old"], "pipeline/a.py") == ["a.old"]
+    frags = manifest.load_fragments()
+    assert set(frags["pipeline__a.json"]) == {"a.keep"}
+    assert set(frags["pipeline__b.json"]) == {"b.old"}
+    assert manifest.drop(["x"], "pipeline/none.py") == []  # no fragment: no-op
+
+
 def test_record_refuses_pre_h0_clock(frag_dir, monkeypatch):
     monkeypatch.setattr(manifest, "_utcnow", lambda: H0 - timedelta(seconds=1))
     with pytest.raises(manifest.ManifestError, match="H0"):
@@ -638,18 +650,84 @@ def test_v1_run_real_plane(tmp_path, frag_dir, monkeypatch):
     assert m["v1.rmse_deg"]["file"] == "validation/v1.json"
     assert "v1.sensitivity.footprint_5m.rmse_deg" in m
     assert len(ET.parse(svg).getroot().findall(f".//{{{figures.SVG_NS}}}circle")) == 2
-    # conservative no-go for WS1/WS2: variants.yaml "20 - v1_rmse_deg" with the primary RMSE
-    cons = doc["conservative_nogo"]
-    assert cons["formula"] == "20 - v1_rmse_deg" and cons["rmse_deg"] == doc["rmse_deg"]
-    assert cons["nogo_deg"] == pytest.approx(20.0 - doc["rmse_deg"])
-    assert m["v1.conservative_nogo.nogo_deg"]["units"] == "deg"
+    # D23 (user 16:16/16:20): V1 is a validation, not a margin. No no-go is derived from the
+    # RMSE; the conservative limit is only cited from config, and never as a v1.* manifest key.
+    assert doc["role"] == "V1 = validation of the slope model, not a safety margin"
+    assert "conservative_nogo" not in doc
+    ctx = doc["nogo_context"]
+    assert ctx["derived_from_v1"] is False and ctx["decision"] == "D23"
+    assert ctx["conservative_nogo_deg"] == 17.0
+    assert ctx["text"] == "conservative no-go = 17° (D23, config)"
+    assert not [k for k in m if k.startswith("v1.conservative_nogo") or "nogo" in k]
 
 
-def test_v1_conservative_nogo_known_answer():
-    assert v1_tilt.conservative_nogo(2.5) == {
-        "formula": "20 - v1_rmse_deg", "rmse_deg": 2.5, "nogo_deg": 17.5,
-        "source": "config/variants.yaml variants.conservative.nogo_deg"}
-    assert v1_tilt.conservative_nogo(None)["nogo_deg"] is None
+def test_v1_run_real_drops_retired_nogo_key(tmp_path, frag_dir, monkeypatch):
+    """A fragment from a pre-D23 run still holds v1.conservative_nogo.nogo_deg; the re-run
+    removes it so the merged manifest never shows a V1-derived no-go."""
+    monkeypatch.setattr(v1_tilt, "_v1_config", lambda: {**VCFG, "footprint_m": FP})
+    manifest.record("v1.conservative_nogo.nogo_deg", 14.553, "deg", "validation/v1.json",
+                    v1_tilt.__file__)
+    mm, coreg, dem = _real_inputs(tmp_path)
+    v1_tilt.run_real(mm, coreg, dem, tmp_path / "v1.json", None)
+    m = manifest.merge(out_path=tmp_path / "manifest.json")
+    assert "v1.conservative_nogo.nogo_deg" not in m and "v1.rmse_deg" in m
+
+
+NOGO_SRC_V = "config/variants.yaml variants.conservative.nogo_deg"
+NOGO_SRC_S = "config/site.yaml slope.nogo_deg.conservative"
+
+
+def _nogo_cfg(monkeypatch, variants_val, site_val):
+    var = yaml.safe_load((REPO / "config/variants.yaml").read_text())
+    var["variants"]["conservative"]["nogo_deg"] = variants_val
+    site = {**SITE, "slope": {**SITE["slope"],
+                              "nogo_deg": {**SITE["slope"]["nogo_deg"], "conservative": site_val}}}
+    monkeypatch.setattr(v1_tilt, "_variants", lambda: var)
+    monkeypatch.setattr(v1_tilt, "_site", lambda: site)
+
+
+def test_v1_nogo_context_real_config():
+    """Main and WS2's branch both resolve to D23's 17 deg (number in site.yaml and/or
+    variants.yaml; the legacy string is never evaluated)."""
+    ctx = v1_tilt.nogo_context()
+    assert ctx["conservative_nogo_deg"] == 17.0 and ctx["derived_from_v1"] is False
+    assert ctx["source"] in (NOGO_SRC_V, NOGO_SRC_S)
+
+
+def test_v1_nogo_context_number(monkeypatch):
+    _nogo_cfg(monkeypatch, 17, 17)
+    assert v1_tilt.nogo_context() == {
+        "conservative_nogo_deg": 17.0, "source": NOGO_SRC_V, "decision": "D23",
+        "derived_from_v1": False, "text": "conservative no-go = 17° (D23, config)",
+        "note": "Config citation for context, not a V1 output."}
+
+
+def test_v1_nogo_context_legacy_variants_falls_back_to_site(monkeypatch):
+    _nogo_cfg(monkeypatch, "20 - v1_rmse_deg", 17)
+    ctx = v1_tilt.nogo_context()
+    assert ctx["conservative_nogo_deg"] == 17.0 and ctx["source"] == NOGO_SRC_S
+
+
+def test_v1_nogo_context_legacy_everywhere_is_unknown_not_evaluated(monkeypatch):
+    _nogo_cfg(monkeypatch, "20 - v1_rmse_deg", "20 - v1_rmse_deg")
+    ctx = v1_tilt.nogo_context()  # must not raise
+    assert ctx["conservative_nogo_deg"] is None and ctx["derived_from_v1"] is False
+    assert "legacy" in ctx["note"] and "not evaluated" in ctx["note"]
+    assert ctx["text"] == "conservative no-go: not a number in config (D23)"
+
+
+def test_v1_nogo_context_conflict_is_unknown(monkeypatch):
+    _nogo_cfg(monkeypatch, 17, 16.5)
+    ctx = v1_tilt.nogo_context()
+    assert ctx["conservative_nogo_deg"] is None and "disagree" in ctx["note"]
+
+
+def test_v1_write_result_role_on_every_doc(tmp_path, frag_dir):
+    doc = v1_tilt.write_result(v1_tilt.compare(np.array([5.0, 12.0]), np.array([4.0, 11.0]),
+                                               (10.0,)),
+                               tmp_path / "v1.json", None, footprint_m=FP, dem_file="x.tif")
+    assert doc["role"] == v1_tilt.ROLE
+    assert json.loads((tmp_path / "v1.json").read_text())["role"] == v1_tilt.ROLE
 
 
 def test_v1_all_in_dem_sensitivity_ignores_focus(tmp_path, frag_dir, monkeypatch):
