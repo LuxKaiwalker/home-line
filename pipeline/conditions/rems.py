@@ -26,7 +26,14 @@ from datetime import date, datetime
 from pathlib import Path
 from typing import Any
 
-from pipeline.conditions.config import INTERIM, RAW, REPO, fmt_utc, load_conditions
+from pipeline.conditions.config import (
+    INTERIM,
+    RAW,
+    REPO,
+    fmt_utc,
+    load_conditions,
+    reset_manifest_fragment,
+)
 
 WEB_PATH = "conditions/rems.json"
 DEFAULT_OUT = INTERIM / WEB_PATH
@@ -245,6 +252,7 @@ def write_rems(obj: dict[str, Any], out_path: Path | None = None, *,
     from pipeline.provenance import manifest  # noqa: PLC0415
 
     validate(obj)
+    reset_manifest_fragment(__file__, fragment_dir)
     path = out_path or DEFAULT_OUT
     path.parent.mkdir(parents=True, exist_ok=True)
     data = (json.dumps(obj, indent=1, allow_nan=False) + "\n").encode()

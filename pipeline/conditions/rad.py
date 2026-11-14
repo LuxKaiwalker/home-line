@@ -44,7 +44,15 @@ from typing import Any
 from jsonschema import Draft202012Validator
 
 from pipeline.conditions import tripwire
-from pipeline.conditions.config import INTERIM, REPO, fmt_utc, load_conditions, parse_utc, require
+from pipeline.conditions.config import (
+    INTERIM,
+    REPO,
+    fmt_utc,
+    load_conditions,
+    parse_utc,
+    require,
+    reset_manifest_fragment,
+)
 
 SCHEMA_PATH = REPO / "contracts" / "rad.schema.json"
 WEB_PATH = "conditions/rad.json"  # path under web/public/data/ (make web copies it)
@@ -417,6 +425,7 @@ def write_rad(obj: dict[str, Any], out_path: str | os.PathLike[str] | None = Non
     from pipeline.provenance import manifest
 
     validate_rad(obj)
+    reset_manifest_fragment(__file__, fragment_dir)
     path = Path(out_path) if out_path is not None else INTERIM / WEB_PATH
     path.parent.mkdir(parents=True, exist_ok=True)
     data = (json.dumps(obj, indent=1, allow_nan=False) + "\n").encode()

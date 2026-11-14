@@ -26,7 +26,7 @@ from typing import Any
 
 from jsonschema import Draft202012Validator
 
-from pipeline.conditions import marstime, sun
+from pipeline.conditions import config, marstime, sun
 from pipeline.conditions.config import (
     INTERIM,
     RAW,
@@ -226,6 +226,7 @@ def write_clock(obj: dict[str, Any], out_dir: Path | None = None, *,
     from pipeline.provenance import manifest
 
     validate(obj)
+    config.reset_manifest_fragment(__file__, fragment_dir)
     path = (out_dir or INTERIM) / WEB_PATH
     path.parent.mkdir(parents=True, exist_ok=True)
     data = (json.dumps(obj, indent=1, allow_nan=False) + "\n").encode()

@@ -98,3 +98,20 @@ def test_real_rems_has_no_ground_temperature():
     text = json.dumps(remsj).lower()
     assert "gts" not in text and "ground" not in text
     assert [v["units"] for v in remsj["variables"]] == ["degC", "Pa", "W/m2"]
+
+
+def test_rewrite_drops_stale_manifest_keys(tmp_path):
+    # keys removed from an output (D37: the old 4th REMS row) must not linger in the fragment
+    from pipeline.provenance import manifest
+
+    m = tmp_path / "m"
+    manifest.record("rems.variables.3.daily_min.median", 1.0, "W/m2", rems.WEB_PATH,
+                    rems.__file__, fragment_dir=m)
+    obj = {"variables": [{"units": "degC", "daily_min": {"median": -70.0, "p10": -72.0,
+                                                         "p90": -68.0},
+                          "daily_max": {"median": -20.0, "p10": -25.0, "p90": -15.0}}],
+           "sols_used": 1, "latest_feed": {"sol": 1, "stale_since": "2026-08-25"}}
+    rems.write_rems(obj, tmp_path / "rems.json", fragment_dir=m)
+    frag = json.loads(next(m.glob("*rems.json")).read_text())
+    assert "rems.variables.3.daily_min.median" not in frag
+    assert frag["rems.variables.0.daily_min.median"]["value"] == -70.0
