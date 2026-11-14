@@ -281,3 +281,62 @@ def test_sun_position_fields_named_with_units():
     p = sun.sun_position(h0_utc(), LAT, LON)
     assert p._fields == ("azimuth_deg", "elevation_deg")
     assert all(math.isfinite(v) for v in p)
+
+
+# ------------------------------------------------------------------ light time and clock.json
+
+HORIZONS_SNIPPET = """header
+ Date__(UT)__HR:MN                delta      deldot  1-way_down_LT
+******************************************************************
+$$SOE
+ 2026-Nov-14 00:00     1.32436201800863 -14.7121700    11.01438304
+ 2026-Nov-14 06:00     1.32223717738816 -14.7218746    10.99671128
+$$EOE
+"""
+
+
+def test_parse_horizons_and_interpolate():
+    from pipeline.conditions import clockfile
+
+    tab = clockfile.parse_horizons(HORIZONS_SNIPPET)  # rows as in discovery.md §4.4 evidence
+    assert tab[0] == (datetime(2026, 11, 14, tzinfo=UTC), 11.01438304)
+    mid = clockfile.light_time_at(datetime(2026, 11, 14, 3, tzinfo=UTC), tab)
+    assert mid == pytest.approx((11.01438304 + 10.99671128) / 2)
+    assert clockfile.light_time_at(datetime(2026, 11, 14, 7, tzinfo=UTC), tab) is None
+    with pytest.raises(ValueError):
+        clockfile.parse_horizons("no table")
+
+
+def test_light_time_cache_matches_discovery():
+    from pipeline.conditions import clockfile
+
+    tab, _ = clockfile.load_light_time()
+    if tab is None:
+        pytest.skip("Horizons cache absent (python -m pipeline.conditions.fetch horizons)")
+    # discovery.md §4.4: 11.014 min at 14 Nov 00:00 UTC, 10.873 min at 16 Nov 00:00 UTC
+    assert clockfile.light_time_at(datetime(2026, 11, 14, tzinfo=UTC), tab) == pytest.approx(
+        11.014, abs=0.001)
+    assert clockfile.light_time_at(datetime(2026, 11, 16, tzinfo=UTC), tab) == pytest.approx(
+        10.873, abs=0.001)
+
+
+def test_clock_json(tmp_path):
+    from pipeline.conditions import clockfile
+
+    obj = clockfile.build_clock()  # validates against contracts/clock.schema.json
+    h0 = obj["h0"]
+    assert h0["utc"] == "2026-11-14T08:00:00Z"
+    assert h0["mars_year"] == CFG["event_weekend"]["mars_year"]
+    assert abs(h0["ls_deg"] - CFG["event_weekend"]["ls_deg"]) < 0.5
+    eva = obj["eva"]
+    start = utc(eva["start_utc"])
+    assert marstime.lmst_h(start, LON) == pytest.approx(CLOCK["eva_start_lmst_h"], abs=1e-3)
+    assert utc(eva["end_utc"]) - start == timedelta(minutes=eva["eva_min"])
+    ss = utc(eva["sunset_flat_utc"])
+    assert sun.sun_position(ss, LAT, LON).elevation_deg == pytest.approx(0.0, abs=0.01)
+    assert eva["t_dark_min"] == pytest.approx((ss - start) / timedelta(minutes=1), abs=0.02)
+    assert len(eva["sun_series"]) == int(eva["eva_min"] // CLOCK["sun_series_step_min"]) + 1
+    sols = [s["msl_sol"] for s in obj["sols"]]
+    assert sols == sorted(set(sols)) and len(sols) >= 2
+    p = clockfile.write_clock(obj, tmp_path, fragment_dir=tmp_path / "m")
+    assert json.loads(p.read_text())["h0"]["lmst"] == h0["lmst"]

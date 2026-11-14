@@ -8,7 +8,7 @@ rad:
   sample_duration: "gap to the next record, capped at the median spacing; the last record repeats the one before"  # WS4 (assumed): cadence 17 min, ~8 min in storms (discovery.md §4.1)
   storm_window_utc: ["2024-05-19T00:00:00Z", "2024-05-23T00:00:00Z"]
   baseline: "median of the 7 days before the storm window"
-  tripwire: {factor: 3.0, consecutive_samples: 2, fires_at: "end of the second qualifying sample"}  # fires_at: WS4 (assumed)
+  tripwire: {factor: 3.0, consecutive_samples: 2, fires_at: "end of the last qualifying sample"}  # fires_at: WS4 (assumed)
   q_sep: 1.0                       # never 3 for the SEP
   interpolation: "linear between sample midpoints"
   event_bounds: "baseline crossings either side of the peak; the storm-window end if still above baseline"  # WS4 (assumed): limits of the excess integral
@@ -28,7 +28,7 @@ rems:
   pds_rmd_record_bytes: 372        # discovery.md §4.2 (LABEL/MODRDR6.FMT RECORD_BYTES)
   pds_mars_years: [36, 37, 38]     # WS4 (assumed): the three latest MYs whose Ls 10-35 window is in PDS (PDS ends at sol 4843)
   pds_rows_per_sol: 200            # WS4 (assumed): evenly spaced MODRDR rows read per sol (one multi-range request), keeps the cache < 50 MB
-  pds_min_lmst_coverage_h: 18      # WS4 (assumed): a sol's min/max counts only if its valid rows span >= 18 LMST hours
+  pds_min_lmst_coverage_h: 18      # WS4 (assumed): a sol's min/max counts only if its valid rows cover >= 18 distinct LMST hours
   assumed: [pds_mars_years, pds_rows_per_sol, pds_min_lmst_coverage_h]   # added by WS4; G to confirm
 donki:
   base_url: "https://api.nasa.gov/DONKI"   # discovery.md §4.3; key from NASA_API_KEY, never stored
