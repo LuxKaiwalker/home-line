@@ -119,9 +119,9 @@ def pad_rc(grid: Grid, lonlat: tuple[float, float] | None = None) -> tuple[int, 
     return grid.rc_of_xy(*xy_of_lonlat(lonlat[0], lonlat[1], grid.crs))
 
 
-def runnable(sids, v1_rmse_deg: float | None) -> tuple[list[str], dict[str, str]]:
+def runnable(sids, v1_rmse_deg: float | None = None) -> tuple[list[str], dict[str, str]]:
     """Split scenario ids into those that can run and those skipped with the MissingInput
-    reason (the conservative variant needs WS6's V1 RMSE)."""
+    reason. Since D23 (conservative no-go 17 deg) no scenario needs WS6's V1 RMSE."""
     ok, skipped = [], {}
     for sid in sids:
         try:
@@ -283,7 +283,8 @@ def partner_fields(grid: Grid, pad, ridge_index, suit_kg: int, settings: Setting
 
 
 def partner_product(grid: Grid, fields, suit_kg: int, settings: Settings,
-                    public: Path = PUBLIC) -> dict:  # fmt: skip
+                    public: Path = PUBLIC, rel: str | None = None, key_prefix: str = "",
+                    ) -> dict:  # fmt: skip
     """partner.geojson (cart line, D20) plus the drag finding as a foreign member
     ``drag_finding`` (flat ground, haul.drag_flat). Manifest keys haul.drag.flat.nom_{suit}.*,
     and haul.drag.flat.* for the default suit (the numbers SPEC §11 D20 cites)."""
@@ -292,13 +293,16 @@ def partner_product(grid: Grid, fields, suit_kg: int, settings: Settings,
     fc["drag_finding"] = {**{k: (round(v, 3) if isinstance(v, float) else v)
                              for k, v in d.items()},
                           "note": load("haul")["drag_note"]}  # fmt: skip
-    rel = f"scenarios/nom_{suit_kg}/partner.geojson"
+    rel = rel or f"scenarios/nom_{suit_kg}/partner.geojson"
     _write_web(public, rel, fc, "partner.schema.json")
     units = {"force_N": "N", "traction_limit_N": "N", "max_mass_kg": "kg", "casualty_kg": "kg",
              "rescuer_system_kg": "kg", "mu": "1", "boot_mu": "1"}  # fmt: skip
-    prefixes = [f"haul.drag.flat.nom_{suit_kg}"]
-    if suit_kg == load("crew")["default_suit_kg"]:
-        prefixes.append("haul.drag.flat")
+    if key_prefix:  # picker pads (D21): pads.{id}.haul.drag.flat.*
+        prefixes = [f"{key_prefix}haul.drag.flat"]
+    else:
+        prefixes = [f"haul.drag.flat.nom_{suit_kg}"]
+        if suit_kg == load("crew")["default_suit_kg"]:
+            prefixes.append("haul.drag.flat")
     for pre in prefixes:
         for k, u in units.items():
             provenance.record(f"{pre}.{k}", fc["drag_finding"][k], u, rel, SCRIPT)
@@ -316,9 +320,10 @@ def siting_scenario() -> str:
 
 
 def run_siting(grid: Grid, sst, s_none, ssid: str, rmse, out: Path, pub: Path, pad_override,
-               ) -> dict:  # fmt: skip
-    """F8 siting + pad.json (siting.run) and the summary.json block. The pad in use is
-    pad_default, or --pad when given; the siting result is only the proposal."""
+               d21: dict | None = None) -> dict:  # fmt: skip
+    """F8 siting + pad.json (siting.run) and the summary.json block. The pad in use is the D21
+    official pad (d21), else --pad, else pad_default; the F8 siting result is only the
+    proposal."""
     from . import siting
 
     print(f"siting: forward runs from the {ssid} access cells of {[s['id'] for s in sst]}"
@@ -327,7 +332,11 @@ def run_siting(grid: Grid, sst, s_none, ssid: str, rmse, out: Path, pub: Path, p
         raise MissingInput(f"no station has an access cell in {ssid}")
     override = tuple(pad_override) if pad_override else None
     src = "--pad override (scenarios CLI)" if override else None
-    doc = siting.run(grid, sst, rmse, out, pub, override, src, s_none)
+    if d21 is not None:
+        from . import padpick
+
+        src = padpick.SOURCE
+    doc = siting.run(grid, sst, rmse, out, pub, override, src, s_none, d21=d21)
     return {"scenario": ssid, "stations": [s["id"] for s in sst], "no_access": s_none,
             "pad": doc["pad"], "proposal": doc["proposal"]}  # fmt: skip
 
@@ -524,25 +533,98 @@ def conditions_inputs(t_dark_min: float | None, tau_dose_min: float | None, dose
     return out
 
 
+def storm_timing(cond: dict, rad_path: Path = INTERIM_DIR / "conditions" / "rad.json"):
+    """D39 dose timing: a callable t* -> margin.DoseTiming (conditions.yaml storm_replay +
+    WS4 rad.json), or None when the dose term is static (CLI --tau-dose-min, --dose latest) or
+    conditions are off. Raises MissingInput if the shared key or rad.json is missing."""
+    import json
+
+    if cond.get("dose") != "storm" or cond.get("tau_dose_source") in (None, "CLI"):
+        return None
+    sr = load("conditions").get("storm_replay")
+    if not sr:
+        raise MissingInput("conditions.yaml storm_replay (D39 shared storm-timing key) missing")
+    if not Path(rad_path).exists():
+        raise MissingInput(f"{rad_path} missing (WS4)")
+    rad = json.loads(Path(rad_path).read_text(encoding="utf-8"))
+
+    def fn(t_star_min: float):
+        return margin.dose_timing_from_ws4(t_star_min, rad, sr)
+
+    fn.source = f"conditions.yaml storm_replay.tripwire_at={sr.get('tripwire_at')} + {rad_path}"
+    return fn
+
+
+def plan_route(grid: Grid, pad, sid: str, field: dijkstra.Field, st: list[dict], cond: dict,
+               dose_fn, partner_t=None, rmse=None) -> tuple[traverse.Result, dict]:  # fmt: skip
+    """F9 route for one scenario and pad: access cells from ``field``, D28 EVA term, D39 timed
+    dose term (dose_fn) or the static one. Returns (Result, no_access {id: reason})."""
+    p = physio.scenario_params(sid, v1_rmse_deg=rmse)
+    tau = None if dose_fn is not None else cond.get("tau_dose_min")
+    mi = margin.inputs(p, cond.get("t_dark_min"), tau, eva=True)
+    rst, no_access = access.routing_stations(st, sid)
+    res = traverse.plan(grid.with_nogo(p.nogo_deg), physio.grade_table(p), field, pad, rst,
+                        route_budget_min(), float(load("variants")["route"]["o2_checkpoint_min"]),
+                        mi, partner_t, load("haul")["contour_min"], dose_fn=dose_fn)  # fmt: skip
+    res.unreachable = res.unreachable + list(no_access)
+    return res, no_access
+
+
+def route_summary(res: traverse.Result, no_access: dict, rst_access: dict | None = None) -> dict:
+    rows = [e for e in res.timeline if e["event"] in ("arrive", "leave", "o2_checkpoint")]
+    low = min(rows, key=lambda e: e["margin_min"]) if rows else None
+    tbs = {e["station"]: {"t_min": e["t_min"], "binding": e["margin_binding"]}
+           for e in res.timeline if e["event"] == "turn_back"}  # fmt: skip
+    return {"order": res.order, "unreachable": res.unreachable, "no_access": no_access,
+            "total_min": round(res.total_min, 2), "value": round(res.value, 4),
+            "n_feasible_subsets": res.n_feasible_subsets, "margin_terms": res.margin_terms,
+            "lowest_margin_min": None if low is None else low["margin_min"],
+            "lowest_margin_binding": None if low is None else low["margin_binding"],
+            "lowest_margin_at": None if low is None else [low["event"], low["station"],
+                                                          low["t_min"]],
+            "track_min_margin": res.track_min_margin, "turn_back": tbs, "dose": res.dose,
+            "legs": [{k: lg[k] for k in ("from", "to", "t_min", "length_m")}
+                     for lg in res.legs],
+            "access_dist_m": rst_access or {}}  # fmt: skip
+
+
+def record_model_checks(file: str) -> dict:
+    """D30 IST-2 pass/miss rows and the D24 reserve (manifest; shown with the scorecard)."""
+    rows = physio.ist2_pass_rows()
+    for v, gs in rows.items():
+        for g, r in gs.items():
+            gk = g.replace("grade_", "").replace("pct", "")
+            provenance.record(f"physio.ist2.{v}.{gk}.pass", r["pass"], None, file, SCRIPT)
+            for k in ("band_lo", "band_hi", "reported"):
+                provenance.record(f"physio.ist2.{v}.{gk}.{k}", r[k], "mL/kg/min", file, SCRIPT)
+    p = physio.scenario_params(load("variants")["scenarios"]["default"])
+    res_l = round(margin.reserve_l(p), 2)
+    provenance.record("margin.o2_reserve_L", res_l, "L", file, SCRIPT)
+    provenance.record("margin.o2_budget_L", round(margin.o2_capacity_l(), 2), "L", file, SCRIPT)
+    provenance.record("margin.station_task_rate_L_min", round(margin.station_task_rate_l_min(), 4),
+                      "L/min", file, SCRIPT)  # fmt: skip
+    return {"ist2": rows, "o2_reserve": {"L": res_l, "label": margin.reserve_label()},
+            "o2_budget_L": round(margin.o2_capacity_l(), 2),
+            "o2_energy_j_per_ml": margin.j_per_ml(),
+            "station_task_rate_L_min": round(margin.station_task_rate_l_min(), 4)}  # fmt: skip
+
+
 def main(argv=None) -> int:
     import json
     import time
-
-    import rasterio
 
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--terrain", type=Path, default=INTERIM_DIR / "terrain")
     ap.add_argument("--scenarios", nargs="*", default=None)
     ap.add_argument("--out", type=Path, default=ENGINE_DIR,
                     help="engine output dir; web files go to <out>/public")
-    ap.add_argument("--v1-json", type=Path, default=INTERIM_DIR / "validation" / "v1.json",
-                    help="WS6 V1 result: rmse_deg sets the conservative slope limit")  # fmt: skip
     ap.add_argument("--t-dark-min", type=float, default=None,
                     help="WS4 daylight: minutes from EVA start to dark (margin term)")  # fmt: skip
     ap.add_argument("--tau-dose-min", type=float, default=None,
-                    help="WS4 dose leash tau_dose, min (margin term)")  # fmt: skip
+                    help="static dose leash tau_dose, min (overrides the D39 storm timing)")
     ap.add_argument("--dose", choices=("storm", "latest"), default="storm",
-                    help="WS4 dose leash: storm peak (default, SPEC storm replay) or latest RAD")
+                    help="storm (default): D39 timed storm replay; latest: static latest-RAD tau")
+    ap.add_argument("--rad-json", type=Path, default=INTERIM_DIR / "conditions" / "rad.json")
     ap.add_argument("--no-conditions", action="store_true",
                     help="do not read WS4 margins (only the --t-dark-min/--tau-dose-min flags)")
     ap.add_argument("--route-scenarios", nargs="*", default=None,
@@ -554,20 +636,19 @@ def main(argv=None) -> int:
                     help="re-run only F8 siting + pad.json: the rule scenario's return field "
                          "(in memory, no rasters), access cells, siting; patches summary.json")
     ap.add_argument("--pad", nargs=2, type=float, metavar=("LON", "LAT"), default=None,
-                    help="pad override (e.g. the F8 pad once S accepts it); default site.yaml")
+                    help="pad override; default site.yaml pad_default (or the D21 pad)")
+    ap.add_argument("--d21", action="store_true",
+                    help="D21: screen every candidate pad, full runs for the top 5, run "
+                         "everything on the official pad, write the pad picker")
     a = ap.parse_args(argv)
     out, pub = a.out, a.out / "public"
-    need = [a.terrain / f for f in ("elev_3m.tif", "maxslope_3m.tif", "cellstate_3m.tif")]
+    need = [a.terrain / f for f in ("elev_3m.tif", "maxslope_3m.tif", "cellstate_3m.tif",
+                                    "slope_3m.tif", "stepguard_3m.tif")]  # fmt: skip
     if not all(f.exists() for f in need):
-        print(f"engine: WS1 routing grids missing in {a.terrain}: {[f.name for f in need]}")
+        print(f"engine: WS1 routing grids missing in {a.terrain}: "
+              f"{[f.name for f in need if not f.exists()]}")
         return 2
-    v1 = None
-    try:
-        v1 = v1_from_file(a.v1_json)
-        print(f"V1 from {a.v1_json}: rmse {v1['rmse_deg']:.3f} deg")
-    except MissingInput as e:
-        print(f"no V1 yet ({e}); conservative scenarios are skipped")
-    rmse = None if v1 is None else v1["rmse_deg"]
+    rmse = None  # D23: V1 no longer feeds the engine
     settings = settings_from_config(rmse)
     sids, skipped = runnable(a.scenarios or load("variants")["scenarios"]["ids"], rmse)
     for sid, why in skipped.items():
@@ -583,23 +664,44 @@ def main(argv=None) -> int:
         print(f"{name}: {timing[name]} s", flush=True)
 
     grid = load_ws1_grid(a.terrain)
-    pad = pad_rc(grid, tuple(a.pad) if a.pad else None)
     lap("load_grid")
     if a.siting_only:
-        return siting_only(grid, pad, a, rmse, settings, out, pub)
+        return siting_only(grid, pad_rc(grid, tuple(a.pad) if a.pad else None), a, rmse,
+                           settings, out, pub)  # fmt: skip
+    cond = conditions_inputs(a.t_dark_min, a.tau_dose_min, a.dose, not a.no_conditions)
+    dose_fn = storm_timing(cond, a.rad_json)
+    print(f"margins: t_dark {cond['t_dark_min']} min ({cond['t_dark_source']}); dose "
+          f"{'timed (D39): ' + dose_fn.source if dose_fn else cond['tau_dose_min']}")
+    st0, missing0 = [], []
+    if (a.terrain / "stations.json").exists():
+        st0, missing0 = stations.load_ws1_stations(a.terrain / "stations.json")
+        stations.attach_cells(grid, st0)
+
+    d21 = None
+    if a.d21:
+        from . import padpick
+
+        if a.pad:
+            raise SystemExit("--d21 picks the pad; do not pass --pad")
+        d21 = padpick.run(grid, st0, cond, dose_fn, timing_cb=lap)
+        off = d21["official"]
+        a.pad = [off.lon, off.lat]
+        print(f"D21 official pad {off.id}: {off.lon}, {off.lat} (score {off.score}, "
+              f"tb1 {off.tb1}, elev {off.elev_m})")
+    pad = pad_rc(grid, tuple(a.pad) if a.pad else None)
     fields = return_fields(grid, pad, sids, settings, out_dir=out)
     lap("return_fields")
-    web_products(grid, pad, fields, settings, public=pub)
+    index = web_products(grid, pad, fields, settings, public=pub)
+    index["model_checks"] = record_model_checks("scenarios/index.json")
+    _write_web(pub, "scenarios/index.json", index, "scenarios_index.schema.json")
     lap("web_products")
     diag = diagnostics(grid, pad, fields, settings)
     lap("diagnostics")
 
     partner_by_suit: dict[int, np.ndarray] = {}
+    ridge = None
     if not a.no_partner:
-        with rasterio.open(a.terrain / "ridge_index.tif") as ds:
-            ridge = ds.read(1, masked=True).filled(np.nan).astype(np.float64)
-            factor = int(round(grid.res_m / ds.res[0]))
-        ridge = ridge_3m(ridge, factor)[: grid.shape[0], : grid.shape[1]]
+        ridge = load_ridge(a.terrain, grid)
         for suit in sorted({physio.parse_scenario(s)[1] for s in sids if s.startswith("nom_")}):
             pf = partner_fields(grid, pad, ridge, suit, settings, out_dir=out)
             partner_product(grid, pf, suit, settings, public=pub)
@@ -614,32 +716,20 @@ def main(argv=None) -> int:
                                                terrain_dir=a.terrain)
         lap("stations")
 
-    cond = conditions_inputs(a.t_dark_min, a.tau_dose_min, a.dose, not a.no_conditions)
-    print(f"margins: t_dark {cond['t_dark_min']} min ({cond['t_dark_source']}); "
-          f"tau_dose {cond['tau_dose_min']} min ({cond['tau_dose_source']})")
     routes = {}
-    budget = route_budget_min()
-    ck = float(load("variants")["route"]["o2_checkpoint_min"])
     for sid in a.route_scenarios or [default]:
         if sid not in fields or not st or any(s.get("value") is None for s in st):
             print(f"route {sid}: skipped (no field, no stations or a station without value)")
             continue
-        p = physio.scenario_params(sid, v1_rmse_deg=rmse)
-        mi = margin.inputs(p, cond["t_dark_min"], cond["tau_dose_min"])
         suit = physio.parse_scenario(sid)[1]
-        rst, no_access = access.routing_stations(st, sid)
-        res = traverse.plan(grid.with_nogo(p.nogo_deg), physio.grade_table(p), fields[sid], pad,
-                            rst, budget, ck, mi, partner_by_suit.get(suit),
-                            load("haul")["contour_min"])  # fmt: skip
-        res.unreachable = res.unreachable + list(no_access)
+        res, no_access = plan_route(grid, pad, sid, fields[sid], st, cond, dose_fn,
+                                    partner_by_suit.get(suit), rmse)  # fmt: skip
         traverse.write(res, sid, pub)
-        routes[sid] = {"order": res.order, "unreachable": res.unreachable,
-                       "no_access": no_access,
-                       "access_dist_m": {s["id"]: s["access_dist_m"] for s in rst},
-                       "total_min": round(res.total_min, 2), "value": round(res.value, 4),
-                       "margin_terms": res.margin_terms}  # fmt: skip
+        rst, _ = access.routing_stations(st, sid)
+        routes[sid] = route_summary(res, no_access, {s["id"]: s["access_dist_m"] for s in rst})
         print(f"route {sid}: {res.order} {res.total_min:.1f} min; terms {res.margin_terms}; "
-              f"no access cell: {no_access}")
+              f"lowest {routes[sid]['lowest_margin_min']} ({routes[sid]['lowest_margin_binding']})"
+              f"; dose {res.dose}; no access cell: {no_access}")
         if sid == default:
             hcfg = load("haul")
             frags = cards.fragments(st, res, sid, partner_by_suit.get(suit),
@@ -661,27 +751,47 @@ def main(argv=None) -> int:
                   f"; no access cell: {s_none}")
             if not sst:
                 raise MissingInput(f"no station has an access cell in {ssid}")
-            siting_info = run_siting(grid, sst, s_none, ssid, rmse, out, pub, a.pad)
-        except MissingInput as e:  # conservative rule variant needs V1
+            siting_info = run_siting(grid, sst, s_none, ssid, rmse, out, pub, a.pad, d21)
+        except MissingInput as e:
             print(f"siting skipped: {e}")
         lap("siting")
+    d21_info = None
+    if d21 is not None:
+        from . import padpick
+
+        d21_info = padpick.write_products(grid, d21, st0, cond, dose_fn, settings, ridge, out,
+                                          pub, routes.get(padpick.settings_from_config().scenario))
+        lap("d21_picker")
 
     summary = {
         "note": "WS2 engine run summary (internal, not a web contract; sanity numbers only)",
         "scenarios_run": sids, "skipped": skipped, "stations_without_position": missing,
-        "v1": v1, "margin_inputs": cond, "pad_rc": [int(pad[0]), int(pad[1])],
+        "margin_inputs": {**cond, "dose_timing": getattr(dose_fn, "source", None)},
+        "pad_rc": [int(pad[0]), int(pad[1])], "pad_lonlat": a.pad,
         "model": {"alpha": physio.alpha_level(), "ist2_span_mars_kg": physio.ist2_span_mars_kg(),
                   "o2_budget_L": {k: margin.o2_budget_l(k) for k in ("primary_L", "secondary_L")},
-                  "kcal_per_L_o2": margin.kcal_per_l_o2()},
+                  "o2_energy_j_per_ml": margin.j_per_ml(),
+                  "reserve_L": margin.reserve_l(physio.scenario_params(default)),
+                  "ist2": physio.ist2_pass_rows()},
         "grid_shape": list(grid.shape),
         "res_m": grid.res_m, "timing_s": timing, "diagnostics": diag, "routes": routes,
         "isochrones": getattr(web_products, "iso_info", {}), "siting": siting_info,
+        "d21": d21_info,
     }  # fmt: skip
     summ = out / "summary.json"
     summ.parent.mkdir(parents=True, exist_ok=True)
-    summ.write_text(json.dumps(summary, indent=1), encoding="utf-8")
+    summ.write_text(json.dumps(summary, indent=1, default=str), encoding="utf-8")
     print(f"wrote {summ}")
     return 0
+
+
+def load_ridge(terrain: Path, grid: Grid) -> np.ndarray:
+    import rasterio
+
+    with rasterio.open(terrain / "ridge_index.tif") as ds:
+        ridge = ds.read(1, masked=True).filled(np.nan).astype(np.float64)
+        factor = int(round(grid.res_m / ds.res[0]))
+    return ridge_3m(ridge, factor)[: grid.shape[0], : grid.shape[1]]
 
 
 if __name__ == "__main__":

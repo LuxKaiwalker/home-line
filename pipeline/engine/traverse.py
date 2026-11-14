@@ -23,15 +23,22 @@ timeline rows and, as ``to_access_dist_m``, to the leg that arrives there.
 from __future__ import annotations
 
 import math
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 
 import numpy as np
 
 from . import dijkstra, orienteering, provenance
+from . import margin as margin_mod
 from .geo import feature_collection, write_json
 from .graph import Grid
-from .margin import MarginInputs, latest_departure, margin, o2_margin_min
+from .margin import (
+    MarginInputs,
+    latest_departure,
+    latest_departure_terms,
+    margin,
+    o2_margin_min,
+)
 from .physio import GradeTable
 
 SCRIPT = "pipeline/engine/traverse.py"
@@ -66,6 +73,10 @@ class Result:
     timeline: list[dict]
     legs: list[dict] = field(default_factory=list)
     margin_terms: list[str] = field(default_factory=list)
+    t_star_min: float | None = None  # D39: route minute of the largest T_home (storm tripwire)
+    dose: dict | None = None  # D39 summary (t*, tau at t*, lowest dose margin, violation)
+    track_min_margin: dict = field(default_factory=dict)  # lowest margin per term on the track
+    n_feasible_subsets: int | None = None  # D21: station subsets with a feasible route
 
 
 def _forward_leg(fld: dijkstra.Field, dst, home: dijkstra.Field) -> LegPath:
@@ -86,13 +97,22 @@ def _home_leg(home: dijkstra.Field, src) -> LegPath:
 def plan(grid: Grid, table: GradeTable, home: dijkstra.Field, pad, stations: list[dict],
          budget_min: float, checkpoint_min: float, mi: MarginInputs,
          partner_t: np.ndarray | None = None, partner_min: float | None = None,
-         ) -> Result:  # fmt: skip
-    """stations: dicts with id, rc, value, dwell_min. home: the scenario's return field."""
+         dose_fn=None, fpad: dijkstra.Field | None = None) -> Result:  # fmt: skip
+    """stations: dicts with id, rc, value, dwell_min. home: the scenario's return field.
+
+    dose_fn (D39): callable t* -> margin.DoseTiming. When given, the DP plans without the dose
+    term (its timing depends on the route), t* = the minute of the route's largest T_home, and
+    the timeline margins and turn-back times use the timed dose term. ``Result.dose`` reports
+    the lowest dose margin on the route (a negative value is a violation, reported, not hidden).
+    """
     reach = [s for s in stations if math.isfinite(float(home.t_min[s["rc"]]))]
     unreachable = [s["id"] for s in stations if s not in reach]
     n = len(reach)
     rc = [tuple(s["rc"]) for s in reach]
-    fpad = dijkstra.forward_field(grid, table, pad)
+    if dose_fn is not None and (mi.dose_timing is not None or mi.tau_dose_min is not None):
+        raise ValueError("dose_fn replaces the dose term; pass mi without one")
+    if fpad is None:
+        fpad = dijkstra.forward_field(grid, table, pad)
     fst = [dijkstra.forward_field(grid, table, x) for x in rc]
     out_legs = [_forward_leg(fpad, x, home) if np.isfinite(fpad.t_min[x]) else None for x in rc]
     back_legs = [_home_leg(home, x) for x in rc]
@@ -127,6 +147,8 @@ def plan(grid: Grid, table: GradeTable, home: dijkstra.Field, pad, stations: lis
     values = [float(s["value"]) for s in reach]
     dwell = [float(s["dwell_min"]) for s in reach]
     p = orienteering.solve(values, dwell, t_from, t_to, t_leg, budget_min, leg_ok)
+    n_feasible = len(orienteering.feasible_subsets(dwell, t_from, t_to, t_leg, budget_min,
+                                                   leg_ok))  # fmt: skip
     names = [s["id"] for s in reach]
 
     # walk the plan: legs with absolute times and O2, a dense (t, used, T_home, O2_home) track
@@ -147,123 +169,183 @@ def plan(grid: Grid, table: GradeTable, home: dijkstra.Field, pad, stations: lis
             in_partner[s["id"]] = bool(math.isfinite(tp) and tp <= partner_min)
 
     access_dist = {s["id"]: s.get("access_dist_m") for s in reach}
-    t, used = 0.0, 0.0
-    track_t, track_u, track_th, track_oh = [0.0], [0.0], [], []
-    items, legs, events = [], [], []
 
-    dwell_iv = []  # (t_arrive, t_leave) per visited station, for O2_station_tasks
+    def walk(mi_ev: MarginInputs, emit: bool):
+        """Walk the plan: dense track (t, used, T_home, O2_home), legs and timeline rows."""
+        t, used = 0.0, 0.0
+        track_t, track_u, track_th, track_oh = [0.0], [0.0], [0.0], [0.0]
+        items, legs, events = [], [], []
+        dwell_iv = []  # (t_arrive, t_leave) per visited station, for O2_station_tasks
 
-    def tasks_left(tm):
-        for a, b in dwell_iv:
-            if a - 1e-9 <= tm < b:
-                return (b - tm) * mi.dwell_rate_l_min
-        return 0.0
+        def tasks_left(tm):
+            for a, b in dwell_iv:
+                if a - 1e-9 <= tm < b:
+                    return (b - tm) * mi_ev.dwell_rate_l_min
+            return 0.0
 
-    def ev(tm, event, st, u, th, oh, tasks=None):
-        tasks = tasks_left(tm) if tasks is None else tasks
-        m, b = margin(mi, tm, u, th, oh, tasks)
-        row = {"t_min": round(tm, 2), "event": event, "station": st,
-               "o2_left_L": round(mi.o2_capacity_l - u, 2), "t_home_min": round(float(th), 2),
-               "margin_min": round(m, 2), "margin_binding": b,
-               "o2_tasks_left_L": round(float(tasks), 2)}  # fmt: skip
-        if mi.planning_rate_l_min is not None:
-            row["o2_margin_min_planning_rate"] = round(
-                o2_margin_min(mi, u, oh, tasks, rate_l_min=mi.planning_rate_l_min), 2)
-        if st is not None and st in in_partner:
-            row["in_partner_line"] = in_partner[st]
-        if st is not None and access_dist.get(st) is not None:
-            row["access_dist_m"] = access_dist[st]  # walk-in leg, not modelled (access.py)
-        events.append(row)
+        def ev(tm, event, st, u, th, oh, tasks=None, binding=None):
+            if not emit:
+                return
+            tasks = tasks_left(tm) if tasks is None else tasks
+            m, b = margin(mi_ev, tm, u, th, oh, tasks)
+            row = {"t_min": round(tm, 2), "event": event, "station": st,
+                   "o2_left_L": round(mi_ev.o2_capacity_l - u, 2),
+                   "t_home_min": round(float(th), 2),
+                   "margin_min": round(m, 2), "margin_binding": binding or b,
+                   "o2_tasks_left_L": round(float(tasks), 2)}  # fmt: skip
+            if mi_ev.planning_rate_l_min is not None:
+                row["o2_margin_min_planning_rate"] = round(
+                    o2_margin_min(mi_ev, u, oh, tasks, rate_l_min=mi_ev.planning_rate_l_min), 2)
+            if st is not None and st in in_partner:
+                row["in_partner_line"] = in_partner[st]
+            if st is not None and access_dist.get(st) is not None:
+                row["access_dist_m"] = access_dist[st]  # walk-in leg, not modelled (access.py)
+            events.append(row)
 
-    ev(0.0, "depart", None, 0.0, 0.0, 0.0)
-    track_th.append(0.0)
-    track_oh.append(0.0)
-    for i, (frm, to, lp, dw) in enumerate(seq):
-        if dw > 0:  # dwell at `frm` before this leg
-            t += dw
-            used += dw * mi.dwell_rate_l_min
-            track_t.append(t)
-            track_u.append(used)
-            track_th.append(float(lp.t_home[0]))
-            track_oh.append(float(lp.o2_home[0]))
-            ev(t, "leave", frm, used, lp.t_home[0], lp.o2_home[0], tasks=0.0)
-        times = t + lp.tau
-        track_t.extend(times[1:].tolist())
-        track_u.extend((used + lp.o2[1:]).tolist())
-        track_th.extend(lp.t_home[1:].tolist())
-        track_oh.extend(lp.o2_home[1:].tolist())
-        xy = np.column_stack(grid.xy_of_rc(lp.cells[:, 0], lp.cells[:, 1]))
-        if len(xy) == 1:
-            xy, times = np.vstack([xy, xy]), np.concatenate([times, times])
-        props = {
-            "leg": i + 1, "from": frm, "to": to,
-            "t_min": round(lp.t, 2), "o2_L": round(lp.o2_total, 2),
-            "length_m": round(float(np.hypot(*np.diff(xy, axis=0).T).sum()), 1),
-            "t_start_min": round(t, 2), "t_end_min": round(t + lp.t, 2),
-            VERTEX_TIME_KEY: [round(float(v), 2) for v in times],
-        }  # fmt: skip
-        if access_dist.get(to) is not None:
-            props["to_access_dist_m"] = access_dist[to]  # walk-in to the science point
-        legs.append(props)
-        from shapely.geometry import LineString
+        ev(0.0, "depart", None, 0.0, 0.0, 0.0)
+        for i, (frm, to, lp, dw) in enumerate(seq):
+            if dw > 0:  # dwell at `frm` before this leg
+                t += dw
+                used += dw * mi_ev.dwell_rate_l_min
+                track_t.append(t)
+                track_u.append(used)
+                track_th.append(float(lp.t_home[0]))
+                track_oh.append(float(lp.o2_home[0]))
+                ev(t, "leave", frm, used, lp.t_home[0], lp.o2_home[0], tasks=0.0)
+            times = t + lp.tau
+            track_t.extend(times[1:].tolist())
+            track_u.extend((used + lp.o2[1:]).tolist())
+            track_th.extend(lp.t_home[1:].tolist())
+            track_oh.extend(lp.o2_home[1:].tolist())
+            if emit:
+                xy = np.column_stack(grid.xy_of_rc(lp.cells[:, 0], lp.cells[:, 1]))
+                if len(xy) == 1:
+                    xy, times = np.vstack([xy, xy]), np.concatenate([times, times])
+                props = {
+                    "leg": i + 1, "from": frm, "to": to,
+                    "t_min": round(lp.t, 2), "o2_L": round(lp.o2_total, 2),
+                    "length_m": round(float(np.hypot(*np.diff(xy, axis=0).T).sum()), 1),
+                    "t_start_min": round(t, 2), "t_end_min": round(t + lp.t, 2),
+                    VERTEX_TIME_KEY: [round(float(v), 2) for v in times],
+                }  # fmt: skip
+                if access_dist.get(to) is not None:
+                    props["to_access_dist_m"] = access_dist[to]  # walk-in to the science point
+                legs.append(props)
+                from shapely.geometry import LineString
 
-        items.append((LineString(xy), props))
-        t += lp.t
-        used += lp.o2_total
-        if to == "pad":
-            ev(t, "return", None, used, 0.0, 0.0)
-        else:
-            k = names.index(to)
-            dwell_iv.append((t, t + dwell[k]))
-            ev(t, "arrive", to, used, lp.t_home[-1], lp.o2_home[-1])
-            back = back_legs[k]
-            tb = latest_departure(mi, t, used, mi.dwell_rate_l_min, back.tau, back.o2,
-                                  back.t_home, back.o2_home)  # fmt: skip
-            if math.isfinite(tb):
-                u_tb = used + (tb - t) * mi.dwell_rate_l_min
-                ev(tb, "turn_back", to, u_tb, back.t_home[0], back.o2_home[0], tasks=0.0)
-    if not p.order:
-        ev(0.0, "return", None, 0.0, 0.0, 0.0)
+                items.append((LineString(xy), props))
+            t += lp.t
+            used += lp.o2_total
+            if to == "pad":
+                ev(t, "return", None, used, 0.0, 0.0)
+            else:
+                k = names.index(to)
+                dwell_iv.append((t, t + dwell[k]))
+                ev(t, "arrive", to, used, lp.t_home[-1], lp.o2_home[-1])
+                if emit:
+                    back = back_legs[k]
+                    terms = latest_departure_terms(mi_ev, t, used, mi_ev.dwell_rate_l_min,
+                                                   back.tau, back.o2, back.t_home,
+                                                   back.o2_home)  # fmt: skip
+                    bind = min(terms, key=terms.get)
+                    tb = terms[bind]
+                    if math.isfinite(tb):
+                        u_tb = used + (tb - t) * mi_ev.dwell_rate_l_min
+                        ev(tb, "turn_back", to, u_tb, back.t_home[0], back.o2_home[0],
+                           tasks=0.0, binding=bind)  # fmt: skip
+        if not seq:
+            ev(0.0, "return", None, 0.0, 0.0, 0.0)
+        tr = (np.array(track_t), np.array(track_u), np.array(track_th), np.array(track_oh))
+        if emit:
+            for tc in np.arange(checkpoint_min, t, checkpoint_min):
+                j = int(np.searchsorted(tr[0], tc, side="right") - 1)
+                u = float(np.interp(tc, tr[0], tr[1]))
+                ev(float(tc), "o2_checkpoint", None, u, tr[2][j], tr[3][j])
+        return tr, items, legs, events
 
-    tr_t, tr_u = np.array(track_t), np.array(track_u)
-    tr_th, tr_oh = np.array(track_th), np.array(track_oh)
-    for tc in np.arange(checkpoint_min, t, checkpoint_min):
-        j = int(np.searchsorted(tr_t, tc, side="right") - 1)
-        u = float(np.interp(tc, tr_t, tr_u))
-        ev(float(tc), "o2_checkpoint", None, u, tr_th[j], tr_oh[j])
+    mi_ev = mi
+    t_star_min, dose = None, None
+    if dose_fn is not None and p.order:
+        tr, *_ = walk(mi, emit=False)
+        t_star_min = margin_mod.t_star(tr[0], tr[2])
+        mi_ev = replace(mi, dose_timing=dose_fn(t_star_min))
+    tr, items, legs, events = walk(mi_ev, emit=True)
+    track_min = _track_min_margin(mi_ev, tr)
+    if mi_ev.dose_timing is not None:
+        dt = mi_ev.dose_timing
+        j = int(np.argmin(dt.tau_min(tr[0]) - tr[2]))
+        dose = {"t_star_min": round(t_star_min, 2),
+                "t_home_at_t_star_min": round(float(np.max(tr[2])), 2),
+                "tau_at_t_star_min": round(float(dt.tau_min(t_star_min)), 2),
+                "tau_min_on_route_min": round(float(np.min(dt.tau_min(tr[0]))), 2),
+                "lowest_dose_margin_min": round(float(dt.tau_min(tr[0][j]) - tr[2][j]), 2),
+                "lowest_dose_margin_at_min": round(float(tr[0][j]), 2),
+                "violation": bool(dt.tau_min(tr[0][j]) - tr[2][j] < 0),
+                "source": dt.source}  # fmt: skip
     events.sort(key=lambda e: (e["t_min"], e["event"] != "depart"))
     route = feature_collection(items, grid.crs)
     return Result([names[k] for k in p.order], unreachable, float(p.total_min), float(p.value),
-                  route, events, legs, mi.terms)  # fmt: skip
+                  route, events, legs, mi_ev.terms, t_star_min, dose, track_min,
+                  n_feasible)  # fmt: skip
 
 
-def write(res: Result, sid: str, public: Path) -> None:
-    """route_{sid}.geojson + timeline_{sid}.json, validated; manifest keys."""
-    rp = write_json(public / f"route_{sid}.geojson", res.route, "route.schema.json")
-    tp = write_json(public / f"timeline_{sid}.json", res.timeline, "timeline.schema.json")
-    tfile = f"timeline_{sid}.json"
+def _track_min_margin(mi: MarginInputs, tr) -> dict:
+    """Lowest value of each margin term along the dense route track (O2 without station tasks;
+    report only)."""
+    t, u, th, oh = tr
+    out = {}
+    o2 = np.array([o2_margin_min(mi, a, b) for a, b in zip(u, oh, strict=True)])
+    out["O2"] = round(float(o2.min()), 2)
+    if mi.t_dark_min is not None:
+        out["daylight"] = round(float(np.min(mi.t_dark_min - t - th)), 2)
+    tau = mi.tau_dose_at(t)
+    if tau is not None:
+        out["dose"] = round(float(np.min(np.asarray(tau) - th)), 2)
+    if mi.eva_budget_min is not None:
+        out["EVA duration"] = round(float(np.min(mi.eva_budget_min - t - th)), 2)
+    return out
+
+
+def write(res: Result, sid: str, public: Path, rel_dir: str = "", key_prefix: str = "",
+          route_name: str | None = None, timeline_name: str | None = None) -> None:
+    """route + timeline files, validated; manifest keys. Default paths route_{sid}.geojson /
+    timeline_{sid}.json at the web root; picker pads (D21) pass rel_dir
+    'scenarios/pads/{id}/', key_prefix 'pads.{id}.' and their own file names."""
+    rfile = f"{rel_dir}{route_name or f'route_{sid}.geojson'}"
+    tfile = f"{rel_dir}{timeline_name or f'timeline_{sid}.json'}"
+    rp = write_json(public / rfile, res.route, "route.schema.json")
+    tp = write_json(public / tfile, res.timeline, "timeline.schema.json")
+    kp = key_prefix
+    ks = "" if key_prefix else f".{sid}"  # picker keys: pads.{id}.timeline.{i}.* (no sid)
     units = {"t_min": "min", "o2_left_L": "L", "t_home_min": "min", "margin_min": "min",
              "o2_margin_min_planning_rate": "min", "o2_tasks_left_L": "L"}
     for i, row in enumerate(res.timeline):
         for k, u in units.items():
             if row.get(k) is not None:
-                provenance.record(f"timeline.{sid}.{i}.{k}", row[k], u, tfile, SCRIPT)
-    # WS6 audit: per-leg numbers (route_{sid}.geojson, leg = 1-based "leg" property) and each
-    # station's walk-in distance shown with the timeline
-    rfile = f"route_{sid}.geojson"
+                provenance.record(f"{kp}timeline{ks}.{i}.{k}", row[k], u, tfile, SCRIPT)
+        if row.get("margin_binding") is not None:
+            provenance.record(f"{kp}timeline{ks}.{i}.margin_binding", row["margin_binding"],
+                              None, tfile, SCRIPT)  # fmt: skip
+    # WS6 audit: per-leg numbers (leg = 1-based "leg" property) and each station's walk-in
+    # distance shown with the timeline
     leg_units = {"t_min": "min", "o2_L": "L", "length_m": "m", "t_start_min": "min",
                  "t_end_min": "min", "to_access_dist_m": "m"}  # fmt: skip
     for lg in res.legs:
         for k, u in leg_units.items():
             if lg.get(k) is not None:
-                provenance.record(f"route.{sid}.leg.{lg['leg']}.{k}", lg[k], u, rfile, SCRIPT)
+                provenance.record(f"{kp}route{ks}.leg.{lg['leg']}.{k}", lg[k], u, rfile,
+                                  SCRIPT)  # fmt: skip
     seen = {}
     for row in res.timeline:
         if row.get("station") is not None and row.get("access_dist_m") is not None:
             seen.setdefault(row["station"], row["access_dist_m"])
     for st, d in seen.items():
-        provenance.record(f"timeline.{sid}.{st}.access_dist_m", d, "m", tfile, SCRIPT)
-    provenance.record(f"route.{sid}.total_min", round(res.total_min, 2), "min", tfile, SCRIPT)
-    provenance.record(f"route.{sid}.margin_terms", res.margin_terms, None, tfile, SCRIPT)
-    provenance.record_file(f"route_{sid}.geojson", rp, SCRIPT)
+        provenance.record(f"{kp}timeline{ks}.{st}.access_dist_m", d, "m", tfile, SCRIPT)
+    provenance.record(f"{kp}route{ks}.total_min", round(res.total_min, 2), "min", tfile, SCRIPT)
+    provenance.record(f"{kp}route{ks}.margin_terms", res.margin_terms, None, tfile, SCRIPT)
+    if res.dose is not None:
+        for k, u in (("t_star_min", "min"), ("tau_at_t_star_min", "min"),
+                     ("lowest_dose_margin_min", "min"), ("violation", None)):  # fmt: skip
+            provenance.record(f"{kp}route{ks}.dose.{k}", res.dose[k], u, tfile, SCRIPT)
+    provenance.record_file(rfile, rp, SCRIPT)
     provenance.record_file(tfile, tp, SCRIPT)

@@ -59,6 +59,7 @@ def fragments(stations: list[dict], res, sid: str, haul_t: np.ndarray | None,
         for e in rows:
             ev.setdefault(e["event"], e["t_min"])
         at = [e for e in rows if e["event"] in ("arrive", "leave")]
+        tb = next((e for e in rows if e["event"] == "turn_back"), None)
         low = min(at, key=lambda e: e["margin_min"]) if at else None
         acc = {"radius_m": float(radius), "rule": RULE}
         if a is not None:
@@ -68,6 +69,8 @@ def fragments(stations: list[dict], res, sid: str, haul_t: np.ndarray | None,
             "timeline": {k: ev.get(k) for k in ("arrive", "leave", "turn_back")},
             "margin_binding": None if low is None else low["margin_binding"],
             "margin_min": None if low is None else low["margin_min"],
+            # D28: the term that sets the latest turn-back (contracts v1.1.3)
+            "turn_back_binding": None if tb is None else tb["margin_binding"],
             "contingency": _contingency(a, haul_t, casualty_kg, case, contour_min, radius),
             "drag_note": load("haul")["drag_note"],  # SPEC F10 Output (D20)
             "t_home_min": None if a is None or a.t_home_min is None else round(a.t_home_min, 2),
@@ -90,6 +93,8 @@ def write(frags: dict[str, dict], public: Path) -> list[Path]:
         Draft202012Validator(schema["contingency"]).validate(fr["contingency"])
         if fr["margin_binding"] is not None:
             Draft202012Validator(schema["margin_binding"]).validate(fr["margin_binding"])
+        if fr.get("turn_back_binding") is not None and "turn_back_binding" in schema:
+            Draft202012Validator(schema["turn_back_binding"]).validate(fr["turn_back_binding"])
         p = Path(public) / "cards" / f"{st}.timeline.json"
         p.parent.mkdir(parents=True, exist_ok=True)
         p.write_text(json.dumps(fr, separators=(",", ":")), encoding="utf-8")
@@ -103,6 +108,9 @@ def write(frags: dict[str, dict], public: Path) -> list[Path]:
                 provenance.record(f"card.{st}.{k}", fr[k], u, f, SCRIPT)
         if fr["margin_binding"] is not None:
             provenance.record(f"card.{st}.margin_binding", fr["margin_binding"], None, f, SCRIPT)
+        if fr.get("turn_back_binding") is not None:
+            provenance.record(f"card.{st}.turn_back_binding", fr["turn_back_binding"], None, f,
+                              SCRIPT)  # fmt: skip
         a = fr["access"]
         for k, u in (("dist_m", "m"),):
             if a.get(k) is not None:

@@ -330,3 +330,17 @@ def ist2_weight_span(variant: str = "nominal") -> dict:
                     "band_vertical_only": [klo, khi],
                     "inside_vertical_only": bool(klo <= reported <= khi)}  # fmt: skip
     return out
+
+
+def ist2_pass_rows() -> dict:
+    """D30 (user 16:20, no tuning): IST-2 weight-span pass/miss per variant and grade, for the
+    manifest (physio.ist2.{variant}.{grade}.*): pass = IST-2's reported value inside the model
+    band (with the level term), band_lo/hi in mL/kg/min."""
+    out = {}
+    for variant in load("variants")["variants"]:
+        s = ist2_weight_span(variant)
+        out[variant] = {g: {"pass": bool(s[g]["inside"]), "band_lo": round(s[g]["band"][0], 3),
+                            "band_hi": round(s[g]["band"][1], 3),
+                            "reported": float(s[g]["reported"])}
+                        for g in load("variants")["ist2"]["uphill_check_ml_kg_min"]}  # fmt: skip
+    return out

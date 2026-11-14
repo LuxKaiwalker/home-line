@@ -103,10 +103,10 @@ def test_carried_mass_is_suit_plus_tools():
 
 
 def test_uphill_k_hand_calculation():
-    """k = (m_b + M) g sin(theta) / (eta m_b) * 60 / 20.1 at 10 deg, nominal, 114 kg."""
+    """k = (m_b + M) g sin(theta) / (eta m_b) * 60 / 21.0 at 10 deg, nominal, 114 kg (D29)."""
     p = _p("nominal", 114.0)
     th = math.radians(10.0)
-    k = (75 + 114) * 3.71 * math.sin(th) / (0.225 * 75) * 60 / 20.1
+    k = (75 + 114) * 3.71 * math.sin(th) / (0.225 * 75) * 60 / 21.0
     assert physio.k_uphill(p, th) == pytest.approx(k)
     assert physio.k_uphill(p, -th) == 0.0
 
@@ -234,9 +234,9 @@ def test_o2_litres():
 
 
 def test_heat_watts():
-    """Heat = VO2 * m_b / 60 * 20.1 J/mL: 18 mL/kg/min, 75 kg -> 452.25 W."""
+    """Heat = VO2 * m_b / 60 * 21.0 J/mL (D29): 18 mL/kg/min, 75 kg -> 472.5 W."""
     p = _p("nominal", 114.0)
-    assert physio.heat_w(p, 18.0) == pytest.approx(18 * 75 / 60 * 20.1)
+    assert physio.heat_w(p, 18.0) == pytest.approx(18 * 75 / 60 * 21.0)
 
 
 # ------------------------------------------------------------ variants / ids
@@ -251,11 +251,14 @@ def test_scenario_ids_parse():
     assert physio.parse_scenario("nom_104") == ("nominal", 104)
 
 
-def test_conservative_needs_rmse():
+def test_conservative_no_longer_needs_rmse_d23():
+    """D23: the conservative no-go is 17 deg; V1's RMSE is ignored (a validation, not a margin).
+    The old text form still parses (resolve_nogo) for the record."""
+    assert physio.params("conservative", suit_kg=104).nogo_deg == 17.0
+    assert physio.params("conservative", suit_kg=104, v1_rmse_deg=1.5).nogo_deg == 17.0
+    assert physio.resolve_nogo("20 - v1_rmse_deg", 1.5) == pytest.approx(18.5)
     with pytest.raises(physio.MissingInput):
-        physio.params("conservative", suit_kg=104)
-    p = physio.params("conservative", suit_kg=104, v1_rmse_deg=1.5)
-    assert p.nogo_deg == pytest.approx(18.5)
+        physio.resolve_nogo("20 - v1_rmse_deg", None)
 
 
 def test_nogo_from_variants():
@@ -270,7 +273,7 @@ def test_nogo_from_variants():
 def test_grade_table_matches_formulas(variant):
     p = _p(variant, 114.0)
     tab = physio.grade_table(p)
-    deg = np.array([-18.3, -8.2, -0.5, 0.0, 3.3, 11.7, 16.9])
+    deg = np.array([-16.8, -8.2, -0.5, 0.0, 3.3, 11.7, 16.9])  # within every no-go (con 17, D23)
     pace = np.interp(deg, tab.theta_deg, tab.pace_s_per_m)
     v = physio.governor(p, _rad(deg))
     np.testing.assert_allclose(pace, 1.0 / v, rtol=1e-4)
@@ -288,32 +291,32 @@ def test_grade_table_impassable_beyond_nogo():
 
 
 def test_o2_budget_formula_recomputes():
-    """Decision 14 Nov 15:40: the O2 budget converts energy with ICES-2026-127 (MetRate
-    kcal/min = 4.039 VO2 + 1.157 VCO2, RER 0.85 -> 5.02245 kcal per L O2), not 20.1 J/mL.
-    Primary 8 h x 1,200 BTU/h = 481.99 L (was 504); secondary 1 h x 3,000 BTU/h = 150.62 L."""
+    """D29 (user 16:20): the O2 budget converts energy at the one O2 energy equivalent
+    21.0 J/mL: O2_L = h x BTU/h x 1055.056 / 21.0 / 1000. Primary 8 h x 1,200 BTU/h = 482.31 L
+    (481.99 via ICES, 504 at 20.1); secondary 1 h x 3,000 BTU/h = 150.72 L."""
     from pipeline.engine import margin
 
     b = CREW["o2_budget"]
-    assert b["conversion"] == "o2_margin.conversion" and "20.1" not in b["formula"]
-    kcal_per_l = 4.039 + 1.157 * 0.85
-    prim = 8 * 1200 / 3.96567 / kcal_per_l
-    sec = 1 * 3000 / 3.96567 / kcal_per_l
-    assert prim == pytest.approx(481.99, abs=0.01) and sec == pytest.approx(150.62, abs=0.01)
+    prim = 8 * 1200 * 1055.056 / 21.0 / 1000
+    sec = 1 * 3000 * 1055.056 / 21.0 / 1000
+    assert prim == pytest.approx(482.31, abs=0.01) and sec == pytest.approx(150.72, abs=0.01)
     assert margin.o2_budget_l("primary_L") == pytest.approx(prim, rel=1e-12)
     assert margin.o2_budget_l("secondary_L") == pytest.approx(sec, rel=1e-12)
     assert margin.o2_capacity_l() == pytest.approx(prim, rel=1e-12)  # margin_uses: primary_L
     # the rounded values documented in crew.yaml (read by the web scorecard) match
     assert b["primary_L"] == round(prim) == 482 and b["secondary_L"] == round(sec) == 151
-    # the old conversion gave 504 L: 22 L less O2 to plan against now
-    old = 8 * 1200 * 0.29307 * 3600 / 20.1 / 1000
-    assert old == pytest.approx(504, abs=0.5) and old - prim == pytest.approx(22.0, abs=0.5)
 
 
-def test_uphill_k_keeps_20_1_j_per_ml():
-    """The physiology constant 20.1 J/mL (k, heat, haul power) is not the budget conversion
-    and is unchanged by the 15:40 decision (flagged for S in STATUS)."""
-    assert CREW["o2_energy_j_per_ml"] == 20.1
-    assert physio.params("nominal", suit_kg=104).j_per_ml == 20.1
+def test_one_o2_energy_equivalent_d29():
+    """D29: one key, 21.0 J/mL, for k, heat, haul power and the O2 budget."""
+    assert CREW["o2_energy_j_per_ml"] == 21.0
+    assert physio.params("nominal", suit_kg=104).j_per_ml == 21.0
+
+
+def test_conservative_nogo_17_d23():
+    """D23: conservative no-go 17 deg, no V1 input needed."""
+    assert physio.params("conservative", suit_kg=104).nogo_deg == 17.0
+    assert physio.scenario_params("con_104").nogo_deg == 17.0
 
 
 def test_level_to_grade_increment_not_validated():
@@ -335,11 +338,11 @@ G0 = VAR["ist2"]["g_earth_ms2"]
 
 def _span_by_hand(eta, grade_pct, v):
     """(VO2 at 0.32 g - VO2 at 0.12 g) per kg subject mass, same grade and speed, vertical term:
-    (m_b + M) dg sin(theta) / (eta m_b) * 60 / 20.1 * v."""
+    (m_b + M) dg sin(theta) / (eta m_b) * 60 / 21.0 * v (D29)."""
     th = math.atan(grade_pct / 100)
     dg = (W["g_frac"][1] - W["g_frac"][0]) * G0
     m_b, m = W["subject_kg"], W["system_kg"]
-    return (m_b + m) * dg * math.sin(th) / (eta * m_b) * 60 / 20.1 * v
+    return (m_b + m) * dg * math.sin(th) / (eta * m_b) * 60 / 21.0 * v
 
 
 def _level_by_hand(v):
@@ -372,24 +375,36 @@ def test_ist2_weight_span_hand_calculation(variant):
 
 def test_ist2_weight_span_nominal_contains_reported():
     """S review pass rule: IST-2's 8.7 (20 %) and 17.0 (30 %) inside the band from the speed
-    sweep 0.56-0.97 m/s. Nominal (eta 0.225) with the level term: 8.23-14.25 and
-    11.55-20.01 -> both inside (vertical term alone: 7.14-12.37, 10.47-18.13, also inside)."""
+    sweep 0.56-0.97 m/s. Nominal (eta 0.225, 21.0 J/mL since D29) with the level term:
+    7.92-13.72 and 11.10-19.23 -> both inside (vertical term alone: 6.84-11.84, 10.02-17.35)."""
     span = physio.ist2_weight_span("nominal")
     assert span["grade_20pct"]["inside"] and span["grade_30pct"]["inside"]
-    assert span["grade_20pct"]["band"] == pytest.approx([8.228, 14.253], abs=1e-3)
-    assert span["grade_30pct"]["band"] == pytest.approx([11.551, 20.008], abs=1e-3)
+    assert span["grade_20pct"]["band"] == pytest.approx([7.922, 13.722], abs=1e-3)
+    assert span["grade_30pct"]["band"] == pytest.approx([11.103, 19.231], abs=1e-3)
     assert span["grade_20pct"]["reported"] == 8.7 and span["grade_30pct"]["reported"] == 17.0
 
 
 def test_ist2_weight_span_by_variant_reported_honestly():
-    """With the level term (alpha on the weight span): optimistic (eta 0.25) 30 % band
-    10.50-18.20 now contains 17.0 (vertical only: 16.31, outside); conservative (eta 0.20)
-    20 % band 9.12-15.80 no longer contains 8.7 (vertical only: 8.04-13.92, inside). Reported,
-    not tuned."""
+    """With the level term (alpha on the weight span), 21.0 J/mL (D29): optimistic (eta 0.25)
+    30 % band 10.10-17.50 contains 17.0 (vertical only: 15.62, outside); conservative (eta 0.20)
+    20 % band 8.78-15.20 does not contain 8.7 (vertical only: 7.69-13.32, inside). Reported,
+    not tuned (D30)."""
     opt = physio.ist2_weight_span("optimistic")
     assert opt["grade_20pct"]["inside"] and opt["grade_30pct"]["inside"]
     assert not opt["grade_30pct"]["inside_vertical_only"]
     con = physio.ist2_weight_span("conservative")
     assert not con["grade_20pct"]["inside"] and con["grade_30pct"]["inside"]
     assert con["grade_20pct"]["inside_vertical_only"]
-    assert con["grade_20pct"]["band"][0] == pytest.approx(9.121, abs=1e-3)
+    assert con["grade_20pct"]["band"][0] == pytest.approx(8.777, abs=1e-3)
+
+
+def test_ist2_manifest_rows_d30():
+    """D30: pass/miss per variant and grade, as written to the manifest by the engine run."""
+    rows = physio.ist2_pass_rows()
+    assert rows["nominal"]["grade_20pct"]["pass"] and rows["nominal"]["grade_30pct"]["pass"]
+    assert not rows["conservative"]["grade_20pct"]["pass"]
+    assert rows["optimistic"]["grade_30pct"]["pass"]
+    assert set(rows) == {"optimistic", "nominal", "conservative"}
+    for v in rows.values():
+        for g in ("grade_20pct", "grade_30pct"):
+            assert set(v[g]) == {"pass", "band_lo", "band_hi", "reported"}
