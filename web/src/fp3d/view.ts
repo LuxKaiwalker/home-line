@@ -51,6 +51,8 @@ interface Loaded {
   route: RoutePath
   eqc: Eqc
   textures: Map<string, HTMLImageElement>
+  /** fp3d/far_tex.jpg when the index lists one (absent in the dummy tree: untextured far mesh) */
+  farTex: HTMLImageElement | null
   ring: RingCurtain | null
   sun: SunTrack | null
   bytes: number
@@ -151,7 +153,7 @@ async function loadAll(
   }
 
   const chunks = index.chunk_grid.chunks
-  const total = 1 + chunks.length + chunks.filter((c) => c.tex).length
+  const total = 1 + chunks.length + chunks.filter((c) => c.tex).length + (index.far.tex ? 1 : 0)
   let done = 0
   // keep a Resource Timing entry for every file we fetch (the default buffer holds 250)
   performance.setResourceTimingBufferSize(performance.getEntriesByType('resource').length + total)
@@ -161,6 +163,14 @@ async function loadAll(
   const codec = codecOf(index)
   const terrain = new Terrain(index, decodeHeights(farBuf, index.far.width, index.far.height, codec))
   progress(++done, total, bytes, expected)
+  let farTex: HTMLImageElement | null = null
+  if (index.far.tex) {
+    const r = await get(index.far.tex)
+    const blob = await r.blob()
+    bytes += wireSize(r, blob.size)
+    farTex = await loadImage(blob)
+    progress(++done, total, bytes, expected)
+  }
 
   const P = index.chunk_grid.chunk_px
   const textures = new Map<string, HTMLImageElement>()
@@ -176,7 +186,7 @@ async function loadAll(
       progress(++done, total, bytes, expected)
     }
   })
-  return { index, terrain, route, eqc, textures, ring, sun, bytes }
+  return { index, terrain, route, eqc, textures, farTex, ring, sun, bytes }
 }
 
 function geometry(m: MeshArrays): THREE.BufferGeometry {
@@ -303,9 +313,18 @@ export async function startView(container: HTMLElement, opts: ViewOptions): Prom
   }
 
   const ground = rgb(cfg.groundRgb)
+  const aniso = renderer.capabilities.getMaxAnisotropy()
+  let farMap: THREE.Texture | null = null
+  if (data.farTex) {
+    farMap = new THREE.Texture(data.farTex)
+    farMap.colorSpace = THREE.SRGBColorSpace
+    farMap.anisotropy = aniso
+    farMap.needsUpdate = true
+    disposables.push(farMap)
+  }
   const farMat = withCurvature(
     new THREE.MeshLambertMaterial({
-      color: ground,
+      ...(farMap ? { map: farMap } : { color: ground }),
       polygonOffset: true,
       polygonOffsetFactor: cfg.farPolygonOffset[0],
       polygonOffsetUnits: cfg.farPolygonOffset[1],
@@ -318,7 +337,6 @@ export async function startView(container: HTMLElement, opts: ViewOptions): Prom
 
   const plainMat = withCurvature(new THREE.MeshLambertMaterial({ color: ground }), R)
   disposables.push(plainMat)
-  const aniso = renderer.capabilities.getMaxAnisotropy()
   for (const ch of index.chunk_grid.chunks) {
     if (!terrain.hasChunk(ch.i, ch.j)) continue
     const g = geometry(nearChunkMesh(terrain, ch.i, ch.j, anchor))

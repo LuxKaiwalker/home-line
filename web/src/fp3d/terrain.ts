@@ -234,6 +234,8 @@ export function farMesh(t: Terrain, anchor: Anchor, step = 1, skipCovered = fals
   const n = cols
   const positions = new Float32Array(n * n * 3)
   const normals = new Float32Array(n * n * 3)
+  // fp3d/far_tex.jpg spans the whole far square: u = east fraction, v = 1 - south fraction
+  const uvs = new Float32Array(n * n * 2)
   let p = 0
   for (let r = 0; r < n; r++) {
     const rr = r * step
@@ -241,6 +243,8 @@ export function farMesh(t: Terrain, anchor: Anchor, step = 1, skipCovered = fals
       const cc = c * step
       const x = g.west + (cc + 0.5) * g.res
       const y = g.north - (rr + 0.5) * g.res
+      uvs[(p / 3) * 2] = (cc + 0.5) / g.cols
+      uvs[(p / 3) * 2 + 1] = 1 - (rr + 0.5) / g.rows
       positions[p] = x - anchor.x
       positions[p + 1] = g.at(cc, rr) - anchor.h
       positions[p + 2] = -(y - anchor.y)
@@ -276,7 +280,7 @@ export function farMesh(t: Terrain, anchor: Anchor, step = 1, skipCovered = fals
     }
     index = keep.slice(0, kept)
   }
-  return { positions, normals, uvs: null, index, vertsPerSide: n }
+  return { positions, normals, uvs, index, vertsPerSide: n }
 }
 
 /** Camera position (Three.js frame, relative to the anchor) at eye height above the drawn surface. */

@@ -3,6 +3,38 @@
 // web/src/hud/ is changed. Every number on the panel is WS7's readout of the exported fields and
 // timeline at WS7's playback position for the clock time; the 3D view only supplies that time.
 import type { HudData } from '../hud/index'
+import type { PolygonFC } from '../hud/types'
+
+/** The partner row's key as WS7's panel writes it (web/src/hud/panel.ts). */
+export const WS7_PARTNER_KEY = 'PARTNER LINE'
+
+/**
+ * D20 (user, 14:22): the partner line is the cart haul only, labelled "Partner line (cart haul,
+ * 60 min)". The case and the minutes come from WS2's partner file (feature properties `case`,
+ * `contour_min`); with no cart feature or more than one cart contour nothing is invented (null:
+ * WS7's own key stays).
+ */
+export function partnerRowLabel(fc: PolygonFC | null | undefined): string | null {
+  const mins = new Set<number>()
+  for (const f of fc?.features ?? []) {
+    const p = f.properties ?? {}
+    if (p.case === 'cart' && typeof p.contour_min === 'number' && Number.isFinite(p.contour_min)) mins.add(p.contour_min)
+  }
+  return mins.size === 1 ? `Partner line (cart haul, ${[...mins][0]} min)` : null
+}
+
+/** Replace WS7's partner key text in the mounted panel (DOM only, WS7's files untouched). */
+export function relabelPartnerRow(root: { querySelectorAll(sel: string): ArrayLike<{ textContent: string | null }> }, label: string | null): boolean {
+  if (!label) return false
+  const keys = root.querySelectorAll('.hl-hud-k')
+  for (let k = 0; k < keys.length; k++) {
+    if (keys[k].textContent === WS7_PARTNER_KEY) {
+      keys[k].textContent = label
+      return true
+    }
+  }
+  return false
+}
 
 export interface HudOverlay {
   /** Update the panel for EVA minute t (the shared clock's time). */
@@ -31,6 +63,7 @@ export async function mountHudOverlay(host: HTMLElement, dataUrl: (path: string)
   const panel = hud.createHudPanel(layer, config)
   panel.el.style.pointerEvents = 'auto'
   panel.el.style.top = '2.4em' // below the 3D view's label / fps line
+  relabelPartnerRow(panel.el, partnerRowLabel(data.ctx.partner)) // D20
   const stations = new Map(data.stations.map((s) => [s.id, s]))
   const plan = data.ctx.plan
   let lastHeading: number | null = null
@@ -46,7 +79,8 @@ export async function mountHudOverlay(host: HTMLElement, dataUrl: (path: string)
       lastT = t
       const state = plan.stateAt(t)
       if (state.headingDeg !== null) lastHeading = state.headingDeg
-      // F21 odometry and the storm switch live on the 2D HUD; here: plain playback
+      // D19: F21 ellipse / Odometry line are an optional add-on on the 2D HUD only; the 3D HUD
+      // runs without WS9 nav (null), i.e. F19's circle and station fixes. No storm switch here.
       const f = hud.hudFrame(hud.playbackPosition(plan, t), data.ctx, null)
       panel.update(f.readout, f.pos, {
         headingDeg: lastHeading,

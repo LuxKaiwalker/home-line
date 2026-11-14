@@ -1090,32 +1090,75 @@ Branch: `ws8-3d`
 - KATs: `tests/test_fp3d_export.py` 34 pass; `web/src/fp3d/*.test.ts` 50 pass + 1 data check
   (`FP3D_REAL_CHECK=1`); full suite 692 pytest, 328 vitest; ruff, tsc, contracts clean.
 
+#### Session 2 (2026-11-14, C decisions 12:35 and 14:13; D19, D20)
+
+- 13:52Z **Rebuilt `make fp3d` with the canonical bands** (commit a0d76ec, manifest keys clean):
+  the far mesh now reads its sources after dem_1m from `config/horizon.yaml bands` (the same
+  files WS3's engine reads; C 14:13 = `ctx_20m_v2.tif`, then `mola_hrsc_200m.tif`), no
+  hard-coded paths. Far cells: 948,676 dem_1m, **1,312,957 ctx_20m_v2**, 383 MOLA, 0 filled.
+  Same 41 near chunks / 41 textures. Reference horizons = WS3 session 3 (14:31 CET: dem_1m to
+  its coverage edge + CTX v2), ring = WS3's 14:31 `horizon_ring.json`.
+- **F20 re-check (`make fp3d-check`, then the GPU probe in headless Chromium/SwiftShader on a
+  scratch build with the real fp3d tree), tolerance 0.5°, geometry / GPU:**
+  | Station | Session 1 | Now (geometry) | Now (GPU) | Pass rule |
+  | --- | --- | --- | --- | --- |
+  | pad | 0.44° | **0.212°** (az 209) | **0.250°** | PASS |
+  | S2 (access cell) | 0.87° | **0.288°** (az 220) | **0.345°** | PASS |
+  | S4 (access cell) | 0.20° | **0.200°** (az 50) | **0.167°** | PASS |
+  | S1 (no access cell) | 0.54° | 0.543° (az 142) | 0.582° | reported, excluded (C 12:35) |
+  Means 0.018–0.069°. Eye height on `route_nom_104` (WS2 14:45 route): 7,987 points over
+  6,221 m, max |agl − 1.7 m| 3 × 10⁻⁶ m; camera = WS7 playback position at 839 times (8 × 10⁻¹⁰ m).
+  The S4 0.504° WS3 saw against my v1 mesh is gone (0.200°), as WS3 predicted.
+- **Pass-rule scope in the data** (C 12:35): `skyline_check.stations[].pass_rule` (false for a
+  station WS2 gives no access cell, i.e. `access_lon` null: S1) + `excluded_reason`;
+  `make fp3d-check` and the GPU probe assert the tolerance on pass-rule stations only and print
+  the others as REPORT.
+- **Far-mesh texture `fp3d/far_tex.jpg`** (`ortho_chunks.export_far_texture_from_file`): WS1's
+  `ortho_lrgb_1m.tif` over the whole 12,032 m far square at 4 m/texel (3,008², JPEG q82,
+  **0.92 MB**); each texel is the area mean where the ortho covers it fully, else
+  `panorama.ground_rgb` (5,555,614 texels = 61 % of the square lie outside the ortho: flat
+  ground colour, nothing invented). The view loads it when `far.tex` is in the index (dummy tree:
+  none, untextured as before); far-mesh UVs span the far square. Checked in the browser.
+- **fp3d size: 10.85 MB** (10,847,716 B incl. far_tex; + WS3 ring 87 kB) of the 30 MB budget.
+- **D19:** the 3D HUD already runs WS7's `hudFrame` with no WS9 nav (`null`) and no minimap:
+  it shows F19's σ circle (position line "planned route · ±0 m") and station fixes, never the
+  F21 ellipse or the Odometry line; a KAT now pins this. Nothing to hide.
+- **D20:** the 3D HUD's partner row (WS7 panel, expanded level) is relabelled
+  **"Partner line (cart haul, 60 min)"** in the 3D overlay only (case and minutes read from
+  WS2's partner file: the `cart` features' `contour_min`; nothing is invented when there is no
+  single cart contour). Checked in the browser DOM. WS7's files are untouched. The 3D scene
+  draws no partner line.
+- KATs: `tests/test_fp3d_export.py` +5 (far texture ×3, canonical far sources, pass-rule
+  scope); `web/src/fp3d` +5 (far UVs, far.tex parsing, D20 label ×2, D19). Full suite
+  738 pytest, 393 vitest (+1 data check); ruff, tsc, `make validate` clean.
+
+
 ### Doing
 
 - —
 
 ### Next
 
-- Performance pass on a real GPU (≥ 30 fps): the headless browser here is SwiftShader (0.5 fps),
-  so it measures nothing; R to check on the reference laptop. Far-mesh LOD if needed.
-- Far texture (8 m ortho JPEG over the far mesh; the untextured far mesh is darker than the
-  near chunks). Needs a new web path `fp3d/far_tex.jpg` → C to add to `make web` RULES.
+- **C: add one `make web` rule** in `tools/make_web.py` RULES, after
+  `Rule("WS8", "export", "fp3d/far.f32.gz")`: `Rule("WS8", "export", "fp3d/far_tex.jpg"),`.
+  Then `make web` (WS8 no longer skipped). `fp3d/index.json` lists `far.tex`; without the rule
+  the view requests a missing file and fails to load.
+- Performance pass on a real GPU (≥ 30 fps; SwiftShader here gives ~1 fps): R on the reference
+  laptop. Far-mesh LOD if needed.
+- Re-run `make fp3d` + `make fp3d-check` whenever WS2 changes the route/stations/pad or WS3 the
+  horizons (the `skyline_check` reference is baked at export time).
 - Sun morning: one 2 s first-person capture for the video option.
 
 ### Blocked
 
-1. **F20 at S2 (C / WS3 decide).** WS3's horizon switches from dem_1m to ctx_20m at 2 km
-   (`horizon.yaml sampling`); the 3D mesh uses dem_1m to the window edge. At S2 az 157–160 the
-   ridge 2.0–2.5 km SSE is ~25 m higher in CTX → 0.87°. Re-running WS3's own engine with dem_1m
-   to 3.7 km agrees with the render to 0.29° at S2 (pad 0.21°, S4 0.20°). Options: (a) WS3 uses
-   dem_1m to the edge of its window (pad ± 3.9 km); (b) accept S2 as a documented band difference.
-   I have not changed the mesh to CTX (it would degrade the 1 m terrain to match the reference).
-2. **F20 at S1 (S / C decide).** S1 sits on a 57° cell; its horizon is 12–17 m away at 17–35°.
-   The render is 0.54° above WS3's rays there: 16 cm at 17 m, i.e. the drawn triangles vs WS3's
-   1 m-step bilinear rays over the same DEM (both are discretisations; the triangle max is exact).
-   Decision needed: do near-field azimuths (horizon < ~20 m) count for the 0.5° rule?
-3. **Config (C / R confirm):** new `config/fp3d.yaml` (WS8 owns no config file; every value
-   `assumed: true`).
+1. ~~F20 at S2~~: resolved (C 12:35 + WS3 session 3): 0.288° / 0.345° GPU.
+2. ~~F20 at S1~~: resolved by C 12:35 (excluded from the pass rule, reported: 0.543° / 0.582°).
+3. Config: `config/fp3d.yaml` accepted by C 12:35 (all `assumed: true`); R to review.
+4. **Pad source (C / WS3, heads-up).** WS2 session 4 wrote `engine/public/pad.json` (F8 proposal:
+   137.402443, −4.769028, ≈ 2.5 km NE of `pad_default`). WS3's pad order reads WS2's pad.json
+   first, so the next `make horizons` would move the pad horizon there, while the 3D grid, the
+   route and the decision log (11:24) keep `pad_default`. If the proposal is not accepted, WS3's
+   order should skip it; if it is, everything downstream (route, horizons, fp3d) re-runs.
 
 ### Assumptions added
 
@@ -1130,6 +1173,10 @@ Branch: `ws8-3d`
   `download_bytes`, `skyline_check` (WS3 horizons at 1°). The schema is loose; WS8 is the only
   reader. C may fold the structure into the contract.
 - `make fp3d` is not in `make all` (C's Makefile): run it after `engine` and `horizons`.
+- Session 2: `fp3d.yaml far.texture` (4 m/texel, JPEG q82; 3,008 px stays under 4,096, the
+  WebGL2 minimum texture size); far-mesh sources = `horizon.yaml bands` (not repeated in
+  fp3d.yaml); F20 pass rule "route stations" = stations with an access cell in WS2's
+  stations.json (C 12:35 wording: S1 "not on the route (no access cell)").
 
 ## WS9 Navigation
 
@@ -1355,3 +1402,4 @@ Branch: `ws10-vo`
 | 2026-11-14 14:19 | Odometry and position determination (WS10 X8/X9, WS9 F21/F22) | **Suspended softly → optional add-on** (SPEC §2.4, D19): no new jobs; merged work stays, labelled optional. Reasons: F22 median 657 m on 35 frames, S1/S2/S4 788/280/966 m, none passes the 10 m gate; F21 fix-interval median 50.7 m dominated by fragmented terrain, N's model review pending; X8 rover analogue only (256², MMGIS not independent, thresholds unconfirmed); X9 stretch. Core: F19 flat drift rule + uncertainty circle, fixes at the rover pad and surveyed stations only | User |
 | 2026-11-14 14:22 | Partner haul case (F10) | **Cart only** (SPEC §11 D20); dragging is reported as a finding, not drawn as a line. With the config values dragging a suited crewmate always exceeds boot traction: drag force 179 kg × 3.71 × 0.6 ≈ 398 N vs traction limit 0.5 × 189 kg × 3.71 ≈ 351 N (maximum draggable mass ≈ 157 kg), so it is infeasible on every cell, even on flat ground. WS2 and WS5 implement | User |
 | 2026-11-14 14:28 | HUD fields size | Accept 41.9 MB (pointer for every scenario, own 3 m grid; ≈ 56 MB with con_*); every file < 50 MB | C |
+| 2026-11-14 14:58 | pad.json vs F8 siting proposal | `pad.json` describes the pad in use = `pad_default` (user 11:24). The F8 siting result is a **proposal** carried separately (siting files + an optional `proposal` block), never as the pad. WS2 fixes its writer; until then make web does not publish pad.json; WS3 keeps the pad_default horizon | C |

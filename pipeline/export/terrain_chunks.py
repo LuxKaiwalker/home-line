@@ -45,6 +45,7 @@ DEFAULT_OUT = REPO / "data" / "interim" / "export"  # files land in <out>/fp3d/.
 NEAR_DIR = "fp3d/near"
 TEX_DIR = "fp3d/near_tex"
 FAR_FILE = "fp3d/far.f32.gz"
+FAR_TEX_FILE = "fp3d/far_tex.jpg"
 RING_FILE = "fp3d/horizon_ring.json"  # written by WS3 (horizon/public/fp3d/), referenced here
 
 
@@ -337,7 +338,8 @@ def build_index(grid: ChunkGrid, geo: Geo, near: list[dict], tex: list[dict], fa
     fw, fs = geo.lonlat(grid.x0, grid.y0 - grid.extent_m)
     fe, fn = geo.lonlat(grid.x0 + grid.extent_m, grid.y0)
     bounds = [round(fw, 6), round(fs, 6), round(fe, 6), round(fn, 6)]
-    total = sum(c["bytes"] + c.get("tex_bytes", 0) for c in chunks) + far.get("bytes", 0)
+    total = (sum(c["bytes"] + c.get("tex_bytes", 0) for c in chunks) + far.get("bytes", 0)
+             + far.get("tex_bytes", 0))
     far = dict(far)
     if "origin_xy_m" in far and "width" in far:
         fx0, fy0 = far["origin_xy_m"]
@@ -377,11 +379,25 @@ def build_index(grid: ChunkGrid, geo: Geo, near: list[dict], tex: list[dict], fa
 
 
 # ---------------------------------------------------------------------- skyline check ----
-def skyline_reference(profiles: list, geo: Geo, cfg: dict | None = None, *, source: str) -> dict:
+NO_ACCESS_REASON = ("no access cell in WS2 stations.json: not on the route, the camera never "
+                    "stands there (C decision 2026-11-14 12:35)")
+
+
+def skyline_exclusions(stations: list[dict]) -> dict[str, str]:
+    """Stations reported but outside the F20 pass rule (C 12:35: the rule covers the pad and the
+    route stations): those WS2 gives no access cell (``access_lon`` present and null)."""
+    return {s["id"]: NO_ACCESS_REASON for s in stations
+            if "access_lon" in s and s["access_lon"] is None}
+
+
+def skyline_reference(profiles: list, geo: Geo, cfg: dict | None = None, *, source: str,
+                      excluded: dict[str, str] | None = None) -> dict:
     """fp3d/index.json ``skyline_check``: the computed horizon (WS3 HorizonProfile) at each
     station, resampled to ``fp3d.skyline_check.az_step_deg``, for the SPEC F20 acceptance check
     (rendered skyline within ``tolerance_deg``). ``profiles`` = [(station_id, HorizonProfile)].
-    Unknown elevations stay null."""
+    Unknown elevations stay null. ``excluded`` = {id: reason} for stations reported but not in
+    the pass rule (``pass_rule`` false)."""
+    excluded = excluded or {}
     cfg = load_config() if cfg is None else cfg
     chk = cfg["fp3d"]["skyline_check"]
     step = float(chk["az_step_deg"])
@@ -396,6 +412,8 @@ def skyline_reference(profiles: list, geo: Geo, cfg: dict | None = None, *, sour
             "x_m": round(x, 3), "y_m": round(y, 3),
             "eye_height_m": float(prof.eye_height_m),
             "elevation_deg": [None if not np.isfinite(v) else round(float(v), 4) for v in el],
+            "pass_rule": sid not in excluded,
+            **({"excluded_reason": excluded[sid]} if sid in excluded else {}),
         })
     return {
         "source": source,
@@ -404,6 +422,8 @@ def skyline_reference(profiles: list, geo: Geo, cfg: dict | None = None, *, sour
         "azimuth_convention": "deg clockwise from grid north (analysis CRS); index k = k * step",
         "curvature": "drop = d^2 / (2 R), R = config/site.yaml crs.mars_radius_m",
         "stations": stations,
+        "pass_rule_note": "pass_rule true = in the F20 pass rule (pad and route stations, "
+                          "C 12:35); false = reported only (excluded_reason)",
     }
 
 
@@ -434,6 +454,15 @@ def _repo_rel(p) -> str:
     return str(a.relative_to(REPO)) if a.is_relative_to(REPO) else str(p)
 
 
+def default_far_sources(cfg: dict | None = None) -> list[Path]:
+    """Far-mesh sources after dem_1m, in priority order: the canonical bands of
+    config/horizon.yaml ``bands`` (ctx_20m, then mola_hrsc_200m), the ones WS3's horizon engine
+    reads (C decisions 11:15 and 14:13)."""
+    cfg = load_config() if cfg is None else cfg
+    bands = cfg["horizon"]["bands"]
+    return [REPO / bands["ctx_20m"]["path"], REPO / bands["mola_hrsc_200m"]["path"]]
+
+
 def main(argv: list[str] | None = None) -> int:
     """Export near chunks, far mesh, ortho textures and fp3d/index.json."""
     from pipeline.export import far_mesh, ortho_chunks
@@ -446,8 +475,8 @@ def main(argv: list[str] | None = None) -> int:
                     default=REPO / "data/interim/engine/public/route_nom_104.geojson",
                     help="WS2 route_{scenario}.geojson (the corridor)")
     ap.add_argument("--far-source", type=Path, action="append",
-                    help="coarser DEMs for the far mesh, in priority order "
-                         "(default WS1 ctx_20m.tif then mola_hrsc_200m.tif)")
+                    help="coarser DEMs for the far mesh, in priority order (default: the "
+                         "canonical bands of config/horizon.yaml, ctx_20m then mola_hrsc_200m)")
     ap.add_argument("--ortho", type=Path, default=terrain / "ortho_lrgb_1m.tif",
                     help="WS1 colour ortho (RGB + alpha)")
     ap.add_argument("--datum", default="areoid heights of WS1 dem_1m.tif (m)",
@@ -460,9 +489,8 @@ def main(argv: list[str] | None = None) -> int:
                     help="stations.json (ids for --station-horizons)")
     ap.add_argument("--out", type=Path, default=DEFAULT_OUT)
     args = ap.parse_args(argv)
-    far_sources_p = args.far_source or [terrain / "ctx_20m.tif", terrain / "mola_hrsc_200m.tif"]
-
     cfg = load_config()
+    far_sources_p = args.far_source or default_far_sources(cfg)
     f3 = cfg["fp3d"]
     geo = Geo(cfg["site"])
     grid = grid_from_config(geo, cfg)
@@ -486,6 +514,11 @@ def main(argv: list[str] | None = None) -> int:
                               + [_repo_rel(p) for p in far_sources_p])
     del dem, far_sources
     ground = cfg["horizon"]["panorama"]["ground_rgb"]
+    ftex = f3["far"].get("texture")
+    if ftex:
+        far.update(ortho_chunks.export_far_texture_from_file(
+            args.ortho, fgrid, args.out, res_m=ftex["res_m"], quality=ftex["jpeg_quality"],
+            nodata_rgb=ground))
     tex = ortho_chunks.export_textures_from_file(
         args.ortho, grid, [(e["i"], e["j"]) for e in near], args.out,
         tex_px=f3["texture"]["chunk_px"], quality=f3["texture"]["jpeg_quality"],
@@ -499,7 +532,8 @@ def main(argv: list[str] | None = None) -> int:
     profs = read_station_horizons(args.station_horizons, ids)
     if profs:
         check = skyline_reference(profs, geo, cfg,
-                                  source=f"WS3 horizon engine, {rel(args.station_horizons)}")
+                                  source=f"WS3 horizon engine, {rel(args.station_horizons)}",
+                                  excluded=skyline_exclusions(stations))
     idx = build_index(
         grid, geo, near, tex, far, quantum_m=q, datum=args.datum,
         eye_height_m=cfg["hud"]["eye_height_m"], sources=sources, skyline_check=check,

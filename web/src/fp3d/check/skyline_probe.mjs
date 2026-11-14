@@ -69,9 +69,11 @@ await withChromium(async ({ send, evaluate }) => {
       }
     })
     const pass = n > 0 && missing === 0 && worst <= tol
-    ok &&= pass
+    // stations outside the pass rule (pass_rule false, C 12:35: no access cell) are reported only
+    const inRule = st.pass_rule !== false
+    if (inRule) ok &&= pass
     console.log(
-      `${pass ? 'PASS' : 'FAIL'} ${st.id}: ${n} azimuths, ${azDeg.length} pixel columns, max |d| ${worst.toFixed(3)} deg at az ${worstAz}, mean ${(sum / Math.max(1, n)).toFixed(3)} deg${missing ? `, ${missing} azimuths without a skyline column` : ''}`,
+      `${inRule ? (pass ? 'PASS' : 'FAIL') : `REPORT (not in the pass rule: ${st.excluded_reason ?? 'excluded'}) ${pass ? 'within' : 'over'}`} ${st.id}: ${n} azimuths, ${azDeg.length} pixel columns, max |d| ${worst.toFixed(3)} deg at az ${worstAz}, mean ${(sum / Math.max(1, n)).toFixed(3)} deg${missing ? `, ${missing} azimuths without a skyline column` : ''}`,
     )
   }
   console.log(`F20 rendered-skyline check (GPU), tolerance ${tol} deg: ${ok ? 'PASS' : 'FAIL'}`)
