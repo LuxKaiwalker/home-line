@@ -185,7 +185,7 @@ $$
 
 ### F10 — Partner line (design question)
 
-> 🛒 **2026-11-14 14:24 (user, D20):** the partner line is the **cart haul only** (60 min). Dragging is reported as a finding, not drawn: with the config values it exceeds boot traction on every cell, even on flat ground.
+> 🛒 **2026-11-14 14:22 (user, D20):** the partner line is the **cart haul only** (60 min). Dragging is reported as a finding, not drawn: with the config values it exceeds boot traction on every cell, even on flat ground.
 
 - **Haul force:** F = m_IC·g·(μ cos θ + sin θ). Cart case μ = 0.1–0.4; drag case μ ≈ 0.5–0.7 _(assumed)_. _(2026-11-14, D20: the drag case is computed only for the infeasibility finding, never drawn.)_
 - **Haul speed:** v_haul = min(v_safe/2 downhill, ε·P_avail / F), with ε = 0.20–0.25 and P_avail = rescuer power at 60–80% of VO₂max minus their own walking cost (via F3). Infeasible if v_haul < 0.1 m/s or F exceeds traction (μ_boot ≈ 0.5, assumed). Ridge cells (F2) are masked.
@@ -863,7 +863,7 @@ Keep the partner line, the storm, the scorecard and any near-field number out of
 > | D15 | Dead-reckoning parameter sets | Low / medium / high as in §2.4, medium default |
 > | D18 | Reviewer allocation for WS9 and WS10 | WS9: N (model), C (skyline fix), D (HUD); WS10: N, only on a go |
 > | D19 | Odometry and position determination (F21, F22, X8, X9) | **2026-11-14 14:19 CET, user: suspended softly → optional add-ons** (reasons in §2.4). No new jobs; merged work stays, labelled optional. Core: F19 flat drift rule + uncertainty circle, fixes at the rover pad and surveyed stations only |
-> | D20 | Partner haul case (F10) | **2026-11-14 14:24 CET, user: cart only.** Dragging is reported as a finding, not drawn as a line: drag force 179 kg × 3.71 × 0.6 ≈ 398 N exceeds the boot traction limit 0.5 × 189 kg × 3.71 ≈ 351 N (maximum draggable mass ≈ 157 kg), so the drag case is infeasible on every cell, even on flat ground |
+> | D20 | Partner haul case (F10) | **2026-11-14 14:22 CET, user: cart only.** Dragging is reported as a finding, not drawn as a line: drag force 179 kg × 3.71 × 0.6 ≈ 398 N exceeds the boot traction limit 0.5 × 189 kg × 3.71 ≈ 351 N (maximum draggable mass ≈ 157 kg), so the drag case is infeasible on every cell, even on flat ground |
 >
 > Decided items are removed from the open table below and written into the plan. **Still open:** D3, D7, D8, D16 and D17 are settled at the event by the rules in their rows.
 >
