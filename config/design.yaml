@@ -1,0 +1,79 @@
+# config/design.yaml — design block settings (WS15–WS18, docs/design.md).
+# Source: Notion page "Design config values (config/design.yaml, tokens.json)"
+#   https://app.notion.com/p/418961bcb61181cc8a38c7f4349afd04 (exported 2026-11-14, design bootstrap D1).
+# Every value is from DESIGN or marked assumed: true. Agents never hard-code a value that belongs here.
+# Changes go through C by PR.
+scale:
+  earth_radius_km: 6378.137
+  mars_radius_km: 3396.19
+  elevation_factor: 1.878          # Earth/Mars radius; baked into terrain tiles so 1x on screen = true shape
+terrain_tiles:
+  encoding: terrarium
+  tile_px: 256
+  zooms_planning_extent: [10, 15]
+  zooms_focus_area: [16, 16]
+  lowzoom_intro: [6, 10]            # CTX 20 m + MOLA-HRSC 200 m over Gale
+  budget_mb: 25
+  lowzoom_budget_mb: 5
+exaggeration: {min: 1.0, max: 3.0, default: 1.0}
+field_layer:
+  sampling: nearest_then_manual_bilinear   # encoded values must not be filtered
+  update_hz_playing: 30
+  half_res_above_px: 1024
+  amber_min: 10                     # = hud.yaml margin_amber_min
+  o2_rate_l_min: 1.35               # effort-cap rate for the O2 term in minutes (D24, D45)
+  flat_speed_ms: 0.98               # D25
+  flat_radius_m: {30: 1764, 60: 3528}
+  hatch_px: 6
+collapse: {duration_s: 3, easing: ease-in-out}
+thread:
+  update_hz: 30
+  dash_steps: 14                     # frames per dash cycle
+  tooltip: "Home in {t_home} min · margin {margin} min ({binding})"
+labels:
+  priority: [selected, pad, route_station, station, scored_site, user_point, landmark, overlay]
+  minzoom: {landmark: 6, pad: 10, station: 13, overlay: 15}
+  leader_line_min_pitch_deg: 30
+  pill_padding_px: [4, 2]
+camera:
+  presets:
+    overhead: {pitch: 0, bearing: 0}
+    isometric: {pitch: 45}
+    low: {pitch: 70}
+    focus: {padding_px: 80}
+    follow: {behind_m: 250, above_m: 120, lookahead_m: 150}
+  flythrough: {sample_m: 20, spline: centripetal_catmull_rom, behind_m: 250, above_m: 120, lookahead_m: 150}
+  history_max: 10
+overlays:
+  max_thematic_on: 2
+  slope_classes_deg: [0, 10, 17, 20]
+  contours_m: {minor: 10, index: 50}
+  mineral_threshold: null           # S confirms (readiness item R9); until then highlight layers are labelled preliminary
+  ridge_index_threshold_m: null     # S confirms (R9); 0.75 m was the WS1 ridge rule, check before reuse
+edit:
+  max_requests_per_s: 2
+  snap_access_radius_m: 50          # D27
+  undo_max: 50
+pad_validity:
+  max_slope_deg: 5
+  block_m: 20
+  disc_inside_grid_m: 1764          # D21
+performance:
+  first_load_added_kb_gz: 150
+  fonts_kb: 120
+  overlays_mb: 15
+  gpu_textures_mb: 64
+  fps_2d_min: 60
+  fps_3d_min: 30
+  hover_ms_max: 16
+  select_ms_max: 100
+3d:
+  shadows_off_below_fps: 30
+  crew_count: 2
+  ground_ring_radius_m: 1.5
+intro: {once_per_browser: true, skip_on_any_input: true, off_with_reduced_motion: true, approx_s: 20}
+capture: {size: [1920, 1080], fps: 60}
+render_review:
+  sizes: [[1440, 900], [1024, 768]]
+  key_screens: [plan_default, station_selected, drag_rover_ghost, fly_margin_storm, report, evidence]
+assumed: true
