@@ -5,7 +5,8 @@ with WS3's ``horizon/public/cards/{S}.json`` into ``cards/{S}.json`` (contract c
 WS2 owns: ``timeline`` {arrive, leave, turn_back} (EVA min), ``margin_binding``,
 ``contingency``. Extra keys (optional, for the card and the cuff card): ``station``,
 ``scenario``, ``on_route``, ``margin_min``, ``t_home_min``, ``o2_home_L`` (at the access cell),
-``science`` {lon, lat}, ``access`` (access.py: lon, lat, dist_m, reason, walk_in, radius_m, rule).
+``science`` {lon, lat}, ``access`` (access.py: lon, lat, dist_m, reason, walk_in, radius_m, rule),
+``drag_note`` (haul.yaml, SPEC F10 / D20: dragging is a finding, not a line).
 
 margin_binding = the binding term at the station's lowest margin among its arrive/leave rows
 (margins only shrink with time). A station not on the route has null times and a null binding
@@ -23,6 +24,7 @@ import numpy as np
 
 from . import provenance
 from .access import RULE
+from .config import load
 from .geo import _validator
 
 SCRIPT = "pipeline/engine/cards.py"
@@ -67,6 +69,7 @@ def fragments(stations: list[dict], res, sid: str, haul_t: np.ndarray | None,
             "margin_binding": None if low is None else low["margin_binding"],
             "margin_min": None if low is None else low["margin_min"],
             "contingency": _contingency(a, haul_t, casualty_kg, case, contour_min, radius),
+            "drag_note": load("haul")["drag_note"],  # SPEC F10 Output (D20)
             "t_home_min": None if a is None or a.t_home_min is None else round(a.t_home_min, 2),
             "o2_home_L": None if a is None or a.o2_home_L is None else round(a.o2_home_L, 2),
             "science": {"lon": round(float(s["lon"]), 6), "lat": round(float(s["lat"]), 6)},

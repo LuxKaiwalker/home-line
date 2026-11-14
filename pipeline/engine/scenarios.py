@@ -291,8 +291,7 @@ def partner_product(grid: Grid, fields, suit_kg: int, settings: Settings,
     d = haul.drag_flat(suit_kg)
     fc["drag_finding"] = {**{k: (round(v, 3) if isinstance(v, float) else v)
                              for k, v in d.items()},
-                          "note": "Dragging is reported, not drawn (D20): on flat ground the drag "
-                                  "force exceeds the rescuer's boot traction."}  # fmt: skip
+                          "note": load("haul")["drag_note"]}  # fmt: skip
     rel = f"scenarios/nom_{suit_kg}/partner.geojson"
     _write_web(public, rel, fc, "partner.schema.json")
     units = {"force_N": "N", "traction_limit_N": "N", "max_mass_kg": "kg", "casualty_kg": "kg",

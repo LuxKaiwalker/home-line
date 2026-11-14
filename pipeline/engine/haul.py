@@ -10,7 +10,7 @@ v = eps P(v) / F linear in v:  v = eps K (E - V0) / (F + eps K c(th)),  K = m_b 
 E = effort_frac VO2max, c = physio.cost_slope. F <= 0 (load pulls downhill) leaves the caps.
 Ridge cells (ridge_index > site.yaml ridge.threshold_m) are masked for hauling.
 
-D20 (user 2026-11-14 14:24, SPEC §11): the partner line and the haul fields use
+D20 (user 2026-11-14 14:22, SPEC §11): the partner line and the haul fields use
 ``haul.yaml partner_cases`` (cart only). The drag case stays in the config and is reported as a
 finding: on flat ground its force exceeds boot traction (``drag_flat``).
 """
@@ -176,8 +176,9 @@ def partner(grid: Grid, fields: dict[tuple[str, float], np.ndarray], simplify_m:
             "contour_min": cmin,
             "style": "dashed",
             "default_visible": False,
-            "caption": h["partner_caption"].format(case=name, contour_min=cmin),
-            "note": "Design question. Every haul parameter is an assumed band.",
+            "label": h["partner_label"].format(case=name, contour_min=cmin),
+            "caption": h["partner_caption"],
+            "drag_note": h["drag_note"],
         }
         m = envelope_mask(t, cmin)
         n = int(m.sum())

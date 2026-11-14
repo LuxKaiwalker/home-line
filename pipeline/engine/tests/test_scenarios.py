@@ -124,7 +124,10 @@ def test_partner_on_plane(tmp_path, settings):
     assert all(ft["properties"]["style"] == "dashed" and not ft["properties"]["default_visible"]
                for ft in fc["features"])  # fmt: skip
     assert {ft["properties"]["case"] for ft in fc["features"]} == {"cart"}
-    assert all(ft["properties"]["caption"] == "Partner line (cart haul, 60 min)"
+    assert all(ft["properties"]["label"] == "Partner line (cart haul, 60 min)"
+               for ft in fc["features"])  # fmt: skip
+    assert all(ft["properties"]["caption"].startswith("Design question")
+               and ft["properties"]["drag_note"].startswith("One astronaut cannot drag")
                for ft in fc["features"])  # fmt: skip
     # the drag finding travels with the file and its numbers are in the manifest (D20)
     d = fc["drag_finding"]
@@ -323,6 +326,7 @@ def test_main_on_synthetic_terrain(tmp_path):
     # card timeline fragments (merged into cards/{S}.json by make web, not web files themselves)
     frag = json.loads((pub / "cards/S1.timeline.json").read_text())
     assert set(frag["timeline"]) == {"arrive", "leave", "turn_back"}
+    assert frag["drag_note"] == load("haul")["drag_note"]  # SPEC F10 / D20 card note
     (pub / "cards").rename(tmp_path / "cards_fragments")
     assert validate_tree(["--data", str(pub), "--dummy", str(tmp_path / "none")]) == 0
     recs = json.loads((pub / "stations.json").read_text())

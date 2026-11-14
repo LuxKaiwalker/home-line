@@ -108,7 +108,7 @@ def test_drag_infeasible_on_level_with_boot_mu():
 
 
 def test_drag_179kg_flat_infeasible_traction():
-    """D20 (user 14:24): dragging the suited crewmate (179 kg at the 104 kg suit) is infeasible
+    """D20 (user 14:22): dragging the suited crewmate (179 kg at the 104 kg suit) is infeasible
     even on flat ground, and the cause is boot traction (F > boot_mu (m_b + suit + tools) g)."""
     c = _case("drag", SUITED)
     assert SUITED == 179
