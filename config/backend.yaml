@@ -26,7 +26,7 @@ compute:
     hex_chars: 16
     # parts: canonical plan inputs + engine tree (git tree of pipeline/) + engine config hash
     # (config/*.yaml except this file) + terrain data hash (server data manifest)
-    exclude_config: [backend.yaml]
+    exclude_config: [backend.yaml, design.yaml]   # D57; design.yaml holds UI-only values
 
 cache:
   dir: results                     # relative to HL_SERVER_DATA (env); one folder per result hash
