@@ -781,24 +781,30 @@ Branch: `ws5-web`
   - **Route legs** (WS6 audit): console route section has a leg table (walk, distance, O₂, walk-in) on `route.{sid}.leg.{i}.*`; station value cites `stations.{S}.value`.
   - **Smoke test** (vite dev on the scratch tree, every route incl. /nav, /hud, /hud3d): **0 unbacked numbers on every view** (`/` 24 backed, S1 8, S2 32, S4 37, `/trade` 21, `/conditions` 50, `/scorecard` 123, `/cuff` 64, `/nav` 17), no data problems, no console errors; one console warning from WS7's HUD ("optional pad.json unavailable", expected while pad.json is unpublished).
 
+- 2026-11-14T15:45Z (session 4, commit 423b45f): **pad.json v1.1.2** (WS2 session 5, C 15:31). vitest **434 pass, 3 skipped** on main's tree; **436 pass, 1 skipped** on a scratch real tree (`make_web.run` from today's interim into the scratchpad, incl. `pad.json`; make web OK, 1,121 keys, validate/H0 OK; `web/public/data` untouched); `tsc` clean; build 2.5 MB without data.
+  - **Proposal shape**: `padProposal()` reads `proposal.pad.{lon,lat,elev_m,score,checks}` and `proposal.site_rule_version`; the session-3 assumed shape is not read (KAT). Panel shows the **tie** (5 of 742 candidate blocks at 0.475, `pad.proposal.tie.*`, tiebreak text), `checks_note` (disc leaves the 3 m grid: "not assessed", rule "not evaluated"), ranked alternatives table (`pad.proposal.alternatives.{rank}.{lon,lat,score}`), stations scored (S4) and `no_access` reasons. KATs use WS2's real pad.json verbatim (validates in the browser checker).
+  - **Pad in use**: new "Rover pad" section on the console (always shown) and the scorecard pad line: F8 score 0 (`pad.score`; no station within a conservative 30-min walk home), **steepest slope in the 21 m pad block** 28.06° (`pad.checks.max_slope_deg`; rule ≤ 5° from `site.yaml siting.max_slope_deg`; caption: not the slope at the pad cell), disc 100 % → "**pad_default fails the F8 rule**"; S decides. The 21 m is derived in the browser (`DerivedNum`) from `siting.block_m` on `grids_m.route` as WS2 siting.py does. Old fallback wording (WS2 session-4 quote when the block was missing) removed.
+  - **Smoke test** (vite dev on the scratch tree, every route): **0 unbacked numbers on every view** (`/` 27 backed, 44 with the siting layer on; S1 8, S2 32, S4 37, `/trade` 21, `/conditions` 50, `/scorecard` 126, `/cuff` 64, `/nav` 17), no data problems, no console errors or warnings (WS7's "optional pad.json unavailable" warning is gone).
+
 ### Doing
 
 - —
 
 ### Next
 
-- Re-run the smoke test on C's session-3 `make web` (the session-3 real-tree KATs in `web/src/data/real.test.ts` switch on when `validation/v1.json` is in the tree).
+- Re-run the smoke test on C's next `make web` with pad.json (the session-4 pad KATs in `web/src/data/real.test.ts` switch on when `pad.json` is in the tree).
+- Polish: the console route-legs table is ~20 px wider than the side panel (horizontal scroll).
 - HUD-on-card strip if WS7 is not green at G2; about page licences/SI text (needs the team).
 
 ### Blocked
 
 - (user) GitHub Pages: repo private and `gh` not logged in; `pages.yml` ready but cannot deploy yet.
 - (C / WS6) `.github/workflows/ci.yml`: please add `npm test` (vitest) to the `web` job.
-- (WS2 / C) `pad.json` `proposal` block: shape assumed (`lon`, `lat`, `score`, `checks{assessed_pct_30min, max_slope_deg, rule_passed}`, `alternatives[]`, `rule`) and keys assumed `pad.proposal.{lon,lat,score,checks.*}`; please confirm in the contract. Without the block only the heatmap is shown.
 - (WS3) D7 wording: SPEC's "far rim (41–57 km) … in 21 north-facing frames" has no data field or manifest key, so the app says it without the numbers. Please add them to `validation/v2.json` (e.g. `far_note` or `far.rim_km`, `far.haze_frames`) with keys, and drop "far class pending the D7 manual check" from the card `skyline_error_scope`.
 - (WS3) `validation/v2.json n_frames_ok` has no key; the scorecard counts `frames[]` in the browser instead.
 - (S / WS2, content) Turn-back times (S4 438.55, S2 409.15 min) are after the 390-min EVA (`clock.eva.eva_min`); shown as written (WS2 question 13).
 - Resolved this session: station value key (WS1), route-leg keys (WS2), V1 + KAT list (WS6), headline range low end (con_*).
+- Resolved session 4: pad.json `proposal` shape (contract v1.1.2, WS2 session 5).
 
 ### Assumptions added
 
@@ -810,6 +816,7 @@ Branch: `ws5-web`
 - Session 2: the F22 table uses each station card's Navcam frame (`navcam.image_id`) and `localisation/{id}.json error_m`; pass = error_m ≤ `skyline_fix.refine_grid_m` (nav.yaml gate, C 11:58).
 - Session 3: `<Num dp signed>` rounds only the display (V1/V2 statistics); the manifest link and tooltip carry the stored value. KAT area counts and the V2 frame count are computed in the browser and labelled so (`DerivedNum`).
 - Session 3: the D7 far-class text is a fixed string in `web/src/views/validation.ts` (no numbers) until WS3 puts the far note in the data.
+- Session 4: the F8 pad block side (21 m) is computed in the browser from `site.yaml siting.block_m` and `grids_m.route` with WS2 siting.py's formula ((2·round(block/grid/2)+1) cells, Python rounding); no manifest key exists for it.
 
 ## WS6 Provenance
 
