@@ -540,7 +540,7 @@ Branch: `ws9-nav`
   fix (sigma 5 m). Who pairs frames with stations (WS3 per its brief, or nearest-frame rule here)?
   Also WS3's current V2 has a far-field residual median of -4.3 deg (v2.json), so skyline matches on
   real frames are poor until the detector/V2 improves (SPEC: F22 runs only after V2 works).
-  Trial at 10:35Z (WS3 code 92d2f61 in a temp worktree, scratch output, no manifest, nothing
+  Trial at 10:27Z (WS3 code 92d2f61 in a temp worktree, scratch output, no manifest, nothing
   published): 35/49 frames ran, 14 failed WS3's clear-sky frame check; median error 617 m (p25-p75
   448-815 m), none within 100 m. On the 6 frames with RMS < 1 deg the RMS at the true position is
   close to the best candidate's (e.g. 0.137 vs 0.095 deg): the far-field skyline barely constrains
