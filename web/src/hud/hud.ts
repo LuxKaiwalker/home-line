@@ -22,6 +22,7 @@ import { Plan } from './plan'
 import { readoutSources } from './provenance'
 import { playbackPosition, type HudContext, type HudFields } from './readout'
 import { radiationInput, stormReplay, stormState, type StormReplay } from './storm'
+import { parseClockSun, sunAt, sunRowText, sunSources, type ClockFile, type SunData } from './sun'
 import type { Bounds, FieldsIndex, HudPosition, LonLat, PadFile, PolygonFC, Rad, RouteFC, ScenariosIndex, Station, TimelineEvent } from './types'
 import { loadPointer, wayHomeView, type PointerField } from './wayhome'
 
@@ -52,6 +53,8 @@ export interface HudData {
   fixes: Fix[]
   /** F21 nav data for config/nav.yaml default_set (null = no nav/montecarlo file) */
   nav: HudNav | null
+  /** WS4 conditions/clock.json EVA sun series + time to dark (null = file absent) */
+  sun: SunData | null
 }
 
 export interface HudHandle {
@@ -104,7 +107,7 @@ export async function loadHudData(opts: MountHudOptions): Promise<HudData> {
   }
   const worstKeys = config.worstCaseRadiiM.map((r) => [r, `${sc}/t_home_worst_${r}`, `${sc}/o2_home_worst_${r}`] as const)
   const partnerFile = entry.files.partner ?? null
-  const [tHome, tHomeCons, o2Home, homeBearing, slope, worstLoaded, route, timeline, stations, partner, rad, padFile, cellstate, pointer] = await Promise.all([
+  const [tHome, tHomeCons, o2Home, homeBearing, slope, worstLoaded, route, timeline, stations, partner, rad, padFile, cellstate, pointer, clockFile] = await Promise.all([
     field(`${sc}/t_home`, true),
     cons ? field(`${cons.id}/t_home`) : Promise.resolve(undefined),
     field(`${sc}/o2_home`),
@@ -119,6 +122,7 @@ export async function loadHudData(opts: MountHudOptions): Promise<HudData> {
     optional('pad.json', getJson<PadFile>(dataUrl, 'pad.json')),
     optional('terrain/cellstate', loadCellstate(dataUrl)),
     index.fields[`${sc}/pointer`]?.stencil ? optional('way-home pointer', loadPointer(index, `${sc}/pointer`, dataUrl)) : Promise.resolve(null),
+    optional('conditions/clock.json', getJson<ClockFile>(dataUrl, 'conditions/clock.json')),
   ])
   const navLoader = createNavLoader(slotFetcher(dataUrl), dummy ? 'dummy' : 'real')
   const set = NAV.defaultSet
@@ -136,6 +140,7 @@ export async function loadHudData(opts: MountHudOptions): Promise<HudData> {
   return {
     ctx, index, scenario: sc, consScenario: tHomeCons && cons ? cons.id : null, stations: stations ?? [], rad, dummy,
     pointer, cellstate, padFromFile: !!padFile, partnerFile, fixes: planFixes(plan, config), nav,
+    sun: clockFile ? parseClockSun(clockFile) : null,
   }
 }
 
@@ -338,6 +343,7 @@ export async function mountHud(container: HTMLElement, opts: MountHudOptions): P
       const pos = f.pos
       const r = f.readout
       const way = wayHomeView(data.pointer, drag, ctx.pad)
+      const sun = data.sun ? sunAt(data.sun, clock.t, drag ? null : state.station) : null
       const pr = panel.el.getBoundingClientRect()
       const sr = stage.getBoundingClientRect()
       map.insetRightPx = pr.width && pr.right <= sr.right + 1 && getComputedStyle(panel.el).position === 'absolute' ? sr.right - pr.left : 0
@@ -351,7 +357,8 @@ export async function mountHud(container: HTMLElement, opts: MountHudOptions): P
         rad: data.rad,
         dummy: data.dummy,
         minimap: mini.canvas,
-        sources: readoutSources(r, { scenario: data.scenario, consScenario: data.consScenario, padFromFile: data.padFromFile, partnerFile: data.partnerFile }),
+        sources: readoutSources(r, { scenario: data.scenario, consScenario: data.consScenario, padFromFile: data.padFromFile, partnerFile: data.partnerFile, sunSources: sun ? sunSources(sun) : null }),
+        sun: sun ? sunRowText(sun) : null,
         wayHome: way.panel,
         storm: st,
         navLine: f.line,
