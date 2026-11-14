@@ -86,7 +86,8 @@ def test_assumed_list_known_answer():
     """Decision 10: assumed values stay marked; every entry resolves to a key of the config."""
     c = st.load()
     assert c.assumed == ["limits.title_max_chars", "limits.notes_max_chars",
-                         "ranges.start_lmst_h", "ranges.reserve_min", "sessions.message_max_chars"]
+                         "ranges.start_lmst_h", "ranges.reserve_min", "sessions.message_max_chars",
+                         "limits.proxy_max_body_bytes"]
     for path in c.assumed:
         node = c
         for part in path.split("."):

@@ -1,10 +1,11 @@
-"""Backend contract family (contracts/backend/, v1.0.1, frozen at P0; kit K1/K4, D50-D57).
+"""Backend contract family (contracts/backend/, v1.1.0, additive since P0; kit K1/K4, D50-D57).
 
 Known answers: every schema is valid draft 2020-12 and versioned; every example validates against
 its schema; the OpenAPI document covers every route of backend spec §5, its refs resolve, and it
 passes the OpenAPI 3.1 meta-schema (openapi-spec-validator, skipped when not installed); the share
 code is HL- + 6 Crockford base32 characters (D55); YAML 1.1 readers (PyYAML) see "on"/"off" as
-strings, not booleans (v1.0.1).
+strings, not booleans (v1.0.1); v1.1.0 adds POST /admin/heavy-jobs (team token) and the 503 on
+importPlan, and the version agrees with config/backend.yaml contract_version.
 """
 
 import json
@@ -224,6 +225,7 @@ SPEC_5 = {  # backend spec §5: method and path, auth
     ("get", "/sessions/{id}/stream"): "K", ("post", "/sessions/{id}/commands"): "K",
     ("post", "/sessions/{id}/end"): "K", ("get", "/runs/{id}"): "K",
     ("get", "/conditions/latest"): "G", ("delete", "/me"): "U", ("get", "/admin/status"): "T",
+    ("post", "/admin/heavy-jobs"): "T",  # v1.1.0 (S1e): the WS12 kill-switch control (O3)
 }
 AUTH = {"U": "supabase", "K": "sessionKey", "T": "teamToken"}
 METHODS = {"get", "put", "post", "delete", "patch"}
@@ -232,7 +234,8 @@ METHODS = {"get", "put", "post", "delete", "patch"}
 def test_openapi_covers_spec_5_exactly_with_auth():
     api = _api()
     assert api["openapi"].startswith("3.1")
-    assert api["info"]["version"] == "1.0.1"
+    assert api["info"]["version"] == _config_contract_version()
+    assert re.fullmatch(r"1\.\d+\.\d+", api["info"]["version"])  # still major 1: additive only
     assert api["servers"][0]["url"] == "/api/v1"
     ops = {(m, path): op for path, item in api["paths"].items()
            for m, op in item.items() if m in METHODS}
@@ -252,6 +255,47 @@ def test_openapi_on_off_are_strings_under_yaml_1_1():
     schemas = _api()["components"]["schemas"]
     assert schemas["Health"]["properties"]["heavy_jobs"]["enum"] == ["on", "off"]
     assert schemas["AdminStatus"]["properties"]["heavy_jobs"]["enum"] == ["on", "off"]
+
+
+def _config_contract_version() -> str:
+    """config/backend.yaml contract_version (the one place the family version is configured)."""
+    cfg = yaml.safe_load((REPO / "config" / "backend.yaml").read_text(encoding="utf-8"))
+    return cfg["contract_version"]
+
+
+def test_contract_version_agrees_everywhere():
+    v = _api()["info"]["version"]
+    assert v == _config_contract_version()
+    assert f"Backend contract family v{v} " in _api()["info"]["description"]
+    readme = (B / "README.md").read_text(encoding="utf-8")
+    assert readme.splitlines()[0].endswith(f"v{v}")
+    assert f"\n- {v} (" in readme  # a changelog entry for the current version
+
+
+def test_admin_heavy_jobs_known_answer():
+    """v1.1.0: POST /admin/heavy-jobs as WS12 (O3) implements it (server/api/auth/admin.py)."""
+    op = _api()["paths"]["/admin/heavy-jobs"]["post"]
+    assert op["operationId"] == "setHeavyJobs" and op["security"] == [{"teamToken": []}]
+    body = op["requestBody"]["content"]["application/json"]["schema"]
+    assert body["required"] == ["heavy_jobs"] and body["additionalProperties"] is False
+    assert body["properties"]["heavy_jobs"]["enum"] == ["on", "off"]  # strings under YAML 1.1
+    r = op["responses"]
+    assert r["200"]["content"]["application/json"]["schema"] == {
+        "$ref": "#/components/schemas/AdminStatus"}
+    assert r["403"] == r["422"] == {"$ref": "#/components/responses/Error"}
+    v = Draft202012Validator(body)
+    assert v.is_valid({"heavy_jobs": "off"}) and v.is_valid({"heavy_jobs": "on"})
+    for bad in ({}, {"heavy_jobs": False}, {"heavy_jobs": "off", "x": 1}, {"heavy_jobs": "OFF"}):
+        assert not v.is_valid(bad), bad
+
+
+def test_import_plan_503_known_answer():
+    """v1.1.0: importPlan answers 503 (Error) without an engine identity, as createJob does."""
+    paths = _api()["paths"]
+    imp = paths["/plans/import"]["post"]["responses"]
+    assert set(imp) == {"200", "413", "422", "503"}
+    assert imp["503"] == paths["/jobs"]["post"]["responses"]["503"] == {
+        "$ref": "#/components/responses/Error"}
 
 
 def _enums(node, path=""):
