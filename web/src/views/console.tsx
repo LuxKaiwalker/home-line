@@ -27,6 +27,8 @@ import { ensureManifest } from './common'
 import { routeSummary, type RouteLeg } from './route'
 import { EXCLUDED_NOTE, STORM_TIMING_NOTE, headline60, homeFor, marginLabel, tightestMargin, turnBacks } from './decisions'
 import { CellSlopeNote, PlanningRuleNote } from '../components/DecisionNotes'
+import { choosePlanScenario, mission, resolvePlanScenario } from '../state/mission'
+import { useSignalValue } from '../state/signal'
 import type { View } from './types'
 
 const LAYER_LABELS: Record<LayerGroup, string> = {
@@ -67,8 +69,10 @@ function ConsolePanel({ cmap }: { cmap: ConsoleMap }) {
   const [idx, setIdx] = useState<ScenariosIndex | null>(null)
   const [stations, setStations] = useState<Station[] | null>(null)
   const [error, setError] = useState<unknown>(null)
-  const [scenarioId, setScenarioId] = useState<string | null>(null)
-  const [budget, setBudget] = useState<number>(CONFIG.walkbackBudgetsMin[0])
+  // The current plan lives in the mission state (WS15 A3): it survives route changes.
+  const scenarioId = useSignalValue(mission.plan.scenario) ?? null
+  const budget = useSignalValue(mission.plan.budgetMin)
+  const setBudget = (b: number) => (mission.plan.budgetMin.value = b)
   const [sliderMin, setSliderMin] = useState<number>(CONFIG.walkbackBudgetsMin[0])
   const [isoMinutes, setIsoMinutes] = useState<number[]>([])
   const [visible, setVisible] = useState<Record<LayerGroup, boolean>>({ ...DEFAULT_VISIBLE })
@@ -83,7 +87,8 @@ function ConsolePanel({ cmap }: { cmap: ConsoleMap }) {
   const [credit, setCredit] = useState<string | null>(null)
   // D21 parking options: null = the official pad (pad.json, existing paths).
   const [pads, setPads] = useState<PadsIndexLoad | null>(null)
-  const [padSel, setPadSel] = useState<string | null>(null)
+  const padSel = useSignalValue(mission.plan.pad)
+  const setPadSel = (id: string | null) => (mission.plan.pad.value = id)
   const [padSummary, setPadSummary] = useState<PadSummaryView | null>(null)
   const [padError, setPadError] = useState<unknown>(null)
 
@@ -97,7 +102,8 @@ function ConsolePanel({ cmap }: { cmap: ConsoleMap }) {
         const i = await L.scenarios()
         if (!alive) return
         setIdx(i)
-        setScenarioId((i.scenarios.find((s) => s.id === i.default) ?? i.scenarios[0]).id)
+        // the stored plan if the index has it, else the index default (else the first entry)
+        choosePlanScenario(resolvePlanScenario(i))
       } catch (e) {
         if (alive) setError(e)
         return
@@ -298,7 +304,11 @@ function ConsolePanel({ cmap }: { cmap: ConsoleMap }) {
   }
   // A parking option runs on the default scenario only (nominal, its suit).
   useEffect(() => {
-    if (padSel && idx && scenarioId !== idx.default) setScenarioId(idx.default)
+    if (padSel && idx && scenarioId !== idx.default) {
+      const d = idx.scenarios.find((s) => s.id === idx.default)
+      if (d) choosePlanScenario(d)
+      else mission.plan.scenario.value = idx.default
+    }
   }, [padSel, idx])
 
   if (error && !idx) {
@@ -313,7 +323,7 @@ function ConsolePanel({ cmap }: { cmap: ConsoleMap }) {
 
   const pick = (variant: string, suit: number) => {
     const s = findScenario(idx, variant, suit)
-    if (s) setScenarioId(s.id)
+    if (s) choosePlanScenario(s)
   }
   const h = scenario.headline
   const hb = h.budget_min

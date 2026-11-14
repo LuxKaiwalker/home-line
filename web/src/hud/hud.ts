@@ -9,7 +9,8 @@
 // WS8 reuses the pieces: loadHudData() -> HudData, then each frame computeReadout(pos, data.ctx)
 // and createHudPanel(el, cfg).update(readout, pos, extras).
 import './hud.css'
-import { PlaybackClock } from './clock'
+import { PlaybackClock, type ClockDriver } from './clock'
+import { missionClock } from '../state/mission'
 import type { HudConfig } from './config'
 import { driftPosition, planFixes, type Fix } from './drift'
 import { decodeRGBA, FieldGrid, loadField, loadFieldRGBA } from './fields'
@@ -59,7 +60,8 @@ export interface HudData {
 }
 
 export interface HudHandle {
-  clock: PlaybackClock
+  /** the shared mission clock (web/src/state/mission.ts): survives route changes */
+  clock: ClockDriver
   data: HudData
   destroy(): void
 }
@@ -185,7 +187,10 @@ export async function mountHud(container: HTMLElement, opts: MountHudOptions): P
   root.append(stage)
   const panel: HudPanel = createHudPanel(stage, cfg)
 
-  const clock = new PlaybackClock(cfg.evaMin, cfg.playbackSpeeds, cfg.defaultSpeed)
+  // the one mission clock (WS15 A3, survives route changes); it is built from the same
+  // config/hud.yaml and crew.yaml keys, so a caller with another config gets a private clock
+  const shared = missionClock.tMax === cfg.evaMin && missionClock.speeds.join() === cfg.playbackSpeeds.join() && cfg.playbackSpeeds.includes(cfg.defaultSpeed)
+  const clock: ClockDriver = shared ? missionClock : new PlaybackClock(cfg.evaMin, cfg.playbackSpeeds, cfg.defaultSpeed)
   const controls = el('div', 'hl-hud-controls')
   const playBtn = button('hl-hud-play', '▶', 'Play / pause')
   controls.append(playBtn)
