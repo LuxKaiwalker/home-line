@@ -631,23 +631,96 @@ Branch: `ws9-nav`
 
 ### Done
 
-- —
+- 2026-11-14T10:11Z: M1 F21 dead-reckoning error model (`pipeline/navigation/deadreckon.py`: step scale
+  + per-step noise, psi0, gyro bias, heading random walk, slip above `slip_min_slope_deg`; fix events
+  reset position to N(0, sigma) and heading to a new psi0) and Monte Carlo summaries
+  (`pipeline/navigation/montecarlo.py`: 95% ellipses per minute, r95, r95(D) = a*D + b*D^2 NNLS fit,
+  contract writers for `nav/montecarlo_{set}.json`, `nav/tracks_{set}.geojson`, `nav/fixes.json`,
+  manifest keys `nav.r95_fit.*`, `nav.montecarlo.*`, `nav.fixes.*`). Ported from the pre-H0 reference
+  code and checked against contracts v1.0.0. KATs on a synthetic straight route, full Monte Carlo from
+  config (500 runs, seed 20261114): zero-error = truth; heading-bias-only lateral error = analytic within
+  1%; 95% ellipse covers 95.6 / 94.8 / 95.0% of runs at 10 / 30 / 60 min; error resets at fixes; slip
+  only above 10 deg; contracts validate.
+- 2026-11-14T10:15Z: fix-interval map (`fixinterval.py`): margin radius, D_max = inverse r95 fit, 0
+  outside the homeline, NaN where T_home is unknown; classes from `fix_interval.classes_m`;
+  `nav/fix_interval_summary.json` (one file, `set` = nav.yaml `default_set`; other sets in the run
+  report); `fields/fix_interval_{set}.png` (1 m per count) on the HUD field grid. KATs: D_max smaller near
+  the edge and 0 outside; EDT radius = worst-field interpolation where both exist; PNG round trip.
+- Real-route driver (`real.py`, `run.py`), `make nav` (= `run real`; `NAV_ARGS=--no-skyline` for the G2
+  fallback). `run real --dry-run` lists inputs with owners. Writes to `data/interim/navigation/` (mirrors
+  the web paths), refuses `web/public/`. End-to-end KAT on a tmp WS2/WS1-shaped tree.
+- 2026-11-14T10:21Z: `/nav` view (`web/src/nav/`) on data-dummy: fix-interval classes, estimated track
+  (truth behind "show truth"), 95% ellipses every 5 min, fix events, playback with the ellipse in force
+  and the SPEC position line ("Odometry ±N m · next fix due in M m · last fix …"), headline from the
+  summary, ellipse-size chart, method and parameter table from config. Exports for WS7's HUD:
+  `navReading`, `navLine`, nav loader, D_max decoder, ellipse geometry. vitest 5 files / 33 nav tests;
+  tsc + vite build clean.
+- 2026-11-14T10:26Z: F22 skyline fix (`skylinefix.py`: coarse 50 m grid / 1 deg rays / far field >=
+  500 m, refine 10 m around the best 3, far-weighted RMS, sigma from the 1.5 x min-RMS region) and
+  `run skyline` (every WS3 frame tried, standalone 300 m prior, `skyline_report.json` +
+  `localisation/{image_id}.json`); `run real` turns frames paired with a route station into skyline fixes
+  (lowest RMS, never lowest error). KATs: synthetic DEM with a known observer recovered within one
+  10 m grid step, every frame reported, contracts. Verified against `origin/ws3-horizon` (92d2f61) in a
+  temp worktree: all 47 nav KATs pass there; on main the 4 engine KATs skip until WS3 merges.
+- `tests/test_nav.py`: 44 pass + 4 skipped (WS3) before the main merge; full suite and ruff green.
+- 2026-11-14T10:31Z: merged `origin/main` (WS3 now on main): all 48 nav KATs pass, none skipped
+  (F22 synthetic-DEM KAT included); full pytest, ruff, tsc, vitest (212), validate_contracts green.
 
 ### Doing
 
-- —
+- Waiting for a non-empty WS2 `route_nom_104` (see Blocked). ws9-nav session 1 merged to main by C
+  (c93daef); 11:01Z merged main back, 48/48 nav KATs pass.
 
 ### Next
 
-- —
+- `make nav` on the real route as soon as WS2's files exist; then the real fix-interval headline.
+- F22 on the real frames once WS3's V2 works (see Blocked).
 
 ### Blocked
 
-- —
+- (WS2 / S) Real run: WS2's real run (10:30Z, WS2 STATUS) puts S1, S2 and S4 on blocked cells, so
+  `route_nom_104.geojson` is empty and the timeline is depart + return at t = 0. With no walked route
+  there is no Monte Carlo, no r95 fit and no fix-interval map; `run real --dry-run` refuses ("route has
+  no legs"). WS9 will not substitute a synthetic route. Unblocks when S re-places stations and WS2
+  re-runs; then `make nav` (or `make nav NAV_ARGS=--no-skyline`). `engine/nom_104/t_home.tif` (2,468 x
+  2,468 at 3 m) reads fine; the fix-interval code runs on it in 3 s.
+- (WS3) F22 imports `pipeline.horizon.rays` / `cahvor` / `navcam` / `sky` from `ws3-horizon`; engine
+  KATs skip on main until it merges. Real frames: all 49 frames in `navcam_frames.json` have
+  `station: null`, so no frame is paired with a route station and every station keeps its surveyed
+  fix (sigma 5 m). Who pairs frames with stations (WS3 per its brief, or nearest-frame rule here)?
+  Also WS3's current V2 has a far-field residual median of -4.3 deg (v2.json), so skyline matches on
+  real frames are poor until the detector/V2 improves (SPEC: F22 runs only after V2 works).
+  Trial at 10:27Z (WS3 code 92d2f61 in a temp worktree, scratch output, no manifest, nothing
+  published): 35/49 frames ran, 14 failed WS3's clear-sky frame check; median error 617 m (p25-p75
+  448-815 m), none within 100 m. On the 6 frames with RMS < 1 deg the RMS at the true position is
+  close to the best candidate's (e.g. 0.137 vs 0.095 deg): the far-field skyline barely constrains
+  position over a few hundred metres here, and best candidates sit near the 1 km search-box edge. For C
+  to judge: present F22 as "does not localise better than ~0.5 km on these frames" unless V2 improves.
+- (C) `nav/fix_interval_summary.json` holds one set (contracts v1.0.0); `/nav` shows the headline only
+  for that set. An array or per-set files would need a contract bump.
+- (C / WS7) The fix-interval PNG grid is pad +/- `planning_radius_m` at 5 m = 1,480 x 1,480 px (edges at
+  pad +/- 3,700 m); the dummy grid is 1,481 px centred on the pad. WS7 owns `fields/index.json`: please
+  confirm the real grid (WS9 writes `fields_index_nav.json` with its grid and entries for the merge).
+- (D / C) Playback values on `/nav` (per-minute ellipse, r95, distance since fix) are rows of
+  `nav/montecarlo_{set}.json`; they are shown as "row" numbers citing the file, not one manifest key per
+  row (static numbers all have keys). OK, or record per-minute keys?
 
 ### Assumptions added
 
-- —
+- `config/nav.yaml model_conventions` (assumed): how SPEC F21's prose model maps to code (psi0 redrawn
+  at each fix, gyro bias per run, random walk per step, per-step noise summed, slip along-track,
+  ellipse = chi-square 2-dof from the second moment, NNLS fit without intercept). For N to confirm.
+- `config/nav.yaml tracks` (ellipse every 5 min from SPEC §6.2; 72 polygon vertices, presentation).
+- `config/nav.yaml fix_interval_ws9` (assumed): budget = crew.yaml walkback_budgets_min[0]; reserve 0
+  (SPEC says "budget minus reserve" but no reserve is defined for it; crew.yaml reserve_min = 30 is
+  the EVA reserve and would zero the 30-min homeline): question to N; margin radius by exact
+  distance transform (= the circular max-filter criterion, not capped at 100 m) with SPEC's
+  worst-field interpolation kept as an option; unknown T_home counts as over the limit; edge figure
+  = 10th percentile of D_max inside the homeline.
+- `config/nav.yaml real_run_ws9` (assumed): timeline event -> fix type; a skyline fix replaces the
+  station fix; frame pick = lowest RMS; standalone prior; unknown slope = no slip; field grid; DEM band
+  paths for the horizon engine (WS1 dem_1m, WS3 `data/interim/horizon/bands/`).
+- Synthetic walking speed = crew.yaml anchor 0.98 m/s.
 
 ## WS10 Visual odometry
 
@@ -668,24 +741,40 @@ Branch: `ws10-vo`
 
   Contract `stereo_pairs` counts all non-thumbnail pairs (256² + full res: 37, 33, 126, 25, 108). Frames decode at 256 × 256; ORB (defaults) finds ~440 keypoints per left frame, median L/R fundamental inliers 151–234, frame-to-frame 34–112 (min 19): indicative only, not a VO result.
 - **Go rule (`nav.yaml vo_probe.go_rule`), mechanical result: go**, met on 5/5 drives at 256² and 0/5 at full resolution. **D16 is N's decision**; WS10 stops here until N records it.
+- **X8 stereo VO at 256² (brief step 2), 10:47 UTC, D16 = go at 256² only.** `pipeline/navigation/vo.py` (ported from the pre-H0 reference code, run fresh on this session's frames), 22 new KATs in `tests/test_vo.py` (48 pass): CAHV/CAHVOR triangulation, known baseline → depth = f·b/d, linearised pinhole exact for rays, same pose → zero motion, 1 m + 4° step with 30 % outliers, metric scale from stereo, rendered 256² textured-ground stereo (same pose; 0.95 m + 3° step), chain/endpoint metrics, bridged steps counted, drift table lists every drive incl. no-data, per-pose attitude comparison, stop rule. Output `data/interim/vo/drift.json` (valid against `vo_drift.schema.json`, every row labelled "rover analogue: a rover is not an astronaut") + `vo_report.json` (per-pose, onboard and calibrated-set detail); manifest keys `vo.drift.*`. 19.5 MB downloaded (all 256² TRAV pairs of the 5 drives; `data/raw/vo/` now 29 MB).
+- Method: SIFT, mutual ratio-test L/R matching, midpoint triangulation on each frame's own CAHVOR (≤ 1 px reprojection, 0.5–25 m), frame-to-frame PnP + RANSAC on the linearised next-left camera + LM refinement; a failed step is bridged with the rover's onboard relative pose and counted. Start = MMGIS previous drive end (position + yaw/pitch/roll); compared with the MMGIS drive end and, per pose, with the API `attitude`/`xyz`.
+
+  | Sol | Drive | MMGIS m | VO steps (failed) | Bridged m | End error m | Drift % | Heading drift ° | Per-pose heading vs attitude RMS / max ° | Onboard vs MMGIS m |
+  | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+  | 5073 | 125_2274 → 2490 | 27.9 | 36/36 (0) | 0 | 0.241 | 0.86 | −0.98 | 0.58 / 1.09 | 0.153 |
+  | 5070 | 125_2082 → 2274 | 28.7 | 31/32 (1: no end pair) | 0.90 | 0.199 | 0.69 | +0.29 | 0.19 / 0.38 | 0.264 |
+  | 5069 | 125_1326 → 2082 | 101.3 | 125/125 (0) | 0 | 1.884 | 1.86 | −2.44 | 1.20 / 2.18 | 0.342 |
+  | 5045 | 125_1194 → 1326 | 12.6 | 21/22 (1: 12 matches) | 1.19 | 0.099 | 0.79 | −0.76 | 0.50 / 0.74 | 0.004 |
+  | 5041 | 125_558 → 1194 | 83.9 | 100/103 (3: 3 matches, RANSAC, no matches) | 1.14 | 0.566 | 0.68 | −0.88 | 0.80 / 1.39 | 0.413 |
+
+  End error is horizontal; drift % = end error / MMGIS `dist_m`. 4 off-pointing pairs dropped on sol 5041. **Caveat: MMGIS drive ends are Curiosity's own localisation (onboard wheel + IMU + VO, ground-updated), not independent truth**; the onboard-vs-MMGIS column shows how close they are (0.0–0.4 m), so our VO error is close to that floor only on the short drives.
+- **Stop rule (D16, deadline H8 = 17:00 CET): verdict plausible at 11:47 CET**, 5/5 drives pass (rule, assumed: ≥ `go_rule.min_drives` = 2 drives with drift ≤ 10 %, |heading drift| ≤ 10°, ≥ 80 % of steps by VO). X8 stays in.
+- Curiosity-calibrated set (in `vo_report.json`, label "rover analogue: a rover is not an astronaut"): σ_s = 0.0064 (RMS along-track scale error, 5 drives), σ_b = 1.25 °/h of *rover driving* (RMS heading drift / drive duration); ψ₀ and slip are not measurable by VO → null, WS9 keeps its assumed values. Not yet handed to WS9 (brief: by H20; N to review first).
 
 ### Doing
 
-- — (stopped after the probe, waiting for D16)
+- — (step 2 done; waiting for N's review of the drift table and the calibrated set)
 
 ### Next
 
-- On go: brief step 2 (stereo VO at 256², drift per drive → `vo/drift.json`, calibrated set for WS9). On no-go: stop.
+- N reviews; then hand the calibrated set to WS9 (by H20). X9 only after G2, if green and N is free.
 
 ### Blocked
 
-- D16 (go/no-go) — N.
+- VO constants are in `vo.py PENDING_VO_CONFIG` (all assumed: resolution, TRAV tag, pointing tolerance 5°, ratio 0.8, stereo reprojection 1 px, range 0.5–25 m, PnP 1.5 px / 2000 it / 0.999, min inliers 15, max step 3 m / 45°, plausibility 10 % / 10° / 0.8). WS9 owns `config/nav.yaml`: please add them as a `vo:` block with `assumed: true` (the code reads `nav.yaml vo` as soon as it exists). WS9 / C.
+- N: confirm the stop-rule plausibility thresholds above (proposal) and whether σ_b per hour of rover driving is the right quantity for F21 (rover drives ~1 m/min; a walker ~1 m/s).
 
 ### Assumptions added
 
 - Probe conventions (code, not config): a stereo pair = L and R with the same spacecraft clock, `subframe_rect` and `scale_factor`; API `sample_type: thumbnail` (64²) never counts; pairs at one (site, drive) are one pose; runs are counted within one resolution class; a step across a site change is unknown.
 - Each drive's previous end is on an earlier sol, so only the end sol was queried; frames from intermediate sols would be missed (can only undercount).
 - Caveat for step 2: 256² only (f ≈ 306 px); the mast looks right and down (az 90°, el −29°) on 4 drives and forward on sol 5070, so VO sees near-field ground.
+- VO: a failed step or a missing drive-end pair is bridged with the onboard relative pose (reported as `bridged_m`, never hidden); at the start pose the last pair before driving is used, elsewhere the first pair at a pose.
 
 ## Decision log (fresh run, recorded by C)
 
@@ -700,3 +789,7 @@ Branch: `ws10-vo`
 | 2026-11-14 11:42 | Isochrone display size (nom_104 2.7 MB gz vs 1.5 MB budget) | Display filter: drop holes < 100 m² (measured 1.19 MB gz); keep 1-min steps if within budget, else the 2-min fallback | C |
 | 2026-11-14 11:42 | Station card producer | WS3 writes `horizon/public/cards/{S}.json` fragments (navcam, skyline error, panorama, landmarks); WS2 writes the timeline/margin part; `make web` (C) merges into `cards/{S}.json` | C |
 | 2026-11-14 11:42 | Basemap | WebP q80, z13–18, 33.1 MB (`config/web.yaml`) | C |
+| 2026-11-14 11:58 | F22 skyline fix presentation | Per SPEC §12 risk 15: report the result honestly (scratch trial: median 617 m, none within 100 m; the far-field skyline barely constrains position here) as a validation finding; the HUD/nav plan falls back to **station fixes**; no skyline fix is shown as a position fix unless a real frame passes the F22 KAT tolerance | C |
+| 2026-11-14 11:58 | Frame↔station pairing for F22 | WS3 sets `station` in `navcam_frames.json` for each station's overlay frame | C |
+| 2026-11-14 11:58 | Nav playback values provenance | Per-minute ellipse/r95/distance rows are covered by the Monte Carlo file's manifest entry (row-level keys not required); every static number keeps its own key | C |
+| 2026-11-14 11:58 | Fix-interval summary sets | Keep contract v1.1 (one file, default set) for G1; an all-sets bump only if time after G1 | C |

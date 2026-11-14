@@ -25,3 +25,39 @@ skyline_fix:
 vo_probe:                          # WS10
   drives: 5
   go_rule: ">= 2 drives with >= 10 consecutive stereo pairs at <= 2 m spacing, with camera models"
+
+# --- WS9 additions (fresh run, flagged for N in STATUS.md) -----------------------------------
+# How the prose error model (SPEC §2.4 F21) maps to code. Conventions, no new science numbers.
+model_conventions:
+  psi0: "heading error drawn N(0, psi0_deg) per run at the start and again at every fix"
+  gyro_bias: "b_g drawn N(0, sigma_b_deg_h) once per run; integrates with time, also while dwelling"
+  heading_rw: "increment N(0, psi_rw_deg_sqrt_min * sqrt(dt_min)) per time step"
+  step_noise: "per-step N(0, step_noise_frac * L) summed over the d / L steps of a time step"
+  slip: "on slope > slip_min_slope_deg: extra along-track per-step N(0, slip * sin(slope) * L)"
+  fix_sigma: "a fix resets the position error to N(0, sigma) per axis"
+  ellipse: "second moment of the error about zero, scaled by the chi-square 2-dof quantile of ellipse_conf"
+  r95: "ellipse_conf quantile of the radial error over runs"
+  r95_fit_method: "non-negative least squares on per-minute (D > 0, r95) pairs, no intercept"
+  assumed: true
+tracks:
+  ellipse_every_min: 5               # SPEC §6.2
+  ellipse_vertices: 72               # polygon resolution; presentation only
+  assumed: true                      # ellipse_vertices only
+fix_interval_ws9:
+  budget_from: "crew.yaml walkback_budgets_min[0]"   # the 30-min homeline (SPEC F21)
+  reserve_min: 0                     # SPEC "budget minus reserve": no reserve defined for this; question to N
+  margin_radius_method: edt          # exact distance to the nearest over-limit cell; "worst_fields" = SPEC interpolation in t_home_worst_*
+  unknown_cells: exceed              # unknown T_home counts as over the limit (conservative)
+  edge_percentile: 10                # edge_p10_m in fix_interval_summary.json
+  assumed: true
+real_run_ws9:                      # run.py real (WS2 route + timeline + T_home, WS1 slope, WS3 Navcam); conventions, flagged for N
+  scenario_from: "variants.yaml scenarios.default"   # the route the Monte Carlo walks (override: --scenario)
+  fix_events: {rover: [depart, return, arrive_home], station: [arrive]}   # timeline event -> fix type (SPEC F21 fix events)
+  skyline_station_fix: replace     # a station with an F22 result: the skyline fix (sigma = measured error) replaces the surveyed-station fix; "add" keeps both
+  skyline_frames: "all navcam_frames.json frames tried and reported; frames whose station is a route station become fix events"
+  skyline_frame_pick: min_rms      # frame used for the fix among a station's frames: lowest skyline RMS (never the error, which needs the truth)
+  skyline_prior: standalone        # SPEC F22 standalone prior (true + standalone_prior_offset_m, random direction, monte_carlo.seed)
+  unknown_slope: no_slip           # route samples on unknown slope get no slip term (fraction reported)
+  field_grid: "pad_default +/- site.yaml planning_radius_m at hud.yaml field_png.res_m"   # fix_interval PNG grid (SPEC §6.1 planning extent); D_max sampled nearest from the T_home grid
+  skyline_bands: {dem_1m: data/interim/terrain/dem_1m.tif, ctx_20m: data/interim/horizon/bands/ctx_20m.tif, mola_hrsc_200m: data/interim/horizon/bands/mola_hrsc_200m.tif}   # WS1 / WS3 bands.py outputs
+  assumed: true

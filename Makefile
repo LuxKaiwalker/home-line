@@ -6,7 +6,7 @@ PY := uv run --no-sync python
 
 # Pipeline order (SPEC §4): WS1 terrain -> WS2 engine -> WS3 horizons -> WS4 conditions
 # -> WS9 nav -> copy to web/public/data (C).
-all: terrain engine horizons conditions nav web
+all: terrain engine horizons conditions nav fields web
 
 terrain:     ## WS1: fetch raw (cached) then build data/interim/terrain/
 	$(PY) -m pipeline.terrain.fetch dem
@@ -24,9 +24,9 @@ conditions:  ## WS4: rad, clock, rems, donki -> data/interim/conditions/ (cache:
 	$(PY) -m pipeline.conditions
 conditions-fetch:  ## WS4: download/refresh data/raw/conditions/ (needs NASA_API_KEY for DONKI)
 	$(PY) -m pipeline.conditions.fetch all
-nav:         ## WS9
-	@echo "nav: stub (WS9 adds pipeline/navigation CLI)"
-fields:      ## WS7: HUD field PNGs + worst-case fields -> data/interim/export/fields/ (needs WS1 grid/slope, WS2 rasters)
+nav:         ## WS9: F21 Monte Carlo + fix-interval map, F22 skyline fixes -> data/interim/navigation/
+	$(PY) -m pipeline.navigation.run real $(NAV_ARGS)
+fields:      ## WS7: HUD field PNGs + worst-case fields -> data/interim/export/fields/ (WS1 grid/slope, WS2 rasters; merges WS9 fields_index_nav.json)
 	$(PY) -m pipeline.export.fields_png
 web:         ## C: copy/transform data/interim -> web/public/data, merge manifest, validate, H0 check
 	$(PY) tools/make_web.py
