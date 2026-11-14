@@ -162,6 +162,15 @@ RULES: list[Rule] = [
     Rule("WS2", "engine/public", "siting.png"),
     Rule("WS2", "engine/public", "siting_png.json"),
     Rule("WS2", "engine/public", "cards/*.timeline.json", kind="card_part"),
+    # v1.1.4 D21 rover parking options (C layout 16:17): ranking table + per picker pad its
+    # summary and nominal-suit layers; no isochrones or field rasters (those stay in interim)
+    Rule("WS2", "engine/public", "scenarios/pads/index.json"),
+    Rule("WS2", "engine/public", "scenarios/pads/*/summary.json"),
+    Rule("WS2", "engine/public", "scenarios/pads/*/bands_*.geojson"),
+    Rule("WS2", "engine/public", "scenarios/pads/*/edges.geojson"),
+    Rule("WS2", "engine/public", "scenarios/pads/*/partner.geojson"),
+    Rule("WS2", "engine/public", "scenarios/pads/*/route_*.geojson"),
+    Rule("WS2", "engine/public", "scenarios/pads/*/timeline_*.json"),
     # WS3 horizon: V2 (pipeline/validation/v2_skyline.py V2_OUT); horizon/public/ mirrors the
     # web tree for the card images (+ card horizon part) and the 3D horizon ring
     Rule("WS3", "horizon/validation", "v2.json", to="validation/v2.json"),
@@ -763,6 +772,16 @@ def dangling(public: Path) -> list[str]:
             for ref in (sc.get("files") or {}).values():
                 if isinstance(ref, str):
                     need(ref, f"scenarios/index.json {sc.get('id')}")
+    pads = public / "scenarios" / "pads"
+    if (pads / "index.json").is_file():  # v1.1.4 D21 picker
+        for row in json.loads((pads / "index.json").read_text()).get("pads", []):
+            if isinstance(row, dict) and isinstance(row.get("summary"), str):
+                need(row["summary"], f"scenarios/pads/index.json {row.get('id')}")
+    for summ in sorted(pads.glob("*/summary.json")) if pads.is_dir() else []:
+        files = json.loads(summ.read_text()).get("files")
+        for ref in (files.values() if isinstance(files, dict) else []):
+            if isinstance(ref, str):
+                need(ref, f"scenarios/pads/{summ.parent.name}/summary.json")
     fidx = public / "fields" / "index.json"
     if fidx.is_file():
         for name, f in json.loads(fidx.read_text()).get("fields", {}).items():

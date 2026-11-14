@@ -1,5 +1,5 @@
 // Data path pattern -> contract schema, mirroring SCHEMA_MAP in tools/validate_contracts.py
-// (contracts v1.1.2; contracts.test.ts checks the two tables match row by row). Schemas are
+// (contracts v1.1.4; contracts.test.ts checks the two tables match row by row). Schemas are
 // imported from contracts/ at build time, so the browser checks the frozen contract itself.
 import bandsSchema from '../../../contracts/bands.schema.json'
 import cardSchema from '../../../contracts/card.schema.json'
@@ -20,6 +20,8 @@ import localisationSchema from '../../../contracts/localisation.schema.json'
 import manifestSchema from '../../../contracts/manifest.schema.json'
 import montecarloSchema from '../../../contracts/montecarlo.schema.json'
 import padSchema from '../../../contracts/pad.schema.json'
+import padSummarySchema from '../../../contracts/pad_summary.schema.json'
+import padsIndexSchema from '../../../contracts/pads_index.schema.json'
 import partnerSchema from '../../../contracts/partner.schema.json'
 import radSchema from '../../../contracts/rad.schema.json'
 import remsSchema from '../../../contracts/rems.schema.json'
@@ -73,6 +75,14 @@ export const SCHEMA_MAP: [pattern: string, schema: JsonSchema][] = [
   ['tiles/basemap/tilejson.json', tilejsonSchema],
   ['terrain/cellstate.json', cellstateSchema],
   ['terrain/cellstate_conservative.json', cellstateSchema],
+  // v1.1.4: D21 rover parking options (pads.ts PAD_SCHEMA_PATTERNS); four segments, no overlap
+  ['scenarios/pads/index.json', padsIndexSchema],
+  ['scenarios/pads/*/summary.json', padSummarySchema],
+  ['scenarios/pads/*/bands_*.geojson', bandsSchema],
+  ['scenarios/pads/*/edges.geojson', edgesSchema],
+  ['scenarios/pads/*/partner.geojson', partnerSchema],
+  ['scenarios/pads/*/route_*.geojson', routeSchema],
+  ['scenarios/pads/*/timeline_*.json', timelineSchema],
 ]
 
 /** fnmatch-style match where `*` does not cross `/` (one glob per path segment, as in Python). */
