@@ -38,7 +38,7 @@ package = false
 default-groups = ["dev", "server"]   # server: backend (D48); CI installs it for the server tests
 
 [tool.pytest.ini_options]
-testpaths = ["pipeline", "tools", "tests", "server"]
+testpaths = ["pipeline", "tools", "tests"]  # server/ runs via make server-test in server.yml, not here (D48)
 pythonpath = ["."]
 addopts = "-q"
 
