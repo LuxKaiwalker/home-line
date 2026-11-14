@@ -3,8 +3,8 @@
 # the static Pages deploy (the static fallback never depends on the backend; kit "never cut").
 # Synthetic parity is the CI half of D56/K3; real-data parity (`make parity`) runs locally and in
 # deploy.sh. Both targets pass while server/ or the parity tests do not exist yet ("no tests
-# collected" is ok) and pick them up once they land. server/ is not in pytest testpaths, so the
-# ci "python" job does not collect it; it runs here only.
+# collected" is ok) and pick them up once they land. server/ and tests/test_backend_*.py are kept
+# out of a plain pytest (pyproject.toml), so the ci "python" job does not run them; they run here.
 name: server
 
 on:

@@ -38,9 +38,11 @@ package = false
 default-groups = ["dev", "server"]   # server: backend (D48); CI installs it for the server tests
 
 [tool.pytest.ini_options]
-testpaths = ["pipeline", "tools", "tests"]  # server/ runs via make server-test in server.yml, not here (D48)
+# Backend tests (server/, tests/test_backend_*.py) stay out of a plain `pytest` (the ci gate for
+# Pages); `make server-test` passes them as explicit paths, which --ignore-glob does not drop (D48).
+testpaths = ["pipeline", "tools", "tests"]
 pythonpath = ["."]
-addopts = "-q"
+addopts = "-q --ignore-glob=tests/test_backend_*.py"
 
 [tool.ruff]
 line-length = 100
