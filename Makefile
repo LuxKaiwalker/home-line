@@ -24,8 +24,8 @@ conditions:  ## WS4: rad, clock, rems, donki -> data/interim/conditions/ (cache:
 	$(PY) -m pipeline.conditions
 conditions-fetch:  ## WS4: download/refresh data/raw/conditions/ (needs NASA_API_KEY for DONKI)
 	$(PY) -m pipeline.conditions.fetch all
-nav:         ## WS9
-	@echo "nav: stub (WS9 adds pipeline/navigation CLI)"
+nav:         ## WS9: F21 Monte Carlo + fix-interval map, F22 skyline fixes -> data/interim/navigation/
+	$(PY) -m pipeline.navigation.run real $(NAV_ARGS)
 web:         ## C: copy/transform data/interim -> web/public/data, merge manifest, validate, H0 check
 	$(PY) tools/make_web.py
 web-plan:    ## C: what make web would copy, and what is missing per owner (no writes)
