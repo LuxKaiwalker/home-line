@@ -415,6 +415,78 @@ def test_read_rgba_alpha_zero_is_nodata(tmp_path):
         assert Image.open(tmp_path / o["tex"]).size == (16, 16)
 
 
+def _write_ortho(path, data, x0, y0, res):
+    import rasterio
+    from rasterio.transform import from_origin
+
+    with rasterio.open(path, "w", driver="GTiff", width=data.shape[2], height=data.shape[1],
+                       count=data.shape[0], dtype="uint8",
+                       transform=from_origin(x0, y0, res, res)) as ds:
+        ds.write(data)
+
+
+def test_far_texture_block_means_and_ground_outside_ortho(tmp_path):
+    """fp3d/far_tex.jpg: one RGB image over the far square (row 0 = north), each texel the area
+    mean of the ortho; texels the ortho does not cover fully = ground colour, counted."""
+    fg = ChunkGrid(x0=0.0, y0=64.0, chunk_px=32, res_m=1.0, n=2)  # far square 64 m
+    data = np.zeros((4, 32, 32), dtype=np.uint8)  # ortho 1 m over the NW 32 x 32 m only
+    data[0], data[1], data[2], data[3] = 200, 120, 60, 255
+    data[:3, 0:8, 0:8] = 40  # dark 8 m block in the NW corner
+    p = tmp_path / "o.tif"
+    _write_ortho(p, data, 0.0, 64.0, 1.0)
+    e = ortho_chunks.export_far_texture_from_file(p, fg, tmp_path, res_m=4.0, quality=95,
+                                                  nodata_rgb=GROUND, strip_rows=3)
+    assert e["tex"] == "fp3d/far_tex.jpg" and e["tex_res_m"] == 4.0
+    assert e["tex_width"] == e["tex_height"] == 16
+    assert e["tex_nodata_px"] == 16 * 16 - 8 * 8
+    assert e["tex_bytes"] == (tmp_path / e["tex"]).stat().st_size
+    assert Image.open(tmp_path / e["tex"]).size == (16, 16)
+    a, nod = ortho_chunks.far_texture_from_file(p, fg, res_m=4.0, nodata_rgb=GROUND,
+                                                strip_rows=5)  # strips do not divide 16
+    assert nod == e["tex_nodata_px"] and a.dtype == np.uint8 and a.shape == (16, 16, 3)
+    assert (a[0:2, 0:2] == 40).all()                      # NW block, row 0 = north
+    assert tuple(a[5, 5]) == (200, 120, 60)
+    assert (a[8:, :] == GROUND).all() and (a[:, 8:] == GROUND).all()  # no ortho -> ground
+    assert np.abs(_jpeg_rgb((tmp_path / e["tex"]).read_bytes())[5, 5] - a[5, 5]).max() <= 8
+
+
+def test_far_texture_partial_texel_is_ground_not_mixed(tmp_path):
+    fg = ChunkGrid(x0=0.0, y0=16.0, chunk_px=16, res_m=1.0, n=1)
+    data = np.zeros((4, 16, 16), dtype=np.uint8)
+    data[0], data[1], data[2], data[3] = 90, 90, 90, 255
+    data[3, :, 6:] = 0  # alpha 0 from x = 6 m: texel x 4..8 is partly covered
+    p = tmp_path / "o.tif"
+    _write_ortho(p, data, 0.0, 16.0, 1.0)
+    e = ortho_chunks.export_far_texture_from_file(p, fg, tmp_path, res_m=4.0, quality=95,
+                                                  nodata_rgb=GROUND)
+    a, nod = ortho_chunks.far_texture_from_file(p, fg, res_m=4.0, nodata_rgb=GROUND)
+    assert (a[:, 0] == 90).all()
+    assert (a[:, 1:] == GROUND).all()
+    assert nod == e["tex_nodata_px"] == 4 * 3
+
+
+def test_far_texture_config_and_index_counts_its_bytes(dummy_grid, geo):
+    ft = FP3D_CFG["far"]["texture"]
+    assert ft["res_m"] > 0 and 1 <= ft["jpeg_quality"] <= 95
+    near = [{"i": 14, "j": 14, "file": "fp3d/near/14_14.f32.gz", "bytes": 10, "filled_px": 0}]
+    far = {"file": "fp3d/far.f32.gz", "res_m": 8.0, "width": 928, "height": 928, "bytes": 100,
+           "tex": "fp3d/far_tex.jpg", "tex_bytes": 1000, "tex_res_m": 4.0}
+    idx = terrain_chunks.build_index(dummy_grid, geo, near, [], far, quantum_m=Q, datum="d",
+                                     eye_height_m=1.7, sources={})
+    assert idx["far"]["tex"] == "fp3d/far_tex.jpg"
+    assert idx["download_bytes"] == 10 + 100 + 1000
+
+
+def test_default_far_sources_are_the_canonical_bands():
+    """C 14:13: the far mesh uses the canonical bands WS3's horizon engine reads
+    (config/horizon.yaml bands), so the 3D skyline and the reference horizon share a CTX band."""
+    cfg = terrain_chunks.load_config()
+    got = terrain_chunks.default_far_sources(cfg)
+    bands = cfg["horizon"]["bands"]
+    assert got == [REPO / bands["ctx_20m"]["path"], REPO / bands["mola_hrsc_200m"]["path"]]
+    assert got[0].name == "ctx_20m_v2.tif"
+
+
 # ---------------------------------------------------------------------------- index ----
 def test_build_index_validates_and_matches_dummy_shape(dummy_grid, dummy_index, geo):
     near = [{"i": 14, "j": 14, "file": "fp3d/near/14_14.f32.gz", "bytes": 10, "filled_px": 0}]
@@ -576,3 +648,26 @@ def test_skyline_reference_resamples_and_keeps_unknown(geo):
     assert st["elevation_deg"][90] == pytest.approx(1.0, abs=1e-4)
     assert st["elevation_deg"][2] is None
     assert (st["lon"], st["lat"]) == pytest.approx(geo.pad_lonlat, abs=1e-6)
+
+
+def test_skyline_pass_rule_excludes_stations_without_access_cell(geo):
+    """C 12:35: the F20 pass rule covers the pad and the route stations; a station with no
+    access cell (WS2 stations.json access_lon null, e.g. S1) is reported but excluded."""
+    from pipeline.horizon.rays import HorizonProfile
+
+    stations = [{"id": "S1", "access_lon": None, "access_lat": None},
+                {"id": "S2", "access_lon": 137.38, "access_lat": -4.77},
+                {"id": "S9"}]  # no access keys at all (older stations.json): kept in the rule
+    excl = terrain_chunks.skyline_exclusions(stations)
+    assert set(excl) == {"S1"} and "access cell" in excl["S1"]
+    az = np.arange(360) * 1.0
+    prof = HorizonProfile(az_deg=az, elevation_deg=np.zeros(360), distance_m=np.full(360, 1e3),
+                          source=["dem_1m"] * 360, observer={"x": geo.pad_xy[0],
+                                                             "y": geo.pad_xy[1], "z": 0.0},
+                          eye_height_m=1.7, az_step_deg=1.0)
+    ref = terrain_chunks.skyline_reference([("pad", prof), ("S1", prof), ("S2", prof)], geo,
+                                           source="t", excluded=excl)
+    by = {s["id"]: s for s in ref["stations"]}
+    assert by["pad"]["pass_rule"] is True and by["S2"]["pass_rule"] is True
+    assert by["S1"]["pass_rule"] is False and by["S1"]["excluded_reason"] == excl["S1"]
+    assert "pass_rule" in ref["pass_rule_note"]

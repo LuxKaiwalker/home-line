@@ -16,6 +16,16 @@ far:
   # the mesh, so the pad-centred skyline ring (WS3) only draws the distant rim, where its
   # parallax is small. Sources beyond WS1's dem_1m window: ctx_20m, then mola_hrsc_200m. assumed
   half_extent_m: 6000
+  # Far-mesh sources beyond dem_1m: the canonical bands of config/horizon.yaml `bands` (ctx_20m,
+  # then mola_hrsc_200m; C 14:13: ctx_20m_v2.tif), so the 3D skyline and WS3's reference horizon
+  # read the same CTX band. Not repeated here; `--far-source` overrides for experiments only.
+  texture:
+    # fp3d/far_tex.jpg: one JPEG of WS1's ortho over the far square (each texel the area mean;
+    # texels the ortho does not cover fully = horizon.yaml panorama.ground_rgb, as the near
+    # chunks). 4 m/px over the 12 km square = 3,008 px (< 4,096, the WebGL2 minimum
+    # MAX_TEXTURE_SIZE). assumed (download budget)
+    res_m: 4.0
+    jpeg_quality: 82
 height:
   # Heights are rounded to a binary step (exact in float32) before gzip: 1/64 m = 1.6 cm, far below
   # the 1 m DEM's vertical accuracy. assumed
