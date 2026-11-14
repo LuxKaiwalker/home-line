@@ -31,7 +31,7 @@ export const DEFAULT_VISIBLE: Record<LayerGroup, boolean> = {
   slider: false,
   route: false,
   partner: false, // never in the default view (brief WS5 "Don't")
-  siting: false, // F8 pad proposal: not adopted (pad_default kept, S decides)
+  siting: false, // F8 heatmap (siting score); D21 picks the official pad by feasible EVAs
 }
 
 const GROUP_LAYERS: Record<LayerGroup, string[]> = {
@@ -67,6 +67,7 @@ export class ConsoleMap {
   private stationMarkers: Marker[] = []
   private padMarker?: Marker
   private sitingMarkers: Marker[] = []
+  private padOptionMarkers: Marker[] = []
   private edgeMarkers: Marker[] = []
   private hasBasemap = false
   private groupLayers: Record<LayerGroup, string[]> = Object.fromEntries(Object.entries(GROUP_LAYERS).map(([k, v]) => [k, [...v]])) as Record<LayerGroup, string[]>
@@ -278,6 +279,24 @@ export class ConsoleMap {
     this.applyVisibility()
   }
 
+  /** D21 parking options (scenarios/pads/index.json, official pad excluded): small markers, the selected one highlighted; click selects. */
+  setPadOptions(opts: { id: string; lon: number; lat: number; label: string; title: string; selected: boolean }[], onPick: (id: string) => void): void {
+    this.padOptionMarkers.forEach((m) => m.remove())
+    this.padOptionMarkers = opts.map((o) => {
+      const el = document.createElement('button')
+      el.type = 'button'
+      el.className = `pad-option${o.selected ? ' on' : ''}`
+      el.textContent = o.label
+      el.title = o.title
+      el.addEventListener('click', (ev) => {
+        ev.stopPropagation()
+        onPick(o.id)
+      })
+      return new Marker({ element: el }).setLngLat([o.lon, o.lat]).addTo(this.map)
+    })
+    this.applyVisibility()
+  }
+
   fitTo(points: { lon: number; lat: number }[]): void {
     const f = CONFIG.aoiFocus
     const b = new LngLatBounds([f.west, f.south], [f.east, f.north])
@@ -325,6 +344,7 @@ export class ConsoleMap {
     }
     for (const mk of this.stationMarkers) mk.getElement().hidden = !this.visible.stations
     if (this.padMarker) this.padMarker.getElement().hidden = !this.visible.stations
+    for (const mk of this.padOptionMarkers) mk.getElement().hidden = !this.visible.stations
     for (const mk of this.sitingMarkers) mk.getElement().hidden = !this.visible.siting
     for (const mk of this.edgeMarkers) mk.getElement().hidden = !this.visible.edges
   }
