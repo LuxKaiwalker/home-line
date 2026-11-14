@@ -144,6 +144,7 @@ class Ranges(_Strict):
     dwell_min: Range
     eva_duration_h: Range
     start_lmst_h: Range
+    reserve_min: Range  # plan_inputs eva.reserve_min (S2b, decision 10)
     user_points_max: int = Field(ge=0)
     anchored_flag_note: str
 

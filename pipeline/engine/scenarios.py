@@ -16,7 +16,6 @@ import numpy as np
 
 from . import (
     access,
-    cards,
     dijkstra,
     edges,
     envelope,
@@ -91,11 +90,19 @@ def isochrones_within_budget(grid: Grid, t_min, settings: Settings) -> tuple[dic
     (its levels are a subset of the 1-min levels, so the features are reused). Holes below
     settings.min_hole_m2 are filled (display filter, C decision 2026-11-14 11:42).
     Returns (FeatureCollection, step used, gz MB)."""
+    fc, step, mb, mb1 = _isochrones_sized(grid, t_min, settings)
+    isochrones_within_budget.first_gz_mb = mb1  # 1-min size (kept for callers that read it)
+    return fc, step, mb
+
+
+def _isochrones_sized(grid: Grid, t_min, settings: Settings) -> tuple[dict, int, float, float]:
+    """isochrones_within_budget plus the 1-min set's gz MB (no function attribute: thread-safe
+    for the plan server)."""
     out = load("variants")["outputs"]["isochrone_minutes"]
     fc = envelope.isochrones(grid, t_min, settings.isochrone_minutes, settings.simplify_m,
                              settings.min_hole_m2)  # fmt: skip
     mb = gz_mb(fc)
-    isochrones_within_budget.first_gz_mb = mb  # 1-min size, for the run summary
+    mb1 = mb
     step = int(out["step"])
     if mb > settings.isochrone_budget_mb_gz:
         step = settings.isochrone_fallback_step
@@ -108,7 +115,7 @@ def isochrones_within_budget(grid: Grid, t_min, settings: Settings) -> tuple[dic
             feats.sort(key=lambda f: f["properties"]["minutes"])
         fc = {**fc, "features": feats}
         mb = gz_mb(fc)
-    return fc, step, mb
+    return fc, step, mb, mb1
 
 
 def pad_rc(grid: Grid, lonlat: tuple[float, float] | None = None) -> tuple[int, int]:
@@ -163,11 +170,12 @@ def write_raster(path: Path, arr: np.ndarray, grid: Grid, nodata) -> Path:
 
 
 def return_fields(grid: Grid, pad, sids, settings: Settings, out_dir: Path = ENGINE_DIR,
-                  ) -> dict[str, dijkstra.Field]:  # fmt: skip
-    """One reverse Dijkstra per scenario on that variant's passability; writes the 3 rasters."""
+                  crew: dict | None = None) -> dict[str, dijkstra.Field]:  # fmt: skip
+    """One reverse Dijkstra per scenario on that variant's passability; writes the 3 rasters.
+    crew: physio.crew_values overrides (F26)."""
     fields = {}
     for sid in sids:
-        p = physio.scenario_params(sid, v1_rmse_deg=settings.v1_rmse_deg)
+        p = physio.scenario_params(sid, v1_rmse_deg=settings.v1_rmse_deg, crew=crew)
         g = grid.with_nogo(p.nogo_deg)
         f = dijkstra.return_field(g, physio.grade_table(p), pad)
         d = out_dir / sid
@@ -259,21 +267,24 @@ def headline_extra(grid: Grid, pad, t_by_sid: dict[str, np.ndarray], settings: S
 
 
 def web_products(grid: Grid, pad, fields: dict[str, dijkstra.Field], settings: Settings,
-                 public: Path = PUBLIC, default: str | None = None) -> dict:  # fmt: skip
-    """Isochrones, edges, bands, headline and scenarios/index.json for the scenarios given."""
+                 public: Path = PUBLIC, default: str | None = None,
+                 iso_info: dict | None = None) -> dict:  # fmt: skip
+    """Isochrones, edges, bands, headline and scenarios/index.json for the scenarios given.
+    iso_info: filled with the per-scenario isochrone sizes (for the run summary); also kept as
+    ``web_products.iso_info`` for older callers."""
     var = load("variants")
     default = default or var["scenarios"]["default"]
     by_suit: dict[int, dict[str, np.ndarray]] = {}
-    iso_info: dict[str, dict] = {}
+    iso_info = {} if iso_info is None else iso_info
     for sid, f in fields.items():
         variant, suit = physio.parse_scenario(sid)
         by_suit.setdefault(suit, {})[variant] = f.t_min
-        iso, step, mb = isochrones_within_budget(grid, f.t_min, settings)
+        iso, step, mb, mb1 = _isochrones_sized(grid, f.t_min, settings)
         _write_web(public, f"scenarios/{sid}/isochrones.geojson", iso, "isochrones.schema.json")
         provenance.record(f"isochrone_step_min.{sid}", step, "min",
                           f"scenarios/{sid}/isochrones.geojson", SCRIPT)  # fmt: skip
         iso_info[sid] = {"step_min": step, "gz_mb": round(mb, 3),
-                         "gz_mb_1min": round(isochrones_within_budget.first_gz_mb, 3),
+                         "gz_mb_1min": round(mb1, 3),
                          "min_hole_m2": settings.min_hole_m2}  # fmt: skip
         cg = grid.with_nogo(physio.scenario_params(sid, v1_rmse_deg=settings.v1_rmse_deg).nogo_deg)
         _write_web(public, f"scenarios/{sid}/edges.geojson",
@@ -327,11 +338,13 @@ def _write_web(public: Path, rel: str, obj, schema: str) -> Path:
 
 
 def partner_fields(grid: Grid, pad, ridge_index, suit_kg: int, settings: Settings,
-                   out_dir: Path = ENGINE_DIR) -> dict[tuple[str, float], np.ndarray]:  # fmt: skip
+                   out_dir: Path = ENGINE_DIR, crew: dict | None = None,
+                   ) -> dict[tuple[str, float], np.ndarray]:  # fmt: skip
     """Nominal-variant haul fields: (suited, bound) casualty x haul.yaml partner_cases (D20: cart
-    only; no drag fields), ridges masked."""
+    only; no drag fields), ridges masked. crew: the rescuer's overrides (F26); the casualty
+    masses stay haul.suited_casualty_kg / haul.yaml."""
     h = load("haul")
-    p = physio.params("nominal", suit_kg=suit_kg)
+    p = physio.params("nominal", suit_kg=suit_kg, crew=crew)
     hg = haul.haul_grid(grid.with_nogo(p.nogo_deg), ridge_index)
     out = {}
     for m_ic in (haul.suited_casualty_kg(suit_kg), h["casualty_kg"]["bound"]):
@@ -675,12 +688,20 @@ def diagnostics(grid: Grid, pad, fields: dict[str, dijkstra.Field], settings: Se
 
 
 def stations_product(grid: Grid, fields, partner_t, public: Path = PUBLIC,
-                     terrain_dir: Path = INTERIM_DIR / "terrain") -> tuple:  # fmt: skip
+                     terrain_dir: Path = INTERIM_DIR / "terrain",
+                     station_list: list[dict] | None = None,
+                     missing: list[str] | None = None) -> tuple:  # fmt: skip
     """stations.json = WS1's stations + T_home per scenario at the access cell (access.py,
     user decision 11:40), the access block and the partner-line flag. Stations without a
     position are left out (the contract needs lon/lat) and returned in ``missing``. The science
-    lon/lat is never moved."""
-    st, missing = stations.load_ws1_stations(terrain_dir / "stations.json")
+    lon/lat is never moved. station_list (with ``missing``): WS1 stations already loaded
+    (stations.load_ws1_stations; deep-copied here), else terrain_dir/stations.json is read."""
+    if station_list is None:
+        st, missing = stations.load_ws1_stations(terrain_dir / "stations.json")
+    else:
+        import copy
+
+        st, missing = copy.deepcopy(station_list), list(missing or [])
     stations.attach_cells(grid, st)
     access.resolve(grid, fields, st, access.radius_m())
     recs = stations.station_records(st, fields, partner_t, load("haul")["contour_min"])
@@ -834,10 +855,11 @@ def storm_timing(cond: dict, rad_path: Path = INTERIM_DIR / "conditions" / "rad.
 
 
 def plan_route(grid: Grid, pad, sid: str, field: dijkstra.Field, st: list[dict], cond: dict,
-               dose_fn, partner_t=None, rmse=None) -> tuple[traverse.Result, dict]:  # fmt: skip
+               dose_fn, partner_t=None, rmse=None, crew: dict | None = None,
+               ) -> tuple[traverse.Result, dict]:  # fmt: skip
     """F9 route for one scenario and pad: access cells from ``field``, D28 EVA term, D39 timed
     dose term (dose_fn) or the static one. Returns (Result, no_access {id: reason})."""
-    p = physio.scenario_params(sid, v1_rmse_deg=rmse)
+    p = physio.scenario_params(sid, v1_rmse_deg=rmse, crew=crew)
     tau = None if dose_fn is not None else cond.get("tau_dose_min")
     mi = margin.inputs(p, cond.get("t_dark_min"), tau, eva=True)
     rst, no_access = access.routing_stations(st, sid)
@@ -866,8 +888,9 @@ def route_summary(res: traverse.Result, no_access: dict, rst_access: dict | None
             "access_dist_m": rst_access or {}}  # fmt: skip
 
 
-def record_model_checks(file: str) -> dict:
-    """D30 IST-2 pass/miss rows and the D24 reserve (manifest; shown with the scorecard)."""
+def record_model_checks(file: str, crew: dict | None = None) -> dict:
+    """D30 IST-2 pass/miss rows and the D24 reserve (manifest; shown with the scorecard).
+    crew: overrides (F26) for the reserve (30 min at the crew's effort cap)."""
     rows = physio.ist2_pass_rows()
     for v, gs in rows.items():
         for g, r in gs.items():
@@ -875,7 +898,7 @@ def record_model_checks(file: str) -> dict:
             provenance.record(f"physio.ist2.{v}.{gk}.pass", r["pass"], None, file, SCRIPT)
             for k in ("band_lo", "band_hi", "reported"):
                 provenance.record(f"physio.ist2.{v}.{gk}.{k}", r[k], "mL/kg/min", file, SCRIPT)
-    p = physio.scenario_params(load("variants")["scenarios"]["default"])
+    p = physio.scenario_params(load("variants")["scenarios"]["default"], crew=crew)
     res_l = round(margin.reserve_l(p), 2)
     provenance.record("margin.o2_reserve_L", res_l, "L", file, SCRIPT)
     provenance.record("margin.o2_budget_L", round(margin.o2_capacity_l(), 2), "L", file, SCRIPT)
@@ -888,7 +911,7 @@ def record_model_checks(file: str) -> dict:
 
 
 def main(argv=None) -> int:
-    import json
+    import copy
     import time
 
     ap = argparse.ArgumentParser(description=__doc__)
@@ -960,10 +983,10 @@ def main(argv=None) -> int:
     dose_fn = storm_timing(cond, a.rad_json)
     print(f"margins: t_dark {cond['t_dark_min']} min ({cond['t_dark_source']}); dose "
           f"{'timed (D39): ' + dose_fn.source if dose_fn else cond['tau_dose_min']}")
-    st0, missing0 = [], []
+    st_ws1, missing_ws1, st0 = None, None, []
     if (a.terrain / "stations.json").exists():
-        st0, missing0 = stations.load_ws1_stations(a.terrain / "stations.json")
-        stations.attach_cells(grid, st0)
+        st_ws1, missing_ws1 = stations.load_ws1_stations(a.terrain / "stations.json")
+        st0 = stations.attach_cells(grid, copy.deepcopy(st_ws1))
 
     d21 = None
     if a.d21:
@@ -976,100 +999,13 @@ def main(argv=None) -> int:
         a.pad = [off.lon, off.lat]
         print(f"D21 official pad {off.id}: {off.lon}, {off.lat} (score {off.score}, "
               f"tb1 {off.tb1}, elev {off.elev_m})")
-    pad = pad_rc(grid, tuple(a.pad) if a.pad else None)
-    fields = return_fields(grid, pad, sids, settings, out_dir=out)
-    lap("return_fields")
-    index = web_products(grid, pad, fields, settings, public=pub)
-    index["model_checks"] = record_model_checks("scenarios/index.json")
-    _write_web(pub, "scenarios/index.json", index, "scenarios_index.schema.json")
-    lap("web_products")
-    diag = diagnostics(grid, pad, fields, settings)
-    lap("diagnostics")
+    from .plan import build_plan
 
-    partner_by_suit: dict[int, np.ndarray] = {}
-    ridge = None
-    if not a.no_partner:
-        ridge = load_ridge(a.terrain, grid)
-        for suit in sorted({physio.parse_scenario(s)[1] for s in sids if s.startswith("nom_")}):
-            pf = partner_fields(grid, pad, ridge, suit, settings, out_dir=out)
-            partner_product(grid, pf, suit, settings, public=pub)
-            partner_by_suit[suit] = pf.get(("cart", float(haul.suited_casualty_kg(suit))))
-        lap("partner")
-
-    default = load("variants")["scenarios"]["default"]
-    st, recs, missing = [], [], []
-    if (a.terrain / "stations.json").exists():
-        partner_t = partner_by_suit.get(physio.parse_scenario(default)[1])
-        st, recs, missing = stations_product(grid, fields, partner_t, public=pub,
-                                               terrain_dir=a.terrain)
-        lap("stations")
-
-    routes = {}
-    for sid in a.route_scenarios or [default]:
-        if sid not in fields or not st or any(s.get("value") is None for s in st):
-            print(f"route {sid}: skipped (no field, no stations or a station without value)")
-            continue
-        suit = physio.parse_scenario(sid)[1]
-        res, no_access = plan_route(grid, pad, sid, fields[sid], st, cond, dose_fn,
-                                    partner_by_suit.get(suit), rmse)  # fmt: skip
-        traverse.write(res, sid, pub)
-        rst, _ = access.routing_stations(st, sid)
-        routes[sid] = route_summary(res, no_access, {s["id"]: s["access_dist_m"] for s in rst})
-        print(f"route {sid}: {res.order} {res.total_min:.1f} min; terms {res.margin_terms}; "
-              f"lowest {routes[sid]['lowest_margin_min']} ({routes[sid]['lowest_margin_binding']})"
-              f"; dose {res.dose}; no access cell: {no_access}")
-        if sid == default:
-            hcfg = load("haul")
-            frags = cards.fragments(st, res, sid, partner_by_suit.get(suit),
-                                    float(haul.suited_casualty_kg(suit)), "cart",
-                                    float(hcfg["contour_min"]), access.radius_m())  # fmt: skip
-            cards.write(frags, pub)
-            routes[sid]["cards"] = sorted(frags)
-    lap("routes")
-
-    if st:
-        trade_product(grid, pad, fields, partner_by_suit, st, settings, public=pub)
-        lap("trade")
-    siting_info = None
-    if a.siting and st and all(s.get("value") is not None for s in st):
-        try:
-            ssid = siting_scenario()
-            sst, s_none = access.routing_stations(st, ssid)
-            print(f"siting: forward runs from the {ssid} access cells of {[s['id'] for s in sst]}"
-                  f"; no access cell: {s_none}")
-            if not sst:
-                raise MissingInput(f"no station has an access cell in {ssid}")
-            siting_info = run_siting(grid, sst, s_none, ssid, rmse, out, pub, a.pad, d21)
-        except MissingInput as e:
-            print(f"siting skipped: {e}")
-        lap("siting")
-    d21_info = None
-    if d21 is not None:
-        from . import padpick
-
-        d21_info = padpick.write_products(grid, d21, st0, cond, dose_fn, settings, ridge, out,
-                                          pub, routes.get(padpick.settings_from_config().scenario))
-        lap("d21_picker")
-
-    summary = {
-        "note": "WS2 engine run summary (internal, not a web contract; sanity numbers only)",
-        "scenarios_run": sids, "skipped": skipped, "stations_without_position": missing,
-        "margin_inputs": {**cond, "dose_timing": getattr(dose_fn, "source", None)},
-        "pad_rc": [int(pad[0]), int(pad[1])], "pad_lonlat": a.pad,
-        "model": {"alpha": physio.alpha_level(), "ist2_span_mars_kg": physio.ist2_span_mars_kg(),
-                  "o2_budget_L": {k: margin.o2_budget_l(k) for k in ("primary_L", "secondary_L")},
-                  "o2_energy_j_per_ml": margin.j_per_ml(),
-                  "reserve_L": margin.reserve_l(physio.scenario_params(default)),
-                  "ist2": physio.ist2_pass_rows()},
-        "grid_shape": list(grid.shape),
-        "res_m": grid.res_m, "timing_s": timing, "diagnostics": diag, "routes": routes,
-        "isochrones": getattr(web_products, "iso_info", {}), "siting": siting_info,
-        "d21": d21_info,
-    }  # fmt: skip
-    summ = out / "summary.json"
-    summ.parent.mkdir(parents=True, exist_ok=True)
-    summ.write_text(json.dumps(summary, indent=1, default=str), encoding="utf-8")
-    print(f"wrote {summ}")
+    build_plan(grid, pad_lonlat=a.pad, scenario_ids=sids, settings=settings, out_dir=out,
+               public_dir=pub, terrain_dir=a.terrain, stations_list=st_ws1,
+               stations_missing=missing_ws1, cond=cond, dose_fn=dose_fn,
+               route_scenarios=a.route_scenarios, partner=not a.no_partner, siting=a.siting,
+               d21=d21, skipped=skipped, rmse=rmse, timing=timing)  # fmt: skip
     return 0
 
 

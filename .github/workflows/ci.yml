@@ -1,5 +1,7 @@
 # CI for every PR and push to main (AGENTS.md "CI"). Owned by WS6 jointly with C.
 # The H0 provenance check (pipeline/provenance/check_h0.py, WS6) runs in the python job.
+# Static site only: pages.yml deploys after this workflow succeeds, so nothing backend runs here.
+# Backend tests live in server.yml (S3b, D48: the static fallback never depends on the backend).
 name: ci
 
 on:
@@ -29,26 +31,6 @@ jobs:
         run: uv run --no-sync python tools/validate_contracts.py
       - name: H0 provenance check (no manifest time or data mtime before H0; F16)
         run: uv run --no-sync python -m pipeline.provenance.check_h0
-
-  # Backend (optional live layer, D48). Synthetic parity is the CI half of D56/K3; real-data
-  # parity (`make parity`) runs locally and in deploy.sh. Both targets pass while server/ or the
-  # parity tests do not exist yet ("no tests collected" is ok) and pick them up once they land.
-  # Pages (pages.yml) never depends on this job.
-  server:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v6
-        with:
-          enable-cache: true
-      - name: Install Python 3.11 and deps (dev + server groups)
-        run: uv sync --locked -p 3.11 --group server
-      - name: Server deps import
-        run: uv run --no-sync python -c "import fastapi, httpx, jwt, psycopg, pydantic, uvicorn"
-      - name: Backend tests (make server-test)
-        run: make server-test
-      - name: Synthetic parity, batch == server (make parity-synthetic; D56)
-        run: make parity-synthetic
 
   web:
     runs-on: ubuntu-latest

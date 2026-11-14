@@ -16,6 +16,9 @@ origins), WS1 cell-state rasters, ``data/interim/manifest/`` (provenance) and ``
 Deterministic: entries sorted (``index.json`` first), fixed zip timestamps and attributes,
 deflate level 9, JSON written in a fixed key order. ``--check`` verifies zips (unzip, sha256,
 validation). ``--fixture`` writes contracts/bundle/fixtures/official_pad_v1/.
+
+Library entry for the backend (D53): ``build_plan_bundle(result_dir) -> bytes`` builds one plan
+bundle from a result tree (``LayeredSources``: the tree's files over the static sources).
 """
 
 from __future__ import annotations
@@ -391,9 +394,7 @@ class Sources:
 
     def web_paths(self, prefix: str, suffix: str) -> list[str]:
         names = {k for k in self.web_map if k.startswith(prefix) and k.endswith(suffix)}
-        if self.public.is_dir():
-            names |= {p.relative_to(self.public).as_posix()
-                      for p in (self.public / prefix).parent.glob("*") if p.is_file()}
+        names |= files_in_dir_of(self.public, prefix)
         return sorted(n for n in names if n.startswith(prefix) and n.endswith(suffix)
                       and "/" not in n[len(prefix):])
 
@@ -412,6 +413,14 @@ class Sources:
         if src is not None:
             names |= {src.path} | ({src.web, f"data/interim/{src.web}"} if src.web else set())
         return [e for e in self.manifest.values() if e.get("file") in names]
+
+
+def files_in_dir_of(root: Path, prefix: str) -> set[str]:
+    """Paths (relative to root) of the files in the folder a web-path prefix names:
+    ``cards/`` -> root/cards/*, ``route_`` -> root/*."""
+    d = root / prefix.rpartition("/")[0]
+    return {p.relative_to(root).as_posix() for p in d.glob("*") if p.is_file()} \
+        if d.is_dir() else set()
 
 
 def newest(entries: list[dict]) -> dict | None:
@@ -1028,6 +1037,110 @@ def stale_sources(fixture: Path = FIXTURE_DIR, interim: Path = INTERIM) -> list[
             if data is None or sha256(data) != s["sha256"]:
                 out.append(p)
     return out
+
+
+# ------------------------------------------------------------------ result trees (backend) ----
+class LayeredSources(Sources):
+    """A result tree (backend ``results/{hash}/``, D48/D53) over the static sources.
+
+    Files the result tree has win; shared files (conditions, terrain grid, fields index, ...)
+    come from the static sources. A result file whose bytes equal the static file keeps the
+    static file's provenance, so a result tree holding copies of the published files (the
+    pinned official result, or ``web/public/data`` itself) gives the committed fixture's bytes.
+    The tree's ``manifest.json`` entries override the static manifest's."""
+
+    def __init__(self, result_dir: Path, base: Sources):
+        self.result_dir, self.base = Path(result_dir), base
+        self.interim, self.public = base.interim, base.public
+        self.web_map = base.web_map
+        self.manifest = dict(base.manifest)
+        m = self.result_dir / "manifest.json"
+        if m.is_file():
+            self.manifest.update({k: v for k, v in json.loads(m.read_text(encoding="utf-8"))
+                                  .items() if isinstance(v, dict)})
+
+    def _result_path(self, rel: str) -> str:
+        try:
+            return (self.result_dir / rel).resolve().relative_to(REPO.resolve()).as_posix()
+        except ValueError:
+            return f"results/{self.result_dir.name}/{rel}"
+
+    def web(self, rel: str) -> Src | None:
+        base = self.base.web(rel)
+        p = self.result_dir / rel
+        if not p.is_file():
+            return base
+        data = p.read_bytes()
+        if base is not None and base.data == data:
+            return base
+        return Src(data, self._result_path(rel), rel)
+
+    def interim_file(self, rel: str) -> Src | None:
+        p = self.result_dir / rel
+        if p.is_file():
+            data = p.read_bytes()
+            base = self.base.interim_file(rel)
+            return base if base is not None and base.data == data else \
+                Src(data, self._result_path(rel))
+        return self.base.interim_file(rel)
+
+    def web_paths(self, prefix: str, suffix: str) -> list[str]:
+        names = set(self.base.web_paths(prefix, suffix)) | files_in_dir_of(self.result_dir, prefix)
+        return sorted(n for n in names if n.startswith(prefix) and n.endswith(suffix)
+                      and "/" not in n[len(prefix):])
+
+
+def result_origin(result_dir: Path) -> str:
+    """D40 origin of a result tree: its run_record.json ``origin`` (WS11 writes one for every
+    live result and every pinned precomputed one); a tree without a run record is a static
+    pipeline output (``web/public/data``), i.e. ``precomputed``."""
+    rr = Path(result_dir) / "run_record.json"
+    if rr.is_file():
+        origin = json.loads(rr.read_text(encoding="utf-8")).get("origin")
+        if origin not in ORIGIN_LABEL:
+            raise ValueError(f"{rr}: origin {origin!r} is not one of {sorted(ORIGIN_LABEL)}")
+        return origin
+    return "precomputed"
+
+
+def default_scenario(srcs: Sources) -> str:
+    sidx = srcs.need("scenarios/index.json").json()
+    if sidx.get("default"):
+        return sidx["default"]
+    ids = [s["id"] for s in sidx.get("scenarios", [])]
+    if len(ids) == 1:
+        return ids[0]
+    raise ValueError(f"scenarios/index.json names no default among {ids}: pass scenario=")
+
+
+def build_plan_bundle(result_dir: Path, *, scenario: str | None = None,
+                      origin: str | None = None, world: World | None = None,
+                      interim: Path = INTERIM, public: Path = PUBLIC,
+                      config_dir: Path = CONFIG) -> bytes:
+    """Plan bundle zip (D41) for one scenario of a result tree (backend F30, D53).
+
+    ``scenario`` defaults to the tree's ``scenarios/index.json`` default; ``origin`` to
+    :func:`result_origin`. ``world`` is the shared world pack (``build_world`` is the slow
+    part: the server builds it once and passes it in). For the official pad, with
+    ``web/public/data`` (or an empty tree) as the result tree, the bytes equal the committed
+    fixture's ``plan_bundle.zip``. Raises ValueError when the bundle does not validate."""
+    base = Sources(interim, public)
+    srcs = LayeredSources(result_dir, base)
+    scenario = scenario or default_scenario(srcs)
+    origin = origin or result_origin(result_dir)
+    frame, pad_src = load_frame(srcs, config_dir)
+    chash = config_hash(config_dir)
+    world = world or build_world(base, frame, chash)
+    files, _, _ = build_plan(srcs, frame, pad_src, world, chash, scenario, config_dir,
+                             origin=origin)
+    errs = verify_entries(files)
+    if errs:
+        raise ValueError("plan bundle invalid:\n  " + "\n  ".join(errs[:50]))
+    raw = zip_bytes(files)
+    errs = verify_zip_bytes(raw)
+    if errs:
+        raise ValueError("plan bundle failed its round trip:\n  " + "\n  ".join(errs[:50]))
+    return raw
 
 
 # ------------------------------------------------------------------------------------ main ----
