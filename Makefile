@@ -6,7 +6,7 @@ PY := uv run --no-sync python
 
 # Pipeline order (SPEC §4): WS1 terrain -> WS2 engine -> WS3 horizons -> WS4 conditions
 # -> WS9 nav -> copy to web/public/data (C).
-all: terrain engine horizons conditions nav fields web
+all: terrain engine horizons conditions nav fields fp3d web
 
 terrain:     ## WS1: fetch raw (cached) then build data/interim/terrain/
 	$(PY) -m pipeline.terrain.fetch dem

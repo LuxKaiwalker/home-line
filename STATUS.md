@@ -1055,3 +1055,6 @@ Branch: `ws10-vo`
 | 2026-11-14 12:20 | Fields scope | Ship all scenarios of the contract table (≈ 37 MB with con_*; 28.4 MB now) | C |
 | 2026-11-14 12:20 | HUD sun / time-to-dark | No `sun.json` contract: WS7 reads `conditions/clock.json eva.sun_series` and `eva.t_dark_min` (WS4) | C |
 | 2026-11-14 12:20 | Station card nulls | `margin_binding: null` for a station with no route or no access cell (S1); the card still ships | C |
+| 2026-11-14 12:35 | F20 at S2 (0.87° vs 0.5°) | WS3 uses the 1 m DEM out to the edge of its coverage before handing over to CTX (WS8 showed WS3's engine with dem_1m to 3.7 km agrees within 0.29° at S2). The 3D terrain is not lowered to CTX. WS3 session 3 implements; then re-run the F20 check | C |
+| 2026-11-14 12:35 | F20 at S1 (0.54°) | S1 is not on the route (no access cell), so the camera never stands there: S1 is reported but excluded from the F20 pass rule; the pass rule covers the pad and route stations | C |
+| 2026-11-14 12:35 | `make all` | Adds `fp3d` after `fields`; `config/fp3d.yaml` (all assumed) accepted for now, R to review | C |
