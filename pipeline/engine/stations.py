@@ -97,7 +97,7 @@ def station_records(stations: list[dict], fields: dict[str, Field],
                 # D26: a station no scenario can reach stays on the map with this label
                 "reachable_on_foot": any(a.rc is not None for a in acc.values()),
                 "reachability_label": None if any(a.rc is not None for a in acc.values())
-                else "not reachable on foot",
+                else load("stations")["placement"]["unreachable_label"],
             }
         out.append({
             "id": s["id"], "name": s["name"],
