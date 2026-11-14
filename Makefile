@@ -21,7 +21,7 @@ nav:         ## WS9
 web:         ## C: copy data/interim -> web/public/data, validate
 	@echo "web: stub (C adds tools/make_web.py)"
 dummy:       ## M0: tools/make_dummy.py -> web/public/data-dummy
-	@echo "dummy: stub (M0 adds tools/make_dummy.py)"
+	$(PY) tools/make_dummy.py --quiet
 
 test:
 	uv run --no-sync pytest
