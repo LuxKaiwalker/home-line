@@ -323,21 +323,34 @@ Branch: `ws2-engine`
   - **Route nom_104: empty** (no reachable station), so the timeline is depart/return at t = 0 (margin 85.9 min, binding: dose). No route or binding margin to report for nom_104.
   - Partner line (nominal, 60 min, ridge-masked): nom_104 cart 179 kg 1.23 km2, drag 179 kg 0.0002 km2, cart 343 kg 0.93 km2, drag 343 kg infeasible. Trade table: reachable % filled, partner area filled, science_value null (needs con_* T_home).
   - Sizes: public tree 153 MB; isochrones fall back to 2-min steps and are still **2.6-3.4 MB gz** (19-24 MB raw) per scenario, over the 1.5 MB budget; bands 4.2-4.6 MB; edges 2.2-3.1 MB; partner 1.1-1.4 MB; `data/interim/engine/` 351 MB total. Cause: thousands of small blocked holes (nom_104 60-min contour has 6,355 holes).
+- 2026-11-14T11:05Z (session 3): **access-cell rule** (user 11:40), KATs first (`pipeline/engine/tests/test_access.py`, 8 pass: wall station -> walkable cell at exactly 30 m; none within radius -> null + reason; assessed-but-sealed pocket -> null + reason; station on walkable cell -> access = science point, dist 0; nearest wins; card fragments match the timeline). `pipeline/engine/access.py`: access cell = nearest cell with WS1 state assessed (0) **and** finite T_home in the scenario, within `variants.yaml route.access_radius_m` 50 (assumed, flagged). Science lon/lat never moved. Walk-in leg **not modelled**; reported straight-line: dist, rise, mean slope, max along-track slope (3 m samples, bilinear on elev_3m), max WS1 max-slope of cells crossed. Per scenario, since the reachable set differs by variant.
+- 2026-11-14T11:05Z: **isochrone display filter** (C 11:42): `variants.yaml outputs.display_min_hole_m2` 100 (assumed, note in config); holes are filled before simplification; routing, T_home, bands and edges unchanged. 1-min isochrones with the filter are 2.25-2.92 MB gz (> 1.5), so the **2-min fallback** is used: 1.15-1.49 MB gz (nom_104 1.18). The fallback now reuses the even-minute 1-min features (no second contouring; run 6 min instead of 13). **Edges**: one MultiLineString per (budget, cause), lossless (nom_104 2.31 -> 1.48 MB raw; KAT: same pieces).
+- 2026-11-14T11:05Z: **card timeline part** (C 11:42): `data/interim/engine/public/cards/{S}.timeline.json` (`pipeline/engine/cards.py`): `timeline` {arrive, leave, turn_back}, `margin_binding`, `contingency` (cart haul time from the access cell, F10); extras `station`, `scenario`, `on_route`, `margin_min`, `t_home_min`, `o2_home_L`, `science` {lon, lat}, `access` {lon, lat, dist_m, reason, walk_in, radius_m, rule}. The card-owned keys are checked against the card schema's sub-schemas; manifest keys `card.{S}.*` (file `cards/{S}.json`).
+- 2026-11-14T11:05Z: **real run** `make engine` (commit 3bad2dd, 6 min 7 s), opt/nom x 80/104/120; con_* skipped (no V1). WS4 margins: t_dark 578.63 min; **tau_dose 85.9 min (storm peak, default)**. All public files validate (0 errors; the card fragments are not web files). Engine manifest fragments were cleared before the run (old keys archived), so no stale keys.
+  - Headline unchanged: nom_104 **12.4 %** of the assessed 30-min disc (range [con pending V1, opt 17.5 %]); 60-min 11.2 %. Edge causes nom_104 30 min: slope 99.4 %, physiology 0.6 %, data 0 %.
+  - **Access cells (nom_104)**:
+    | Station | Science lon, lat | Access lon, lat | access_dist_m | Walk-in rise / mean / max along / max terrain slope | T_home nom_104 | O2_home |
+    | --- | --- | --- | --- | --- | --- | --- |
+    | S1 | 137.391523, -4.810007 | null | null | - | null: "38 assessed cells within 50 m, none with a walk home in this scenario" (same in all 6 scenarios) | null |
+    | S2 | 137.383058, -4.776687 | 137.382736, -4.777025 | 27.6 | +7.79 m / 15.8 / 22.0 / 43.4 deg | 71.01 min | 95.56 L |
+    | S4 | 137.408864, -4.785707 | 137.408842, -4.785679 | 2.1 | +0.59 m / 15.9 / 15.9 / 23.7 deg | 59.93 min | 77.72 L |
+    Optimistic: S2 access 24.1 m (T_home 55.6 / 60.7 / 64.2 min at 80 / 104 / 120 kg), S4 2.1 m. S3, S5: no position (S).
+  - **G1 route `route_nom_104`: pad -> S4 -> S2 -> pad, 209.7 min** (walk 149.7 + 2 x 30 dwell), legs 2,357 / 1,741 / 2,122 m, 48.4 / 30.3 / 71.0 min. Only 2 stations: S1 has no access cell, S3/S5 unpositioned, so no 3-station route yet. Timeline: arrive S4 48.4, leave 78.4, arrive S2 108.7, leave 138.7, return 209.7; O2 left at return 267.7 L. **Binding margin: dose** everywhere (storm tau 85.9 - T_home): 25.97 min at S4, **14.89 min at S2 (lowest)**. With `--dose latest` (tau 3,771.6 min, scratch run, not published) the same route is chosen and **O2 binds**: 224.1 min at S4, 168.3 at S2. Turn-back (latest leave, O2 term): S4 438.6 min, S2 409.2 min, i.e. after the 6.5 h EVA budget (see question 13). Both stations are outside the 60-min partner line (cart haul from the access cell 99 / 108 min).
+  - **Sizes** (public tree, 6 scenarios): **79.5 MB raw, 12.1 MB gz** (was 159.5 / 22.0). Isochrones 7.7-9.9 MB raw (1.15-1.49 gz); bands 4.2-4.6 raw (0.58-0.65 gz); edges 1.4-2.0 raw (0.26-0.36 gz); partner 1.1-1.4 raw; rest < 0.05. Largest file 9.95 MB (opt_80 isochrones). With con_* expect about 107 MB raw / 16 MB gz. Git stores blobs zlib-compressed, so repo growth is about the gz column (under 25 MB); the **raw** tree is over 25 MB and cannot get there losslessly (see question 10).
 
 ### Doing
 
-- Waiting for S (stations on blocked cells, margins) and C (isochrone size).
+- Waiting for V1 (con_*), S (S3/S5 positions, S1 access, questions) and C (card merge, sizes).
 
 ### Next
 
 - On V1 (WS6 `validation/v1.json`): `make engine` again for con_* (range low end, trade science_value, siting rule).
-- Once stations have reachable positions: route + timeline for nom_104 (G1 3-station route), F8 siting.
+- Once S3/S5 have positions (or S1 gets an access cell): re-run for a 3-station nom_104 route. F8 siting + `pad.json` on V1 (the brief has no nom-only interim, so not produced).
 - WS7/WS9: real rasters are ready in `data/interim/engine/{sid}/`.
 
 ### Blocked
 
-- **G1 route (S/WS1):** every positioned station (S1, S2, S4) is on a blocked cell (> 20 deg at 3 m), so nom_104 has no route. Brief rule: no snapping. S/WS1 to choose either station positions on passable cells, or an "access cell" rule (for example nearest passable cell within N m, recorded per station). Not decided by WS2.
-- **Isochrone size (C/S):** with 2-min steps the isochrones are still 2.6-3.4 MB gz. Measured on nom_104 (2-min, 30 contours): drop holes and parts < 100 m2 -> 1.19 MB gz; < 500 m2 -> 0.82 MB; 5 m simplification alone -> 1.89 MB; 5 m + < 500 m2 -> 0.40 MB. Dropping holes hides small blocked islands in the display (routing is unchanged). Needs a config value (`variants.yaml outputs`), so C/S decide; not applied.
+- **3-station G1 route (S/WS1):** with the access-cell rule only S2 and S4 are routable; S1's 38 assessed cells within 50 m are all sealed off (no walk home in any scenario). S to pick S3/S5 positions, or move S1, or widen the radius (assumed 50 m; not changed by WS2).
 - con_* scenarios, the headline range low end, trade `science_value` and F8 siting wait on WS6's V1 RMSE (S's footprint decision).
 - Questions for S (science):
   1. **alpha encoding (C note, model unchanged).** IST-2's weight span is a gravity change (0.12 -> 0.32 g on 201.7 kg = 395.6 N). At Mars g that weight equals 106.6 kg of carried mass, not `delta_mass_kg` 60.
@@ -355,6 +368,11 @@ Branch: `ws2-engine`
   7. Proposed for contracts v1.1 (loose schemas accept them now): `partner.geojson` properties `{case, casualty_kg, contour_min, style, default_visible, caption, feasible, area_km2}`; route leg properties `{leg, from, to, t_min, o2_L, length_m, t_start_min, t_end_min, times_min[]}`; timeline rows `margin_binding`, `o2_tasks_left_L`, `o2_margin_min_planning_rate`, optional `in_partner_line`, plus `turn_back` events. `siting_png.json` has no schema.
   8. F11 partner_area_km2 uses the 60-min cart line (suited casualty) in both rows; reachable_pct uses the nominal variant. OK?
   9. WS5 scorecard shows `crew.o2_reserve_frac` as "O2 reserve in the route margin". It is no longer used; the reserve is `crew.o2_margin.reserve_min_at_effort_cap` (30 min at 1.35 L/min = 40.5 L). Please ask WS5 to switch the row.
+  10. **Sizes / coordinate precision.** Losslessly I merged edge pieces (MultiLineString). Two more cuts need a C decision: (a) 5 decimals (0.59 m on Mars, below the 2 m simplification) saves 9 % raw / 16 % gz (79.5 -> 72.5 MB raw, 12.0 -> 10.1 gz), but SPEC §6 and contracts/README say 6 decimals, so not applied; (b) the same < 100 m2 hole filter on `bands_*` cuts them 13.1 -> 5.8 MB raw (1.84 -> 0.9 gz), but bands are the main F4 layer and edges would still trace the dropped islands, so not applied.
+  11. **Card merge.** WS2 writes `engine/public/cards/{S}.timeline.json`; `tools/make_web.py RULES` has no rule for it yet and no merge into `cards/{S}.json`. Note `SCHEMA_MAP` pattern `cards/*.json` also matches `*.timeline.json` if the fragments ever land in the web tree. The card contract's `margin_binding` enum has no null: S1 (no access cell) has null times and a null binding; please allow null (as the timeline schema does) or say what a card without a route should carry.
+  12. **stations.json extras (stations schema is open):** `access_radius_m`, `access_lon`, `access_lat`, `access_dist_m`, `access_reason` (default scenario), `access` {scenario: {lon, lat, dist_m, t_home_min, o2_home_L, reason, walk_in {dist_m, rise_m, mean_slope_deg, max_slope_deg, max_terrain_slope_deg, modelled: false}}}. `lon`/`lat` stay the science point; `t_home_min` is at the access cell. Timeline station rows: `access_dist_m`; route legs: `to_access_dist_m`. Optional in a v1.2 note?
+- Question for S: 13. **Turn-back beyond the EVA budget.** The SPEC F4 margin has no EVA-duration term, so the latest turn-back (O2 term) is 409-439 min, after the 6.5 h (390 min) budget. Cap turn_back at `crew.eva_h` - T_home, or keep it as the physical limit?
+- **For WS5 (answer to Q9, not editing web/):** `web/src/config.ts` line 94 still cites `crew.yaml o2_reserve_frac` (0.2) for the scorecard. The engine does not use it. The route margin's reserve is `crew.yaml o2_margin.reserve_min_at_effort_cap` = 30 min at the effort rate 1.35 L/min = **40.5 L** (S review). Please show that row instead.
 
 ### Assumptions added
 
@@ -365,6 +383,9 @@ Branch: `ws2-engine`
 - `haul.yaml g_moon` 1.62 m/s^2 (assumed; standard lunar g, only for the Mars/Moon KAT).
 - The DP bounds O2 used before a departure by the effort-capped rate (station work at 0.84 is below 1.35 L/min, so the bound holds). The DP stays exact; the timeline reports the actual margins.
 - Pre-H0 station snapping is not used: a station with no walk home gets null.
+- `variants.yaml route.access_radius_m` 50 (assumed: user chose the access-cell rule 2026-11-14 11:40; radius assumed). Walkable = WS1 state assessed and reachable in the scenario. Walk-in leg not modelled.
+- `variants.yaml outputs.display_min_hole_m2` 100 (C decision 11:42, display only).
+- Card contingency uses the cart case with the suited casualty (the partner-line case), from the access cell.
 - Engine CLI: `--dose storm|latest` (default storm, the SPEC storm replay) and `--no-conditions`. CLI `--t-dark-min` and `--tau-dose-min` override WS4.
 
 ## WS3 Horizon

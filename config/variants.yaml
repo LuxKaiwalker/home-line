@@ -35,11 +35,13 @@ outputs:                           # added 13 Nov (gap found by WS2)
   isochrone_size_budget_mb_gz: 1.5
   simplify_tolerance_m: 2
   band_budgets_min: [30, 60]
+  display_min_hole_m2: 100         # C decision 2026-11-14 11:42 (assumed: true): display isochrones fill holes (blocked islands) < 100 m2 (nom_104 2-min: 2.66 -> 1.18 MB gz); routing, bands, edges and T_home unchanged
 route:                             # added by WS2 2026-11-14 (values from SPEC F9)
   o2_checkpoint_min: 30            # SPEC F9: "O2 checkpoints every 30 min"
   budget: "crew.eva_h"             # SPEC F9: sum(walk + dwell) <= 6.5 h
   o2_margin: "crew.o2_margin"      # S review 2026-11-14: margin formula, effort rate, task rate and reserve (sourced there)
   assumed: true                    # o2_checkpoint_min and budget read from SPEC text
+  access_radius_m: 50              # added by WS2 2026-11-14 (assumed: true): user chose the access-cell rule 2026-11-14 11:40; radius assumed. Route to the nearest walkable cell (assessed + reachable) within this radius of the science point; walk-in leg not modelled
 numerics:                          # added by WS2 2026-11-14; numerical resolution, not a model parameter
   grade_table_step_deg: 0.01       # router pace/O2 lookup table step (linear interpolation; KAT rel err < 1e-4)
   assumed: true

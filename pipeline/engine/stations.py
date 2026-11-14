@@ -2,9 +2,15 @@
 partner-line flag.
 
 Stations come from WS1 (``data/interim/terrain/stations.json``: the contract array, or an
-object with a ``stations`` array). A station is evaluated at the 3 m cell that holds its
-lon/lat. Nothing is moved: a station whose cell has no walk home in a scenario gets ``null``
-there (unknown stays unknown, AGENTS.md rule 7).
+object with a ``stations`` array). ``lon``/``lat`` stay the science coordinate. T_home is taken
+at the station's access cell (access.py, user decision 2026-11-14 11:40) when
+``access.resolve`` has run, else at the 3 m cell holding lon/lat. A station with no access cell
+in a scenario gets ``null`` there (unknown stays unknown, AGENTS.md rule 7).
+
+Extra properties (the stations contract allows them; reported to C):
+``access_radius_m``; ``access`` = {scenario: {lon, lat, dist_m, t_home_min, o2_home_L, reason,
+walk_in}}; and for the default scenario ``access_lon``, ``access_lat``, ``access_dist_m``,
+``access_reason``.
 """
 
 from __future__ import annotations
@@ -58,16 +64,37 @@ def _at(arr: np.ndarray, rc) -> float | None:
 
 
 def station_records(stations: list[dict], fields: dict[str, Field],
-                    partner_t: np.ndarray | None, partner_min: float) -> list[dict]:  # fmt: skip
+                    partner_t: np.ndarray | None, partner_min: float,
+                    default: str | None = None) -> list[dict]:  # fmt: skip
     """stations.json records (contract stations). objective/tasks pass through from WS1."""
+    from .access import radius_m
+
+    default = default or load("variants")["scenarios"]["default"]
     out = []
     for s in stations:
-        rc = s["rc"]
-        t_home = {sid: _at(f.t_min, rc) for sid, f in fields.items()}
+        acc = s.get("access")
+        if acc is None:
+            t_home = {sid: _at(f.t_min, s["rc"]) for sid, f in fields.items()}
+            prc = s["rc"]
+        else:
+            t_home = {sid: (None if a.t_home_min is None else round(a.t_home_min, 2))
+                      for sid, a in acc.items()}  # fmt: skip
+            prc = acc[default].rc if default in acc else None
         in_partner = None
-        if partner_t is not None:
-            tp = float(partner_t[rc])
+        if partner_t is not None and prc is not None:
+            tp = float(partner_t[prc])
             in_partner = bool(math.isfinite(tp) and tp <= float(partner_min))
+        extra = {}
+        if acc is not None:
+            d = acc.get(default)
+            extra = {
+                "access_radius_m": float(radius_m()),
+                "access_lon": None if d is None or d.lon is None else round(d.lon, 6),
+                "access_lat": None if d is None or d.lat is None else round(d.lat, 6),
+                "access_dist_m": None if d is None or d.dist_m is None else round(d.dist_m, 1),
+                "access_reason": None if d is None else d.reason,
+                "access": {sid: a.to_json() for sid, a in acc.items()},
+            }
         out.append({
             "id": s["id"], "name": s["name"],
             "lon": round(float(s["lon"]), 6), "lat": round(float(s["lat"]), 6),
@@ -77,5 +104,6 @@ def station_records(stations: list[dict], fields: dict[str, Field],
             "dwell_min": s.get("dwell_min", load("stations")["dwell_min"]),
             "t_home_min": t_home, "in_partner_line": in_partner,
             "card": s.get("card", f"cards/{s['id']}.json"),
+            **extra,
         })  # fmt: skip
     return out
