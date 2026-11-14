@@ -52,7 +52,13 @@ export const view: View = async (el) => {
     location.hash = href({ name: 'station', id })
   })
   render(<ConsolePanel cmap={cmap} />, panelEl)
+  // Live pad tool (D48, WS13 U2; team lead D81): lazy, only in builds with VITE_LIVE=1.
+  let alive = true
+  let disposeLive: (() => void) | undefined
+  if (import.meta.env.VITE_LIVE === '1') void import('../live').then((m) => { if (alive) disposeLive = m.padTool(panelEl.parentElement!.appendChild(document.createElement('aside')), m.consoleMapPort(cmap)) })
   return () => {
+    alive = false
+    disposeLive?.()
     render(null, panelEl)
     cmap.destroy()
   }
