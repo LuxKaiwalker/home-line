@@ -25,3 +25,28 @@ skyline_fix:
 vo_probe:                          # WS10
   drives: 5
   go_rule: ">= 2 drives with >= 10 consecutive stereo pairs at <= 2 m spacing, with camera models"
+
+# --- WS9 additions (fresh run, flagged for N in STATUS.md) -----------------------------------
+# How the prose error model (SPEC §2.4 F21) maps to code. Conventions, no new science numbers.
+model_conventions:
+  psi0: "heading error drawn N(0, psi0_deg) per run at the start and again at every fix"
+  gyro_bias: "b_g drawn N(0, sigma_b_deg_h) once per run; integrates with time, also while dwelling"
+  heading_rw: "increment N(0, psi_rw_deg_sqrt_min * sqrt(dt_min)) per time step"
+  step_noise: "per-step N(0, step_noise_frac * L) summed over the d / L steps of a time step"
+  slip: "on slope > slip_min_slope_deg: extra along-track per-step N(0, slip * sin(slope) * L)"
+  fix_sigma: "a fix resets the position error to N(0, sigma) per axis"
+  ellipse: "second moment of the error about zero, scaled by the chi-square 2-dof quantile of ellipse_conf"
+  r95: "ellipse_conf quantile of the radial error over runs"
+  r95_fit_method: "non-negative least squares on per-minute (D > 0, r95) pairs, no intercept"
+  assumed: true
+tracks:
+  ellipse_every_min: 5               # SPEC §6.2
+  ellipse_vertices: 72               # polygon resolution; presentation only
+  assumed: true                      # ellipse_vertices only
+fix_interval_ws9:
+  budget_from: "crew.yaml walkback_budgets_min[0]"   # the 30-min homeline (SPEC F21)
+  reserve_min: 0                     # SPEC "budget minus reserve": no reserve defined for this; question to N
+  margin_radius_method: edt          # exact distance to the nearest over-limit cell; "worst_fields" = SPEC interpolation in t_home_worst_*
+  unknown_cells: exceed              # unknown T_home counts as over the limit (conservative)
+  edge_percentile: 10                # edge_p10_m in fix_interval_summary.json
+  assumed: true

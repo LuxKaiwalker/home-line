@@ -488,15 +488,25 @@ Branch: `ws9-nav`
 
 ### Done
 
-- —
+- 2026-11-14T10:25Z: M1 F21 dead-reckoning error model (`pipeline/navigation/deadreckon.py`: step scale
+  + per-step noise, psi0, gyro bias, heading random walk, slip above `slip_min_slope_deg`; fix events
+  reset position to N(0, sigma) and heading to a new psi0) and Monte Carlo summaries
+  (`pipeline/navigation/montecarlo.py`: 95% ellipses per minute, r95, r95(D) = a*D + b*D^2 NNLS fit,
+  contract writers for `nav/montecarlo_{set}.json`, `nav/tracks_{set}.geojson`, `nav/fixes.json`,
+  manifest keys `nav.r95_fit.*`, `nav.montecarlo.*`). Ported from the pre-H0 reference code and
+  checked against contracts v1.0.0. KATs `tests/test_nav.py` 23/23 pass on a synthetic straight route,
+  full Monte Carlo from config (500 runs, seed 20261114): zero-error = truth; heading-bias-only lateral
+  error = analytic within 1%; 95% ellipse covers 95.6 / 94.8 / 95.0% of runs at 10 / 30 / 60 min;
+  error resets at fixes; slip only above 10 deg; contracts validate.
 
 ### Doing
 
-- —
+- Fix-interval map + `nav/fix_interval_summary.json` (F21), tracks, `/nav` view on data-dummy.
 
 ### Next
 
-- —
+- F22 skyline fix wiring against WS3's `HorizonEngine` (branch `ws3-horizon`).
+- `make nav` on the real `route_nom_104` once WS2 has produced it.
 
 ### Blocked
 
@@ -504,7 +514,17 @@ Branch: `ws9-nav`
 
 ### Assumptions added
 
-- —
+- `config/nav.yaml model_conventions` (assumed): how SPEC F21's prose model maps to code (psi0 redrawn
+  at each fix, gyro bias per run, random walk per step, per-step noise summed, slip along-track,
+  ellipse = chi-square 2-dof from the second moment, NNLS fit without intercept). For N to confirm.
+- `config/nav.yaml tracks` (ellipse every 5 min from SPEC §6.2; 72 polygon vertices, presentation).
+- `config/nav.yaml fix_interval_ws9` (assumed): budget = crew.yaml walkback_budgets_min[0]; reserve 0
+  (SPEC says "budget minus reserve" but no reserve is defined for it; crew.yaml reserve_min = 30 is
+  the EVA reserve and would zero the 30-min homeline): question to N; margin radius by exact
+  distance transform (= the circular max filter criterion, not capped at 100 m) with SPEC's
+  worst-field interpolation kept as an option; unknown T_home counts as over the limit; edge figure
+  = 10th percentile of D_max inside the homeline.
+- Synthetic walking speed = crew.yaml anchor 0.98 m/s.
 
 ## WS10 Visual odometry
 
