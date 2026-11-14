@@ -423,10 +423,11 @@ def test_station_observer_access_cell_rule():
     assert "none walkable" in o["note"]
 
 
-def test_pad_observer_is_pad_default_never_the_proposal(tmp_path):
-    """C 14:58: the pad horizon is at the pad in use (site.yaml pad_default). WS2 pad.json's
-    top-level pad counts only when it is pad_default and not marked as a proposal; its
-    `proposal` block (F8 siting) is never read; anything else falls back to pad_default."""
+def test_pad_observer_is_the_d21_official_pad_never_the_proposal(tmp_path):
+    """D21 (user 16:14): the pad horizon is at the official pad = WS2 pad.json's top-level pad
+    when its `source` cites D21 and it is not marked as a proposal; the `proposal` block is never
+    read. A pre-D21 file counts only when its top-level pad is pad_default (C 14:58); anything
+    else falls back to site.yaml pad_default with a source_note."""
     import json
 
     from pipeline.horizon.cards import pad_observer
@@ -439,24 +440,35 @@ def test_pad_observer_is_pad_default_never_the_proposal(tmp_path):
     o = pad_observer(eng, ter)                                  # no pad.json
     assert (o["lon"], o["lat"]) == (pad["lon"], pad["lat"]) and "site.yaml" in o["source"]
     assert "source_note" not in o
-    # the wrong file WS2 wrote at 14:45: the F8 proposal as the top-level pad
-    (eng / "pad.json").write_text(json.dumps({"pad": {"lon": 137.402443, "lat": -4.769028}}))
+    # D21 official pad elsewhere than pad_default, cited: used
+    official = {"lon": 137.402443, "lat": -4.769028,
+                "source": "WS2 D21 screening: most feasible EVAs (rank 1)"}
+    alts = [{"lon": pad["lon"], "lat": pad["lat"], "role": "pad_default"}]
+    (eng / "pad.json").write_text(json.dumps({"pad": official, "alternatives": alts}))
     o = pad_observer(eng, ter)
-    assert (o["lon"], o["lat"]) == (pad["lon"], pad["lat"]) and "site.yaml" in o["source"]
-    assert "ignored" in o["source_note"] and "not pad_default" in o["source_note"]
-    # the fixed file: pad_default at the top level, the proposal in its own block
-    fixed = {"pad": {"lon": pad["lon"] + 4e-7, "lat": pad["lat"]},
-             "proposal": {"lon": 137.402443, "lat": -4.769028}}
-    (eng / "pad.json").write_text(json.dumps(fixed))
+    assert (o["lon"], o["lat"]) == (official["lon"], official["lat"])
+    assert "pad.json" in o["source"] and "D21" in o["source"] and "source_note" not in o
+    # D21 not cited (e.g. "D210", or no source): a pad off pad_default is ignored
+    for src in ({"source": "F8 siting result D210"}, {}):
+        (eng / "pad.json").write_text(json.dumps({"pad": {"lon": official["lon"],
+                                                          "lat": official["lat"], **src}}))
+        o = pad_observer(eng, ter)
+        assert (o["lon"], o["lat"]) == (pad["lon"], pad["lat"]) and "site.yaml" in o["source"]
+        assert "ignored" in o["source_note"] and "D21" in o["source_note"]
+    # a pre-D21 file with pad_default at the top level is still fine
+    (eng / "pad.json").write_text(json.dumps({"pad": {"lon": pad["lon"] + 4e-7,
+                                                      "lat": pad["lat"]},
+                                              "proposal": {"pad": official}}))
     o = pad_observer(eng, ter)
     assert "pad.json" in o["source"] and "source_note" not in o
     assert o["lon"] == pytest.approx(pad["lon"]) and o["lat"] == pytest.approx(pad["lat"])
-    # a top-level pad marked as a proposal is ignored even at pad_default's coordinates
+    # a top-level pad marked as a proposal is ignored even when it cites D21
     for mark in ({"proposal": True}, {"is_proposal": True}, {"role": "proposal"}):
-        (eng / "pad.json").write_text(json.dumps({"pad": {**fixed["pad"], **mark}}))
+        (eng / "pad.json").write_text(json.dumps({"pad": {**official, **mark}}))
         o = pad_observer(eng, ter)
         assert "site.yaml" in o["source"] and "marked as a proposal" in o["source_note"]
-    (eng / "pad.json").write_text(json.dumps({"proposal": fixed["proposal"]}))   # no pad
+    # only a proposal block (no top-level pad): never read
+    (eng / "pad.json").write_text(json.dumps({"proposal": {"pad": {**official}}}))
     o = pad_observer(eng, ter)
     assert (o["lon"], o["lat"]) == (pad["lon"], pad["lat"]) and "ignored" in o["source_note"]
 
@@ -514,26 +526,56 @@ def test_landmark_on_skyline_peak_is_visible_and_behind_it_is_hidden(cone_engine
     assert side["bearing_deg"] == pytest.approx(90.0)
 
 
-def test_landmark_pick_rule():
-    """landmarks.yaml rule: 3-6 landmarks that rise above the skyline or are within 5 km;
-    drop_if: below the skyline and > 5 km. Fewer than 3 qualifying are reported, not padded."""
-    from pipeline.horizon.cards import pick_landmarks
+def test_landmark_display_rule_d33():
+    """landmarks.yaml rule + D33 (user 16:20): up to 6 landmarks above the skyline, nearest
+    first, labelled; every landmark below the skyline (at any distance, 4.9 km too) is listed
+    after them, nearest first, as a bearing-only tick (display bearing_tick, above_skyline false,
+    no elevation). Fewer than 3 visible are reported in the note, never padded."""
+    from pipeline.horizon.cards import classify_landmarks
 
     rule = CFG["landmark_rule"]
-    assert (rule["min_n"], rule["max_n"], rule["near_km"]) == (3, 6, 5)
+    hid = CFG["hidden_landmarks"]
+    assert (rule["min_n"], rule["max_n"]) == (3, 6)
+    assert (hid["display"], hid["visible_display"], hid["label"]) == \
+        ("bearing_tick", "label", "below skyline")
+    assert "D33" in hid["source"]
 
     def v(name, d, above):
-        return {"name": name, "bearing_deg": 10.0, "dist_km": d, "above_skyline": above}
+        return {"name": name, "bearing_deg": 10.0 + d, "dist_km": d, "kind": "official",
+                "el_deg": 1.0, "skyline_el_deg": 2.0, "above_skyline": above}
 
     views = [v("far_hidden", 40, False), v("near_hidden", 4.9, False), v("far_up", 30, True),
              v("mid_up", 12, True)] + [v(f"up{i}", 20 + i, True) for i in range(5)]
-    picked, note = pick_landmarks(views)
-    names = [p["name"] for p in picked]
-    assert len(picked) == 6 and "far_hidden" not in names and names[0] == "near_hidden"
-    assert names == sorted(names, key=lambda n: next(x["dist_km"] for x in views
-                                                     if x["name"] == n))
-    picked, note = pick_landmarks([v("a", 40, False), v("b", 2, False)])
-    assert [p["name"] for p in picked] == ["b"] and "fewer than 3" in note
+    items, note = classify_landmarks(views)
+    names = [p["name"] for p in items]
+    assert names == ["mid_up", "up0", "up1", "up2", "up3", "up4", "near_hidden", "far_hidden"]
+    assert "far_up" not in names                                  # 7th visible: max_n 6
+    assert all(p["display"] == "label" and p["above_skyline"] is True for p in items[:6])
+    for p in items[6:]:
+        assert p["display"] == "bearing_tick" and p["above_skyline"] is False
+        assert set(p) == {"name", "kind", "bearing_deg", "dist_km", "above_skyline", "display"}
+    assert items[6]["bearing_deg"] == 14.9 and items[6]["dist_km"] == 4.9
+    assert note is None
+    items, note = classify_landmarks([v("a", 40, False), v("b", 2, False), v("c", 9, True)])
+    assert [(p["name"], p["display"]) for p in items] == \
+        [("c", "label"), ("b", "bearing_tick"), ("a", "bearing_tick")]
+    assert "1 landmark" in note and "fewer than 3" in note and "2" in note
+    assert "below skyline" in note and "D33" in note
+    items, note = classify_landmarks([])
+    assert items == [] and "0 landmark" in note
+
+
+def test_overlay_shows_only_landmarks_visible_from_the_photo_stop(cone_engine):
+    """D33: the Navcam overlay marks only landmarks above the skyline seen from the frame's
+    stop; a landmark hidden behind the cone gets no tick."""
+    from pipeline.horizon.cards import overlay_items
+
+    prof = cone_engine.horizon(0.0, 0.0)
+    stop = {"x": 0.0, "y": 0.0, "z": prof.observer["z"]}
+    lms = [{"name": "apex", "x": 0.0, "y": 30_000.0}, {"name": "behind", "x": 0.0, "y": 50_000.0}]
+    items = overlay_items(stop, lms, cone_engine, prof)
+    assert [i["name"] for i in items] == ["apex"]
+    assert items[0]["bearing_deg"] == pytest.approx(0.0, abs=1e-6)
 
 
 def test_panorama_rows_follow_profile_and_landmark_tick():
@@ -555,6 +597,42 @@ def test_panorama_rows_follow_profile_and_landmark_tick():
         assert abs(ground[0] - y_want) <= 2.0          # first ground pixel under the line
     x, y = pano_xy(meta, 90.0, 3.0)
     assert tuple(a[int(round(y)) - 4, int(round(x))]) == tuple(pc["tick_rgb"])
+
+
+def test_panorama_hidden_landmark_is_a_bearing_only_tick_d33():
+    """D33: a hidden landmark is drawn at its bearing only: a dashed line through the ground
+    from the skyline down, and a bottom band (below the strip) with its tick and label. The
+    strip above (sky, skyline, ground rows) is unchanged by it."""
+    from pipeline.horizon.cards import pano_xy, render_panorama
+
+    az = np.arange(1440) * 0.25
+    el = 2.0 + np.sin(np.radians(az))
+    prof = HorizonProfile(az, el, np.full(az.size, 10_000.0), ["ctx_20m"] * az.size,
+                          {"x": 0, "y": 0, "z": 0}, EYE, 0.25)
+    hidden = {"name": "Gale", "bearing_deg": 200.0, "dist_km": 41.3, "above_skyline": False,
+              "display": "bearing_tick"}
+    base, mb = render_panorama(prof, [])
+    img, meta = render_panorama(prof, [hidden])
+    ph = CFG["panorama_hidden"]
+    a = np.asarray(img.convert("RGB")).astype(int)
+    a0 = np.asarray(base.convert("RGB")).astype(int)
+    assert meta["strip_height_px"] == mb["height"] and meta["height"] > mb["height"]
+    assert a.shape[0] == meta["height"]
+    x = int(round(pano_xy(meta, 200.0, 0.0)[0]))
+    _, y_sky = pano_xy(meta, 200.0, 2.0 + math.sin(math.radians(200.0)))
+    col = a[: meta["strip_height_px"], x]
+    hits = np.nonzero(np.all(col == ph["tick_rgb"], axis=1))[0]
+    assert hits.size > 0 and hits.min() >= y_sky - 1            # only below the skyline
+    assert not np.any(np.all(a[: int(y_sky) - 2, x] == ph["tick_rgb"], axis=1))  # none in sky
+    band = a[meta["strip_height_px"]:, x - 1: x + 2]
+    assert np.any(np.all(band == ph["tick_rgb"], axis=2))      # tick in the bottom band
+    assert np.any(np.all(a[meta["strip_height_px"]:] == ph["band_rgb"], axis=2))
+    far = int(round(pano_xy(meta, 20.0, 0.0)[0]))               # away from the tick and label
+    assert np.array_equal(a[: mb["height"], far], a0[:, far])
+    # a visible landmark is still a labelled tick at its elevation, no bottom band
+    img2, meta2 = render_panorama(prof, [{"name": "Peak", "bearing_deg": 90.0, "dist_km": 10.0,
+                                          "el_deg": 3.0, "display": "label"}])
+    assert meta2["height"] == meta2["strip_height_px"] == mb["height"]
 
 
 def test_horizon_ring_beyond_min_range_and_consistent_points(cone_engine):
@@ -598,8 +676,16 @@ def test_card_fragment_validates_against_card_contract_fields():
         frame={"image_id": "NLB_X", "sol": 4834, "stop_id": "v121_0"}, frame_dist_m=522.0,
         frame_errors={"near": 0.1, "mid": None, "far": 4.2},
         landmarks=[{"name": "Gale", "bearing_deg": 142.7, "dist_km": 41.8, "el_deg": 1.0,
-                    "above_skyline": True}], landmarks_note=None)
+                    "above_skyline": True, "display": "label"},
+                   {"name": "Aeolis Mons", "bearing_deg": 121.2, "dist_km": 31.3,
+                    "kind": "official", "above_skyline": False, "display": "bearing_tick"}],
+        landmarks_note=None)
     validate(frag, "card.schema.json", properties=FRAGMENT_FIELDS)
+    # D33: the hidden landmark keeps kind, bearing, distance, above_skyline false, display hint
+    assert frag["landmarks"][1] == {"name": "Aeolis Mons", "bearing_deg": 121.2, "dist_km": 31.3,
+                                    "kind": "official", "above_skyline": False,
+                                    "display": "bearing_tick"}
+    assert frag["landmarks"][0]["display"] == "label" and "el_deg" not in frag["landmarks"][0]
     assert set(FRAGMENT_FIELDS) == {"navcam", "skyline_error_deg", "panorama_png", "landmarks"}
     assert frag["navcam"]["url_local"] == "cards/S1/navcam.png"
     assert frag["navcam"]["overlay_png"] == "cards/S1/overlay.png"

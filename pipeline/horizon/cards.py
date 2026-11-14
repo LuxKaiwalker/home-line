@@ -4,9 +4,9 @@ fragments (F12).
     python -m pipeline.horizon.cards
 
 Observers (eye height ``horizon.yaml eye_height_m``):
-  * pad: ``site.yaml pad_default`` (the pad in use, user 11:24; C 14:58). WS2
-    ``engine/public/pad.json`` is used only when its top-level pad is pad_default and not marked
-    as a proposal; its ``proposal`` block (F8 siting) is never read.
+  * pad: the official pad (D21, user 16:14): WS2 ``engine/public/pad.json``'s top-level pad when
+    its ``source`` cites D21 and it is not marked as a proposal (a pre-D21 file only when that
+    pad is ``site.yaml pad_default``); else pad_default. The ``proposal`` block is never read.
   * stations: WS2 ``engine/public/stations.json``. Access-cell rule (user decision 11:40): the
     observer stands at the station's access cell once WS2 publishes it; until then at the science
     coordinate, and the card is marked ``provisional``.
@@ -26,6 +26,7 @@ import csv
 import datetime as dt
 import json
 import math
+import re
 import shutil
 import sys
 from pathlib import Path
@@ -95,14 +96,17 @@ def observer_from_station(rec: dict) -> dict:
     return o
 
 
-def pad_observer(engine_public: Path = ENGINE_PUBLIC, terrain: Path = TERRAIN) -> dict:
-    """Pad observer = the pad in use, ``site.yaml pad_default`` (user 11:24; C 14:58).
+_D21 = re.compile(r"\bD21\b")
 
-    WS2 ``pad.json``'s top-level ``pad`` is used only when it is not marked as a proposal and
-    equals pad_default at the file's 6-decimal precision (SPEC §6); its ``proposal`` block (the
-    F8 siting result) is never read. Otherwise the pad is ``pad_default`` from config, with a
-    ``source_note`` saying why pad.json was ignored. ``terrain`` is kept for call compatibility
-    (WS1 grid.json's pad is pad_default too)."""
+
+def pad_observer(engine_public: Path = ENGINE_PUBLIC, terrain: Path = TERRAIN) -> dict:
+    """Pad observer = the official pad (D21, user 16:14 CET).
+
+    WS2 ``pad.json``'s top-level ``pad`` is the official pad when its ``source`` cites D21 and it
+    is not marked as a proposal. A pre-D21 file counts only when its top-level pad equals
+    ``site.yaml pad_default`` at the file's 6-decimal precision (C 14:58). The ``proposal`` block
+    is never read. Otherwise the pad is ``pad_default`` from config, with a ``source_note``
+    saying why pad.json was ignored. ``terrain`` is kept for call compatibility."""
     default = hcfg.site()["pad_default"]
     out = {"id": "pad", "lon": default["lon"], "lat": default["lat"],
            "source": "config/site.yaml pad_default"}
@@ -113,15 +117,22 @@ def pad_observer(engine_public: Path = ENGINE_PUBLIC, terrain: Path = TERRAIN) -
     marked = any(bool(d.get(k)) for k in ("proposal", "is_proposal")) or \
         str(d.get("role", d.get("kind", ""))).lower() == "proposal"
     try:
-        same = (round(float(d["lon"]), 6), round(float(d["lat"]), 6)) == \
+        lon, lat = float(d["lon"]), float(d["lat"])
+        same = (round(lon, 6), round(lat, 6)) == \
             (round(float(default["lon"]), 6), round(float(default["lat"]), 6))
     except (KeyError, TypeError, ValueError):
+        lon = lat = None
         same = False
-    if same and not marked:
-        return {"id": "pad", "lon": d["lon"], "lat": d["lat"], "source": f"WS2 {_rel(p)}"}
-    why = "marked as a proposal" if marked else "not pad_default"
+    cites = bool(_D21.search(str(d.get("source") or "")))
+    if lon is not None and not marked and (cites or same):
+        tag = " (D21 official pad)" if cites else " (pad_default)"
+        return {"id": "pad", "lon": d["lon"], "lat": d["lat"], "source": f"WS2 {_rel(p)}{tag}",
+                "pad_source": d.get("source")}
+    why = ("marked as a proposal" if marked else "no top-level pad" if lon is None
+           else "source does not cite D21 and the pad is not pad_default")
     out["source_note"] = (f"WS2 {_rel(p)} pad ({d.get('lon')}, {d.get('lat')}) ignored: {why} "
-                          f"(C 14:58: the pad in use is pad_default; F8 siting is a proposal)")
+                          "(D21: the official pad is pad.json's top-level pad citing D21; the "
+                          "proposal block is never read)")
     return out
 
 
@@ -177,18 +188,40 @@ def landmark_view(obs: dict, lm: dict, engine, profile: HorizonProfile) -> dict:
             "bearing_grid_deg": round(b_grid, 3)}
 
 
-def pick_landmarks(views: list[dict], rule: dict | None = None) -> tuple[list[dict], str | None]:
-    """landmarks.yaml rule: 3-6 landmarks above the skyline or within 5 km, nearest first; the
-    rest are dropped (drop_if). Fewer than min_n qualifying are reported, never padded."""
-    r = hcfg.load()["landmark_rule"] if rule is None else rule
-    q = [v for v in views if v["above_skyline"] or v["dist_km"] <= float(r["near_km"])]
-    q.sort(key=lambda v: v["dist_km"])
-    picked = q[: int(r["max_n"])]
+HIDDEN_KEYS = ("name", "kind", "bearing_deg", "dist_km", "above_skyline", "display")
+
+
+def classify_landmarks(views: list[dict], rule: dict | None = None,
+                       hidden_rule: dict | None = None) -> tuple[list[dict], str | None]:
+    """landmarks.yaml rule + D33 (user 16:20). Visible = centre above the computed skyline: up to
+    ``max_n``, nearest first, ``display`` = label (drawn at their elevation). Hidden = below the
+    skyline, at any distance: all listed after the visible ones, nearest first, as bearing-only
+    items (name, kind, bearing, distance, above_skyline false, ``display`` = bearing_tick; no
+    elevation). Fewer than ``min_n`` visible are reported in the note, never padded."""
+    cfg = hcfg.load()
+    r = cfg["landmark_rule"] if rule is None else rule
+    h = cfg["hidden_landmarks"] if hidden_rule is None else hidden_rule
+    vis = sorted((v for v in views if v["above_skyline"]), key=lambda v: v["dist_km"])
+    vis = [{**v, "display": h["visible_display"]} for v in vis[: int(r["max_n"])]]
+    hid = sorted((v for v in views if not v["above_skyline"]), key=lambda v: v["dist_km"])
+    hid = [{k: v for k, v in {**v, "above_skyline": False, "display": h["display"]}.items()
+            if k in HIDDEN_KEYS} for v in hid]
     note = None
-    if len(picked) < int(r["min_n"]):
-        note = (f"only {len(picked)} landmark(s) qualify (fewer than {r['min_n']}): the others "
-                f"are below the computed skyline and farther than {r['near_km']} km")
-    return picked, note
+    if len(vis) < int(r["min_n"]):
+        note = (f"{len(vis)} landmark(s) rise above the computed skyline (fewer than "
+                f"{r['min_n']}); {len(hid)} {h['label']} are listed as bearing-only ticks (D33)")
+    return vis + hid, note
+
+
+def overlay_items(stop: dict, landmarks: list[dict], engine, profile: HorizonProfile) -> list[dict]:
+    """Landmarks for the Navcam overlay (D33): only those above the skyline seen from the frame's
+    own stop (``stop``: x, y, z eye; ``profile``: the stop horizon), at their grid bearing."""
+    out = []
+    for lm in landmarks:
+        v = landmark_view(stop, lm, engine, profile)
+        if v["above_skyline"]:
+            out.append({"name": lm["name"], "bearing_deg": v["bearing_grid_deg"]})
+    return out
 
 
 # --------------------------------------------------------------------------------------------
@@ -211,10 +244,14 @@ def _font(px: int):
 def render_panorama(profile: HorizonProfile, marks: list[dict], cfg: dict | None = None):
     """Equirectangular strip (north at the left edge, azimuth increasing to the right, same
     scale on both axes): sky above the computed skyline, ground below, unknown azimuths left as
-    sky with no line; landmarks as ticks at (bearing, elevation) with "name dist km" labels."""
+    sky with no line; visible landmarks as ticks at (bearing, elevation) with "name dist km"
+    labels; hidden ones (``display`` bearing_tick, D33) as bearing-only ticks in a bottom band
+    (``meta['strip_height_px']`` = the strip without that band)."""
     pc = (hcfg.load() if cfg is None else cfg)["panorama"]
     ppd = float(pc["px_per_deg"])
     el = np.asarray(profile.elevation_deg, dtype=float)
+    hidden = [m for m in marks if m.get("display") == "bearing_tick"]
+    marks = [m for m in marks if m.get("display") != "bearing_tick"]
     mark_el = [m["el_deg"] for m in marks if m.get("el_deg") is not None]
     lo = math.floor(np.nanmin(el) - pc["el_margin_deg"]) if np.isfinite(el).any() else -5
     hi = math.ceil(max([np.nanmax(el) if np.isfinite(el).any() else 0.0, *mark_el])
@@ -226,7 +263,11 @@ def render_panorama(profile: HorizonProfile, marks: list[dict], cfg: dict | None
     meta = {"px_per_deg": ppd, "el_top_deg": hi, "el_bottom_deg": lo, "top_px": top,
             "width": w, "height": h, "az_left_deg": 0.0,
             "observer": profile.observer, "eye_height_m": profile.eye_height_m}
-    img = Image.new("RGB", (w, h), tuple(pc["sky_rgb"]))
+    font = _font(int(pc["font_px"]))
+    band_h, hidden_rows = _hidden_band_layout(hidden, ppd, w, font, int(pc["font_px"]), cfg)
+    meta["strip_height_px"] = h
+    meta["height"] = h + band_h
+    img = Image.new("RGB", (w, h + band_h), tuple(pc["sky_rgb"]))
     draw = ImageDraw.Draw(img)
     xs = np.arange(w)
     az = (xs + 0.5) / ppd
@@ -245,7 +286,6 @@ def render_panorama(profile: HorizonProfile, marks: list[dict], cfg: dict | None
             seg = []
     if len(seg) > 1:
         draw.line(seg, fill=tuple(pc["line_rgb"]), width=1)
-    font = _font(int(pc["font_px"]))
     for i, c in enumerate("NESW"):
         draw.text((i * 90 * ppd + 3, h - pc["font_px"] - 3), c, fill=tuple(pc["line_rgb"]),
                   font=font)
@@ -266,7 +306,60 @@ def render_panorama(profile: HorizonProfile, marks: list[dict], cfg: dict | None
         draw.line([(x, ty + pc["font_px"]), (x, y - 12)], fill=tuple(pc["tick_rgb"]), width=1)
         draw.text((tx, ty), label, fill=tuple(pc["tick_rgb"]), font=font)
         last_x = x
+    if hidden:
+        _draw_hidden(draw, profile, meta, hidden_rows, font, cfg)
     return img, meta
+
+
+def _hidden_label(m: dict, cfg: dict | None = None) -> str:
+    lab = (hcfg.load() if cfg is None else cfg)["hidden_landmarks"]["label"]
+    return f"{m['name']} {m['dist_km']:.1f} km ({lab})"
+
+
+def _hidden_band_layout(hidden: list[dict], ppd: float, w: int, font, font_px: int,
+                        cfg: dict | None = None) -> tuple[int, list[tuple]]:
+    """Bottom band for the bearing-only ticks (D33): (band height px, [(mark, x, tx, row)]).
+    Labels are stacked greedily into rows so they never overlap."""
+    if not hidden:
+        return 0, []
+    ph = (hcfg.load() if cfg is None else cfg)["panorama_hidden"]
+    probe = ImageDraw.Draw(Image.new("RGB", (1, 1)))
+    rows_end: list[float] = []
+    out = []
+    for m in sorted(hidden, key=lambda m: m["bearing_deg"] % 360.0):
+        x = (m["bearing_deg"] % 360.0) * ppd
+        tw = probe.textlength(_hidden_label(m, cfg), font=font)
+        tx = max(2.0, min(x + 2, w - tw - 2))
+        row = next((i for i, e in enumerate(rows_end) if e + 6 < tx), len(rows_end))
+        if row == len(rows_end):
+            rows_end.append(0.0)
+        rows_end[row] = tx + tw
+        out.append((m, x, tx, row))
+    band_h = int(ph["tick_len_px"]) + len(rows_end) * (font_px + 2) + 4
+    return band_h, out
+
+
+def _draw_hidden(draw, profile: HorizonProfile, meta: dict, rows: list[tuple], font,
+                 cfg: dict | None = None) -> None:
+    """Hidden landmarks (D33): a dashed line through the ground from the skyline down at the
+    bearing (no elevation), and a tick + "name dist km (below skyline)" in the bottom band."""
+    c = hcfg.load() if cfg is None else cfg
+    ph, fpx = c["panorama_hidden"], int(c["panorama"]["font_px"])
+    rgb = tuple(ph["tick_rgb"])
+    h, hb = meta["strip_height_px"], meta["height"]
+    draw.rectangle([(0, h), (meta["width"] - 1, hb - 1)], fill=tuple(ph["band_rgb"]))
+    on, off = (int(v) for v in ph["dash_px"])
+    tl = int(ph["tick_len_px"])
+    for m, x, tx, row in rows:
+        e = float(profile.elevation_at(m["bearing_deg"]))
+        y0 = math.ceil(pano_xy(meta, m["bearing_deg"], e)[1]) + 1 if np.isfinite(e) else h // 2
+        for y in range(int(y0), h, on + off):
+            draw.line([(x, y), (x, min(y + on - 1, h - 1))], fill=rgb, width=1)
+        draw.line([(x, h), (x, h + tl)], fill=rgb, width=2)
+        ty = h + tl + 2 + row * (fpx + 2)
+        if row:
+            draw.line([(x, h + tl), (x, ty + fpx // 2)], fill=rgb, width=1)
+        draw.text((tx, ty), _hidden_label(m, c), fill=rgb, font=font)
 
 
 # --------------------------------------------------------------------------------------------
@@ -390,7 +483,8 @@ def card_fragment(station_id: str, *, observer: dict, frame: dict | None,
                                 "hidden by haze in north-facing frames)") if frame else None,
         "panorama_png": f"{base}/panorama.png" if panorama else None,
         "landmarks": [{k: lm[k] for k in ("name", "bearing_deg", "dist_km", "kind",
-                                          "above_skyline") if k in lm} for lm in landmarks],
+                                          "above_skyline", "display") if k in lm}
+                      for lm in landmarks],
         "landmarks_note": landmarks_note,
         "built_utc": _now(),
     }
@@ -412,9 +506,9 @@ def _frame_xy(frames: list[dict], horizons_dir: Path) -> list[dict]:
     return out
 
 
-def _write_overlay(frame: dict, picked: list[dict], landmarks: list[dict], engine,
-                   out_dir: Path) -> None:
-    """Navcam frame as PNG + transparent overlay (frame's stop horizon, landmark ticks)."""
+def _write_overlay(frame: dict, landmarks: list[dict], engine, out_dir: Path) -> list[str]:
+    """Navcam frame as PNG + transparent overlay (frame's stop horizon; ticks only for the
+    landmarks visible from that stop, D33). Returns the ticked landmark names."""
     from pipeline.horizon.overlay import (  # noqa: PLC0415
         az_ticks,
         frame_camera,
@@ -429,15 +523,11 @@ def _write_overlay(frame: dict, picked: list[dict], landmarks: list[dict], engin
     grey.save(out_dir / "navcam.png", optimize=True)
     model, q = frame_camera(frame)
     stop = {"x": frame["x"], "y": frame["y"], "z": float(prof.observer["z"])}
-    names = {p["name"] for p in picked}
-    items = []
-    for lm in landmarks:
-        if lm["name"] in names:
-            v = landmark_view(stop, lm, engine, prof)
-            items.append({"name": lm["name"], "bearing_deg": v["bearing_grid_deg"]})
+    items = overlay_items(stop, landmarks, engine, prof)
     ticks = az_ticks(prof, model, q, size, items)
     render_overlay(size, skyline_pixels(prof, model, q, size), ticks).save(
         out_dir / "overlay.png", optimize=True)
+    return [t.get("label") for t in ticks]
 
 
 def _slug(name: str) -> str:
@@ -465,8 +555,8 @@ def run(*, engine=None, stations_json: Path | None = None, public: Path = PUBLIC
                  "position": pad["source"]}
     prof.write_json(horizons_dir / "pad.json", observer_id="pad")
     validate(json.loads((horizons_dir / "pad.json").read_text()), "horizon.schema.json")
-    report["observers"]["pad"] = {k: pad[k] for k in ("lon", "lat", "source", "source_note")
-                                  if k in pad}
+    report["observers"]["pad"] = {k: pad[k] for k in ("lon", "lat", "source", "pad_source",
+                                                      "source_note") if k in pad}
     if pad.get("source_note"):
         log(f"pad: {pad['source_note']}")
     ring = ring_doc(engine, pad)
@@ -505,7 +595,7 @@ def run(*, engine=None, stations_json: Path | None = None, public: Path = PUBLIC
         z = float(prof.observer["z"])
         o = {"x": x, "y": y, "z": z, "lon": obs["lon"], "lat": obs["lat"]}
         views = [landmark_view(o, lm, engine, prof) for lm in landmarks]
-        picked, note = pick_landmarks(views)
+        picked, note = classify_landmarks(views)
         sdir = cards_dir / sid
         sdir.mkdir(parents=True, exist_ok=True)
         pano_ok = bool(np.isfinite(prof.elevation_deg).any())
@@ -513,11 +603,11 @@ def run(*, engine=None, stations_json: Path | None = None, public: Path = PUBLIC
             img, meta = render_panorama(prof, picked)
             img.save(sdir / "panorama.png", optimize=True)
         frame, fdist = nearest_suitable_frame((x, y), frames, v2_by_id)
-        errs = None
+        errs, overlay_names = None, []
         if frame is not None:
             picks[sid] = {"image_id": frame["image_id"], "dist_m": fdist,
                           "position": obs["position"]}
-            _write_overlay(frame, picked, landmarks, engine, sdir)
+            overlay_names = _write_overlay(frame, landmarks, engine, sdir)
             errs = {c: v2_by_id[frame["image_id"]]["summary"][c]["median_abs_deg"]
                     for c in CLASSES}
         frag = card_fragment(sid, observer=obs, frame=frame, frame_dist_m=fdist,
@@ -533,12 +623,13 @@ def run(*, engine=None, stations_json: Path | None = None, public: Path = PUBLIC
                                 "landmarks": [(v["name"], v["bearing_deg"], v["dist_km"],
                                                v["el_deg"], v["skyline_el_deg"],
                                                v["above_skyline"]) for v in views],
-                                "picked": [p["name"] for p in picked], "note": note}
+                                "picked": [(p["name"], p["display"]) for p in picked],
+                                "overlay_landmarks": overlay_names, "note": note}
         if record_manifest:
             _record_card(sid, frag)
         log(f"{sid}: {obs['position']}{' (provisional)' if obs['provisional'] else ''}; frame "
             f"{frame and frame['image_id']} at {fdist and round(fdist)} m; landmarks "
-            f"{[p['name'] for p in picked]}")
+            f"{[(p['name'], p['display']) for p in picked]}; overlay {overlay_names}")
     # C request (WS9 F22): tag each card frame with its station in navcam_frames.json
     fj = HROOT / "navcam_frames.json"
     nf = tag_station_frames(json.loads(fj.read_text()), picks)
