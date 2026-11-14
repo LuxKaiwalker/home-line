@@ -1,0 +1,19 @@
+rad:
+  dataset: MSL_RAD_OBS-L2
+  dose_variable: verify_at_h0
+  storm_window_utc: ["2024-05-19T00:00:00Z", "2024-05-23T00:00:00Z"]
+  baseline: "median of the 7 days before the storm window"
+  tripwire: {factor: 3.0, consecutive_samples: 2}
+  q_sep: 1.0                       # never 3 for the SEP
+  interpolation: "linear between sample midpoints"
+  expected: {peak_mgy_day: [8.1, 8.4], excess_mgy: [1.7, 1.9]}
+leash:
+  d_allow_mgy: 0.5                 # decided (D9), slider 0.25-1.0
+  formula: "tau_dose_min = 60 * D_allow / Ddot_mGy_per_h"
+rems:
+  ls_window_deg: [10, 35]
+  feed_stale_since: "2026-08-25"
+clock:
+  algorithm: "Mars24 (Allison and McEwen 2000)"
+  gale_lon_east_deg: 137.39
+event_weekend: {ls_deg: 22, mars_year: 39}

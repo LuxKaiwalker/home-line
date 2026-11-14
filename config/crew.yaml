@@ -1,0 +1,33 @@
+crew_size: 2
+eva_h: 6.5
+reserve_min: 30
+o2_reserve_frac: 0.2              # r in the route margin, assumed
+vo2max_ml_kg_min: 36
+effort_cap_frac: 0.5
+body_mass_kg: 75                  # assumed (D10)
+suit_masses_kg: [80, 104, 120]    # 80 = our sensitivity value, labelled as such
+default_suit_kg: 104
+tools_kg: 10
+g_mars: 3.71
+anchor:
+  vo2_ml_kg_min: 19.0             # ICES-2026-127, level walking, Mars offload
+  speed_ms: 0.98                  # 2.2 mph
+  carried_kg: 120
+o2_energy_j_per_ml: 20.1
+v_safe_ms:                        # assumed
+  - {max_deg: 10, v: 1.0}
+  - {max_deg: 17, v: 0.6}
+  - {max_deg: 25, v: 0.3}
+walkback_budgets_min: [30, 60]
+heat_reference_btu_h: {average: 1200, peak: 3000}
+o2_budget:                        # added 13 Nov (gap found by WS2); derived, see notes
+  basis: "metabolic O2 only (no leakage or venting); NASA does not publish a single Mars-suit O2 capacity"
+  primary_design_eva_h: 8          # NASA EVA-EXP-0075: surface EVAs up to 8 h (6 +/- 2)
+  primary_design_rate_btu_h: 1200  # ICES-2026-127 average metabolic design rate
+  secondary_eva_h: 1               # ICES-2026 Mars PLSS study: secondary sized 1 h for 4-8 h EVAs
+  secondary_design_rate_btu_h: 3000
+  formula: "O2_L = hours * rate_btu_h * 0.29307 * 3600 / 20.1 / 1000"
+  primary_L: 504                   # = 8 h x 63.0 L/h (derived)
+  secondary_L: 157                 # = 1 h x 157 L/h at 3000 BTU/h (derived)
+  margin_uses: primary_L           # O2_left = primary_L - consumed; secondary is shown, never planned against
+  assumed: true

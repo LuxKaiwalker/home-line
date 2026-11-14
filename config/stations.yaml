@@ -1,0 +1,29 @@
+scoring_weights: {crism: 0.4, ridge_density: 0.4, manual: 0.2}
+ridge_density_radius_m: 25
+crism_indices: {sulfate: SINDEX2, clay: D2300}
+dwell_min: 30
+max_stations_siting: 8
+max_stations_dp: 12
+stations:
+  - id: S1
+    name: "Boxwork ridge-hollow transect"
+    rule: "highest (ridge_density + clay index) 25 m cell inside the focus area and inside the flat 30-min disc"
+    manual_priority: 0.5
+  - id: S2
+    name: "Fracture-network survey"
+    rule: "highest ridge_density cell at least 300 m from S1"
+    manual_priority: 0.5
+  - id: S3
+    name: "Nodule census"
+    rule: "hand pick by S on HiRISE ortho before H2; record lon/lat and the image used"
+    manual_priority: 0.5
+  - id: S4
+    name: "Gediz Vallis sulfur field"
+    rule: "Curiosity drive end nearest sol 4200 from MMGIS"
+    manual_priority: 1.0
+    verify_at_h0: true
+  - id: S5
+    name: "Debris-flow boulders"
+    rule: "hand pick by S on HiRISE ortho before H2"
+    manual_priority: 0.5
+extra_from_scoring: {max: 3, decide_by: "Sat 23:00 (D8)"}

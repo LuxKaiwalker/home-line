@@ -1,0 +1,17 @@
+casualty_kg:
+  suited: "body_mass + suit_mass (179 at the 104 kg suit)"
+  bound: 343                       # NASA 2024 Lunar Rescue System challenge
+cases:
+  cart: {mu_range: [0.1, 0.4], mu_nominal: 0.2}
+  drag: {mu_range: [0.5, 0.7], mu_nominal: 0.6}
+efficiency_eps: {range: [0.20, 0.25], nominal: 0.225}
+rescuer_effort_frac: {range: [0.6, 0.8], nominal: 0.7}
+boot_mu: 0.5
+formulas:
+  force: "F = m_IC * g * (mu * cos(theta) + sin(theta))"
+  p_avail_w: "P = (effort_frac * VO2max - VO2_walk_self) * m_b * 20.1 / 60"
+  speed: "v_haul = min(v_safe(theta), eps * P / F); downhill: min(v_haul, 0.5 * v_safe)"
+  infeasible: "v_haul < 0.1 m/s or F > boot_mu * (m_b + suit + tools) * g * cos(theta)"
+contour_min: 60                    # Scoville, Artemis III 1 h benchmark
+mask_ridges: true
+assumed: true

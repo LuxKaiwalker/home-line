@@ -1,0 +1,27 @@
+sets:                              # decided (D15), all assumed
+  low:    {sigma_s: 0.01, sigma_b_deg_h: 1,  psi0_deg: 1, psi_rw_deg_sqrt_min: 0.05, slip: 0.02}
+  medium: {sigma_s: 0.03, sigma_b_deg_h: 5,  psi0_deg: 3, psi_rw_deg_sqrt_min: 0.10, slip: 0.05}
+  high:   {sigma_s: 0.05, sigma_b_deg_h: 20, psi0_deg: 5, psi_rw_deg_sqrt_min: 0.30, slip: 0.10}
+default_set: medium
+step_m: 0.7
+step_noise_frac: 0.05
+slip_min_slope_deg: 10
+monte_carlo: {runs: 500, dt_s: 1, seed: 20261114}
+ellipse_conf: 0.95
+r95_fit: "r95(D) = a*D + b*D^2"
+fix_sigma_m: {rover: 2, station: 5}
+fix_interval:
+  criterion: "r95(D) <= margin radius"   # D17 default 95%
+  classes_m: [100, 300, 1000]
+skyline_fix:
+  coarse_grid_m: 50
+  search_extent_m: 1000
+  refine_grid_m: 10
+  refine_top_k: 3
+  far_field_min_m: 500
+  column_weights: {far: 2.0, mid: 1.0, near: 0.5}
+  sigma_rule: "region with RMS <= 1.5 x minimum RMS"
+  standalone_prior_offset_m: 300
+vo_probe:                          # WS10
+  drives: 5
+  go_rule: ">= 2 drives with >= 10 consecutive stereo pairs at <= 2 m spacing, with camera models"

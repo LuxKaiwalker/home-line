@@ -1,0 +1,29 @@
+formulas:
+  level_slope_a: "a(M) = a_anchor * a_mult + alpha * (M - anchor.carried_kg)"
+  a_anchor: "a_anchor = (anchor.vo2 - V0) / anchor.speed      # mL/kg/min per m/s"
+  alpha: "alpha = ist2.level_increment / (ist2.delta_mass_kg * anchor.speed)"
+  uphill_k: "k = (m_b + M) * g * sin(theta) / (eta * m_b) * 60 / 20.1   # theta > 0"
+  vo2_uphill: "VO2 = V0 + a(M) * v + k * v"
+  vo2_downhill: "VO2 = V0 + a(M) * v * clamp(f(i) / f(0), 0.4, 3.0)    # i = tan(theta) < 0"
+  minetti_f: "f(i) = 280.5 i^5 - 58.7 i^4 - 76.8 i^3 + 51.9 i^2 + 19.6 i + 2.5   # Minetti 2002, Earth shape only"
+  governor: "v* = min(v_safe(theta), (effort_cap * VO2max - V0) / (a(M) + k))   # downhill: divide by a(M)*f(i)/f(0)"
+  o2_litres: "O2 = integral(VO2 * m_b dt) / 1000"
+ist2:
+  level_increment_ml_kg_min: 1.9  # lightest -> heaviest weight condition, 0% grade
+  delta_mass_kg: 60               # mass span of those conditions
+  verify_at_h0: true              # S reads the IST-2 table; correct delta_mass_kg
+  uphill_check_ml_kg_min: {grade_20pct: 8.7, grade_30pct: 17.0}
+variants:
+  optimistic:   {eta: 0.25,  V0: 5, a_mult: 1.0, nogo_deg: 25}
+  nominal:      {eta: 0.225, V0: 6, a_mult: 1.0, nogo_deg: 20}
+  conservative: {eta: 0.20,  V0: 7, a_mult: 1.1, nogo_deg: "20 - v1_rmse_deg"}
+scenarios:
+  ids: [opt_80, opt_104, opt_120, nom_80, nom_104, nom_120, con_80, con_104, con_120]
+  default: nom_104
+  freeze: "Sat 23:00"
+outputs:                           # added 13 Nov (gap found by WS2)
+  isochrone_minutes: {min: 1, max: 60, step: 1}
+  isochrone_fallback_step_min: 2   # if a scenario's isochrones exceed the size budget
+  isochrone_size_budget_mb_gz: 1.5
+  simplify_tolerance_m: 2
+  band_budgets_min: [30, 60]

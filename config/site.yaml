@@ -1,0 +1,36 @@
+crs:
+  geographic: "Mars 2000 planetocentric, sphere R = 3396190 m"
+  analysis_proj: "+proj=eqc +lat_ts=-4.8 +lat_0=0 +lon_0=137.39 +x_0=0 +y_0=0 +R=3396190 +units=m +no_defs"
+  mars_radius_m: 3396190
+aoi_focus: {west: 137.37, east: 137.42, south: -4.82, north: -4.77}
+planning_radius_m: 3700          # flat 60-min disc at 0.98 m/s = 3528 m, plus margin
+pad_default:
+  lon: 137.382
+  lat: -4.806
+  rule: "centroid of Curiosity 2025-26 boxwork drive ends from MMGIS"
+  verify_at_h0: true
+grids_m: {dem: 1, route: 3, fields: 5, web: 10, siting_block: 20}
+siting:                            # added 13 Nov (gap found by WS2); F8 rule
+  block_m: 20
+  max_slope_deg: 5
+  require_assessed: true
+  score: "sum of station values with conservative T_home <= 30 min"
+  tiebreak: "lower elevation than the value-weighted station centroid"
+  top_k: 3
+coverage:
+  pad_disc_assessed_min_pct: 90  # else move pad by the F8 rule
+  source_edge_buffer_m: 20       # edges this close to a source boundary are labelled "data"
+coreg: {search_m: 200, step_m: 2, metric: MAD}
+slope:
+  method: horn_3x3
+  compare_window_m: 5
+  nogo_deg: {optimistic: 25, nominal: 20, conservative: "20 - v1_rmse_deg"}
+  flag_beyond_tested_deg: 17
+ridge: {median_window_m: 15, threshold_m: 0.75, assumed: true}
+roughness_window_m: 5
+sources:
+  merged_dem_vrt: "https://asc-pds-services.s3.us-west-2.amazonaws.com/mosaic/Mars/MSL/MSL_Gale_DEM_Mosaic_1m_v3.vrt"
+  hirise_dtms: [DTEEC_009149_1750_009294_1750_U01, DTEEC_019698_1750_019988_1750_U01]
+  hirise_ortho: ESP_019698_1750_RED
+  crism_mtrdr: [FRT000058A3, FRT0000B6F1]
+  themis_tile: 30S120E

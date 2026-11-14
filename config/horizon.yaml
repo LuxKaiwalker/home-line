@@ -1,0 +1,12 @@
+az_step_deg: 0.25
+az_step_coarse_deg: 1.0            # F22 coarse search
+sampling:
+  - {to_m: 2000,  step_m: 1,   source: dem_1m}
+  - {to_m: 30000, step_m: 20,  source: ctx_20m}
+  - {to_m: 80000, step_m: 200, source: mola_hrsc_200m}
+curvature: "drop = d^2 / (2 R)"
+eye_height_m: 1.7
+navcam_height_m: 1.9               # verify_at_h0 from camera model C-vector
+distance_classes_km: [0.5, 2.0]
+v2: {min_stops: 10, target_stops: 30, manual_check_frac: 0.2}
+sky_detector: "per column, top-down: first pixel where vertical gradient > 3x the median gradient of the top 10% rows"
