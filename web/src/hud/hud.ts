@@ -1,0 +1,352 @@
+// /hud view (F18, F19): playback clock, route-following marker, helmet panel, alarms, minimap,
+// drag-anywhere, storm switch, fallback drift. Self-contained: reads its own files from the data
+// root through opts.dataUrl.
+//
+//   const hud = await mountHud(container, { dataUrl, config })   // config = parseHudConfig(...)
+//   hud.destroy()
+//
+// WS8 reuses the pieces: loadHudData() -> HudData, then each frame computeReadout(pos, data.ctx)
+// and createHudPanel(el, cfg).update(readout, pos, extras).
+import './hud.css'
+import { PlaybackClock } from './clock'
+import type { HudConfig } from './config'
+import { driftPosition, planFixes, type Fix } from './drift'
+import { decodeRGBA, FieldGrid, loadField, loadFieldRGBA } from './fields'
+import { HudMap } from './map'
+import { createHudPanel, fmtEva, type HudPanel } from './panel'
+import { Plan } from './plan'
+import { readoutSources } from './provenance'
+import { computeReadout, playbackPosition, type HudContext, type HudFields } from './readout'
+import { radiationInput, stormReplay, stormState, type StormReplay } from './storm'
+import type { Bounds, FieldsIndex, HudPosition, LonLat, PadFile, PolygonFC, Rad, RouteFC, ScenariosIndex, Station, TimelineEvent } from './types'
+import { loadPointer, type PointerField } from './wayhome'
+
+export interface MountHudOptions {
+  /** URL of a file in the active data tree, e.g. dataUrl('fields/index.json'). */
+  dataUrl: (path: string) => string
+  config: HudConfig
+  /** Scenario id; default = scenarios/index.json "default". */
+  scenario?: string
+  /** Homeline budget (min) for the alarm-3 circle; default crew.yaml walkback_budgets_min[0]. */
+  budgetMin?: number
+}
+
+export interface HudData {
+  ctx: HudContext
+  index: FieldsIndex
+  scenario: string
+  consScenario: string | null
+  stations: Station[]
+  rad: Rad | null
+  dummy: boolean
+  /** way-home pointer (proposal, not in contracts v1.1.0); null = not exported */
+  pointer: PointerField | null
+  /** terrain/cellstate.png on its own grid (contracts v1.1.0); null = not available */
+  cellstate: FieldGrid | null
+  padFromFile: boolean
+  partnerFile: string | null
+  fixes: Fix[]
+}
+
+export interface HudHandle {
+  clock: PlaybackClock
+  data: HudData
+  destroy(): void
+}
+
+async function getJson<T>(dataUrl: (p: string) => string, path: string): Promise<T> {
+  const res = await fetch(dataUrl(path))
+  if (!res.ok) throw new Error(`${path}: HTTP ${res.status}`)
+  const text = await res.text()
+  if (/^\s*<!doctype html/i.test(text)) throw new Error(`${path}: not found`)
+  return JSON.parse(text) as T
+}
+async function optional<T>(what: string, p: Promise<T>): Promise<T | null> {
+  try {
+    return await p
+  } catch (e) {
+    console.warn(`[hud] optional ${what} unavailable:`, e)
+    return null
+  }
+}
+
+async function loadCellstate(dataUrl: (p: string) => string): Promise<FieldGrid> {
+  const meta = await getJson<{ image: string; bounds: Bounds; width: number; height: number; res_m: number }>(dataUrl, 'terrain/cellstate.json')
+  const { rgba, width, height } = await loadFieldRGBA(dataUrl(meta.image))
+  return new FieldGrid(meta, decodeRGBA(rgba, width, height, 1), 'state')
+}
+
+/** Load everything the HUD reads for one scenario. Missing optional files stay unknown. */
+export async function loadHudData(opts: MountHudOptions): Promise<HudData> {
+  const { dataUrl, config } = opts
+  const [scen, index] = await Promise.all([
+    getJson<ScenariosIndex>(dataUrl, 'scenarios/index.json'),
+    getJson<FieldsIndex>(dataUrl, 'fields/index.json'),
+  ])
+  const dummy = index.dummy === true || scen.dummy === true
+  const sc = opts.scenario ?? scen.default
+  const entry = scen.scenarios.find((s) => s.id === sc)
+  if (!entry) throw new Error(`scenario ${sc} not in scenarios/index.json`)
+  const cons = scen.scenarios.find((s) => s.suit_kg === entry.suit_kg && s.variant === 'conservative')
+
+  const field = async (key: string, required = false): Promise<FieldGrid | undefined> => {
+    if (!index.fields[key]) {
+      if (required) throw new Error(`fields/index.json lacks ${key}`)
+      return undefined
+    }
+    return loadField(index, key, dataUrl)
+  }
+  const worstKeys = config.worstCaseRadiiM.map((r) => [r, `${sc}/t_home_worst_${r}`, `${sc}/o2_home_worst_${r}`] as const)
+  const partnerFile = entry.files.partner ?? null
+  const [tHome, tHomeCons, o2Home, homeBearing, slope, worstLoaded, route, timeline, stations, partner, rad, padFile, cellstate, pointer] = await Promise.all([
+    field(`${sc}/t_home`, true),
+    cons ? field(`${cons.id}/t_home`) : Promise.resolve(undefined),
+    field(`${sc}/o2_home`),
+    field(`${sc}/home_bearing`),
+    field('slope'),
+    Promise.all(worstKeys.map(async ([r, tk, ok]) => [r, { tHome: await field(tk), o2Home: await field(ok) }] as const)),
+    getJson<RouteFC>(dataUrl, `route_${sc}.geojson`),
+    getJson<TimelineEvent[]>(dataUrl, `timeline_${sc}.json`),
+    optional('stations.json', getJson<Station[]>(dataUrl, 'stations.json')),
+    partnerFile ? optional(partnerFile, getJson<PolygonFC>(dataUrl, partnerFile)) : Promise.resolve(null),
+    optional('conditions/rad.json', getJson<Rad>(dataUrl, 'conditions/rad.json')),
+    optional('pad.json', getJson<PadFile>(dataUrl, 'pad.json')),
+    optional('terrain/cellstate', loadCellstate(dataUrl)),
+    index.fields[`${sc}/pointer`]?.stencil ? optional('way-home pointer', loadPointer(index, `${sc}/pointer`, dataUrl)) : Promise.resolve(null),
+  ])
+  const fields: HudFields = { tHome: tHome!, tHomeCons, o2Home, homeBearing, slope, worst: new Map(worstLoaded) }
+  const padLL: LonLat | undefined = padFile ? [padFile.pad.lon, padFile.pad.lat] : undefined
+  const plan = new Plan(route, timeline, tHome!, padLL)
+  const pad: LonLat = padLL ?? plan.start
+  const ctx: HudContext = { cfg: config, fields, plan, budgetMin: opts.budgetMin ?? config.walkbackBudgetsMin[0], pad, partner }
+  return {
+    ctx, index, scenario: sc, consScenario: tHomeCons && cons ? cons.id : null, stations: stations ?? [], rad, dummy,
+    pointer, cellstate, padFromFile: !!padFile, partnerFile, fixes: planFixes(plan, config),
+  }
+}
+
+function el<K extends keyof HTMLElementTagNameMap>(tag: K, cls: string, text?: string): HTMLElementTagNameMap[K] {
+  const e = document.createElement(tag)
+  e.className = cls
+  if (text !== undefined) e.textContent = text
+  return e
+}
+function button(cls: string, text: string, label?: string): HTMLButtonElement {
+  const b = el('button', cls, text)
+  b.type = 'button'
+  if (label) b.setAttribute('aria-label', label)
+  return b
+}
+
+export async function mountHud(container: HTMLElement, opts: MountHudOptions): Promise<HudHandle> {
+  const cfg = opts.config
+  const root = el('div', 'hl-hud')
+  root.append(el('div', 'hl-hud-loading', `Loading HUD fields… (${cfg.simulatedLabel})`))
+  container.append(root)
+
+  let data: HudData
+  try {
+    data = await loadHudData(opts)
+  } catch (e) {
+    root.replaceChildren(el('div', 'hl-hud-error', `HUD data could not be loaded: ${(e as Error).message}`))
+    throw e
+  }
+  const { ctx } = data
+  root.replaceChildren()
+
+  const stationPts = data.stations.filter((s) => s.lon !== null && s.lat !== null) as { id: string; lon: number; lat: number }[]
+  const mapOpts = { grid: ctx.fields.tHome, plan: ctx.plan, budgetMin: ctx.budgetMin, stations: stationPts, cellstate: data.cellstate, pad: ctx.pad }
+  const map = new HudMap(mapOpts)
+  const mini = new HudMap({ ...mapOpts, follow: true, spanM: 1200, className: 'hl-hud-minimap-canvas' })
+  const stage = el('div', 'hl-hud-stage')
+  stage.append(map.canvas)
+  stage.append(el('div', 'hl-hud-sim-label', cfg.simulatedLabel + (data.dummy ? ' · DUMMY DATA' : '')))
+  if (!ctx.plan.legs.length) stage.append(el('div', 'hl-hud-noroute', `No planned route for ${data.scenario} (no reachable station): the HUD stays at the pad; drag the map to read any spot.`))
+  root.append(stage)
+  const panel: HudPanel = createHudPanel(stage, cfg)
+
+  const clock = new PlaybackClock(cfg.evaMin, cfg.playbackSpeeds, cfg.defaultSpeed)
+  const controls = el('div', 'hl-hud-controls')
+  const playBtn = button('hl-hud-play', '▶', 'Play / pause')
+  controls.append(playBtn)
+  let dirty = true
+  const speedBtns = cfg.playbackSpeeds.map((s) => {
+    const b = button('hl-hud-speed', `${s}×`)
+    b.addEventListener('click', () => {
+      clock.setSpeed(s)
+      dirty = true
+    })
+    controls.append(b)
+    return [s, b] as const
+  })
+  const scrub = el('input', 'hl-hud-scrub')
+  scrub.type = 'range'
+  scrub.min = '0'
+  scrub.max = String(cfg.evaMin)
+  scrub.step = '0.1'
+  scrub.setAttribute('aria-label', 'EVA time')
+  const timeLbl = el('span', 'hl-hud-time')
+  const fpsLbl = el('span', 'hl-hud-fps')
+  // storm switch (F18) and fallback drift (F19, D12)
+  const stormBtn = button('hl-hud-toggle-btn', 'Storm replay: off')
+  stormBtn.title = 'Replay the 20 May 2024 storm during this EVA (onset now)'
+  const driftBtn = button('hl-hud-toggle-btn', 'Drift: off')
+  driftBtn.title = `Simulated dead reckoning: ±${cfg.fallbackDrift.pctOfDistance}% of distance since the last fix (assumed)`
+  controls.append(scrub, timeLbl, stormBtn, driftBtn, fpsLbl)
+  root.append(controls)
+
+  let storm: StormReplay | null = null
+  stormBtn.disabled = stormReplay(data.rad, 0) === null
+  stormBtn.addEventListener('click', () => {
+    storm = storm ? null : stormReplay(data.rad, clock.t)
+    stormBtn.textContent = storm ? `Storm replay: on (onset T+${Math.round(clock.t)} min)` : 'Storm replay: off'
+    stormBtn.classList.toggle('active', !!storm)
+    dirty = true
+  })
+  let drift = false
+  driftBtn.addEventListener('click', () => {
+    drift = !drift
+    driftBtn.textContent = drift ? 'Drift: on' : 'Drift: off'
+    driftBtn.classList.toggle('active', drift)
+    dirty = true
+  })
+
+  // drag-anywhere (F18) + user sigma (F19 source "drag": slider 0 .. largest worst-case radius, default 0)
+  const dragBar = el('div', 'hl-hud-dragbar')
+  dragBar.hidden = true
+  const sigmaLbl = el('label', 'hl-hud-sigma', 'σ ')
+  const sigma = el('input', 'hl-hud-sigma-input')
+  sigma.type = 'range'
+  sigma.min = '0'
+  sigma.max = String(cfg.worstCaseRadiiM[cfg.worstCaseRadiiM.length - 1])
+  sigma.step = '1'
+  sigma.value = '0'
+  const sigmaVal = el('span', 'hl-hud-sigma-val', '0 m')
+  sigmaLbl.append(sigma, sigmaVal)
+  const backBtn = button('hl-hud-back', 'Back to playback')
+  dragBar.append(el('span', 'hl-hud-draghint', 'Drag-anywhere: drag or click the map'), sigmaLbl, backBtn)
+  controls.append(dragBar)
+  const dragHint = el('div', 'hl-hud-draghint-map', data.pointer ? 'Click or drag the map: time home and way home from any spot' : 'Click or drag the map: time home from any spot')
+  stage.append(dragHint)
+
+  let drag: LonLat | null = null
+  let pressed = false
+  const setDrag = (e: PointerEvent) => {
+    const r = map.canvas.getBoundingClientRect()
+    const p = map.screenToLonLat(e.clientX - r.left, e.clientY - r.top)
+    if (!p) return
+    drag = p
+    if (clock.playing) clock.pause()
+    dragBar.hidden = false
+    dirty = true
+  }
+  map.canvas.addEventListener('pointerdown', (e) => {
+    pressed = true
+    map.canvas.setPointerCapture?.(e.pointerId)
+    setDrag(e)
+  })
+  map.canvas.addEventListener('pointermove', (e) => {
+    if (pressed) setDrag(e)
+  })
+  const release = () => {
+    pressed = false
+  }
+  map.canvas.addEventListener('pointerup', release)
+  map.canvas.addEventListener('pointercancel', release)
+  sigma.addEventListener('input', () => {
+    sigmaVal.textContent = `${sigma.value} m`
+    dirty = true
+  })
+  const leaveDrag = () => {
+    drag = null
+    dragBar.hidden = true
+    dirty = true
+  }
+  backBtn.addEventListener('click', leaveDrag)
+  playBtn.addEventListener('click', () => {
+    if (drag) leaveDrag()
+    clock.toggle()
+    dirty = true
+  })
+  scrub.addEventListener('input', () => {
+    clock.seek(Number(scrub.value))
+    dirty = true
+  })
+  panel.onLevelChange = () => {
+    dirty = true
+  }
+  const onKey = (e: KeyboardEvent) => {
+    if (e.key === ' ' && !(e.target instanceof HTMLInputElement || e.target instanceof HTMLButtonElement || e.target instanceof HTMLSelectElement)) {
+      e.preventDefault()
+      clock.toggle()
+      dirty = true
+    }
+  }
+  window.addEventListener('keydown', onKey)
+  const ro = new ResizeObserver(() => {
+    dirty = true
+  })
+  ro.observe(stage)
+
+  const stationById = new Map(data.stations.map((s) => [s.id, s]))
+  let lastHeading: number | null = null
+  let raf = 0
+  let last = performance.now()
+  let fps = 0
+  const frame = (now: number) => {
+    const dt = now - last
+    last = now
+    if (dt > 0) fps = fps ? fps * 0.95 + (1000 / dt) * 0.05 : 1000 / dt
+    if (clock.tick(dt)) dirty = true
+    if (dirty) {
+      dirty = false
+      const state = ctx.plan.stateAt(clock.t)
+      if (state.headingDeg !== null) lastHeading = state.headingDeg
+      const pos: HudPosition = drag
+        ? { lon: drag[0], lat: drag[1], sigma_m: Number(sigma.value), source: 'drag', t_eva_min: clock.t, last_fix: null }
+        : drift
+          ? driftPosition(ctx.plan, cfg, data.fixes, clock.t)
+          : playbackPosition(ctx.plan, clock.t)
+      const st = stormState(storm, clock.t)
+      const r = computeReadout(pos, { ...ctx, radiation: radiationInput(st) })
+      const way = drag && data.pointer ? data.pointer.pathFrom(drag[0], drag[1], ctx.pad) : null
+      const pr = panel.el.getBoundingClientRect()
+      const sr = stage.getBoundingClientRect()
+      map.insetRightPx = pr.width && pr.right <= sr.right + 1 && getComputedStyle(panel.el).position === 'absolute' ? sr.right - pr.left : 0
+      const mf = { state, lon: pos.lon, lat: pos.lat, sigmaM: pos.sigma_m, wayHome: way ? { coords: way.coords, reachesPad: way.reachesPad } : null, dragging: !!drag }
+      map.draw({ ...mf, band: clock.playing ? r.band : 'unknown' })
+      if (panel.level === 'expanded') mini.draw({ ...mf, band: r.band })
+      panel.update(r, pos, {
+        headingDeg: drag ? null : lastHeading,
+        stationName: (id) => stationById.get(id)?.name ?? id,
+        stationTasks: (id) => stationById.get(id)?.tasks ?? [],
+        rad: data.rad,
+        dummy: data.dummy,
+        minimap: mini.canvas,
+        sources: readoutSources(r, { scenario: data.scenario, consScenario: data.consScenario, padFromFile: data.padFromFile, partnerFile: data.partnerFile }),
+        wayHome: drag && data.pointer ? (way ? { reachesPad: way.reachesPad, startKnown: way.startKnown } : null) : undefined,
+        storm: st,
+      })
+      playBtn.textContent = clock.playing ? '❚❚' : '▶'
+      for (const [s, b] of speedBtns) b.classList.toggle('active', s === clock.speed)
+      if (document.activeElement !== scrub) scrub.value = String(clock.t)
+      timeLbl.textContent = `${fmtEva(clock.t)} · ${clock.t.toFixed(1)} min${drag ? ' · dragged position' : ''}`
+      dragHint.hidden = !!drag
+    }
+    fpsLbl.textContent = `${Math.round(fps)} fps`
+    raf = requestAnimationFrame(frame)
+  }
+  raf = requestAnimationFrame(frame)
+
+  return {
+    clock,
+    data,
+    destroy() {
+      cancelAnimationFrame(raf)
+      window.removeEventListener('keydown', onKey)
+      ro.disconnect()
+      panel.destroy()
+      root.remove()
+    },
+  }
+}
