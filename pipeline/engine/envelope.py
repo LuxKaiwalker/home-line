@@ -10,7 +10,7 @@ from __future__ import annotations
 import numpy as np
 from rasterio.features import shapes
 from shapely import make_valid
-from shapely.geometry import shape
+from shapely.geometry import MultiPolygon, Polygon, shape
 from shapely.ops import unary_union
 
 from .geo import feature_collection
@@ -21,8 +21,28 @@ def envelope_mask(t_min: np.ndarray, minutes: float) -> np.ndarray:
     return np.isfinite(t_min) & (t_min <= minutes)
 
 
-def mask_polygon(grid: Grid, mask: np.ndarray, simplify_m: float):
-    """Union of the cells in `mask` as a (Multi)Polygon in the analysis CRS."""
+def drop_small_holes(geom, min_hole_m2: float):
+    """Fill interior rings smaller than min_hole_m2 (display filter; routing unchanged)."""
+    if geom is None or not min_hole_m2:
+        return geom
+
+    def fix(p):
+        return Polygon(p.exterior, [r for r in p.interiors if Polygon(r).area >= min_hole_m2])
+
+    if geom.geom_type == "Polygon":
+        return fix(geom)
+    if geom.geom_type == "MultiPolygon":
+        return MultiPolygon([fix(p) for p in geom.geoms])
+    if geom.geom_type == "GeometryCollection":  # make_valid can return one; keep areal parts
+        parts = [fix(p) for g in geom.geoms for p in getattr(g, "geoms", [g])
+                 if p.geom_type == "Polygon"]  # fmt: skip
+        return MultiPolygon(parts) if parts else None
+    return geom
+
+
+def mask_polygon(grid: Grid, mask: np.ndarray, simplify_m: float, min_hole_m2: float = 0.0):
+    """Union of the cells in `mask` as a (Multi)Polygon in the analysis CRS. Holes smaller than
+    min_hole_m2 are filled before simplification (display filter)."""
     if not mask.any():
         return None
     polys = [
@@ -32,17 +52,21 @@ def mask_polygon(grid: Grid, mask: np.ndarray, simplify_m: float):
         )
     ]
     geom = make_valid(unary_union(polys))
+    geom = drop_small_holes(geom, min_hole_m2)
     if simplify_m:
         geom = make_valid(geom.simplify(simplify_m, preserve_topology=True))
     return geom
 
 
-def isochrones(grid: Grid, t_min: np.ndarray, minutes, simplify_m: float) -> dict:
-    """FeatureCollection with one {T_home <= m} polygon per m (contract isochrones)."""
+def isochrones(grid: Grid, t_min: np.ndarray, minutes, simplify_m: float,
+               min_hole_m2: float = 0.0) -> dict:  # fmt: skip
+    """FeatureCollection with one {T_home <= m} polygon per m (contract isochrones).
+    min_hole_m2: display filter (variants.yaml outputs.display_min_hole_m2)."""
     items = [
-        (mask_polygon(grid, envelope_mask(t_min, m), simplify_m), {"minutes": int(m)})
+        (mask_polygon(grid, envelope_mask(t_min, m), simplify_m, min_hole_m2),
+         {"minutes": int(m)})
         for m in minutes
-    ]
+    ]  # fmt: skip
     return feature_collection(items, grid.crs)
 
 

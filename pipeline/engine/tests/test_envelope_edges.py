@@ -173,3 +173,51 @@ def test_headline_contract_shape(world):
     assert lo <= h["reachable_pct"] <= hi
     # a disc running off the grid gives None, never a wrong number
     assert envelope.reachable_pct(grid, f.t_min, pad, 30, speed) is None
+
+
+# ------------------------------------------------- display size filter (C decision 11:42)
+
+
+def test_display_hole_threshold_from_config():
+    assert OUT["display_min_hole_m2"] == 100
+
+
+def test_isochrone_drops_holes_below_threshold():
+    """Flat plane, two blocked islands inside the 10-min contour: 2 x 2 cells (36 m2) and
+    5 x 5 cells (225 m2). With the 100 m2 display filter only the 225 m2 hole is kept;
+    without it both are holes. Routing (T_home) is unchanged."""
+    from shapely.geometry import shape
+
+    n = 121
+    state = np.zeros((n, n), np.uint8)
+    ms = np.zeros((n, n))
+    ms[40:42, 40:42] = 35.0  # 36 m2
+    ms[70:75, 70:75] = 35.0  # 225 m2
+    g = make_grid(np.zeros((n, n)), RES, cellstate=state, maxslope=ms)
+    f = dijkstra.return_field(g, TAB, (60, 60))
+    full = envelope.isochrones(g, f.t_min, [10], SIMPLIFY_M)
+    shown = envelope.isochrones(g, f.t_min, [10], SIMPLIFY_M, min_hole_m2=100.0)
+    holes = lambda fc: len(shape(fc["features"][0]["geometry"]).interiors)  # noqa: E731
+    assert holes(full) == 2 and holes(shown) == 1
+    assert np.isinf(f.t_min[40, 40]) and np.isinf(f.t_min[72, 72])
+
+
+def test_edges_merged_per_budget_and_cause(world):
+    """Edge pieces are merged into one MultiLineString per (budget, cause): same total length
+    (lossless), one feature per pair."""
+    grid, pad, _, f = world
+    from shapely.geometry import shape
+
+    from pipeline.engine.geo import validate
+
+    fc = edges.edges(grid, f.t_min, BUDGETS, BUFFER_M, SIMPLIFY_M)
+    validate(fc, "edges.schema.json")
+    keys = [(x["properties"]["budget"], x["properties"]["cause"]) for x in fc["features"]]
+    assert len(keys) == len(set(keys))
+    pieces = edges.edge_lines(grid, f.t_min, BUDGETS[0], BUFFER_M)
+    n_pieces = {c: sum(1 for _, cc in pieces if cc == c) for c in edges.CAUSES}
+    for ft in fc["features"]:
+        if ft["properties"]["budget"] == BUDGETS[0]:
+            g = shape(ft["geometry"])
+            n = len(g.geoms) if g.geom_type == "MultiLineString" else 1
+            assert n == n_pieces[ft["properties"]["cause"]]
