@@ -1,6 +1,6 @@
 # HOMELINE pipeline entry points. Stub targets print a message until the owning workstream
 # adds its CLI (ownership: AGENTS.md "Folder ownership"; this file is owned by C).
-.PHONY: all terrain engine horizons conditions conditions-fetch nav fields fp3d fp3d-check web web-plan bundle bundle-fixture bundle-check serve serverdata parity parity-synthetic server-test dummy test lint validate kats h0 clean
+.PHONY: all terrain engine horizons conditions conditions-fetch nav fields fp3d fp3d-check web web-plan bundle bundle-fixture bundle-check serve stack-up stack-down serverdata parity parity-synthetic server-test dummy test lint validate kats h0 clean
 
 PY := uv run --no-sync python
 
@@ -52,8 +52,12 @@ bundle-check:  ## C: unzip + sha256 + schema check of the committed fixture zips
 HL_SERVER_DATA ?= data/server
 SERVER_TEST_PATHS = $(wildcard server tests/test_backend_*.py)
 PYTEST_OK5 = rc=0; $(1) || rc=$$?; if [ $$rc -eq 5 ]; then echo "(no tests collected: ok)"; rc=0; fi; exit $$rc
-serve:       ## WS11: run the API locally (http://localhost:8000/api/v1/health)
-	HL_SERVER_DATA=$(HL_SERVER_DATA) uv run --no-sync uvicorn server.app:app --port 8000 --reload
+serve:       ## WS11: run the API locally (http://localhost:8012/api/v1/health; 8000 belongs to another app here)
+	HL_SERVER_DATA=$(HL_SERVER_DATA) uv run --no-sync uvicorn server.app:app --host 127.0.0.1 --port 8012 --reload
+stack-up:    ## WS12: local Docker stack, API + Caddy (http://127.0.0.1:8012/api/v1/health); see server/ops/README.md
+	flock /tmp/hl-heavy.lock server/ops/up.sh
+stack-down:  ## WS12: stop the local Docker stack
+	docker compose -f server/ops/compose.yaml down
 serverdata:  ## WS11: station fields + grids + data manifest -> $(HL_SERVER_DATA) (after the core re-run)
 	$(PY) tools/make_serverdata.py --out $(HL_SERVER_DATA)
 parity:      ## WS11: official pad via the API == web/public/data (real data; before every server/engine merge, D56). Strict: no tests = fail

@@ -10,15 +10,28 @@
 //   startJob(client, req, callbacks)  submit + poll with backoff, staged callbacks, cancel() (jobs.ts)
 //   liveLoader(resultBase)            the existing contract-checking loader on a live result (result.ts)
 //   LIVE_LABEL, OFFLINE_LABEL         labels from config/backend.yaml (config.ts)
+//   padTool(panel, port)              F24 pad tool: validate, instant preview, staged full plan (padmount.tsx)
+//   consoleMapPort(cmap, restore?)    MapPort over the console map (mapPort.ts)
+//
+// Pad tool mount (owned by WS5/C, not added here), in views/console.tsx after `cmap` exists, behind the
+// same VITE_LIVE guard:
+//   if (import.meta.env.VITE_LIVE === '1') void import('../live').then((m) => m.padTool(panelEl, m.consoleMapPort(cmap)))
 import './live.css'
 import { createApiClient, type ApiClient, type FetchLike } from './client'
 import { bannerFor, watchHealth, type LiveState } from './health'
+import type { MapPort } from './mapPort'
+import { mountPadTool } from './padmount'
+import { mockLiveLoader } from './result'
 
 export { ApiError, createApiClient, type ApiClient, type ApiClientOptions } from './client'
 export { API_BASE, LIVE_ENABLED, LIVE_LABEL, OFFLINE_LABEL, WARMING_LABEL } from './config'
 export { bannerFor, checkHealth, watchHealth, type Banner, type LiveState } from './health'
 export { startJob, type JobCallbacks, type JobHandle, type JobOptions, type JobOutcome } from './jobs'
 export { liveLoader } from './result'
+export { consoleMapPort, type ConsoleMapLike, type MapPort } from './mapPort'
+export { createPadTool, type PadTool, type PadToolState } from './padtool'
+export { mountPadTool } from './padmount'
+export { loadStage, type StageResult } from './stage'
 export type * from './types'
 
 // Dev mock: the flag is compared inline so Vite folds it and, when off, drops the mock chunk.
@@ -67,4 +80,12 @@ export function mountLive(anchor: Element, client: ApiClient = liveClient()): ()
     stop()
     line.remove()
   }
+}
+
+/**
+ * The pad tool (F24) in `panel`, on the app-wide client and health state. Its controls show only
+ * while the engine is ready (U1's banner covers offline and warming). Returns cleanup.
+ */
+export function padTool(panel: Element, port: MapPort, client: ApiClient = liveClient()): () => void {
+  return mountPadTool(panel, port, { client, onLiveState, ...(USE_MOCK ? { loaderFor: mockLiveLoader(lazyMockFetch) } : {}) }).cleanup
 }

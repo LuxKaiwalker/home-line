@@ -11,6 +11,11 @@ import { checkSchema, SUPPORTED_KEYWORDS, type JsonSchema } from '../data/schema
 import { createApiClient } from './client'
 import { HEALTH_COLD, HEALTH_NOT_OK, HEALTH_WARM, failedJobScript, jobScript, PLAN_INPUTS_OFFICIAL, RUN_RECORD_LIVE } from './mock/fixtures'
 import { createMockFetch } from './mock/fetch'
+import { MOCK_PAD_INVALID, MOCK_PAD_VALID, mockPadScreen, PAD_CHECK_INVALID, PAD_CHECK_VALID } from './mock/pads'
+import { MOCK_RESULT_STAGES, mockResultDocs } from './mock/result'
+import { planInputsFor } from './padtool'
+import { schemaFor } from '../data/contracts'
+import { MOCK_STAGES } from './mock/fixtures'
 import {
   ENGINE_VERSION_KEYS, ERROR_KEYS, HEALTH_KEYS, IMPORT_RESULT_KEYS, JOB_KEYS, JOB_REQUEST_KEYS, JOB_STATUSES, JOB_TYPES,
   PAD_CHECK_KEYS, PAD_REASONS, PAD_SCREEN_KEYS,
@@ -185,5 +190,63 @@ describe('every mock response validates against openapi.yaml', () => {
     valid(fetch.calls[1].body, schemaOf('#/components/schemas/JobRequest'))
     // unknown paths answer an Error 404
     await expect(client.engineVersion()).rejects.toMatchObject({ status: 404, code: 'not_found' })
+  })
+})
+
+describe('pad tool mocks (F24) validate against openapi.yaml', () => {
+  it('PadCheck answers (POST /pads/validate 200): valid and one per reason code', () => {
+    const s = responseSchema('POST', '/pads/validate', 200)
+    valid(PAD_CHECK_VALID, s)
+    const reasons = Object.keys(PAD_CHECK_INVALID)
+    expect(reasons.sort()).toEqual(PAD_REASONS.filter((r) => r !== null).sort())
+    for (const c of Object.values(PAD_CHECK_INVALID)) valid(c, s)
+    expect(validate({ valid: false, reason: 'too_steep' }, s)).not.toEqual([])
+  })
+  it('PadScreen answer (POST /pads/screen 200)', () => {
+    valid(mockPadScreen(MOCK_PAD_VALID), responseSchema('POST', '/pads/screen', 200))
+  })
+  it('the pad tool request bodies: LonLat, plan_inputs, JobRequest', async () => {
+    const fetch = createMockFetch()
+    const client = createApiClient({ base: 'http://api.test', fetch })
+    valid(await client.validatePad(MOCK_PAD_INVALID), responseSchema('POST', '/pads/validate', 200))
+    valid(await client.screenPad(planInputsFor(MOCK_PAD_VALID)), responseSchema('POST', '/pads/screen', 200))
+    valid(fetch.calls[0].body, schemaOf('#/components/schemas/LonLat'))
+    valid(fetch.calls[1].body, schemaOf('#/components/schemas/PlanInputs'))
+    valid({ type: 'plan', inputs: planInputsFor(MOCK_PAD_VALID, PLAN_INPUTS_OFFICIAL) }, schemaOf('#/components/schemas/JobRequest'))
+  })
+  it('bad pad requests get 422 Error documents', async () => {
+    const fetch = createMockFetch()
+    const res = await fetch('http://api.test/api/v1/pads/validate', { method: 'POST', body: JSON.stringify({ lon: 1 }) })
+    expect(res.status).toBe(422)
+    valid(await res.json(), responseSchema('POST', '/pads/validate', 422))
+    const res2 = await fetch('http://api.test/api/v1/pads/screen', { method: 'POST', body: JSON.stringify({ contract_version: '1.0.1' }) })
+    expect(res2.status).toBe(422)
+    valid(await res2.json(), responseSchema('POST', '/pads/screen', 422))
+  })
+  it('every staged result file validates against its static contract (contracts/*.schema.json)', () => {
+    expect(Object.keys(MOCK_RESULT_STAGES)).toEqual([...MOCK_STAGES])
+    const docs = mockResultDocs()
+    expect(docs.length).toBeGreaterThanOrEqual(9)
+    for (const { stage, path, doc } of docs) {
+      const s = schemaFor(path)
+      expect(s, `${stage}: ${path} has a contract`).toBeDefined()
+      expect(checkSchema(doc, s!), `${stage}: ${path}`).toEqual([])
+    }
+  })
+  it('result files are served only once their stage is done', async () => {
+    const fetch = createMockFetch()
+    const client = createApiClient({ base: 'http://api.test', fetch })
+    const get = (p: string) => fetch(`http://api.test/api/v1/results/0123456789abcdef/${p}`)
+    expect((await get('scenarios/index.json')).status).toBe(404)
+    const job = await client.submitJob({ type: 'plan', inputs: planInputsFor(MOCK_PAD_VALID) })
+    await client.getJob(job.id) // running 'nominal', nothing done
+    expect((await get('manifest.json')).status).toBe(404)
+    await client.getJob(job.id) // 'nominal' done
+    expect((await get('manifest.json')).status).toBe(200)
+    expect((await get('scenarios/nom_104/partner.geojson')).status).toBe(404)
+    await client.getJob(job.id)
+    await client.getJob(job.id) // done
+    expect((await get('scenarios/nom_104/partner.geojson')).status).toBe(200)
+    expect((await fetch('http://api.test/api/v1/results/ffffffffffffffff/manifest.json')).status).toBe(404)
   })
 })

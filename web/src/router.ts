@@ -37,6 +37,9 @@ export function parseRoute(hash: string): Route {
   return { name: 'notfound', path }
 }
 
+/** Unlinked dev page (WS16 M1 field-shader spike): never in NAV_ITEMS; main.ts lazy-loads it. */
+export const isSpikeHash = (hash: string): boolean => /^#?\/spike\/?(\?|$)/.test(hash)
+
 export function href(route: Route): string {
   switch (route.name) {
     case 'console':

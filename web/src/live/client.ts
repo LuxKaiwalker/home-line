@@ -41,9 +41,9 @@ export interface RequestOptions {
 }
 
 export interface ApiClient {
-  /** API origin without the prefix, e.g. http://localhost:8000 */
+  /** API origin without the prefix, e.g. http://localhost:8012 */
   readonly base: string
-  /** base + api.prefix, e.g. http://localhost:8000/api/v1 */
+  /** base + api.prefix, e.g. http://localhost:8012/api/v1 */
   readonly root: string
   health(opts?: RequestOptions): Promise<Health>
   engineVersion(opts?: RequestOptions): Promise<EngineVersion>
