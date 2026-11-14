@@ -1,0 +1,584 @@
+"""WS3 camera KATs (SPEC §2.2 F12, §9; brief WS3 "Tests"): CAHV/CAHVOR/CAHVORE projection and the
+site <-> rover attitude chain on synthetic cameras; the real-frame KATs (A-vector azimuth and rover
+yaw within 1 deg of the image label on 3 frames) run on raw-image API records fetched after H0
+(see the "Real frames" section).
+"""
+
+from __future__ import annotations
+
+import math
+
+import numpy as np
+import pytest
+
+from pipeline.horizon import config as hcfg
+from pipeline.horizon.cahvor import (
+    CameraModel,
+    cahv_from_intrinsics,
+    enu_to_site,
+    matrix_to_ypr,
+    parse_cmod_string,
+    pointing_az_el,
+    quat_to_matrix,
+    site_to_enu,
+    ypr_to_quat,
+)
+from pipeline.horizon.rays import HorizonProfile
+
+CFG = hcfg.load()
+
+# A Navcam-like synthetic camera (1024 x 1024, 45 deg FOV) in the rover frame
+# (MSL rover frame: +X forward, +Y right, +Z down).
+W = H_IMG = 1024
+F = 512.0 / math.tan(math.radians(22.5))
+CX = CY = 511.5
+C0 = np.array([0.8, 0.5, -1.9])
+
+
+def rot_y(deg):  # pitch about the rover +Y axis (nose up positive in NED-like frames)
+    a = math.radians(deg)
+    return np.array([[math.cos(a), 0, math.sin(a)], [0, 1, 0], [-math.sin(a), 0, math.cos(a)]])
+
+
+def base_cahv(pitch_deg=0.0):
+    rot = rot_y(pitch_deg)
+    a = rot @ np.array([1.0, 0, 0])
+    h = rot @ np.array([0, 1.0, 0])   # image right = rover right
+    v = rot @ np.array([0, 0, 1.0])   # image down = rover down
+    return cahv_from_intrinsics(C0, a, h, v, F, F, CX, CY)
+
+
+def cahvor(pitch_deg=-10.0, r=(1e-3, -0.08, 0.02)):
+    m = base_cahv(pitch_deg)
+    o = rot_y(0.5) @ m.A  # optical axis 0.5 deg off the pointing axis
+    return CameraModel("CAHVOR", m.C, m.A, m.H, m.V, O=o / np.linalg.norm(o), R=np.array(r))
+
+
+def grid_pixels(step=64):
+    xs, ys = np.meshgrid(np.arange(0, W, step, dtype=float), np.arange(0, H_IMG, step, dtype=float))
+    return np.column_stack([xs.ravel(), ys.ravel()])
+
+
+# --------------------------------------------------------------------------------------------
+# Projection KATs
+# --------------------------------------------------------------------------------------------
+
+def test_cahv_matches_pinhole_formula():
+    m = base_cahv(0.0)
+    p = np.array([[10.0, 2.0, -1.0], [5.0, -1.0, 0.3]])
+    px = m.project(C0 + p)
+    np.testing.assert_allclose(px[:, 0], CX + F * p[:, 1] / p[:, 0], atol=1e-9)
+    np.testing.assert_allclose(px[:, 1], CY + F * p[:, 2] / p[:, 0], atol=1e-9)
+
+
+def test_cahvor_radial_term_known_answer():
+    # With O = A, a point at angle t off-axis lands at radius f t (1 + r0 + r1 t^2 + r2 t^4).
+    r = np.array([1e-3, -0.08, 0.02])
+    m0 = base_cahv(0.0)
+    m = CameraModel("CAHVOR", m0.C, m0.A, m0.H, m0.V, O=m0.A.copy(), R=r)
+    t = 0.3
+    px = m.project(C0 + np.array([[1.0, t, 0.0]]))[0]
+    mu = r[0] + r[1] * t**2 + r[2] * t**4
+    assert px[0] - CX == pytest.approx(F * t * (1 + mu), abs=1e-9)
+    assert px[1] == pytest.approx(CY, abs=1e-9)
+
+
+def test_cahvor_round_trip_under_half_pixel():
+    m = cahvor()
+    px = grid_pixels()
+    origin, d = m.unproject(px)
+    back = m.project(origin + 30.0 * d)
+    err = np.hypot(*(back - px).T)
+    assert err.max() < 0.5
+    assert err.max() < 1e-6  # in practice it is exact to numerical precision
+
+
+def test_cahvor_point_round_trip_rays_hit_points():
+    m = cahvor()
+    rng = np.random.default_rng(0)
+    pts = m.C + np.column_stack([rng.uniform(5, 50, 200), rng.uniform(-8, 8, 200),
+                                 rng.uniform(-6, 6, 200)])
+    px = m.project(pts)
+    origin, d = m.unproject(px)
+    v = pts - origin
+    cosang = np.sum(v * d, axis=1) / np.linalg.norm(v, axis=1)
+    assert np.all(cosang > math.cos(1e-7))
+
+
+def test_points_behind_camera_are_nan():
+    m = cahvor()
+    px = m.project(np.array([m.C - 10.0 * m.A]))
+    assert np.all(np.isnan(px))
+
+
+def test_cahvore_perspective_without_entrance_shift_equals_cahvor():
+    m = cahvor()
+    e = CameraModel("CAHVORE", m.C, m.A, m.H, m.V, O=m.O, R=m.R, E=np.zeros(3), linearity=1.0)
+    pts = m.C + np.array([[10.0, 2.0, -1.0], [5.0, -2.0, 1.5], [20.0, 0.0, 0.0]])
+    np.testing.assert_allclose(e.project(pts), m.project(pts), atol=1e-6)
+
+
+def test_cahvore_fisheye_equidistant_known_answer():
+    # L = 0, E = 0, R = 0, O = A: radius = f * theta (equidistant fisheye).
+    m0 = base_cahv(0.0)
+    e = CameraModel("CAHVORE", m0.C, m0.A, m0.H, m0.V, O=m0.A.copy(), R=np.zeros(3),
+                    E=np.zeros(3), linearity=0.0)
+    theta = math.radians(40.0)
+    px = e.project(C0 + np.array([[math.cos(theta), math.sin(theta), 0.0]]))[0]
+    assert px[0] - CX == pytest.approx(F * theta, abs=1e-6)
+
+
+@pytest.mark.parametrize("linearity", [1.0, 0.5, 0.0, -0.3])
+def test_cahvore_round_trip_under_half_pixel(linearity):
+    m = cahvor()
+    e = CameraModel("CAHVORE", m.C, m.A, m.H, m.V, O=m.O, R=np.array([0.0, -0.02, 0.003]),
+                    E=np.array([0.002, 0.01, -0.004]), linearity=linearity)
+    px = grid_pixels()
+    origin, d = e.unproject(px)
+    back = e.project(origin + 25.0 * d)
+    assert np.nanmax(np.hypot(*(back - px).T)) < 0.5
+
+
+def test_parse_cmod_string():
+    s = "(1.0,2.0,3.0);(0,0,1);(100,0,500);(0,100,500);(0,0,1);(0.1,0.2,0.3)"
+    m = parse_cmod_string(s)
+    assert m.kind == "CAHVOR"
+    np.testing.assert_allclose(m.C, [1, 2, 3])
+    np.testing.assert_allclose(m.R, [0.1, 0.2, 0.3])
+    assert parse_cmod_string(";".join(s.split(";")[:4])).kind == "CAHV"
+
+
+def test_intrinsics_recovered_from_cahv():
+    m = base_cahv(-7.0)
+    k = m.intrinsics()
+    assert k["fx"] == pytest.approx(F)
+    assert k["cx"] == pytest.approx(CX)
+    assert k["cy"] == pytest.approx(CY)
+
+
+# --------------------------------------------------------------------------------------------
+# Attitude chain
+# --------------------------------------------------------------------------------------------
+
+def test_quaternion_identity_and_yaw():
+    np.testing.assert_allclose(quat_to_matrix([1, 0, 0, 0]), np.eye(3), atol=1e-12)
+    rm = quat_to_matrix(ypr_to_quat(30.0, 0.0, 0.0))
+    np.testing.assert_allclose(rm @ [1, 0, 0], [math.cos(math.radians(30)),
+                                                 math.sin(math.radians(30)), 0], atol=1e-12)
+
+
+@pytest.mark.parametrize("ypr", [(30.0, 0.0, 0.0), (-150.0, 4.0, -3.0), (271.0, -12.0, 8.0)])
+def test_ypr_round_trip(ypr):
+    y, p, r = matrix_to_ypr(quat_to_matrix(ypr_to_quat(*ypr)))
+    assert (y - ypr[0]) % 360.0 == pytest.approx(0.0, abs=1e-9) or \
+        (y - ypr[0]) % 360.0 == pytest.approx(360.0, abs=1e-9)
+    assert p == pytest.approx(ypr[1], abs=1e-9)
+    assert r == pytest.approx(ypr[2], abs=1e-9)
+
+
+def test_pointing_azimuth_follows_yaw_and_pitch():
+    az, el = pointing_az_el(np.array([1.0, 0, 0]), ypr_to_quat(30.0, 5.0, 0.0))
+    assert az == pytest.approx(30.0)
+    assert el == pytest.approx(5.0)
+    az, el = pointing_az_el(base_cahv(-10.0).A, ypr_to_quat(200.0, 0.0, 0.0))
+    assert az == pytest.approx(200.0)
+    assert el == pytest.approx(-10.0)
+
+
+def test_enu_site_round_trip():
+    v = np.array([[1.0, 2.0, 3.0]])
+    np.testing.assert_allclose(enu_to_site(v), [[2.0, 1.0, -3.0]])
+    np.testing.assert_allclose(site_to_enu(enu_to_site(v)), v)
+
+
+def test_attitude_chain_round_trip_site_az_el_to_pixels_and_back():
+    """Site-frame (az, el) -> rover frame -> CAHVOR pixel -> back to (az, el), tilted rover."""
+    from pipeline.horizon.cahvor import pixels_to_az_el, project_az_el
+
+    m = cahvor(pitch_deg=-5.0)
+    q = ypr_to_quat(123.0, 7.0, -4.0)
+    px = grid_pixels(128)
+    az, el = pixels_to_az_el(m, q, px)
+    back = project_az_el(m, q, az, el, 1e7)  # far points: the camera offset is negligible
+    assert np.nanmax(np.hypot(*(back - px).T)) < 0.5
+
+
+# --------------------------------------------------------------------------------------------
+# Real frames (brief WS3: A-vector azimuth and rover yaw within 1 deg of the label on 3 frames)
+# --------------------------------------------------------------------------------------------
+
+# Three NAV_LEFT_B full frames from two drive ends, as returned by the raw-image API after H0
+# (WS3 query of sol 4200 at 2026-11-14 ~10:10Z; sol 5073 from D0's raw response
+# data/raw/discovery/rawapi_msl_sol5073_NAV_LEFT_B.json). Fields as in docs/discovery.md §3.3.
+# Rover yaw/pitch/roll labels: MMGIS MSL_waypoints.json (D0 copy) for the same RMC.
+REAL_ITEMS = [
+    {"imageid": "NLB_770343787EDR_F1072484NCAM00255M_", "instrument": "NAV_LEFT_B", "sol": 4200,
+     "site": 107, "drive": 2484, "camera_model_type": "CAHVOR",
+     "camera_model_component_list":
+         "(0.852289,0.319831,-1.88711);(0.861523,-0.272506,0.42837);(806.22,1029.51,217.423);"
+         "(-67.7024,21.1742,1321.88);(0.861522,-0.272508,0.428371);(0.0,0.00011478,0.00639642)",
+     "attitude": "(0.117987,0.110838,-0.0566556,-0.985182)", "subframe_rect": "(1,1,1024,1024)",
+     "scale_factor": 1,
+     "camera_vector": "(0.8594041342558667,-0.267705945464948,0.4356122826397835)",
+     "xyz": "(-104.508,25.6997,-13.481)", "date_taken": "2024-05-30T13:23:48.000Z",
+     "https_url": "https://mars.nasa.gov/msl-raw-images/proj/msl/redops/ods/surface/sol/04200/"
+                  "opgs/edr/ncam/NLB_770343787EDR_F1072484NCAM00255M_.JPG",
+     "extended": {"lmst": "Sol-04200M12:06:44.820", "mast_az": "342.672", "mast_el": "-25.801",
+                  "sample_type": "full"}},
+    {"imageid": "NLB_770345556EDR_F1072484NCAM00256M_", "instrument": "NAV_LEFT_B", "sol": 4200,
+     "site": 107, "drive": 2484, "camera_model_type": "CAHVOR",
+     "camera_model_component_list":
+         "(0.560687,0.53582,-1.89878);(-0.376355,-0.862424,0.338476);(931.702,-927.043,172.534);"
+         "(-24.0018,-52.6588,1322.48);(-0.376357,-0.862423,0.338476);(0.0,0.000112331,0.00639928)",
+     "attitude": "(0.117987,0.110838,-0.0566556,-0.985182)", "subframe_rect": "(1,1,1024,1024)",
+     "scale_factor": 1,
+     "camera_vector": "(-0.37170472721888237,-0.8614290484531315,0.34608610235643483)",
+     "xyz": "(-104.508,25.6997,-13.481)", "date_taken": "2024-05-30T13:53:17.000Z",
+     "https_url": "https://mars.nasa.gov/msl-raw-images/proj/msl/redops/ods/surface/sol/04200/"
+                  "opgs/edr/ncam/NLB_770345556EDR_F1072484NCAM00256M_.JPG",
+     "extended": {"lmst": "Sol-04200M12:35:26.384", "mast_az": "246.635", "mast_el": "-20.2247",
+                  "sample_type": "full"}},
+    {"imageid": "NLB_847852920EDR_F1252490NCAM00282M_", "instrument": "NAV_LEFT_B", "sol": 5073,
+     "site": 125, "drive": 2490, "camera_model_type": "CAHVOR",
+     "camera_model_component_list":
+         "(0.781275,0.802092,-1.93076);(-0.917103,0.391826,0.0733355);(-946.226,-927.548,36.1975);"
+         "(-378.439,160.669,1258.38);(-0.917102,0.391828,0.073336);(0.0,0.000119405,0.00639103)",
+     "attitude": "(0.0692464,0.105055,-0.0267776,-0.991691)", "subframe_rect": "(1,1,1024,1024)",
+     "scale_factor": 1,
+     "camera_vector": "(-0.9181436763864114,0.3878351267392882,0.08121640215353779)",
+     "xyz": "(-82.2708,45.3949,-14.604)", "date_taken": "2026-11-13T15:55:03.000Z",
+     "https_url": "https://mars.nasa.gov/msl-raw-images/proj/msl/redops/ods/surface/sol/05073/"
+                  "opgs/edr/ncam/NLB_847852920EDR_F1252490NCAM00282M_.JPG",
+     "extended": {"lmst": "Sol-05073M14:34:08.418", "mast_az": "157.077", "mast_el": "-4.63516",
+                  "sample_type": "full"}},
+]
+MMGIS_YPR = {"107_2484": (-165.5, 11.83, 8.09), "125_2490": (-171.6, 11.81, 3.96)}
+KAT_TOL_DEG = 1.0  # brief WS3 "Tests": within 1 deg of the image label
+
+
+def _angdiff(a, b):
+    return abs((a - b + 180.0) % 360.0 - 180.0)
+
+
+def _check_label(rec, mmgis_ypr):
+    from pipeline.horizon.navcam import a_vector_rover_az_el, rover_ypr
+
+    a_az, a_el = a_vector_rover_az_el(rec)
+    assert _angdiff(a_az, rec["mast_az_deg"]) < KAT_TOL_DEG, rec["image_id"]
+    assert abs(a_el - rec["mast_el_deg"]) < KAT_TOL_DEG, rec["image_id"]
+    yaw, pitch, roll = rover_ypr(rec)
+    assert _angdiff(yaw, mmgis_ypr[0]) < KAT_TOL_DEG, rec["image_id"]
+    assert abs(pitch - mmgis_ypr[1]) < KAT_TOL_DEG, rec["image_id"]
+    assert abs(roll - mmgis_ypr[2]) < KAT_TOL_DEG, rec["image_id"]
+
+
+def test_a_vector_azimuth_and_yaw_match_label_on_3_real_frames():
+    from pipeline.horizon.navcam import parse_item
+
+    for it in REAL_ITEMS:
+        rec = parse_item(it)
+        _check_label(rec, MMGIS_YPR[f"{rec['site']}_{rec['drive']}"])
+
+
+def test_navcam_c_height_on_real_frames_within_discovery_range():
+    """Navcam C-vector height above the rover-frame origin (discovery §3.4 range)."""
+    from pipeline.horizon.navcam import camera_offset_site, parse_item
+
+    rng = CFG["navcam_api"]["c_height_above_rover_origin_m"]
+    for it in REAL_ITEMS:
+        h = -camera_offset_site(parse_item(it))[2]
+        assert rng["min"] <= h <= rng["max"], it["imageid"]
+
+
+def test_a_vector_and_yaw_on_3_cached_frames_from_different_stops():
+    import json
+
+    path = hcfg.REPO / "data" / "interim" / "horizon" / "navcam_frames.json"
+    if not path.exists():
+        pytest.skip("navcam cache not present (pipeline host only)")
+    frames = json.loads(path.read_text())["frames"]
+    by_stop = {}
+    for f in frames:
+        by_stop.setdefault(f["rmc"], f)
+    picks = [by_stop[k] for k in sorted(by_stop)[:3]]
+    assert len(picks) == 3
+    for f in picks:
+        _check_label(f, f["mmgis_yaw_pitch_roll_deg"])
+
+
+# --------------------------------------------------------------------------------------------
+# Raw-image API parsing and frame selection (navcam.py)
+# --------------------------------------------------------------------------------------------
+
+def test_parse_item_fields_and_conventions():
+    from pipeline.horizon.navcam import parse_item, parse_lmst
+
+    rec = parse_item(REAL_ITEMS[0])
+    assert rec["camera_model"]["type"] == "CAHVOR"
+    assert rec["camera_model"]["C"] == [0.852289, 0.319831, -1.88711]
+    assert rec["attitude_quaternion"][0] == pytest.approx(0.117987)  # w first (discovery §3.3a)
+    assert (rec["width"], rec["height"]) == (1024, 1024)
+    assert rec["utc"] == "2024-05-30T13:23:48.000Z"
+    lm = parse_lmst(rec["lmst"])
+    assert lm["sol"] == 4200
+    assert lm["hours"] == pytest.approx(12 + 6 / 60 + 44.820 / 3600)
+    assert parse_lmst("12:00") is None
+
+
+def test_parse_item_downsampled_size_and_strict_numbers():
+    from pipeline.horizon.navcam import parse_item, parse_tuple, strip_key
+
+    it = dict(REAL_ITEMS[0], scale_factor=4)
+    assert (parse_item(it)["width"], parse_item(it)["height"]) == (256, 256)
+    with pytest.raises(ValueError):
+        parse_tuple("(1.0,2.0);import os")
+    bad = dict(REAL_ITEMS[0])
+    bad["camera_model_component_list"] = ";".join(bad["camera_model_component_list"]
+                                                  .split(";")[:5])
+    with pytest.raises(ValueError):
+        parse_item(bad)
+    with pytest.raises(ValueError):
+        parse_item(dict(REAL_ITEMS[0], https_url="https://evil.example/x.JPG"))
+    assert "SECRET" not in strip_key("https://api.nasa.gov/x?a=1&api_key=SECRET&b=2")
+    assert "SECRET" not in strip_key("https://api.nasa.gov/x?a=1&API_KEY=SECRET")
+
+
+def test_sky_geometry_known_answer_on_synthetic_camera():
+    from pipeline.horizon.navcam import sky_geometry, sky_test
+
+    m = base_cahv(-10.0)  # boresight 10 deg below level, rover level and facing north
+    rec = {"camera_model": {"type": "CAHV", "C": m.C.tolist(), "A": m.A.tolist(),
+                            "H": m.H.tolist(), "V": m.V.tolist()},
+           "attitude_quaternion": [1.0, 0.0, 0.0, 0.0], "width": W, "height": H_IMG,
+           "subframe": [1, 1, W, H_IMG]}
+    g = sky_geometry(rec)
+    half = math.degrees(math.atan(CY / F))
+    assert g["el_centre_deg"] == pytest.approx(-10.0, abs=0.01)
+    assert g["el_top_deg"] == pytest.approx(-10.0 + half, abs=0.01)
+    assert g["el_bottom_deg"] == pytest.approx(-10.0 - half, abs=0.01)
+    assert g["az_centre_deg"] == pytest.approx(0.0, abs=1e-6)
+    sel = CFG["navcam_selection"]
+    ok, _, _ = sky_test(rec, sel)
+    assert ok == (g["el_top_deg"] >= sel["top_row_min_el_deg"]
+                  and g["el_bottom_deg"] <= sel["bottom_row_max_el_deg"])
+    ok, why, _ = sky_test({**rec, "subframe": [257, 1, 512, 512]}, sel)
+    assert not ok and "unverified" in why
+
+
+def test_spread_pick_takes_widest_azimuth_spread():
+    from pipeline.horizon.navcam import spread_pick
+
+    cands = [{"image_id": f"f{az}", "geometry": {"az_centre_deg": float(az),
+                                                 "el_top_deg": 20.0 if az == 10 else 15.0}}
+             for az in (0, 10, 20, 100, 190, 200, 280)]
+    got = [c["image_id"] for c in spread_pick(cands, 4)]
+    assert got[0] == "f10" and got[1] == "f190"
+    assert set(got[2:]) == {"f100", "f280"}
+    assert spread_pick([], 4) == []
+
+
+def test_order_stops_station_first_by_sol_rule_and_spacing():
+    from pipeline.horizon.geo import lonlat_to_xy
+    from pipeline.horizon.navcam import nearest_sol_rmc, order_stops
+
+    des = [{"rmc": f"1_{i}", "site": 1, "drive": i, "sol": 100 + i // 2,
+            "lon": 137.39 + 1e-4 * i, "lat": -4.8} for i in range(10)]  # ~5.9 m apart
+    assert nearest_sol_rmc(des, 103) == "1_7"  # two drive ends on sol 103: the last one
+    order = order_stops(des, [{"station": "S4", "nearest_sol": 101}], 20.0)
+    assert order[0]["rmc"] == "1_3" and order[0]["station"] == "S4"
+    assert order[1]["rmc"] == "1_9"  # farthest from 1_3
+    assert len(order) == len({o["rmc"] for o in order})
+    xy = [lonlat_to_xy(o["lon"], o["lat"]) for o in order]
+    for i in range(len(xy)):
+        for j in range(i):
+            assert math.dist(xy[i], xy[j]) >= 20.0
+
+
+def test_s4_first_stop_is_the_discovery_drive_end():
+    """stations.yaml S4 rule on MMGIS -> 107_2484 (docs/discovery.md §3.2)."""
+    from pipeline.horizon.navcam import WAYPOINTS_D0, load_drive_ends, nearest_sol_rmc
+
+    if not WAYPOINTS_D0.exists():
+        pytest.skip("D0 MMGIS copy not present (pipeline host only)")
+    s4 = CFG["navcam_selection"]["first_stops"][0]
+    assert s4["station"] == "S4"
+    assert nearest_sol_rmc(load_drive_ends(), s4["nearest_sol"]) == "107_2484"
+
+
+# --------------------------------------------------------------------------------------------
+# Skyline in the image: overlay, sky detector, V2 comparison
+# --------------------------------------------------------------------------------------------
+
+def wavy_profile(base=2.0, amp=1.5, dist=5_000.0):
+    az = np.arange(0.0, 360.0, CFG["az_step_deg"])
+    el = base + amp * np.sin(np.radians(3 * az))
+    return HorizonProfile(az_deg=az, elevation_deg=el, distance_m=np.full(az.size, dist),
+                          source=["ctx_20m"] * az.size, observer={"x": 0.0, "y": 0.0, "z": 0.0},
+                          eye_height_m=CFG["navcam_height_m"], az_step_deg=CFG["az_step_deg"])
+
+
+def test_skyline_projects_to_expected_row():
+    from pipeline.horizon.overlay import skyline_pixels
+
+    m = base_cahv(0.0)
+    q = ypr_to_quat(90.0, 0.0, 0.0)  # rover faces east
+    flat = wavy_profile(amp=0.0)
+    lines = skyline_pixels(flat, m, q, (W, H_IMG))
+    pts = np.vstack(lines)
+    centre = pts[np.argmin(np.abs(pts[:, 0] - CX))]
+    assert centre[1] == pytest.approx(CY - F * math.tan(math.radians(2.0)), abs=0.5)
+    assert np.all((pts[:, 0] >= -1) & (pts[:, 0] <= W))
+
+
+def test_overlay_is_transparent_except_on_the_skyline(tmp_path):
+    from pipeline.horizon.overlay import render_overlay, skyline_pixels
+
+    m = base_cahv(0.0)
+    q = ypr_to_quat(90.0, 0.0, 0.0)
+    lines = skyline_pixels(wavy_profile(amp=0.0), m, q, (W, H_IMG))
+    img = render_overlay((W, H_IMG), lines, ticks=[{"x": CX, "label": "S1"}])
+    path = tmp_path / "overlay.png"
+    img.save(path)
+    a = np.asarray(img)
+    assert a.shape == (H_IMG, W, 4)
+    row = int(round(CY - F * math.tan(math.radians(2.0))))
+    assert a[row, 300, 3] > 0
+    assert a[row + 40, 300, 3] == 0
+    assert tuple(a[row, 300]) == tuple(CFG["overlay"]["line_rgba"])
+
+
+def synth_frame(m, q, prof, seed=1):
+    """Smooth sky above the projected skyline, textured terrain below (uint8)."""
+    from pipeline.horizon.overlay import skyline_rows
+
+    rows = skyline_rows(prof, m, q, (W, H_IMG))  # continuous row per column (NaN if none)
+    rng = np.random.default_rng(seed)
+    yy = np.arange(H_IMG, dtype=float)[:, None]
+    sky = 200.0 - 20.0 * yy / H_IMG + rng.normal(0.0, 0.3, (H_IMG, W))
+    ground = 100.0 + rng.uniform(-25.0, 25.0, (H_IMG, W))
+    img = np.where(yy >= rows[None, :], ground, sky)
+    return np.clip(np.round(img), 0, 255).astype(np.uint8), rows
+
+
+def test_sky_detector_recovers_synthetic_skyline():
+    from pipeline.horizon.sky import detect_skyline
+
+    m = cahvor(pitch_deg=0.0)
+    q = ypr_to_quat(10.0, 1.0, -2.0)
+    img, truth = synth_frame(m, q, wavy_profile())
+    det = detect_skyline(img)
+    ok = ~np.isnan(truth)
+    err = np.abs(det.rows[ok] - truth[ok])
+    assert np.mean(err <= 1.0) >= 0.98
+
+
+def test_v2_comparison_recovers_angles_and_summary():
+    from pipeline.horizon.sky import detect_skyline
+    from pipeline.validation.v2_skyline import compare_columns, summarise
+
+    m = cahvor(pitch_deg=0.0)
+    q = ypr_to_quat(10.0, 1.0, -2.0)
+    prof = wavy_profile()
+    img, _ = synth_frame(m, q, prof)
+    det = detect_skyline(img)
+    rec = compare_columns(m, q, prof, det.rows)
+    assert len(rec["column"]) > 0.9 * W
+    err = np.asarray(rec["error_deg"])
+    # one pixel is ~0.046 deg for this camera
+    assert np.median(np.abs(err)) < 0.05
+    s = summarise([rec])
+    assert s["far"]["n"] == len(err) and s["near"]["n"] == 0
+    assert s["far"]["p90_abs_deg"] < 0.1
+
+
+# --------------------------------------------------------------------------------------------
+# validation/v2.json writer (contract v2.schema.json)
+# --------------------------------------------------------------------------------------------
+
+def _synthetic_frame(i, station=None):
+    m = cahvor(pitch_deg=0.0)
+    q = ypr_to_quat(10.0 + 30.0 * i, 1.0, -2.0)
+    rec = {"image_id": f"SYN_{i:03d}", "sol": 4000 + i, "station": station,
+           "stop_id": f"v1_{i}", "attitude_quaternion": q.tolist(),
+           "camera_model": {"type": "CAHVOR", "C": m.C.tolist(), "A": m.A.tolist(),
+                            "H": m.H.tolist(), "V": m.V.tolist(), "O": m.O.tolist(),
+                            "R": m.R.tolist()}}
+    return rec, m, q
+
+
+def test_v2_writer_on_synthetic_frames(tmp_path, monkeypatch):
+    import json
+
+    from pipeline.validation.v2_skyline import build_v2, evaluate_frame, write_v2
+
+    monkeypatch.setenv("HOMELINE_MANIFEST_DIR", str(tmp_path / "manifest"))
+    n_ok = CFG["v2"]["min_stops"]
+    prof = wavy_profile()
+    entries = []
+    for i in range(n_ok):
+        rec, m, q = _synthetic_frame(i, station="S4" if i == 0 else None)
+        img, _ = synth_frame(m, q, prof, seed=i)
+        entries.append(evaluate_frame(rec, prof, img))
+    rec, m, q = _synthetic_frame(98)
+    entries.append(evaluate_frame(rec, None, synth_frame(m, q, prof)[0]))   # no horizon
+    entries.append(evaluate_frame(_synthetic_frame(99)[0], prof, None))    # no image
+    flat = np.full((H_IMG, W), 128, dtype=np.uint8)
+    entries.append(evaluate_frame(_synthetic_frame(97)[0], prof, flat))    # no sky boundary
+    terrain = np.full((H_IMG, W), 200, dtype=np.uint8)
+    terrain[30:, :] = 90                                                   # edge in the ref band
+    entries.append(evaluate_frame(_synthetic_frame(96)[0], prof, terrain))
+    doc = build_v2(entries)
+    assert doc["available"] is True and doc["method"] == "automatic"
+    assert doc["n_stops"] == n_ok and doc["n_frames_tried"] == n_ok + 4
+    failed = [f for f in doc["frames"] if f["status"] == "failed"]
+    assert len(failed) == 4 and all(f["failure"] for f in failed)   # reported, not dropped
+    assert any("reference band" in f["failure"] for f in failed)
+    assert doc["summary"]["far"]["n"] > 0.9 * W * n_ok
+    assert doc["summary"]["far"]["median_abs_deg"] < 0.05
+    assert doc["summary"]["near"]["n"] == 0 and doc["summary"]["near"]["median_deg"] is None
+    assert sum(f["manual_check"] for f in doc["frames"]) == \
+        math.ceil(CFG["v2"]["manual_check_frac"] * len(entries))
+    path = write_v2(doc, tmp_path / "v2.json")
+    from pipeline.horizon.contracts import validate
+
+    validate(json.loads(path.read_text()), "v2.schema.json")
+    frag = {}
+    for p in (tmp_path / "manifest").rglob("*.json"):
+        frag.update(json.loads(p.read_text()))
+    assert frag["v2.far.n"]["value"] == doc["summary"]["far"]["n"]
+    assert frag["v2.far.median_abs_deg"]["units"] == "deg"
+    assert frag["skyline_error_deg.S4.far"]["value"] < 0.05
+    assert frag["skyline_error_deg.S4.near"]["value"] is None
+    assert frag["v2.n_stops"]["value"] == n_ok
+
+
+def test_v2_hand_aligned_and_too_few_stops_are_not_available():
+    from pipeline.validation.v2_skyline import build_v2, evaluate_frame
+
+    prof = wavy_profile()
+    rec, m, q = _synthetic_frame(0)
+    e = evaluate_frame(rec, prof, synth_frame(m, q, prof)[0])
+    doc = build_v2([e])  # 1 stop < v2.min_stops
+    assert doc["available"] is False and doc["summary"]["far"]["median_abs_deg"] is None
+    doc = build_v2([e], hand_aligned=True)
+    assert doc["available"] is False and doc["method"] == "hand-aligned"
+    doc = build_v2([e], manual={rec["image_id"]: False})
+    assert doc["method"] == "automatic+manual_check" and doc["n_stops"] == 0
+
+
+def test_predicted_skyline_frac_known_answer():
+    """Level camera facing east, flat skyline at +2 deg: testable in every column; pitched up
+    so the skyline lands in the detector's top reference band: testable in none."""
+    from pipeline.horizon.navcam import predicted_skyline_frac
+
+    def rec(pitch):
+        m = base_cahv(pitch)
+        return {"camera_model": {"type": "CAHV", "C": m.C.tolist(), "A": m.A.tolist(),
+                                 "H": m.H.tolist(), "V": m.V.tolist()},
+                "attitude_quaternion": ypr_to_quat(90.0, 0.0, 0.0).tolist(),
+                "width": W, "height": H_IMG}
+
+    prof = wavy_profile(amp=0.0)
+    assert predicted_skyline_frac(rec(0.0), prof) > 0.99
+    # skyline row = CY - F tan(2 deg - pitch) < top band (~10 % of rows) for pitch -19 deg
+    assert predicted_skyline_frac(rec(-19.0), prof) == 0.0

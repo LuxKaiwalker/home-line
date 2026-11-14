@@ -10,3 +10,73 @@ navcam_height_m: 1.9               # verify_at_h0 from camera model C-vector
 distance_classes_km: [0.5, 2.0]
 v2: {min_stops: 10, target_stops: 30, manual_check_frac: 0.2}
 sky_detector: "per column, top-down: first pixel where vertical gradient > 3x the median gradient of the top 10% rows"
+
+# --- WS3 additions (fresh run, 2026-11-14; each assumed: true and flagged in STATUS.md) ------
+# Ray engine: DEM bands are north-up rasters in the analysis CRS (site.yaml); a sample with no
+# data in its configured source falls back to the next coarser source given (never finer).
+band_fallback: {value: coarser, assumed: true}
+# Raw-image API facts verified by D0 today (docs/discovery.md 3.3, 3.3a, 3.4); cited, not assumed.
+navcam_api:
+  url: "https://mars.nasa.gov/api/v1/raw_image_items/"   # 3.3, no key needed
+  camera_model_field: camera_model_component_list        # 3.3: "C;A;H;V;O;R"
+  camera_frame: "rover frame, +X forward, +Y right, +Z down"                          # 3.3a
+  attitude: "quaternion (w, x, y, z), rover -> site (N, E, Down); ZYX Euler = MMGIS yaw/pitch/roll"  # 3.3a
+  lmst_format: "Sol-NNNNNMhh:mm:ss.sss"                  # 3.3
+  downsampled_models_in_downsampled_px: true             # 3.3
+  c_height_above_rover_origin_m: {median_near_horizontal: 1.924, min: 1.835, max: 2.026}  # 3.4
+# Navcam frame selection and cache (data/raw/navcam/). WS3 assumptions, flagged in STATUS.md.
+navcam_selection:
+  instruments: [NAV_LEFT_B]        # left eye only: the right eye has the same pointing; halves downloads
+  sample_types: [full]             # API filter extended=full::sample_type::eq (checked by WS3 on sol 4200: 48/48 full)
+  per_page: 200                    # 3.3: per_page=200 works
+  stops_wanted: 36                 # v2.target_stops (30) + 20% for frames the detector fails on
+  max_stops_tried: 120              # all 116 distinct focus-area stops at 30 m spacing (WS3 run 1: 11/70 had a frame with sky)
+  max_frames_per_stop: 4           # widest azimuth spread among frames that pass the sky test
+  min_stop_spacing_m: 30           # distinct stops: farthest-point order over focus-area drive ends
+  first_stops:                     # stations.yaml rules that name a drive end go first
+    - {station: S4, nearest_sol: 4200}   # S4 rule "Curiosity drive end nearest sol 4200 from MMGIS"
+  top_row_min_el_deg: 0.0          # pre-test only (no DEM needed): top-centre pixel above local level; the predicted-skyline test below decides (WS3 run 1: 10 deg kept 15/116 stops, most frames still had no sky)
+  bottom_row_max_el_deg: -5.0      # ... and its bottom-centre pixel at most this (ground in frame)
+  min_predicted_skyline_col_frac: 0.5   # keep a frame only if the DEM-predicted skyline is testable (below the detector reference band, inside the frame) in >= 50 % of columns; WS3 run 1: the geometric test alone kept frames filled by rising terrain
+  max_extra_sols: 1                # also look at drive-end sol + 1 if the drive-end sol has no usable frame
+  max_total_mb: 150                # cache budget for API JSON + JPG
+  timeout_s: 60
+  retries: 2
+  assumed: true
+# Structured copy of the sky_detector rule above (same numbers: 3x, top 10% rows) so code does not
+# parse prose, plus WS3 additions justified on fresh frames (see STATUS.md WS3 for the evidence):
+#  zero_median_guard: a zero reference median (smooth 8-bit sky) uses one DN instead.
+#  border_px: Navcam JPEG artefact border (fresh cache, 12 frames: row 0 ~235-254 DN, row 1
+#             ~20 DN above row 2, column 0 ~25 DN darker, last row bright 141-252 DN).
+#  presmooth_sigma_px: Gaussian pre-smoothing before the gradient; 0 = rule as written.
+sky_detector_params: {grad_ratio: 3.0, ref_top_frac: 0.10, zero_median_guard: one_count,
+                      border_px: 2, presmooth_sigma_px: 2.0, assumed: true}
+# DEM bands for the ray engine (pipeline/horizon/bands.py). URLs and assets from docs/discovery.md
+# 2.4/2.5; radii, item counts and resolution choices are WS3 assumptions.
+bands:
+  dem_1m: {path: data/interim/terrain/dem_1m.tif}       # WS1 (7,800 x 7,800 at 1 m, pad +/- 3.9 km)
+  ctx_20m:
+    listing: data/raw/discovery/stac_ctx_pad_point_idbbox.json   # D0: first 500 STAC items at the pad
+    stac_item_url: "https://stac.astrogeology.usgs.gov/api/collections/mro_ctx_controlled_usgs_dtms/items/{id}"
+    asset: geoid_adjusted_dem      # discovery 2.4: plain `dem` is 567 m lower at the pad
+    res_m: 20
+    radius_m: 34000                # 30 km sampling limit + planning radius 3.7 km, rounded up
+    max_items: 3                   # greedy footprint gain over the disc (D0 listing saturates at ~73 %)
+    min_gain_pct: 1.0
+    max_offset_to_mola_m: 20       # reject an item whose median offset to MOLA-HRSC is larger (WS3 run 1: one item -55 m, the others -4 m)
+    max_rejects: 5
+    assumed: true
+  mola_hrsc_200m:
+    url: "https://asc-pds-services.s3.us-west-2.amazonaws.com/mosaic/Mars/HRSC_MOLA_Blend/Mars_HRSC_MOLA_BlendDEM_Global_200mp_v2.tif"
+    res_m: 200
+    radius_m: 84000                # 80 km sampling limit + planning radius 3.7 km, rounded up
+    assumed: true
+# V2 frame-level failure: if the detector's boundary falls inside the top reference band in more
+# than this share of columns, the top of the frame is not clear sky; the frame is reported as
+# failed (not dropped). Fresh evidence: 34 of 44 geometric candidates had 88-100 % of columns there.
+v2_frame_fail: {max_in_ref_band_frac: 0.5, assumed: true}
+# Presentation only (overlay PNGs and V2 check composites; panorama strips for station cards).
+overlay: {line_rgba: [255, 90, 0, 255], line_width_px: 2, tick_rgba: [255, 215, 0, 255],
+          tick_len_px: 14, detected_rgba: [0, 200, 255, 255], assumed: true}
+panorama: {px_per_deg: 4, el_margin_deg: 2, sky_rgb: [210, 168, 140], ground_rgb: [118, 84, 62],
+           line_rgb: [255, 255, 255], tick_rgb: [255, 215, 0], assumed: true}
