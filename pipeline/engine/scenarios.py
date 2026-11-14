@@ -371,6 +371,32 @@ def trade_product(grid: Grid, pad, fields, partner_by_suit, station_list, settin
     return tt
 
 
+def conditions_inputs(t_dark_min: float | None, tau_dose_min: float | None, dose: str,
+                      use_ws4: bool) -> dict:  # fmt: skip
+    """Daylight and dose-leash margin terms: CLI values win; otherwise WS4's
+    pipeline.conditions.margins (clock.json t_dark at the pad, rad.json leash tau at the storm
+    peak or the latest rate). A term WS4 cannot provide stays None (left out of the margin)."""
+    out = {"t_dark_min": t_dark_min, "t_dark_source": "CLI" if t_dark_min is not None else None,
+           "tau_dose_min": tau_dose_min,
+           "tau_dose_source": "CLI" if tau_dose_min is not None else None,
+           "dose": dose}  # fmt: skip
+    if use_ws4 and (t_dark_min is None or tau_dose_min is None):
+        try:
+            from pipeline.conditions.margins import margin_inputs
+
+            ws4 = margin_inputs(None, dose)
+        except (ImportError, FileNotFoundError, KeyError) as e:
+            print(f"WS4 margins unavailable ({e!r}); missing terms are left out")
+            return out
+        for k in ("t_dark_min", "tau_dose_min"):
+            if out[k] is None and ws4.get(k) is not None:
+                out[k] = float(ws4[k])
+                out[k.replace("_min", "_source")] = "WS4: " + str(ws4.get(
+                    k.replace("_min", "_source")))  # fmt: skip
+        out["eva_start_utc"] = ws4.get("eva_start_utc")
+    return out
+
+
 def main(argv=None) -> int:
     import json
     import time
@@ -388,6 +414,10 @@ def main(argv=None) -> int:
                     help="WS4 daylight: minutes from EVA start to dark (margin term)")  # fmt: skip
     ap.add_argument("--tau-dose-min", type=float, default=None,
                     help="WS4 dose leash tau_dose, min (margin term)")  # fmt: skip
+    ap.add_argument("--dose", choices=("storm", "latest"), default="storm",
+                    help="WS4 dose leash: storm peak (default, SPEC storm replay) or latest RAD")
+    ap.add_argument("--no-conditions", action="store_true",
+                    help="do not read WS4 margins (only the --t-dark-min/--tau-dose-min flags)")
     ap.add_argument("--route-scenarios", nargs="*", default=None,
                     help="scenarios to plan a traverse for (default: the default scenario)")
     ap.add_argument("--no-partner", action="store_true")
@@ -452,6 +482,9 @@ def main(argv=None) -> int:
                                                terrain_dir=a.terrain)
         lap("stations")
 
+    cond = conditions_inputs(a.t_dark_min, a.tau_dose_min, a.dose, not a.no_conditions)
+    print(f"margins: t_dark {cond['t_dark_min']} min ({cond['t_dark_source']}); "
+          f"tau_dose {cond['tau_dose_min']} min ({cond['tau_dose_source']})")
     routes = {}
     budget = route_budget_min()
     ck = float(load("variants")["route"]["o2_checkpoint_min"])
@@ -460,7 +493,7 @@ def main(argv=None) -> int:
             print(f"route {sid}: skipped (no field, no stations or a station without value)")
             continue
         p = physio.scenario_params(sid, v1_rmse_deg=rmse)
-        mi = margin.inputs(p, a.t_dark_min, a.tau_dose_min)
+        mi = margin.inputs(p, cond["t_dark_min"], cond["tau_dose_min"])
         res = traverse.plan(grid.with_nogo(p.nogo_deg), physio.grade_table(p), fields[sid], pad,
                             st, budget, ck, mi, partner_by_suit.get(physio.parse_scenario(sid)[1]),
                             load("haul")["contour_min"])  # fmt: skip
@@ -486,7 +519,8 @@ def main(argv=None) -> int:
     summary = {
         "note": "WS2 engine run summary (internal, not a web contract; sanity numbers only)",
         "scenarios_run": sids, "skipped": skipped, "stations_without_position": missing,
-        "v1": v1, "pad_rc": [int(pad[0]), int(pad[1])], "grid_shape": list(grid.shape),
+        "v1": v1, "margin_inputs": cond, "pad_rc": [int(pad[0]), int(pad[1])],
+        "grid_shape": list(grid.shape),
         "res_m": grid.res_m, "timing_s": timing, "diagnostics": diag, "routes": routes,
         "isochrones": getattr(web_products, "iso_info", {}),
     }  # fmt: skip

@@ -230,38 +230,68 @@ Branch: `ws2-engine`
   - F9 exact DP (= brute force on 8 stations) with the SPEC F4 margin check on every leg vertex; route legs with per-vertex `times_min`; timeline with depart/arrive/leave/return, O2 checkpoints every 30 min, turn-back rows, `o2_left_L`, `t_home_min`, `margin_min` + `margin_binding`.
   - F11 trade table. `make engine` = `python -m pipeline.engine.scenarios` (e2e test on WS1-shaped synthetic GeoTIFFs: every product passes `tools/validate_contracts.py`).
 
+- 2026-11-14T10:05Z (session 2): provenance now goes through WS6 `pipeline.provenance.manifest.record` (fragments `data/interim/manifest/pipeline__engine__*.json`); `manifest_fragment.json` dropped. Pushed a5508f6.
+- 2026-11-14T10:20Z: S review (docs/review/2026-11-14-ist2-and-o2-margin.md) implemented, KATs first. Pushed 4c54e5e.
+  - **IST-2 weight-span check** (`physio.ist2_weight_span`, `tests/test_physio.py`): same grade, 0.12 g vs 0.32 g, 121 + 80.7 kg, per kg subject mass, speed sweep 0.56-0.97 m/s. Model is not retuned.
+    | Variant (eta) | 20 % band | 8.7 inside? | 30 % band | 17.0 inside? |
+    | --- | --- | --- | --- | --- |
+    | optimistic (0.25) | 6.43-11.13 | yes | 9.42-16.31 | **no** (17.0 > 16.31) |
+    | **nominal (0.225)** | 7.14-12.37 | **yes** | 10.47-18.13 | **yes** |
+    | conservative (0.20) | 8.04-13.92 | yes | 11.77-20.39 | yes |
+    Speeds that reproduce IST-2 exactly (nominal): 0.68 m/s at 20 %, 0.91 m/s at 30 %. Only k depends on g, so the band is the vertical-work term alone; IST-2's 30 % value sits near the top of the band (steep grades cost more than vertical work, as S noted).
+  - **Level -> grade increment: "not validated"** (`variants.yaml ist2.level_to_grade_validated: false`, `physio.level_to_grade_increment`). Nominal 104 kg at 0.98 m/s: +23.8 / +34.9 mL/kg/min at 20 / 30 %. No measured reference found in the repo or config.
+  - **O2 margin** (`margin.py`, `crew.yaml o2_margin`, all sourced): `margin_min = (O2_left - O2_return_route - O2_station_tasks - O2_reserve) / 1.35`, "minutes at maximum effort"; station work 0.84 L/min (1,000 BTU/hr); reserve 30 min x 1.35 = 40.5 L. Timeline rows add `o2_tasks_left_L` and `o2_margin_min_planning_rate` (O2 term at 1,200 BTU/hr = 1.004 L/min).
+- 2026-11-14T10:30Z: **real run** `make engine` on WS1's grid (2,468 x 2,468 at 3 m), commit 4c54e5e, 13 min 18 s (return fields 26 s, isochrones/edges/bands 730 s). Scenarios opt_80/104/120, nom_80/104/120; con_* skipped (no `validation/v1.json`). Margins from WS4 `pipeline.conditions.margins`: t_dark 578.63 min (flat horizon, pad), **tau_dose 85.9 min = storm peak** (20 May 2024, D_allow 0.5 mGy). All public files pass `tools/validate_contracts.py` (0 errors). Outputs in `data/interim/engine/` (rasters for WS7/WS9: `{sid}/t_home.tif`, `o2_home.tif`, `pointer.tif`, `pointer_offsets.json`) and `data/interim/engine/public/`.
+  - **Headline nom_104: reachable 12.4 % of the assessed 30-min flat disc (r 1,764 m), range [con pending V1, opt 17.5 %].** 60-min: 11.2 %. Other suits (30 min): nom_80 12.9, nom_120 12.1; opt 18.2 / 17.5 / 17.1.
+  - Edge causes nom_104 (share of edge length): 30 min slope 99.4 %, physiology 0.6 %, data 0 % (117.5 km of edge); 60 min slope 97.8 %, physiology 2.2 %, data 0 %. No unknown cells and 100 % HiRISE, so no `data` edges.
+  - Disc blocked share (nominal, > 20 deg): 41.2 % (30-min disc), 31.4 % (60-min). Reached cells 3.59 M; max finite T_home 296.7 min.
+  - **Stations: S1, S2 and S4 all sit on blocked cells** (cell state 1; max slope 57.2, 40.5, 23.6 deg). Not snapped. T_home nominal = null for all three; optimistic (25 deg) reaches only S4: 52.2 / 55.6 / 58.0 min (80 / 104 / 120 kg). S4's 7x7 neighbourhood has a nominal T_home of 59.7 min; S1 and S2 have no passable cell within 3 cells (nominal). S3 and S5 have no position (S picks).
+  - **Route nom_104: empty** (no reachable station), so the timeline is depart/return at t = 0 (margin 85.9 min, binding: dose). No route or binding margin to report for nom_104.
+  - Partner line (nominal, 60 min, ridge-masked): nom_104 cart 179 kg 1.23 km2, drag 179 kg 0.0002 km2, cart 343 kg 0.93 km2, drag 343 kg infeasible. Trade table: reachable % filled, partner area filled, science_value null (needs con_* T_home).
+  - Sizes: public tree 153 MB; isochrones fall back to 2-min steps and are still **2.6-3.4 MB gz** (19-24 MB raw) per scenario, over the 1.5 MB budget; bands 4.2-4.6 MB; edges 2.2-3.1 MB; partner 1.1-1.4 MB; `data/interim/engine/` 351 MB total. Cause: thousands of small blocked holes (nom_104 60-min contour has 6,355 holes).
+
 ### Doing
 
-- Waiting for WS1's real routing grids.
+- Waiting for S (stations on blocked cells, margins) and C (isochrone size).
 
 ### Next
 
-- On WS1 hand-off (`data/interim/terrain/elev_3m.tif`, `maxslope_3m.tif`, `cellstate_3m.tif`, `ridge_index.tif`, `stations.json`): `make engine` for nom_104 first, hand rasters to WS7, bands/edges/isochrones to WS5 (G1).
-- Margins: wire WS4 daylight (t_dark) and dose leash (tau_dose) once their files exist (CLI `--t-dark-min`, `--tau-dose-min` meanwhile).
-- Switch `pipeline/engine/provenance.py` to WS6's `manifest.record` when it lands (TODO; until then entries go to `data/interim/engine/manifest_fragment.json`, contract-valid).
+- On V1 (WS6 `validation/v1.json`): `make engine` again for con_* (range low end, trade science_value, siting rule).
+- Once stations have reachable positions: route + timeline for nom_104 (G1 3-station route), F8 siting.
+- WS7/WS9: real rasters are ready in `data/interim/engine/{sid}/`.
 
 ### Blocked
 
-- Real-grid tasks (brief tasks 3-6) need WS1's grids and stations (expected ~H4).
-- Conservative scenarios (con_*) and the F8 siting rule (conservative T_home) need WS6's V1 RMSE (`data/interim/validation/v1.json`, `rmse_deg`); they are skipped until it exists.
+- **G1 route (S/WS1):** every positioned station (S1, S2, S4) is on a blocked cell (> 20 deg at 3 m), so nom_104 has no route. Brief rule: no snapping. S/WS1 to choose either station positions on passable cells, or an "access cell" rule (for example nearest passable cell within N m, recorded per station). Not decided by WS2.
+- **Isochrone size (C/S):** with 2-min steps the isochrones are still 2.6-3.4 MB gz. Measured on nom_104 (2-min, 30 contours): drop holes and parts < 100 m2 -> 1.19 MB gz; < 500 m2 -> 0.82 MB; 5 m simplification alone -> 1.89 MB; 5 m + < 500 m2 -> 0.40 MB. Dropping holes hides small blocked islands in the display (routing is unchanged). Needs a config value (`variants.yaml outputs`), so C/S decide; not applied.
+- con_* scenarios, the headline range low end, trade `science_value` and F8 siting wait on WS6's V1 RMSE (S's footprint decision).
 - Questions for S (science):
-  1. IST-2 uphill check fails by ~2.7x at the anchor speed: k*v at 0.98 m/s, nominal 104 kg = +23.8 / +34.9 mL/kg/min at 20 / 30 % grade vs IST-2 +8.7 / +17.0 (optimistic 21.5 / 31.4). Check IST-2's test speed and `ist2.delta_mass_kg` (verify_at_h0).
-  2. Margin units: SPEC F4 m(t) mixes litres (O2 term) and minutes. Assumed: O2 surplus / effort-capped O2 rate (1.35 L/min at 75 kg) -> minutes (`variants.yaml route.o2_margin_rate`). Dwell O2 uses VO2 = V0 (`route.dwell_vo2`). Confirm or replace.
-  3. Haul model: with boot_mu 0.5 < drag mu 0.5-0.7 the drag case is infeasible on level ground and uphill for both casualty masses (traction rule); the 343 kg cart is infeasible above ~0 deg uphill. Partner line will be small; intended?
-  4. Casualty mass: SPEC F10 says 165-186 kg suited, haul.yaml rule body + suit gives 155/179/195 kg. Using haul.yaml.
-  5. Headline flat disc uses the anchor speed 0.98 m/s (as site.yaml planning_radius_m); nominal level v* is 0.918 m/s (104 kg), so flat terrain reads ~88 %, not 100 %. Alternative: disc at each scenario's level v*.
+  1. **alpha encoding (C note, model unchanged).** IST-2's weight span is a gravity change (0.12 -> 0.32 g on 201.7 kg = 395.6 N). At Mars g that weight equals 106.6 kg of carried mass, not `delta_mass_kg` 60.
+     | | alpha (mL/kg/min per kg per m/s) | a(M) nom 80 / 104 / 120 kg suit | level VO2 at 0.98 m/s, nom 80 / 104 / 120 | level v* nom 80 / 104 / 120 (m/s) | headline 30 min nom_80 / nom_120 |
+     | --- | --- | --- | --- | --- | --- |
+     | before (60 kg) | 0.03231 | 12.296 / 13.071 / 13.588 | 18.05 / 18.81 / 19.32 | 0.976 / 0.918 / 0.883 | 12.91 / 12.12 % |
+     | after (106.6 kg, anchor speed) | 0.01818 (x 0.563) | 12.720 / 13.156 / 13.447 | 18.47 / 18.89 / 19.18 | 0.943 / 0.912 / 0.892 | 12.78 / 12.15 % |
+     With IST-2's own per-subject speeds instead of 0.98 m/s, alpha = 0.0184-0.0318. The 80-120 kg level-cost spread shrinks from 1.27 to 0.71 mL/kg/min; 60-min headline nom_80 12.63 -> 12.29 %, nom_120 10.29 -> 10.40 %. Adopt (set `delta_mass_kg` to a weight-span encoding) or keep?
+  2. **O2_station_tasks interpretation (please confirm).** Implemented as the task O2 still to do at the station the crew is working at (0 while walking). The O2 margin on arrival therefore equals the one on leaving. Daylight and dose terms are unchanged (SPEC F4).
+  3. **Margin change on the only real route** (opt_104 -> S4, 131.9 min, scratch run, not published). O2 term: start 373.3 -> 343.3 min (-30.0, the 40.5 L reserve); arrive S4 260.5 -> 230.8 (-29.7); return 271.2 -> 230.8 (-40.3). Latest turn-back at S4: 523 min (daylight) -> 447 min (O2). Each 30-min station now costs 11.7 L more (0.84 vs 0.45 L/min) = 8.7 min. On the nom_104 field (no route), the O2 term on the 30- / 60-min contours drops by a median 24.5 / 19.3 min. **The binding margin does not change.** With the storm tau (85.9 min) the dose term (85.9 - T_home) binds everywhere within 60 min; with `--dose latest` (3,771.6 min) the O2 term binds on the S4 route (230.8 min).
+  4. O2 conversion mismatch: `o2_budget` uses 20.1 J/mL (4.80 kcal/L), while the review conversion gives 5.02 kcal/L at RER 0.85. With 5.02 kcal/L, primary_L would be 482 L instead of 504 L. Not changed.
+  5. Earlier open: haul drag case infeasible (old Q3), casualty mass (Q4), flat-disc speed (Q5). Old Q1 and Q2 are answered by the review.
 - Questions for C (code/contracts):
-  6. Who writes the web `stations.json`? WS2 fills `t_home_min` and `in_partner_line` from WS1's `data/interim/terrain/stations.json` and writes `data/interim/engine/public/stations.json`.
-  7. Proposed loose-contract structures: `partner.geojson` properties `{case, casualty_kg, contour_min, style: "dashed", default_visible: false, caption, feasible, area_km2}`; `route_*.geojson` leg properties `{leg, from, to, t_min, o2_L, length_m, t_start_min, t_end_min, times_min[]}`; timeline rows add `margin_binding` and (when known) `in_partner_line`, plus `turn_back` events. `siting_png.json` (image corners) has no schema; siting tiles vs one PNG?
-  8. F11 partner_area_km2 uses the 60-min partner line (cart, suited casualty) in both budget rows; reachable_pct uses the nominal variant. OK?
+  6. Who writes the web `stations.json`? WS2 writes `data/interim/engine/public/stations.json` with `t_home_min` and `in_partner_line` from WS1's stations.
+  7. Proposed for contracts v1.1 (loose schemas accept them now): `partner.geojson` properties `{case, casualty_kg, contour_min, style, default_visible, caption, feasible, area_km2}`; route leg properties `{leg, from, to, t_min, o2_L, length_m, t_start_min, t_end_min, times_min[]}`; timeline rows `margin_binding`, `o2_tasks_left_L`, `o2_margin_min_planning_rate`, optional `in_partner_line`, plus `turn_back` events. `siting_png.json` has no schema.
+  8. F11 partner_area_km2 uses the 60-min cart line (suited casualty) in both rows; reachable_pct uses the nominal variant. OK?
+  9. WS5 scorecard shows `crew.o2_reserve_frac` as "O2 reserve in the route margin". It is no longer used; the reserve is `crew.o2_margin.reserve_min_at_effort_cap` (30 min at 1.35 L/min = 40.5 L). Please ask WS5 to switch the row.
 
 ### Assumptions added
 
-- `variants.yaml route` (assumed: true): o2_checkpoint_min 30 and budget crew.eva_h (SPEC F9 values), o2_margin_rate, dwell_vo2.
+- `variants.yaml route.o2_checkpoint_min` 30 and `budget: crew.eva_h` (assumed; SPEC F9 text). `route.o2_margin_rate` and `dwell_vo2` were removed and replaced by `crew.yaml o2_margin` (sourced: S review, ICES-2026-127, NTRS 20140009556).
+- **Reserve in use:** the margin uses the fixed `o2_margin.reserve_min_at_effort_cap` (40.5 L) only. `crew.o2_reserve_frac` (r = 0.2) is no longer used anywhere in the engine (`MarginInputs.reserve_frac` = 0; `margin.legacy_inputs` is kept only for the before/after comparison). `crew.reserve_min` (30) stays the EVA-time reserve of SPEC §1.4; the engine does not use it.
+- `variants.yaml ist2.weight_span` and `g_earth_ms2` 9.80665 (sourced: Norcross et al. 2010; CGPM). `speed_sweep_n` 42 is numerical resolution only.
 - `variants.yaml numerics.grade_table_step_deg` 0.01 (assumed: true; lookup resolution, KAT error < 1e-4).
 - `haul.yaml g_moon` 1.62 m/s^2 (assumed; standard lunar g, only for the Mars/Moon KAT).
-- O2 used before a departure is bounded by the effort-capped rate in the DP check (VO2 never exceeds the cap), so the DP stays exact; the timeline reports actual margins.
+- The DP bounds O2 used before a departure by the effort-capped rate (station work at 0.84 is below 1.35 L/min, so the bound holds). The DP stays exact; the timeline reports the actual margins.
 - Pre-H0 station snapping is not used: a station with no walk home gets null.
+- Engine CLI: `--dose storm|latest` (default storm, the SPEC storm replay) and `--no-conditions`. CLI `--t-dark-min` and `--tau-dose-min` override WS4.
 
 ## WS3 Horizon
 

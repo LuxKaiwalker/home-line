@@ -20,7 +20,7 @@ from __future__ import annotations
 
 import math
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 import numpy as np
 
@@ -257,6 +257,36 @@ def grade_table(p: Params, step_deg: float | None = None) -> GradeTable:
     return GradeTable(deg, pace, o2, 180.0 / (n - 1))
 
 
-def ist2_uphill_check(p: Params, v: float) -> dict[str, float]:
-    """Uphill increment k*v (mL/kg/min) at 20 % and 30 % grade, for S to compare with IST-2."""
-    return {f"grade_{g}pct": float(k_uphill(p, math.atan(g / 100)) * v) for g in (20, 30)}
+def level_to_grade_increment(p: Params, v: float) -> dict:
+    """Level -> 20 % / 30 % increment k*v (mL/kg/min) at speed v. NOT validated: IST-2's
+    8.7 / 17.0 are weight-span differences, not this quantity (S review 2026-11-14), and no
+    measured level -> grade reference is in hand (variants.yaml ist2.level_to_grade_validated)."""
+    out: dict = {f"grade_{g}pct": float(k_uphill(p, math.atan(g / 100)) * v) for g in (20, 30)}
+    out["validated"] = bool(load("variants")["ist2"]["level_to_grade_validated"])
+    return out
+
+
+def ist2_weight_span(variant: str = "nominal") -> dict:
+    """IST-2 weight-span check (S review 2026-11-14, variants.yaml ist2.weight_span).
+
+    The model is run at the same grade at the lightest and heaviest IST-2 weight (g fractions
+    of Earth g) with the IST-2 system (carried = system_kg, body = subject_kg, so VO2 is per kg
+    of subject mass) over the IST-2 speed range. The band is min..max of the difference over
+    the speed sweep; ``inside`` says whether IST-2's reported difference falls in it. Only the
+    variant's eta matters (V0 and a(M) do not depend on g and cancel).
+    """
+    ist2 = load("variants")["ist2"]
+    w = ist2["weight_span"]
+    eta = float(load("variants")["variants"][variant]["eta"])
+    base = params("nominal", carried_kg=float(w["system_kg"]))
+    base = replace(base, variant=variant, eta=eta, m_b=float(w["subject_kg"]))
+    g_lo, g_hi = (float(f) * float(ist2["g_earth_ms2"]) for f in w["g_frac"])
+    v = np.linspace(float(w["speed_ms"][0]), float(w["speed_ms"][1]), int(w["speed_sweep_n"]))
+    out: dict = {"variant": variant, "eta": eta, "speed_ms": [float(v[0]), float(v[-1])]}
+    for key, reported in ist2["uphill_check_ml_kg_min"].items():
+        th = math.atan(float(key.split("_")[1].rstrip("pct")) / 100)
+        d = vo2(replace(base, g=g_hi), v, th) - vo2(replace(base, g=g_lo), v, th)
+        lo, hi = float(np.min(d)), float(np.max(d))
+        out[key] = {"band": [lo, hi], "reported": float(reported),
+                    "inside": bool(lo <= reported <= hi)}  # fmt: skip
+    return out
