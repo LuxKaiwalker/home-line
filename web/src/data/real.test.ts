@@ -13,7 +13,7 @@ import { routeSummary } from '../views/route'
 import { f22Rows, f22Verdict } from '../views/f22'
 import { accessFor } from './access'
 import { dragFinding, drawnPartner, partnerLabel } from './partner'
-import { padMarker, padProposal } from '../map/pad'
+import { padInUse, padMarker, padProposal } from '../map/pad'
 import { allScienceZero } from '../views/trade'
 import { katAreas, v2Classes } from '../views/validation'
 import { createLoader, type TextFetcher } from './loader'
@@ -207,5 +207,41 @@ describe.skipIf(!S3)('real data tree, session-3 publish (D19, D20, V1, F8)', () 
   it('KAT list loads; area counts add up to the summary total', async () => {
     const k = await L.json<{ summary: { total: number }; tests: { id: string; area: string; features: string[]; outcome: string; reason: string | null }[] }>('validation/kats.json')
     expect(katAreas(k.tests).reduce((a, b) => a + b.total, 0)).toBe(k.summary.total)
+  })
+})
+
+// Session-5 tree (C 15:31: pad.json released after WS2 session 5, contract pad v1.1.2).
+const S5 = has && existsSync(resolve(REAL, 'pad.json'))
+
+describe.skipIf(!S5)('real data tree, pad.json v1.1.2 (F8, C 15:31)', () => {
+  const L = createLoader(fsFetcher, 'real')
+  const entry = async (k: string) => (await L.manifest())[k] as ManifestEntry | undefined
+
+  it('pad in use = pad_default and fails the F8 rule; every shown number has its manifest key', async () => {
+    const pf = await L.pad()
+    const u = padInUse(pf)!
+    expect([pf.pad.lon, pf.pad.lat]).toEqual([CONFIG.padDefault.lon, CONFIG.padDefault.lat])
+    expect([u.score, u.rulePassed]).toEqual([0, false])
+    expect(u.maxSlopeDeg!).toBeGreaterThan(5)
+    for (const [k, v] of [
+      ['pad.score', u.score],
+      ['pad.checks.max_slope_deg', u.maxSlopeDeg],
+      ['pad.checks.assessed_pct_30min', u.assessedPct],
+    ] as const)
+      expect((await entry(k))?.value).toBe(v)
+  })
+
+  it('proposal read from proposal.pad.*: not adopted, tie and alternatives keyed', async () => {
+    const pf = await L.pad()
+    expect(pf.proposal?.adopted).toBe(false)
+    const p = padProposal(pf)!
+    expect(p).not.toBeNull()
+    expect((await entry('pad.proposal.lon'))?.value).toBe(p.lon)
+    expect((await entry('pad.proposal.score'))?.value).toBe(p.score)
+    expect((await entry('pad.proposal.checks.max_slope_deg'))?.value).toBe(p.maxSlopeDeg)
+    expect((await entry('pad.proposal.tie.n_blocks_at_top_score'))?.value).toBe(p.tie!.nAtTop)
+    expect((await entry('pad.proposal.tie.n_candidate_blocks'))?.value).toBe(p.tie!.nCandidates)
+    for (const a of p.ranked) for (const f of ['lon', 'lat', 'score'] as const) expect((await entry(`pad.proposal.alternatives.${a.rank}.${f}`))?.value).toBe(a[f])
+    if (p.assessedPct === null) expect(p.checksNote).toBeTruthy()
   })
 })
