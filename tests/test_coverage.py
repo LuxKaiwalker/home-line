@@ -66,7 +66,8 @@ def _flat_world(n3=60):
 def test_unknown_island_never_assessed_and_excluded():
     dem, mask = _flat_world()
     slope1 = np.zeros_like(dem)
-    elev3, max3, state3 = routing.routing_grids(dem, slope1, mask, nogo_deg=20.0)
+    cg = routing.cell_grids(dem, slope1, mask, res_m=1.0, step_guard_deg=30.0)
+    state3 = cg.state(20.0)
     island3 = np.zeros(state3.shape, bool)
     island3[90 // 3:(100 + 2) // 3, 90 // 3:(100 + 2) // 3] = True
     assert (state3[island3] == routing.UNKNOWN).all()
@@ -82,22 +83,166 @@ def test_unknown_island_never_assessed_and_excluded():
     assert cov["assessed_frac"] + cov["unknown_frac"] == pytest.approx(1.0)
 
 
-def test_blocked_cells_from_max_slope():
-    dem = np.zeros((30, 30), np.float32)
-    slope1 = np.zeros_like(dem)
-    slope1[4, 4] = 21.0  # one steep 1 m cell blocks its 3 m cell
-    mask = np.full(dem.shape, coverage.HIRISE, np.uint8)
-    _, max3, st = routing.routing_grids(dem, slope1, mask, nogo_deg=20.0)
-    assert st[1, 1] == routing.BLOCKED and max3[1, 1] == pytest.approx(21.0)
-    assert (np.delete(st.ravel(), 1 * 10 + 1) == routing.ASSESSED).all()
-
-
 def test_nodata_cell_is_unknown():
     dem = np.zeros((9, 9), np.float32)
     dem[0, 0] = np.nan
     mask = coverage.source_mask(dem, np.ones(dem.shape, bool))
-    _, _, st = routing.routing_grids(dem, np.zeros_like(dem), mask, nogo_deg=20.0)
+    cg = routing.cell_grids(dem, np.zeros_like(dem), mask, res_m=1.0, step_guard_deg=30.0)
+    st = cg.state(20.0)
     assert st[0, 0] == routing.UNKNOWN and st[1, 1] == routing.ASSESSED
+    assert np.isnan(cg.slope[0, 0]) and cg.stepguard_u8()[0, 0] == routing.STEPGUARD_NODATA
+
+
+# ---------------------------------------------------------------- D22 cell slope + step guard
+
+NOGO = {"optimistic": 25.0, "nominal": 20.0, "conservative": 17.0}  # D23
+
+
+def _plane(theta_deg, azimuth_deg, n=30, res=1.0, offset=0.0, dtype=np.float64):
+    """z = tan(theta) * (distance along the azimuth), x east, y north (rows run south)."""
+    yy, xx = np.mgrid[0:n, 0:n].astype(np.float64)
+    x, y = xx * res, -yy * res
+    a = math.radians(azimuth_deg)
+    return (offset + math.tan(math.radians(theta_deg)) * (math.sin(a) * x + math.cos(a) * y)
+            ).astype(dtype)
+
+
+@pytest.mark.parametrize("theta", [5.710593137499643, 17.0, 20.0, 25.0, 40.0])
+@pytest.mark.parametrize("azimuth", [0.0, 90.0, 137.0, 250.0])
+def test_plane_fit_cell_slope_of_an_exact_plane(theta, azimuth):
+    """D22: the 3 m plane-fit slope of an exact plane equals its slope (every cell)."""
+    s = routing.plane_slope_blocks(_plane(theta, azimuth), 1.0)
+    assert s.shape == (10, 10)
+    assert np.abs(s - theta).max() < 1e-6
+    # realistic heights in float32 (pad -3627 m): still within 0.01 deg
+    z32 = _plane(theta, azimuth, offset=-3627.74, dtype=np.float32)
+    assert np.abs(routing.plane_slope_blocks(z32, 1.0) - theta).max() < 0.01
+    # the 10 % grade of the brief: 5.71 deg
+    assert routing.plane_slope_blocks(_plane(5.710593137499643, 0.0), 1.0)[0, 0] == \
+        pytest.approx(5.71, abs=0.005)
+
+
+def test_plane_fit_cell_slope_equals_3x3_plane_fit_at_the_cell_centre():
+    """Same estimator as slope.plane_fit(window 3) evaluated at each block's centre pixel."""
+    rng = np.random.default_rng(3)
+    z = rng.normal(0, 1.5, (30, 30))
+    blocks = routing.plane_slope_blocks(z, 1.0)
+    moving, _ = slope.plane_fit(z.astype(np.float32), 1.0, window_px=3)
+    centres = moving[1::3, 1::3]
+    ok = np.isfinite(centres)
+    assert ok.sum() >= 60
+    assert np.abs(blocks[ok] - centres[ok]).max() < 1e-3
+
+
+def test_plane_fit_nan_elevation_gives_nan():
+    z = np.zeros((9, 9))
+    z[4, 4] = np.nan
+    s = routing.plane_slope_blocks(z, 1.0)
+    assert np.isnan(s[1, 1]) and np.isfinite(np.delete(s.ravel(), 4)).all()
+
+
+def test_step_guard_blocks_a_single_steep_1m_step_with_low_plane_slope():
+    """D22: one 1 m spike inside a cell -> 1 m Horn slopes > 30 deg around it, plane-fit slope
+    0 (the spike is the block centre) -> blocked by the step guard at every no-go."""
+    dem = np.zeros((30, 30), np.float32)
+    dem[10, 10] = 3.0                      # centre pixel of 3 m cell (3, 3)
+    s1 = slope.horn(dem, 1.0)
+    mask = np.full(dem.shape, coverage.HIRISE, np.uint8)
+    cg = routing.cell_grids(dem, s1, mask, res_m=1.0, step_guard_deg=30.0)
+    assert cg.slope[3, 3] == pytest.approx(0.0, abs=1e-9)
+    assert cg.maxslope[3, 3] == pytest.approx(math.degrees(math.atan(0.75)), abs=1e-4)  # 36.87
+    assert cg.stepguard[3, 3] and cg.stepguard.sum() == 1
+    sg = cg.stepguard_u8()
+    assert sg[3, 3] == 1 and sg[2, 2] == 0
+    inner = np.zeros(cg.known.shape, bool)
+    inner[1:-1, 1:-1] = True               # border cells have no Horn slope: unknown
+    for nogo in NOGO.values():
+        st = cg.state(nogo)
+        assert st[3, 3] == routing.BLOCKED
+        assert (st[inner & ~cg.stepguard] == routing.ASSESSED).all()
+        assert (st[~inner] == routing.UNKNOWN).all()
+    # the old max-slope rule would also block it, but plane-fit alone would not
+    assert routing.cell_state(cg.known, cg.slope, np.zeros_like(cg.stepguard), 17.0)[3, 3] \
+        == routing.ASSESSED
+
+
+def test_step_guard_threshold_is_strict():
+    dem = np.zeros((9, 9), np.float32)
+    s1 = np.zeros_like(dem)
+    s1[1, 1] = 30.0                        # cell (0, 0): exactly 30 -> not fired
+    s1[4, 4] = 30.01                       # cell (1, 1): fired
+    mask = np.full(dem.shape, coverage.HIRISE, np.uint8)
+    cg = routing.cell_grids(dem, s1, mask, res_m=1.0, step_guard_deg=30.0)
+    assert not cg.stepguard[0, 0] and cg.stepguard[1, 1]
+    st = cg.state(25.0)
+    assert st[0, 0] == routing.ASSESSED and st[1, 1] == routing.BLOCKED
+
+
+def test_unknown_cells_stay_unknown_in_every_variant():
+    rng = np.random.default_rng(5)
+    dem = rng.normal(0, 3.0, (30, 30)).astype(np.float32)   # steep noise everywhere
+    s1 = np.full(dem.shape, 45.0, np.float32)
+    mask = np.full(dem.shape, coverage.HIRISE, np.uint8)
+    mask[0:3, 0:3] = coverage.NON_HIRISE    # cell (0, 0): non-HiRISE
+    dem[4, 4] = np.nan                      # cell (1, 1): no elevation
+    s1[7, 7] = np.nan                       # cell (2, 2): no slope
+    cg = routing.cell_grids(dem, s1, mask, res_m=1.0, step_guard_deg=30.0)
+    unk = [(0, 0), (1, 1), (2, 2)]
+    for nogo in NOGO.values():
+        st = cg.state(nogo)
+        for rc in unk:
+            assert st[rc] == routing.UNKNOWN
+        assert (np.delete(st.ravel(), [0, 11, 22]) == routing.BLOCKED).all()
+    for rc in unk:
+        assert np.isnan(cg.slope[rc]) and cg.stepguard_u8()[rc] == routing.STEPGUARD_NODATA
+
+
+def _random_cells(seed=0, n=60):
+    rng = np.random.default_rng(seed)
+    dem = np.cumsum(rng.normal(0, 0.35, (n, n)), axis=1).astype(np.float32)
+    s1 = slope.horn(dem, 1.0)
+    mask = np.full(dem.shape, coverage.HIRISE, np.uint8)
+    mask[:9, :9] = coverage.NON_HIRISE
+    return routing.cell_grids(dem, s1, mask, res_m=1.0, step_guard_deg=30.0)
+
+
+@pytest.mark.parametrize("variant", list(NOGO))
+def test_cell_state_is_blocked_iff_plane_slope_over_nogo_or_step_guard(variant):
+    cg = _random_cells()
+    nogo = NOGO[variant]
+    st = cg.state(nogo)
+    with np.errstate(invalid="ignore"):
+        exp_blocked = cg.known & ((cg.slope > nogo) | cg.stepguard)
+    assert ((st == routing.BLOCKED) == exp_blocked).all()
+    assert ((st == routing.UNKNOWN) == ~cg.known).all()
+    assert ((st == routing.ASSESSED) == (cg.known & ~exp_blocked)).all()
+    # both branches occur in this synthetic world, so the KAT bites
+    with np.errstate(invalid="ignore"):
+        assert (cg.known & (cg.slope > nogo)).any()
+        assert (cg.known & cg.stepguard & (cg.slope <= nogo)).any()
+        assert (st == routing.ASSESSED).any()
+    # WS2's rule from the written rasters gives the same cells
+    nominal = cg.state(NOGO["nominal"])
+    assert (routing.passable(nominal, cg.slope, cg.stepguard_u8(), nogo)
+            == (st == routing.ASSESSED)).all()
+
+
+def test_variants_nest_and_share_unknown():
+    cg = _random_cells(seed=2)
+    o, n, c = (cg.state(NOGO[v]) for v in ("optimistic", "nominal", "conservative"))
+    assert ((o == routing.BLOCKED) <= (n == routing.BLOCKED)).all()
+    assert ((n == routing.BLOCKED) <= (c == routing.BLOCKED)).all()
+    assert ((o == routing.UNKNOWN) == (c == routing.UNKNOWN)).all()
+
+
+def test_site_config_d22_d23_values():
+    from pipeline.terrain import grid as G
+
+    sl = G.site()["slope"]
+    assert sl["nogo_deg"] == {"optimistic": 25, "nominal": 20, "conservative": 17}   # D23
+    assert sl["step_guard_deg"] == 30 and sl["step_guard_assumed"] is True          # D22
+    assert sl["flag_beyond_tested_deg"] == 17
+    assert sl["cell_slope"] == "plane_fit_3x3"
 
 
 # ---------------------------------------------------------------- data edge
@@ -351,83 +496,41 @@ def test_basemap_zoom_range_for_025_to_10_m():
 
 # ---------------------------------------------------------------- conservative cell states (task 8)
 
-V1_RMSE = 5.447021418084812  # WS6 real V1 (STATUS WS6 13:14Z); the KATs use it as a known input
-
-
-def test_conservative_nogo_is_config_formula_minus_v1_rmse():
-    """site.yaml slope.nogo_deg.conservative = "20 - v1_rmse_deg" -> 20 - 5.447 = 14.553 deg."""
-    from pipeline.terrain import grid as G
-
-    spec = G.site()["slope"]["nogo_deg"]["conservative"]
-    assert routing.conservative_nogo(spec, V1_RMSE) == pytest.approx(14.552978581915188)
-    assert routing.conservative_nogo("25 - v1_rmse_deg", 1.0) == pytest.approx(24.0)
-    with pytest.raises(ValueError):
-        routing.conservative_nogo(spec, None)            # no V1: never guessed
-    with pytest.raises(ValueError):
-        routing.conservative_nogo(spec, float("nan"))
-    with pytest.raises(ValueError):
-        routing.conservative_nogo("20 * v1_rmse_deg", 1.0)
-
-
-def test_restate_blocks_above_the_limit_and_keeps_unknown():
-    st = np.array([[0, 0, 0, 0, 1, 2, 2, 0]], np.uint8)
-    mx = np.array([[10.0, 14.5, 14.55, 14.56, 25.0, 3.0, np.nan, np.nan]], np.float32)
-    out = routing.restate(st, mx, 14.552978581915188)
-    A, B, U = routing.ASSESSED, routing.BLOCKED, routing.UNKNOWN
-    # blocked = max slope strictly above the limit; a known cell without a slope is unknown
-    assert out.tolist() == [[A, A, A, B, B, U, U, U]]
-    assert out.dtype == np.uint8 and st.tolist() == [[0, 0, 0, 0, 1, 2, 2, 0]]  # input untouched
-
-
-def _synthetic_states(seed=0, n=60):
-    rng = np.random.default_rng(seed)
-    dem = rng.normal(0, 1, (n, n)).astype(np.float32)
-    slope1 = rng.uniform(0, 30, (n, n)).astype(np.float32)
-    mask = np.full(dem.shape, coverage.HIRISE, np.uint8)
-    mask[:9, :9] = 2                                   # non-HiRISE island -> unknown
-    return routing.routing_grids(dem, slope1, mask, nogo_deg=20.0)
-
-
-def test_conservative_is_a_superset_of_nominal_and_restate_at_20_is_identity():
-    _, mx, nom = _synthetic_states()
-    con = routing.restate(nom, mx, 14.552978581915188)
-    assert ((nom == routing.BLOCKED) <= (con == routing.BLOCKED)).all()
-    assert ((nom == routing.UNKNOWN) == (con == routing.UNKNOWN)).all()
-    assert (con[:3, :3] == routing.UNKNOWN).all()
-    assert (routing.restate(nom, mx, 20.0) == nom).all()
-
-
-def test_conservative_assessed_equals_ws2_passable_mask():
-    """WS2 re-derives passability from maxslope (pipeline/engine/graph.py passable_mask); the
-    conservative raster must agree cell by cell."""
-    from pipeline.engine.graph import passable_mask
-
-    elev, mx, nom = _synthetic_states(seed=1)
-    nogo = routing.conservative_nogo("20 - v1_rmse_deg", V1_RMSE)
-    con = routing.restate(nom, mx, nogo)
-    assert ((con == routing.ASSESSED) == passable_mask(nom, mx, nogo, elev)).all()
-
-
-def test_conservative_summary_discs_and_newly_blocked():
+def test_cell_state_summary_splits_slope_and_step_guard_shares():
     from pipeline.terrain import webout
 
     g = Grid(x0=0.0, y0=30.0, res=3.0, width=10, height=10)
-    nom = np.zeros((10, 10), np.uint8)
-    nom[0, :] = routing.BLOCKED
-    nom[9, :] = routing.UNKNOWN
-    con = nom.copy()
-    con[1, :] = routing.BLOCKED            # 10 more cells blocked at the lower limit
-    doc = webout.conservative_summary(nom, con, g, (15.0, 15.0), {30: 100.0},
-                                      nogo_deg=14.552978581915188, v1_rmse_deg=V1_RMSE,
-                                      v1_source="validation/v1.json")
-    assert doc["nogo_deg"] == pytest.approx(14.553) and doc["v1_rmse_deg"] == pytest.approx(5.447)
-    row = doc["discs"][0]                  # radius 100 m covers the whole 30 x 30 m grid
-    assert row["budget_min"] == 30
-    assert row["blocked_pct"] == pytest.approx(20.0) and row["unknown_pct"] == pytest.approx(10.0)
-    assert row["assessed_pct"] == pytest.approx(70.0)
-    assert row["nominal_blocked_pct"] == pytest.approx(10.0)
-    assert row["newly_blocked_pct"] == pytest.approx(10.0)
-    assert doc["grid_pct"] == {"assessed": 70.0, "blocked": 20.0, "unknown": 10.0}
+    known = np.ones((10, 10), bool)
+    known[9, :] = False                    # 10 unknown cells
+    sl = np.full((10, 10), 10.0, np.float32)
+    sl[0, :] = 22.0                        # 10 cells: blocked by slope at 20 and 17, not 25
+    sl[1, :] = 18.0                        # 10 cells: blocked by slope at 17 only
+    sl[~known] = np.nan
+    sg = np.zeros((10, 10), bool)
+    sg[2, :5] = True                       # 5 cells: step guard only
+    sg[0, :2] = True                       # 2 cells: step guard and slope (counted as slope)
+    mx = np.full((10, 10), 21.0, np.float32)   # old rule: every known cell > 20 and > 17
+    nogo = {"optimistic": 25.0, "nominal": 20.0, "conservative": 17.0}
+    states = {v: routing.cell_state(known, sl, sg, d) for v, d in nogo.items()}
+    doc = webout.cell_state_summary(states, sl, sg, known, mx, g, (15.0, 15.0), {30: 100.0},
+                                    nogo_deg=nogo, step_guard_deg=30.0, rasters={})
+    assert doc["step_guard_deg"] == 30.0
+    row = {v: doc["variants"][v]["discs"][0] for v in nogo}
+    assert row["optimistic"]["blocked_slope_pct"] == 0.0
+    assert row["optimistic"]["blocked_stepguard_only_pct"] == pytest.approx(7.0)
+    assert row["optimistic"]["blocked_pct"] == pytest.approx(7.0)
+    assert row["optimistic"]["maxslope_rule_blocked_pct"] == pytest.approx(0.0)
+    assert row["nominal"]["blocked_slope_pct"] == pytest.approx(10.0)
+    assert row["nominal"]["blocked_stepguard_only_pct"] == pytest.approx(5.0)
+    assert row["nominal"]["blocked_pct"] == pytest.approx(15.0)
+    assert row["nominal"]["maxslope_rule_blocked_pct"] == pytest.approx(90.0)
+    assert row["conservative"]["blocked_slope_pct"] == pytest.approx(20.0)
+    assert row["conservative"]["blocked_stepguard_only_pct"] == pytest.approx(5.0)
+    assert row["conservative"]["blocked_pct"] == pytest.approx(25.0)
+    assert row["conservative"]["unknown_pct"] == pytest.approx(10.0)
+    assert row["conservative"]["assessed_pct"] == pytest.approx(65.0)
+    assert doc["discs_stepguard"][0]["stepguard_pct"] == pytest.approx(7.0)
+    assert doc["variants"]["nominal"]["nogo_deg"] == 20.0
 
 
 # ---------------------------------------------------------------- manifest file paths (WS6 audit 1)
@@ -458,9 +561,13 @@ def test_every_ws1_manifest_key_cites_a_web_path_that_holds_its_value(tmp_path, 
     slope_summary = {"slope_compare": {"median_abs_diff_deg": 0.341},
                      "discs": {"30": {"blocked_pct_of_known": 41.23},
                                "60": {"blocked_pct_of_known": 31.357}}}
-    con = {"nogo_deg": 14.553, "v1_rmse_deg": 5.447, "discs": [
-        {"budget_min": 30, "assessed_pct": 40.0, "blocked_pct": 60.0, "unknown_pct": 0.0,
-         "nominal_blocked_pct": 41.23, "newly_blocked_pct": 18.77}]}
+    row = {"budget_min": 30, "radius_m": 1764.0, "assessed_pct": 70.0, "blocked_pct": 30.0,
+           "unknown_pct": 0.0, "blocked_slope_pct": 21.5, "blocked_stepguard_only_pct": 8.5,
+           "maxslope_rule_blocked_pct": 41.23}
+    con = {"step_guard_deg": 30.0, "discs_stepguard": [{"budget_min": 30, "stepguard_pct": 9.1}],
+           "variants": {v: {"nogo_deg": d, "discs": [row]}
+                        for v, d in (("optimistic", 25.0), ("nominal", 20.0),
+                                     ("conservative", 17.0))}}
     discs = [{"budget_min": 30, "radius_m": 1764.0, "assessed_pct": 58.77, "blocked_pct": 41.23,
               "unknown_pct": 0.0}]
     doc = {"discs": discs, "source_fractions_pct": {"hirise": 100.0},
@@ -487,8 +594,102 @@ def test_every_ws1_manifest_key_cites_a_web_path_that_holds_its_value(tmp_path, 
     for key in ("stations.S1.value", "terrain.xcheck.DTEEC_X.median",
                 "terrain.xcheck.DTEEC_X.p90_abs", "terrain.slope_compare.median_abs_diff",
                 "terrain.blocked_pct.30min", "terrain.blocked_pct.60min",
-                "terrain.nogo_conservative_deg", "terrain.conservative.disc_30.blocked_pct",
-                "terrain.conservative.disc_30.newly_blocked_pct"):
+                "terrain.nogo_deg.conservative", "terrain.nogo_deg.optimistic",
+                "terrain.step_guard_deg", "terrain.stepguard.disc_30.pct",
+                "terrain.cellstates.conservative.disc_30.blocked_pct",
+                "terrain.cellstates.nominal.disc_30.blocked_stepguard_only_pct",
+                "terrain.cellstates.optimistic.disc_30.maxslope_rule_blocked_pct"):
         assert key in frag, key
+    # D23: the old "20 - V1 RMSE" keys are gone
+    assert not [k for k in frag if k.startswith("terrain.conservative.")
+                or k == "terrain.nogo_conservative_deg"]
     assert frag["stations.S1.value"]["file"] == "stations.json"
     assert "stations.S3.value" not in frag                    # unknown stays unrecorded
+
+
+# ---------------------------------------------------------------- stations (D26, D32; F7)
+
+
+def test_station_spacing_rule_300m():
+    from pipeline.terrain import stations as ST
+
+    x = np.array([0.0, 299.9, 300.0, 0.0, 500.0])
+    y = np.array([0.0, 0.0, 0.0, -300.0, 400.0])
+    ok = ST.spacing_ok(x, y, [(0.0, 0.0)], 300.0)
+    assert ok.tolist() == [False, False, True, True, True]     # >= 300 m from every station
+    ok2 = ST.spacing_ok(x, y, [(0.0, 0.0), (500.0, 300.0)], 300.0)
+    assert ok2.tolist() == [False, False, True, True, False]
+    assert ST.spacing_ok(x, y, [], 300.0).all()
+
+
+def test_station_focus_area_filter_is_inclusive_box():
+    from pipeline.terrain import stations as ST
+
+    f = {"west": 137.37, "east": 137.42, "south": -4.82, "north": -4.77}
+    lon = np.array([137.37, 137.395, 137.42, 137.3699, 137.4201, 137.40, 137.40])
+    lat = np.array([-4.82, -4.80, -4.77, -4.80, -4.80, -4.8201, -4.7699])
+    assert ST.in_focus(lon, lat, f).tolist() == [True, True, True, False, False, False, False]
+
+
+def test_station_walkable_filter_uses_the_3m_cell_under_the_point():
+    from pipeline.terrain import stations as ST
+
+    g3 = Grid(x0=0.0, y0=30.0, res=3.0, width=10, height=10)
+    st = np.zeros((10, 10), np.uint8)
+    st[0, 1] = routing.BLOCKED
+    st[0, 2] = routing.UNKNOWN
+    x = np.array([1.5, 4.5, 7.5, 10.5, -1.0, 31.0])
+    y = np.array([28.5, 28.5, 28.5, 28.5, 28.5, 28.5])
+    # assessed -> walkable; blocked, unknown, off the grid -> not walkable
+    assert ST.walkable_at(st, g3, x, y).tolist() == [True, False, False, True, False, False]
+
+
+@pytest.mark.parametrize("crism,ridge,expected", [
+    ({"D2300": 0.92, "SINDEX2": 0.10}, 0.20, "high D2300 clay signal"),
+    ({"D2300": 0.10, "SINDEX2": 0.81}, 0.00, "high SINDEX2 sulfate signal"),
+    ({"D2300": 0.30, "SINDEX2": 0.20}, 1.00, "dense ridge network"),
+    ({"D2300": 0.60, "SINDEX2": 0.20}, 1.00, "dense ridge network + high D2300 clay signal"),
+    ({"D2300": 0.90, "SINDEX2": 0.20}, 0.70, "high D2300 clay signal + dense ridge network"),
+    ({"D2300": 0.30, "SINDEX2": 0.20}, 0.40, "F7 score without a dominant component"),
+])
+def test_station_name_comes_from_the_score_components(crism, ridge, expected):
+    from pipeline.terrain import stations as ST
+
+    words = {"D2300": "clay", "SINDEX2": "sulfate"}
+    name, finding = ST.finding_name(crism, ridge, min_norm=0.5, index_words=words)
+    assert name == expected
+    # the finding states the numbers the name rests on, never a geological claim
+    assert "D2300" in finding and "SINDEX2" in finding and "ridge density" in finding
+    for bad in ("nodule", "boulder", "vein", "sulfur", "water", "ancient"):
+        assert bad not in name.lower()
+
+
+def test_station_extras_are_greedy_by_value_and_respect_every_filter():
+    from pipeline.terrain import stations as ST
+
+    #           0      1      2      3      4      5      6
+    x = np.array([0.0, 100.0, 500.0, 900.0, 1300.0, 2000.0, 2600.0])
+    y = np.zeros(7)
+    value = np.array([0.9, 0.95, 0.7, 0.8, 0.6, 0.99, 0.5])
+    eligible = np.array([True, True, True, True, True, False, True])  # 5: off focus/unwalkable
+    placed = [(0.0, 400.0)]                                           # 500 m from 0, 412 from 1
+    pick = ST.place_extras(x, y, value, eligible, placed, n_max=3, min_m=300.0)
+    # 1 (0.95) first; 0 is 100 m from 1 -> out; 3 (0.8); 2 is 400 m from 3 and 400 from 1 -> ok
+    assert pick == [1, 3, 2]
+    pts = placed + [(x[i], y[i]) for i in pick]
+    for i, a in enumerate(pts):
+        for b in pts[i + 1:]:
+            assert math.hypot(a[0] - b[0], a[1] - b[1]) >= 300.0
+    assert ST.place_extras(x, y, value, np.zeros(7, bool), placed, 3, 300.0) == []
+    assert len(ST.place_extras(x, y, value, eligible, [], n_max=2, min_m=300.0)) == 2
+
+
+def test_stations_config_d26_d32():
+    from pipeline.terrain import grid as G
+
+    st = G.stations_cfg()
+    assert st["scoring_weights"] == {"crism": 0.4, "ridge_density": 0.4, "manual": 0.2}
+    assert st["scoring_weights_assumed"] is True                                 # D32
+    assert st["min_spacing_m"] == 300                                            # D32
+    assert st["extras"]["max"] == 3 and st["extras"]["manual_priority"] == 0
+    assert {s["id"] for s in st["stations"] if s.get("status") == "dropped"} == {"S3", "S5"}
