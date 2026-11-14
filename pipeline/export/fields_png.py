@@ -30,9 +30,10 @@ reads ``data/interim/{terrain,engine}/`` and writes ``data/interim/export/fields
 reported by owner, never faked. WS9's ``data/interim/navigation/fields_index_nav.json``
 (``fix_interval_{set}`` entries; the PNGs reach the web tree through WS9's own ``make web`` rule)
 is merged into ``fields/index.json`` when its grid is exactly this one (``merge_nav_index``).
-``--with-pointer`` also writes WS2's way-home pointer on its
-native grid with extra index keys: **not in contracts v1.1.0** (proposal to C, STATUS.md WS7), so
-it is off by default.
+Every scenario's way-home pointer (WS2 ``engine/{sc}/pointer.tif``) is written as
+``fields/{sc}/pointer.png`` on WS2's native 3 m route grid, with its own ``bounds``/
+``width``/``height``/``res_m`` and the ``stencil`` in its index entry (contracts v1.1.1;
+``--no-pointer`` skips it).
 
 Provenance (AGENTS.md rule 6): per PNG, ``fields.<key>.sha256`` (the file, which backs every
 per-pixel value the HUD reads from it), ``fields.<key>.max`` and ``fields.<key>.known_pct``.
@@ -277,7 +278,7 @@ def build_index(bounds: Sequence[float], width: int, height: int, res_m: float,
     return idx
 
 
-# ------------------------------------------------- way-home pointer (proposal, not v1.1.0) ----
+# ------------------------------------------------------ way-home pointer (contracts v1.1.1) ----
 def pointer_values(pointer: np.ndarray, n_moves: int) -> np.ndarray:
     """WS2 ``pointer.tif`` (int move index, -1 = no move) -> float field, NaN = no move."""
     p = np.asarray(pointer)
@@ -377,7 +378,7 @@ def _lonlat_bounds(grid5: Mapping[str, Any]) -> list[float]:
 
 def run(*, interim: str | Path = INTERIM, out_root: str | Path | None = None,
         scenarios: Sequence[str] | None = None, dry_run: bool = False,
-        with_pointer: bool = False, manifest_fragment_dir: str | Path | None = None,
+        with_pointer: bool = True, manifest_fragment_dir: str | Path | None = None,
         log: Callable[..., None] = print) -> dict[str, Any]:
     """Export every field whose inputs exist; returns ``{written, skipped, inputs, sizes}``."""
     interim = Path(interim)
@@ -396,6 +397,9 @@ def run(*, interim: str | Path = INTERIM, out_root: str | Path | None = None,
         {"path": str(Path("terrain/slope_5m.tif")), "owner": "WS1", "present": slope_tif.exists()},
         {"path": str(NAV_INDEX), "owner": "WS9", "present": (interim / NAV_INDEX).exists()},
     ]
+    if with_pointer:
+        inputs.append({"path": str(Path("engine/pointer_offsets.json")), "owner": "WS2",
+                       "present": offsets_json.exists()})
     for sc in ids:
         for name in ("t_home", "o2_home") + (("pointer",) if with_pointer else ()):
             p = interim / "engine" / sc / f"{name}.tif"
@@ -468,7 +472,9 @@ def run(*, interim: str | Path = INTERIM, out_root: str | Path | None = None,
             if p_path.exists() and offsets_json.exists():
                 _write_pointer(out_root, sc, p_path, offsets_json, hud, entries, rep, log, kw)
             else:
-                rep["skipped"][f"{sc}/pointer"] = f"missing engine/{sc}/pointer.tif (WS2)"
+                miss = (f"engine/{sc}/pointer.tif" if not p_path.exists()
+                        else "engine/pointer_offsets.json")
+                rep["skipped"][f"{sc}/pointer"] = f"missing {miss} (WS2)"
 
     bounds = _lonlat_bounds(g5)
     nav_path = interim / NAV_INDEX
@@ -499,7 +505,7 @@ def run(*, interim: str | Path = INTERIM, out_root: str | Path | None = None,
 
 
 def _write_pointer(out_root, sc, p_path, offsets_json, hud, entries, rep, log, kw) -> None:
-    """``--with-pointer``: WS2's pointer on its native grid (proposal; not in contracts v1.1.0)."""
+    """WS2's pointer on its native 3 m grid (contracts v1.1.1: own grid keys + ``stencil``)."""
     import rasterio
 
     offs = json.loads(offsets_json.read_text())["offsets_drow_dcol"]
@@ -510,7 +516,9 @@ def _write_pointer(out_root, sc, p_path, offsets_json, hud, entries, rep, log, k
         h, w = ptr.shape
     grid = json.loads((Path(p_path).parents[2] / "terrain" / "grid.json").read_text())
     g3 = grid["grids"]["route_3m"]
-    if (int(g3["width"]), int(g3["height"])) != (w, h) or not math.isclose(t.a, g3["res_m"]):
+    if ((int(g3["width"]), int(g3["height"])) != (w, h) or not math.isclose(t.a, g3["res_m"])
+            or not math.isclose(-t.e, g3["res_m"])
+            or any(abs(a - b) > 1e-3 for a, b in zip((t.c, t.f), g3["nw_xy"], strict=True))):
         raise ValueError(f"{p_path}: not on grid.json route_3m")
     key = f"{sc}/pointer"
     entries[key] = write_field(out_root, key, pointer_values(ptr, len(stencil)), sc, hud,
@@ -518,18 +526,25 @@ def _write_pointer(out_root, sc, p_path, offsets_json, hud, entries, rep, log, k
                                       "width": w, "height": h, "res_m": g3["res_m"],
                                       "stencil": stencil}, **kw)
     rep["written"].append(key)
-    log(f"wrote fields/{key}.png (proposal, own grid)")
+    log(f"wrote fields/{key}.png (own {w} x {h} grid at {g3['res_m']:g} m)")
 
 
-def main(argv: list[str] | None = None) -> int:
+def build_arg_parser() -> argparse.ArgumentParser:
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--scenarios", nargs="*", help="scenario ids (default: variants.yaml ids)")
     ap.add_argument("--interim", default=str(INTERIM))
     ap.add_argument("--out", default=None, help="output root (default data/interim/export)")
     ap.add_argument("--dry-run", action="store_true", help="list inputs, write nothing")
-    ap.add_argument("--with-pointer", action="store_true",
-                    help="also write {scenario}/pointer (proposal, not in contracts v1.1.0)")
-    a = ap.parse_args(argv)
+    ap.add_argument("--no-pointer", dest="with_pointer", action="store_false",
+                    help="skip {scenario}/pointer (the way-home pointer, written by default)")
+    ap.add_argument("--with-pointer", dest="with_pointer", action="store_true",
+                    help=argparse.SUPPRESS)  # pre-v1.1.1 spelling; now the default
+    ap.set_defaults(with_pointer=True)
+    return ap
+
+
+def main(argv: list[str] | None = None) -> int:
+    a = build_arg_parser().parse_args(argv)
     rep = run(interim=a.interim, out_root=a.out, scenarios=a.scenarios, dry_run=a.dry_run,
               with_pointer=a.with_pointer)
     if not a.dry_run and not rep["written"]:

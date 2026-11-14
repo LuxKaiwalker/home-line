@@ -312,7 +312,22 @@ def _write_tif(path, arr, nw, res, nodata):
         ds.write(arr, 1)
 
 
-def _synthetic_tree(root, *, with_o2=True):
+PAD_RC = (20, 19)  # 3 m cell SW of the pad corner (0, 0) on the 40 x 40 synthetic grid
+
+
+def _synthetic_pointer():
+    """Greedy king moves toward PAD_RC (move index into STENCIL), -1 at the pad cell."""
+    n3 = 40
+    ptr = np.full((n3, n3), -1, dtype=np.int8)
+    for r in range(n3):
+        for c in range(n3):
+            dr, dc = int(np.sign(PAD_RC[0] - r)), int(np.sign(PAD_RC[1] - c))
+            if (dr, dc) != (0, 0):
+                ptr[r, c] = STENCIL.index([dr, dc])
+    return ptr
+
+
+def _synthetic_tree(root, *, with_o2=True, pointer_moves=False):
     """Pad corner at (0, 0); 3 m grid +-60 m (NW at (-60, 60)); 5 m grid +-55 m (NW (-55, 55));
     slope at 1 m +-60 m. T_home = distance from the pad / 1 m/s in minutes."""
     n3 = 40
@@ -325,7 +340,7 @@ def _synthetic_tree(root, *, with_o2=True):
     if with_o2:
         _write_tif(eng / "o2_home.tif", (t * 0.7).astype(np.float32), (-60.0, 60.0), 3.0,
                    np.float32(np.nan))
-    ptr = np.full((n3, n3), -1, dtype=np.int8)
+    ptr = _synthetic_pointer() if pointer_moves else np.full((n3, n3), -1, dtype=np.int8)
     _write_tif(eng / "pointer.tif", ptr, (-60.0, 60.0), 3.0, -1)
     slope = np.random.default_rng(3).uniform(0, 40, (120, 120)).astype(np.float32)
     _write_tif(root / "terrain" / "slope_5m.tif", slope, (-60.0, 60.0), 1.0, np.float32(np.nan))
@@ -351,10 +366,12 @@ def test_cli_writes_contract_valid_index(tmp_path):
     radii = HUD["worst_case_radii_m"]
     want = {"slope", "nom_104/t_home", "nom_104/o2_home", "nom_104/home_bearing"}
     want |= {f"nom_104/{b}_worst_{r}" for b in ("t_home", "o2_home") for r in radii}
-    assert set(idx["fields"]) == want  # no pointer without --with-pointer
+    want |= {"nom_104/pointer"}  # the way-home pointer is in the default run (contracts v1.1.1)
+    assert set(idx["fields"]) == want
     for k, e in idx["fields"].items():
         assert (out / e["file"]).exists(), k
-        assert Image.open(out / e["file"]).size == (22, 22)
+        size = (e.get("width", 22), e.get("height", 22))
+        assert Image.open(out / e["file"]).size == size
     assert idx["fields"]["slope"]["file"] == "fields/shared/slope.png"
     assert idx["fields"]["slope"]["scenario"] is None
     # T_home at the pad pixel SW of the pad corner (5 m pixel (11, 10)): the 3 m cell under its
@@ -400,16 +417,50 @@ def test_cli_dry_run_writes_nothing(tmp_path):
         "path": str(Path("engine/con_104/t_home.tif")), "owner": "WS2", "present": False}
 
 
-def test_cli_with_pointer_proposal(tmp_path):
-    _synthetic_tree(tmp_path / "interim")
+def test_cli_pointer_by_default_on_its_own_grid(tmp_path):
+    """contracts v1.1.1: {sc}/pointer on WS2's 3 m grid with its own bounds/size/res + stencil."""
+    _synthetic_tree(tmp_path / "interim", pointer_moves=True)
     out = tmp_path / "out"
-    fp.run(interim=tmp_path / "interim", out_root=out, scenarios=["nom_104"], with_pointer=True,
+    fp.run(interim=tmp_path / "interim", out_root=out, scenarios=["nom_104"],
            manifest_fragment_dir=tmp_path / "manifest", log=lambda *a: None)
     idx = json.loads((out / "fields" / "index.json").read_text())
     p = idx["fields"]["nom_104/pointer"]
     Draft202012Validator(SCHEMA).validate(idx)
+    assert p["file"] == "fields/nom_104/pointer.png" and p["scenario"] == "nom_104"
     assert (p["width"], p["height"], p["res_m"], p["stencil"]) == (40, 40, 3.0, STENCIL)
+    assert p["bounds"] == [137.38, -0.001, 137.40, 0.001]
     assert (p["scale"], p["units"]) == (1, "move")
+    # exact round trip of the move index; -1 (pad / unreached) decodes as unknown
+    v = fp.decode_png(out / p["file"], 1)
+    ptr = _synthetic_pointer()
+    assert np.array_equal(np.isnan(v), ptr == -1)
+    assert np.array_equal(v[ptr >= 0], ptr[ptr >= 0])
+    # following it from any cell with a move ends on the pad cell
+    path, why = fp.follow_pointer(v, p["stencil"], 0, 0)
+    assert why == "stop" and path[-1] == PAD_RC
+
+
+def test_cli_no_pointer_opt_out(tmp_path):
+    _synthetic_tree(tmp_path / "interim")
+    out = tmp_path / "out"
+    fp.run(interim=tmp_path / "interim", out_root=out, scenarios=["nom_104"], with_pointer=False,
+           manifest_fragment_dir=tmp_path / "manifest", log=lambda *a: None)
+    idx = json.loads((out / "fields" / "index.json").read_text())
+    assert "nom_104/pointer" not in idx["fields"]
+    a = fp.build_arg_parser().parse_args([])
+    assert a.with_pointer is True
+    assert fp.build_arg_parser().parse_args(["--no-pointer"]).with_pointer is False
+
+
+def test_cli_missing_pointer_is_reported_not_faked(tmp_path):
+    _synthetic_tree(tmp_path / "interim")
+    (tmp_path / "interim" / "engine" / "nom_104" / "pointer.tif").unlink()
+    out = tmp_path / "out"
+    rep = fp.run(interim=tmp_path / "interim", out_root=out, scenarios=["nom_104"],
+                 manifest_fragment_dir=tmp_path / "manifest", log=lambda *a: None)
+    idx = json.loads((out / "fields" / "index.json").read_text())
+    assert "nom_104/pointer" not in idx["fields"]
+    assert "WS2" in rep["skipped"]["nom_104/pointer"]
 
 
 def test_cli_partial_run_keeps_other_scenarios(tmp_path):
@@ -434,7 +485,9 @@ def test_real_index_valid_and_pad_zero():
     Draft202012Validator(SCHEMA).validate(idx)
     assert idx["dummy"] is False
     for k, e in idx["fields"].items():
-        f = REAL_IDX.parent.parent / e["file"]
+        # WS9's fix_interval PNGs stay in navigation/ (WS9's make web rule copies them)
+        root = INTERIM / "navigation" if k.startswith("fix_interval_") else REAL_IDX.parent.parent
+        f = root / e["file"]
         assert f.exists(), k
         assert f.stat().st_size < 50e6
     sc = VARIANTS["scenarios"]["default"]
@@ -462,6 +515,38 @@ def test_real_worst_case_ge_point_on_crop():
         a = fp.decode_png(fp.encode_png(t, s), s)
         b = fp.decode_png(fp.encode_png(f, s), s)
         assert np.all(b[both] >= a[both])
+
+
+@pytest.mark.skipif(not REAL_IDX.exists() or not REAL_T.exists(), reason="no real export / WS2")
+def test_real_pointer_leads_home_downhill_in_t_home():
+    """The exported pointer PNG (v1.1.1) leads from any reached cell to the pad (T_home 0), and
+    WS2's T_home never rises along the way (F18 way-home path = WS2's route home)."""
+    import rasterio
+
+    idx = json.loads(REAL_IDX.read_text())
+    sc = VARIANTS["scenarios"]["default"]
+    e = idx["fields"].get(f"{sc}/pointer")
+    if e is None:
+        pytest.skip("no pointer in the real export")
+    Draft202012Validator(SCHEMA).validate(idx)
+    v = fp.decode_png(REAL_IDX.parent.parent / e["file"], e["scale"])
+    assert v.shape == (e["height"], e["width"]) and e["res_m"] == 3
+    with rasterio.open(REAL_T) as ds:
+        t = ds.read(1).astype(np.float64)
+        if ds.nodata is not None and np.isfinite(ds.nodata):
+            t[t == ds.nodata] = np.nan
+    assert t.shape == v.shape
+    # a move exactly where WS2 has a finite T_home > 0; none at the pad / unreached
+    assert np.array_equal(np.isfinite(v), np.isfinite(t) & (t > 0))
+    pad = np.argwhere(t == 0)
+    assert len(pad) == 1
+    rng = np.random.default_rng(7)
+    reached = np.argwhere(np.isfinite(v))
+    for r, c in reached[rng.choice(len(reached), 60, replace=False)]:
+        path, why = fp.follow_pointer(v, e["stencil"], int(r), int(c))
+        assert why == "stop" and path[-1] == tuple(pad[0]), (r, c, why)
+        tt = np.array([t[i, j] for i, j in path])
+        assert np.all(np.diff(tt) <= 1e-4), (r, c)
 
 
 # --------------------------------------------------------- WS9 fix-interval index merge ----

@@ -596,7 +596,14 @@ def _real_inputs(tmp_path: Path, dx=0.0, dy=0.0):
     return mm, coreg, dem
 
 
-def test_v1_run_real_blocked_until_footprint_decided(tmp_path, frag_dir):
+def test_v1_config_footprint_decided_3m():
+    """User decision 2026-11-14 12:37 (STATUS Decision log): 3 m (SPEC F13); 5 m is sensitivity."""
+    assert VCFG["footprint_m"] == 3 and v1_tilt.footprint_m() == 3.0
+    assert 5 in VCFG["footprint_candidates_m"]
+
+
+def test_v1_run_real_blocked_until_footprint_decided(tmp_path, frag_dir, monkeypatch):
+    monkeypatch.setattr(v1_tilt, "_v1_config", lambda: {**VCFG, "footprint_m": None})
     mm, coreg, dem = _real_inputs(tmp_path)
     assert v1_tilt.main(["--mmgis", str(mm), "--coreg", str(coreg), "--dem", str(dem),
                          "--out", str(tmp_path / "v1.json"), "--svg", str(tmp_path / "v1.svg")]
@@ -623,7 +630,7 @@ def test_v1_run_real_plane(tmp_path, frag_dir, monkeypatch):
     assert doc["point_ids"] == ["1_0", "1_1"]
     assert abs(doc["bias_deg"]) < 1e-4 and doc["rmse_deg"] < 1e-4
     sens = doc["sensitivity"]
-    assert set(sens) == {"footprint_5m", "imu_roll_pitch"}  # 3 m is primary here
+    assert set(sens) == {"footprint_5m", "imu_roll_pitch", "all_in_dem"}  # 3 m is primary
     assert abs(sens["footprint_5m"]["bias_deg"]) < 1e-4
     assert sens["imu_roll_pitch"]["n"] == 3  # roll/pitch is valid where tilt was -2.24
     assert Draft202012Validator(V1_SCHEMA).is_valid(json.loads(out.read_text()))
@@ -631,6 +638,35 @@ def test_v1_run_real_plane(tmp_path, frag_dir, monkeypatch):
     assert m["v1.rmse_deg"]["file"] == "validation/v1.json"
     assert "v1.sensitivity.footprint_5m.rmse_deg" in m
     assert len(ET.parse(svg).getroot().findall(f".//{{{figures.SVG_NS}}}circle")) == 2
+    # conservative no-go for WS1/WS2: variants.yaml "20 - v1_rmse_deg" with the primary RMSE
+    cons = doc["conservative_nogo"]
+    assert cons["formula"] == "20 - v1_rmse_deg" and cons["rmse_deg"] == doc["rmse_deg"]
+    assert cons["nogo_deg"] == pytest.approx(20.0 - doc["rmse_deg"])
+    assert m["v1.conservative_nogo.nogo_deg"]["units"] == "deg"
+
+
+def test_v1_conservative_nogo_known_answer():
+    assert v1_tilt.conservative_nogo(2.5) == {
+        "formula": "20 - v1_rmse_deg", "rmse_deg": 2.5, "nogo_deg": 17.5,
+        "source": "config/variants.yaml variants.conservative.nogo_deg"}
+    assert v1_tilt.conservative_nogo(None)["nogo_deg"] is None
+
+
+def test_v1_all_in_dem_sensitivity_ignores_focus(tmp_path, frag_dir, monkeypatch):
+    """Primary set = drive ends in the focus area (SPEC F13); `all_in_dem` drops the focus
+    filter and keeps every drive end whose footprint lies on the DEM."""
+    monkeypatch.setattr(v1_tilt, "_v1_config", lambda: {**VCFG, "footprint_m": FP})
+    mm, coreg, dem = _real_inputs(tmp_path)
+    a = SITE["aoi_focus"]
+    lon_c, lat_c = (a["west"] + a["east"]) / 2, (a["south"] + a["north"]) / 2
+    tiny = {"west": lon_c - 1e-5, "east": lon_c + 1e-5, "south": lat_c - 1e-5,
+            "north": lat_c + 1e-5}
+    monkeypatch.setattr(v1_tilt, "_site", lambda: {**SITE, "aoi_focus": tiny})
+    doc = v1_tilt.run_real(mm, coreg, dem, tmp_path / "v1.json", None)
+    assert doc["n_in_focus"] == 1 and doc["n"] == 1
+    alld = doc["sensitivity"]["all_in_dem"]
+    assert alld["n"] == 2 and alld["n_excluded"] == 3  # 1 invalid IMU, 2 off the DEM
+    assert alld["n_drive_ends"] == 5 and abs(alld["bias_deg"]) < 1e-4
 
 
 # --------------------------------------------------------------------------- KAT pass list (F16)
@@ -684,6 +720,7 @@ def test_kats_area_and_feature_map():
     assert kats.classify("tests/test_provenance.py::test_h0_x") == ("Provenance", ["F16"])
     assert kats.classify("web/src/hud/hud.test.ts > HUD > t_home")[0] == "HUD logic"
     assert kats.classify("tests/test_new_thing.py::test_y") == ("other", [])
+    assert kats.classify("tests/test_fp3d_export.py::test_chunk") == ("3D", ["F20"])
 
 
 def test_kats_document_validates_and_records_summary(tmp_path, frag_dir):

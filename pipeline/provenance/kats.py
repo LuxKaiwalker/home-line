@@ -58,6 +58,7 @@ FILE_MAP: dict[str, tuple[str, list[str]]] = {
     "tests/test_fields_png.py": ("HUD fields", ["F18"]),
     "tests/test_nav.py": ("F21 navigation", ["F21"]),
     "tests/test_vo.py": ("X8 visual odometry", ["X8"]),
+    "tests/test_fp3d_export.py": ("3D", ["F20"]),
 }
 # Web test directories (vitest) -> area, features.
 WEB_DIR_MAP: dict[str, tuple[str, list[str]]] = {

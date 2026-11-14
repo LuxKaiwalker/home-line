@@ -751,42 +751,127 @@ Branch: `ws6-provenance`
 - Manifest records made under pytest go to a temp dir unless `HOMELINE_MANIFEST_DIR` is set, so
   no workstream's tests can leak into the shared `data/interim/manifest/`.
 - `tests/test_provenance.py`: 51 KATs pass; full suite 122 pass; ruff clean.
+- 2026-11-14T11:40Z (session 2): `config/validation.yaml v1.footprint_m: 3` (user 12:37 CET, for S);
+  5 m kept as a sensitivity. KATs first: footprint decided, `conservative_nogo` known answer,
+  all-in-DEM set ignores the focus filter. Commit 4c38616.
+- 2026-11-14T13:14Z: **real V1** (F13), re-run after merging main 78cb57d (commit f9ffe96, clean;
+  same numbers as the 11:40Z run). Inputs: `data/raw/discovery/mmgis_MSL_waypoints.json` (1,389 drive
+  ends), WS1 `dem_1m.tif`, WS1 `coreg.json` shift (0, 0) m **added** to the MMGIS x/y (sign
+  confirmed by WS1). Outputs `data/interim/validation/v1.json` (valid against `v1.schema.json`) +
+  `v1.svg`; 56 manifest keys `v1.*` (file `validation/v1.json`).
+  - **Primary (SPEC F13: focus area, 3 m footprint, MMGIS `tilt`): n = 290** (0 excluded: every
+    focus drive end has a full 3 m DEM footprint, no invalid tilt). **bias +1.31°** (DEM − IMU),
+    **RMSE 5.45°**, **r 0.50**.
+    Confusion (DEM predicts, IMU is the reference; positive = tilt ≥ threshold):
+    10°: TP 84, FP 55, FN 20, TN 131. 20°: TP 1, FP 15, FN 2, TN 272.
+  - Sensitivity, 5 m footprint: n 290, bias +0.78°, RMSE 4.91°, r 0.52; 10°: 76/50/28/136;
+    20°: 1/14/2/273 (TP/FP/FN/TN).
+  - Sensitivity, IMU tilt from roll/pitch (acos(cos r · cos p)): n 290, bias +1.31°, RMSE 5.45°,
+    r 0.50; matrices identical to the primary (MMGIS `tilt` is this quantity).
+  - Sensitivity, every drive end on the DEM (no focus filter): 537 of 1,389 (852 off the DEM),
+    bias +0.59°, RMSE 4.90°, r 0.58; 10°: 200/71/55/211; 20°: 3/27/9/498.
+  - Reading: the 1 m DEM over 3 m is steeper and noisier than the rover's tilt (it cannot see the
+    rover's wheelbase averaging); at 20° it raises 15 false alarms for 1 hit, so as a hazard flag it is
+    conservative, not permissive. Caveat (SPEC F13): the rover chose gentle ground (3 of 290 ≥ 20°).
+  - **For WS2 (con_*) and WS1 (`cellstate_3m_conservative.tif`): use the top-level `rmse_deg` of
+    `data/interim/validation/v1.json` = 5.447021 deg → conservative no-go = 20 − 5.447 =
+    14.553°** (`v1.json conservative_nogo`, manifest `v1.rmse_deg`, `v1.conservative_nogo.nogo_deg`).
+    Not the 5 m or all-in-DEM values; those are sensitivities only. Both consumers already read
+    exactly that field (`pipeline/engine/scenarios.py v1_from_file`, `pipeline/terrain/build.py
+    step_conservative`).
+- 2026-11-14T13:18Z: **KAT list** `data/interim/validation/kats.json` (valid against
+  `contracts/kats.schema.json`), commit 70d6e11 (clean), runner pytest+vitest:
+  **1,082 tests: 1,081 passed, 0 failed, 1 skipped** (pytest 721/721; vitest 360 passed, 1 skipped:
+  `web/src/fp3d/skyline.test.ts` real-data F20 check, skipped by design until fp3d is in the public
+  tree). `make kats` alone (pytest only): 721/721. Manifest `kats.summary.*` (4 keys).
+  `tests/test_fp3d_export.py` now maps to 3D/F20 (KAT first); 404 rows stay "other" (contracts,
+  config, make_web/make_dummy, WS5 views), not guessed.
+  To include vitest: `cd web && npx vitest run --reporter=json --outputFile=<f>` then
+  `python -m pipeline.provenance.kats --exit-zero --vitest-json <f>`.
+- `tests/test_provenance.py`: 54 pass; ruff clean.
+
+### Audit 1 (2026-11-14T13:20Z): main's `web/public/data/` (C's make web 3fe841a, 846 keys)
+
+Scope: manifest integrity (units, H0, commit, file), coverage (numeric leaves of every JSON file vs
+manifest values for that file), CRS (every GeoJSON coordinate and every `bounds`), nodata
+(sentinels/NaN in JSON, PNG alpha encoding). Tree-wide: H0 check passes; no NaN/Infinity or
+sentinel (−9999, −32768, ±3.4e38, ≥ 1e15) anywhere; **all GeoJSON is lon/lat** (3.6 M coordinates,
+0 outside the Gale box, no `crs` member) and every `bounds` is W<E, S<N in lon/lat. A trial merge
+of today's 20 fragments in `data/interim/manifest/` gives 929 unique keys (no duplicates).
+
+- **WS1** (36 keys): (a) **the station "value" does have keys** (`stations.S1/S2/S4.value` = 0.8683
+  / 0.7443 / 0.475, units "1"), but they are recorded with `file: data/interim/terrain/stations.json`
+  instead of the web path `stations.json`, so WS5's `<Num>` (named key, else same file + value)
+  cannot match them. 10 keys use interim paths: `stations.*.value`, `terrain.blocked_pct.{30,60}min`
+  (`cellstate_3m.tif`), `terrain.slope_compare.median_abs_diff` (`slope_5m.tif`),
+  `terrain.xcheck.*` (`hirise_xcheck.json`). Fix: record the web path (`stations.json`;
+  `validation/coverage.json` or another shown file for the rest), or WS5 resolves
+  `stations.{S}.value` by name. Still so in WS1's current fragment (f70f3eb). (b) The public tree
+  still has WS1's old `-dirty` keys (commit 4ff8b1b/fb7e979); WS1's clean re-record (f70f3eb)
+  reaches it at the next `make web`. Units, CRS (pad.xy is analysis-CRS metres and labelled `xy`),
+  nodata: OK (cell states 0 % unknown in the 3 m grid, consistent with `slope.png` having no A = 0).
+- **WS2** (273 keys): **route legs have no keys** (`route_nom_104.geojson` legs `t_min`, `o2_L`,
+  `length_m`, `t_start_min`, `t_end_min`; only `route.nom_104.{total_min,margin_terms}`), and
+  `timeline_nom_104.json access_dist_m` (2.1, 27.6 m) is unkeyed; `views/route.ts` shows all of
+  them. Partner area on /trade is keyed (`trade.30.{suit}.partner_area_km2`); the per-feature
+  `area_km2` / `casualty_kg` in `partner.geojson` are not (fine while only the trade value is
+  shown). Proposal: `route.nom_104.leg.{i}.{t_min,o2_L,length_m}`,
+  `timeline.nom_104.{S}.access_dist_m`. Station value: see WS1 (not WS2). Isochrone `minutes`, band
+  `budget` and `suit_kg` are labels from config, not measurements. All commits clean (3bad2dd).
+  con_* now unblocked: rmse 5.447 → 14.553°.
+- **WS3** (29 keys): clean commit; `fp3d/horizon_ring.json` has no keys (observer `eye_height_m` 1.7
+  is config, `z_ground_m` −3627.74 not shown today); `validation/v2.json n_frames_tried/ok` unkeyed
+  (shown only if the scorecard prints them). Public tree predates WS3 session 3 (109/119 frames).
+- **WS4** (235 keys): clean; `rems.latest_feed.sol` has `units: null` (suggest "sol");
+  `rad.json source.median_spacing_min` 17.1 unkeyed (shown with the data lag?). Units otherwise
+  consistent with key suffixes.
+- **WS7** (60 keys in public, clean edbcd3c): `fields/index.json` has no keys (scales are encoding
+  constants; `radius_m_effective` 12/51/102 m is not read by the web app). Nodata OK: every field
+  PNG has B = 0 and RGB = 0 under A = 0; unknown share 41.0 % (nom) / 28.7 % (opt) matches between
+  `t_home` and `o2_home`; `home_bearing` is valid everywhere (bearing to the pad is defined
+  everywhere, SPEC F18 compass). Note: WS7's current interim fragment (13:19Z) is `-dirty`
+  (78cb57d-dirty, session running): re-record from a commit before C's next `make web`.
+- **WS8**: not in the public tree yet (skipped owner). Interim fragment: 6 keys at 2806c39-dirty
+  with `file: data/interim/export/fp3d/index.json` (interim path): record `fp3d/index.json` and
+  re-run from a clean commit.
+- **WS9** (172 keys): **every key is `-dirty`** (7908eda-dirty) in the public tree and in the
+  current fragments (skylinefix, montecarlo, fixinterval): re-run from a committed tree.
+  `nav/tracks_*.geojson` (500 runs) have no keys; the 11:58 decision covers per-row playback
+  values by the Monte Carlo file's entry; `runs` (500, shown in nav/page) is keyed as
+  `nav.montecarlo.{set}.runs` (cite that key by name). `fix_interval_summary.json limit_min`,
+  `cells_inside` unkeyed (limit is config).
+- **WS10** (38 keys): clean; `vo.drift.{i}.sol` has `units: null` (suggest "sol"). `vo/probe.json`
+  and `vo/drift.json` carry many unkeyed per-drive counts (frames, pairs, steps); WS5's drift
+  table shows 5 drives: check that every printed cell resolves to a key.
+- **C** (3 keys): `terrain.cellstate.pct.*` recorded by `tools/make_web.py` at e3ed2d5-dirty.
+- **WS6** (own): `validation/v1.json`, `v1.svg`, `kats.json` and their 60 keys are not in the public
+  tree yet; they are ready in `data/interim/validation/` for the next `make web`.
 
 ### Doing
 
-- — (waiting for WS1 `dem_1m.tif` + `coreg.json` and the footprint decision for the real V1)
+- —
 
 ### Next
 
-- H4–H8: real V1 (`uv run python -m pipeline.validation.v1_tilt --mmgis <cached MSL_waypoints.json>`),
-  RMSE to WS1 for the conservative limit.
-- Reviewer audit every 4 h (units, CRS, nodata, manifest coverage).
+- C: `make web` to publish `validation/{v1.json,v1.svg,kats.json}` (+ `v1.*`, `kats.summary.*`);
+  WS2 `make engine` for con_* and WS1 `cellstate_3m_conservative.tif` with rmse 5.447°.
+- Audit 2 at about 17:20Z (after the next make web): re-run the audit on the public tree.
 - Freeze: `make clean all` from a clean checkout, provenance audit, sign-off.
 
 ### Blocked
 
-1. **V1 footprint (S decides):** SPEC F13 / brief say "≈3 m footprint"; `config/site.yaml`
-   `slope.compare_window_m` is 5. `config/validation.yaml` `v1.footprint_m` is `null` until S sets
-   it; the other candidate is reported as a sensitivity. The real V1 run exits 2 until then.
-2. **WS1 coreg shift sign (WS1/S):** V1 adds `coreg.json` (`dx_m`, `dy_m`) to the MMGIS
-   positions (analysis-CRS x/y) to put them in the DEM frame. Please confirm that sign convention,
-   or tell me the opposite. Also confirm the paths `data/interim/terrain/{dem_1m.tif,coreg.json}`.
-3. **KAT contract (C):** the scorecard's KAT list (`validation/kats.json`) has no contract. Proposal:
-   `pipeline/provenance/kats.schema.proposed.json`; please copy it to `contracts/kats.schema.json`
-   and map `validation/kats.json` in `tools/validate_contracts.py`. `kats.py` uses the contract
-   automatically once it exists.
-4. **Makefile (C):** please wire `make web` to run
-   `uv run python -m pipeline.provenance.manifest merge` and
-   `uv run python -m pipeline.provenance.check_h0`, and add a target for
-   `uv run python -m pipeline.provenance.kats --exit-zero` (KAT list for the scorecard).
+- — (footprint decided 12:37; coreg sign confirmed by WS1; kats contract and `make kats` / `make
+  web` merge + H0 wiring done by C.)
 
 ### Assumptions added
 
 - `config/validation.yaml` (new; no config file held V1 constants): `v1.confusion_thresholds_deg`
-  [10, 20] (SPEC F13), `v1.footprint_m` null (open), `v1.footprint_candidates_m` [3, 5],
+  [10, 20] (SPEC F13), `v1.footprint_m` 3 (decided 12:37), `v1.footprint_candidates_m` [3, 5],
   `v1.dem_method: plane_fit_square` with `dem_method_assumed: true` (least-squares plane over the
   DEM cells whose centres fall in a footprint-sized square; any nodata cell excludes the drive end).
 - V1 IMU tilt = MMGIS `tilt` (deg); negative or missing values are invalid and counted, not fixed.
+- V1 primary set = drive ends in `site.yaml aoi_focus` (SPEC F13 "every drive end in the focus
+  area"); every drive end on the DEM is reported as a sensitivity.
 
 ## WS7 HUD
 
@@ -838,34 +923,56 @@ Branch: `ws7-hud`
   `fields/fix_interval_{set}.png`), and "Take fix" jumps to the next fix event. KATs
   `navhud.test.ts` (6; exact ellipse/band crossing). Checked in the browser on data-dummy.
 
+- 2026-11-14T13:20Z (session 2): **Way-home pointer is now part of the default `make fields`** (contracts
+  v1.1.1; `--no-pointer` skips it). Every scenario's `fields/{sc}/pointer.png` sits on WS2's 3 m
+  route grid (2,468²) with its own bounds/width/height/res_m and the `stencil` from
+  `pointer_offsets.json`. Re-run on WS2's 11:55 rasters: **29 entries, 41.2 MB in
+  `data/interim/export/fields/`** (6 pointers = 12.8 MB, 2.0–2.3 MB each: 16 move codes over 6.1 M
+  px; compress level 9 or optimize gains 0 bytes) + WS9's 3 `fix_interval_*` PNGs 0.7 MB in
+  navigation/ = **41.9 MB in the web tree**. Every file < 50 MB. `fields/index.json` now carries
+  WS9's `fix_interval_{low,medium,high}` (the old index predated WS9's file). Index validates; the
+  manifest fragment gets `fields.{sc}/pointer.{sha256,max,known_pct}`. KAT on the real export:
+  a move exactly where WS2's T_home is finite and > 0; from 60 random reached cells the pointer
+  ends on the single T_home = 0 cell and T_home never rises along the way.
+- 2026-11-14T13:25Z: **Drag-anywhere draws the way-home path** (`wayhome.ts wayHomeView`): solid
+  line from the dragged spot to the rover when it reaches the pad, dashed when it ends short,
+  nothing on unreached ground ("no way home known from here"). The pad sits on a 3 m cell corner,
+  so "at the pad" = within one pixel of it (WS2's pad cell is (1234, 1233), pixelOf(pad) may be a
+  neighbour); the line ends on the pad itself. KATs: corner rule, view states, and every 10th
+  vertex of `route_nom_104` leads to the pad on the real pointer. Browser check on real data (pointer
+  copied into the web tree for the check, then restored): solid path, "way home drawn", no errors.
+- 2026-11-14T13:30Z: **Sun / time-to-dark row** (C decision 12:20; `sun.ts`, expanded panel "SUN /
+  DARK IN"): reads `conditions/clock.json` `eva.sun_series` (columns by name, linear, azimuth across
+  north, never extrapolated), `eva.t_dark_min` (dark in = t_dark − EVA clock, minutes floored) and
+  `eva.t_dark_min_by_observer` (range over the known WS3 horizons, nulls counted; the station's own
+  horizon when the HUD dwells at a station WS4 has). Real: "dark in 578 min · sun el 36.7°, az 75° ·
+  local horizons 523–571 min (52 stops)". Manifest keys on the row: `clock.eva.t_dark_min`,
+  `clock.eva.sun_series`, `clock.eva.t_dark_min_by_observer.{ids shown}`. Hidden without clock.json
+  (the dummy tree has none).
+- 2026-11-14T13:30Z: **turn_back**: WS2's STATUS describes the rows as "Turn-back (latest leave, O2
+  term)" = our reading, so they stay notes, not walk events. Whether to cap them at the EVA budget is
+  WS2's open question 13 for S. **con_\***: no rasters in `data/interim/engine/` yet (V1), so none
+  exported.
+- KATs: `tests/test_fields_png.py` 51 pass; `web/src/hud/*.test.ts` 93 pass (incl. real-data KATs);
+  whole web suite 388 pass, 1 skipped; `tsc --noEmit` clean.
+
 ### Doing
 
 - —
 
 ### Next
 
-- Bind the HUD to WS2's `route_nom_104` once `make web` publishes it (already works on data/interim).
+- C: `make web` to publish the pointers and the merged index (the HUD already runs on the real tree).
 - con_* fields when V1 lands (`make fields` again; worst-case + bearing unchanged).
 - 60 fps check at 60× on a real laptop (the automated browser here is throttled to ~15 fps even
   when the HUD is idle, so it measures nothing).
 
 ### Blocked
 
-- **Way-home path (F18 drag-anywhere), C:** the pointer field is **not in contracts v1.1.0**. A
-  pointer cannot be resampled to 5 m (moves are grid-relative), so it needs its own grid.
-  Proposal (implemented behind `--with-pointer`, off by default; TS follower `wayhome.ts` ready):
-  `fields/{scenario}/pointer.png`, `scale` 1, `units` "move", plus entry keys `bounds`, `width`,
-  `height`, `res_m` (WS2 route_3m grid) and `stencil` (WS2 `pointer_offsets.json`). nom_104 only,
-  ≈ 0.3–0.6 MB. Until then drag-anywhere shows the numbers but no path.
-- **Fields size, C:** all opt/nom suits = 28.4 MB (con_* will add ≈ 8 MB → ≈ 37 MB), over the
-  20 MB target, under 50 MB per file. PNG optimisation gains < 2 %; the scales are fixed by the
-  contract. The HUD reads only the active scenario (nom_104 + worst/bearing), its conservative
-  twin and slope (≈ 17 MB with opt_104/con_104). C to choose: all 9 scenarios (contract table) or
-  only the 104 kg suits in the web tree (`make fields --scenarios …`).
-- **WS2 question:** `turn_back` rows (t 409 / 439 min, after the return, margin 0, binding O₂)
-  are read as annotations "latest time to leave each station" and kept out of the walk; their
-  O₂ binding differs from the dose-bound margins of the same stations (storm τ 85.9 min). Confirm
-  the meaning.
+- **Fields size, C (info):** 41.9 MB in the web tree now (28.4 MB fields + 12.8 MB pointers + 0.7 MB
+  WS9); con_* will add ≈ 8 MB fields + ≈ 6 MB pointers (≈ 56 MB). The HUD reads one pointer (the
+  active scenario). If that is too much: `--no-pointer` and a nom_104-only pointer run (2.0 MB), or
+  pointers for the 104 kg suits only. Way-home path and pointer-field proposal: resolved (v1.1.1).
 
 ### Assumptions added
 
@@ -879,6 +986,9 @@ Branch: `ws7-hud`
 - A-WS7-4: storm switch puts the 2024 onset at the EVA minute the switch is turned on; the
   tripwire fires after the real onset→tripwire delay (rad.json); the dose budget then counts down
   from `leash.tau_min_at_peak`; alarm 2 when T_home ≥ budget left.
+- A-WS7-6: the pad is "reached" when the pointer path stops within one 3 m pixel of the pad
+  (pad on a cell corner). Sun row minutes are floored; outside WS4's series the sun position is
+  unknown (not extrapolated).
 - A-WS7-5: drift σ = fix σ at the fix, else max(fix σ, floor 5 m, 2 % of distance since the fix).
 - 5 m sampling: each 5 m pixel takes the 3 m cell under its centre (no ties on these grids);
   slope = the 1 m `slope_5m` cell at the 5 m pixel centre; `home_bearing` = geometric bearing to
@@ -965,6 +1075,8 @@ Branch: `ws8-3d`
 - `make fp3d` is not in `make all` (C's Makefile): run it after `engine` and `horizons`.
 
 ## WS9 Navigation
+
+**⏸️ Suspended (optional add-on), 2026-11-14 14:19, user:** F21/F22 out of core (SPEC §2.4, D19); no new jobs; merged work stays. Core: F19 drift rule + station fixes.
 
 Branch: `ws9-nav`
 
@@ -1099,6 +1211,8 @@ Branch: `ws9-nav`
 
 ## WS10 Visual odometry
 
+**⏸️ Suspended (optional add-on), 2026-11-14 14:19, user:** X8/X9 out of core (SPEC §2.4, D19); no new jobs; merged VO results stay.
+
 Branch: `ws10-vo`
 
 ### Done
@@ -1181,3 +1295,6 @@ Branch: `ws10-vo`
 | 2026-11-14 12:37 | D7 sky detection | Automatic + manual check (SPEC default); the user reviews the 39-frame sheet in data/interim/horizon/validation/manual_check/; import with `python -m pipeline.validation.v2_skyline --import-manual <csv>` | User |
 | 2026-11-14 12:42 | pages.yml review (WS5) | Approved by C: CI-gated, real-only, dist excludes data-dummy (verified), 150 MB dist; deploy blocked only on repo visibility/plan (user) | C |
 | 2026-11-14 14:13 | Canonical CTX band | `terrain/ctx_20m_v2.tif` (each CTX item co-registered to dem_1m; v2 − dem_1m +0.16 m vs +19.79 m; better agreement with MOLA–HRSC in every ring). WS3 switches its CTX path; `ctx_20m.tif` kept for reference | C |
+| 2026-11-14 14:19 | Odometry and position determination (WS10 X8/X9, WS9 F21/F22) | **Suspended softly → optional add-on** (SPEC §2.4, D19): no new jobs; merged work stays, labelled optional. Reasons: F22 median 657 m on 35 frames, S1/S2/S4 788/280/966 m, none passes the 10 m gate; F21 fix-interval median 50.7 m dominated by fragmented terrain, N's model review pending; X8 rover analogue only (256², MMGIS not independent, thresholds unconfirmed); X9 stretch. Core: F19 flat drift rule + uncertainty circle, fixes at the rover pad and surveyed stations only | User |
+| 2026-11-14 14:22 | Partner haul case (F10) | **Cart only** (SPEC §11 D20); dragging is reported as a finding, not drawn as a line. With the config values dragging a suited crewmate always exceeds boot traction: drag force 179 kg × 3.71 × 0.6 ≈ 398 N vs traction limit 0.5 × 189 kg × 3.71 ≈ 351 N (maximum draggable mass ≈ 157 kg), so it is infeasible on every cell, even on flat ground. WS2 and WS5 implement | User |
+| 2026-11-14 14:28 | HUD fields size | Accept 41.9 MB (pointer for every scenario, own 3 m grid; ≈ 56 MB with con_*); every file < 50 MB | C |

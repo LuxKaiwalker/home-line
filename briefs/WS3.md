@@ -1,6 +1,6 @@
 # 🌄 WS3 brief — Horizon and camera
 
-**Mission:** point horizons, panoramas, CAHVOR projection of the predicted skyline onto Curiosity's Navcam frames, and the skyline validation V2. Also provides the horizon engine and sky detector that WS9 uses for the navigation fix.
+**Mission:** point horizons, panoramas, CAHVOR projection of the predicted skyline onto Curiosity's Navcam frames, and the skyline validation V2. Also provides the horizon engine and sky detector that WS9 uses for the navigation fix _(optional add-on since 2026-11-14, D19)_.
 
 **Human owner / reviewer:** C · **Features:** F12, F13 (V2) · **SPEC:** §2.2 F12/F13, §5.1 items 4, 5, 9
 
@@ -29,7 +29,7 @@
 3. **H4–H8:** first real overlay at one station (MVP fallback frame), hand-checked by C.
 4. **H8–H12:** frame selection for ≥ 30 stops (skyline visible, in the focus area); sky detector; manual check of 20% (D7: switch to fully manual if the detector fails by 23:00).
 5. **Overnight:** horizons at stations, pads and all validation stops; V2 statistics by distance class; panoramas and overlays for every station card.
-6. **By H20:** hand the horizon engine API, sky detector and `navcam_frames.json` to WS9 for F22.
+6. **By H20:** hand the horizon engine API, sky detector and `navcam_frames.json` to WS9 for F22. _(2026-11-14, D19: F22 is an optional add-on, so this hand-off is optional too.)_
 
 ## Tests (write first)
 

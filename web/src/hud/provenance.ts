@@ -5,7 +5,7 @@
 // files on each row (data-manifest-key, data-source-files, tooltip).
 import type { Readout } from './readout'
 
-export type PanelRow = 'tHome' | 'margin' | 'o2' | 'binding' | 'turn' | 'rover' | 'next' | 'slope' | 'partner' | 'dose' | 'trip'
+export type PanelRow = 'tHome' | 'margin' | 'o2' | 'binding' | 'turn' | 'rover' | 'next' | 'slope' | 'partner' | 'sun' | 'dose' | 'trip'
 
 export interface RowSource {
   keys: string[]
@@ -17,6 +17,8 @@ export interface KeyContext {
   consScenario?: string | null
   padFromFile?: boolean
   partnerFile?: string | null
+  /** sun row (sun.ts sunSources: the observers actually shown); default t_dark_min + sun_series */
+  sunSources?: RowSource | null
 }
 
 export function readoutSources(r: Readout, k: KeyContext): Record<PanelRow, RowSource> {
@@ -37,6 +39,7 @@ export function readoutSources(r: Readout, k: KeyContext): Record<PanelRow, RowS
     next: join(timeline, file('stations.json')),
     slope: { keys: ['fields.slope.sha256'], files: ['fields/shared/slope.png', 'config/crew.yaml'] },
     partner: file(k.partnerFile ?? `scenarios/${scenario}/partner.geojson`),
+    sun: k.sunSources ?? { keys: ['clock.eva.t_dark_min', 'clock.eva.sun_series'], files: ['conditions/clock.json'] },
     dose: file('conditions/rad.json'),
     trip: file('conditions/rad.json'),
   }

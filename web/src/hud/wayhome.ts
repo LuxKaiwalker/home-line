@@ -1,8 +1,10 @@
-// Way-home path from the pointer field (F18 drag-anywhere, F4; contracts v1.1 "{scenario}/pointer").
+// Way-home path from the pointer field (F18 drag-anywhere, F4; contracts v1.1.1 "{scenario}/pointer").
 // The pointer PNG holds, per pixel of WS2's native route grid, the index k of the next move;
 // stencil[k] = [drow, dcol] (rows grow southwards) from fields/index.json. A = 0 = no move
 // (the pad pixel, unreached or unknown): the path ends there. The browser follows the pointer
 // pixel to pixel; it never routes. Must agree with pipeline/export/fields_png.py follow_pointer.
+// The pad sits on a pixel corner of WS2's grid (pad +- n x 3 m), so WS2's pad cell is one of the
+// pixels touching it: "at the pad" = within one pixel (Chebyshev) of pixelOf(pad).
 import { fieldGrid, loadFieldRGBA, decodeRGBA, FieldGrid } from './fields'
 import type { FieldsIndex, LonLat } from './types'
 
@@ -14,7 +16,7 @@ export interface PixelPath {
 }
 
 export interface WayHome extends PixelPath {
-  /** Position first, then the centre of every following pointer pixel. */
+  /** Position first, then the centre of every following pointer pixel; ends on the pad when reachesPad. */
   coords: LonLat[]
   /** false = the start pixel has no move and is not the pad (unknown / unreached ground). */
   startKnown: boolean
@@ -71,14 +73,36 @@ export class PointerField {
     const path = this.followPixels(p.row, p.col)
     const last = path.pixels[path.pixels.length - 1]
     const padPx = this.grid.pixelOf(pad[0], pad[1])
-    const reachesPad = path.end === 'stop' && padPx !== null && padPx.row === last[0] && padPx.col === last[1]
-    const startIsPad = padPx !== null && padPx.row === p.row && padPx.col === p.col
+    const atPad = (r: number, c: number) => padPx !== null && Math.abs(padPx.row - r) <= 1 && Math.abs(padPx.col - c) <= 1
+    const reachesPad = path.end === 'stop' && atPad(last[0], last[1])
+    const startIsPad = atPad(p.row, p.col)
+    const coords: LonLat[] = [[lon, lat], ...path.pixels.slice(1).map(([r, c]) => this.grid.lonLatOf(r, c))]
+    const end = coords[coords.length - 1]
+    if (reachesPad && (end[0] !== pad[0] || end[1] !== pad[1])) coords.push([pad[0], pad[1]])
     return {
       ...path,
-      coords: [[lon, lat], ...path.pixels.slice(1).map(([r, c]) => this.grid.lonLatOf(r, c))],
+      coords,
       startKnown: this.grid.data.known[p.row * this.grid.width + p.col] === 1 || startIsPad,
       reachesPad,
     }
+  }
+}
+
+/** What the HUD draws and says for the way home in drag-anywhere mode (F18). */
+export interface WayHomeView {
+  /** line for the map (start = dragged position); null = nothing to draw */
+  map: { coords: LonLat[]; reachesPad: boolean } | null
+  /** panel status: undefined = no drag or no pointer exported (say nothing), null = outside the grid */
+  panel: { reachesPad: boolean; startKnown: boolean } | null | undefined
+}
+
+export function wayHomeView(pointer: PointerField | null, drag: LonLat | null, pad: LonLat): WayHomeView {
+  if (!drag || !pointer) return { map: null, panel: undefined }
+  const w = pointer.pathFrom(drag[0], drag[1], pad)
+  if (!w) return { map: null, panel: null }
+  return {
+    map: w.startKnown && w.coords.length > 1 ? { coords: w.coords, reachesPad: w.reachesPad } : null,
+    panel: { reachesPad: w.reachesPad, startKnown: w.startKnown },
   }
 }
 

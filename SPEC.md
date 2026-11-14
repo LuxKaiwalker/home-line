@@ -88,13 +88,15 @@ Each feature has an ID used in tickets. Tiers: **MVP** (gate G1, Sat 19:00), **C
 | X3 | Radio line of sight to the rover | Stretch | WS3 | — |
 | X4 | Helmet-display replay | Stretch | WS5 | — |
 | X5 | THEMIS soft-ground penalty | Stretch | WS1 | — |
-| F21 | Dead-reckoning simulation: Monte Carlo error ellipses, fix events, fix-interval map | Core | WS9 | `nav/*.json`, `fields/fix_interval_*.png` |
-| F22 | Skyline-matching navigation fix on real Navcam (promoted from X6) | Core (after V2) | WS9 | `localisation/*.json`, `nav/fixes.json` |
-| X8 | Visual-odometry drift calibration on Curiosity drives | Conditional: go/no-go at H2 after a data probe | WS10 | `vo/*.json` |
-| X9 | MGL-style ground-image matching (stereo panorama → top-down view → HiRISE match) | Stretch, after G2 only | WS10 | `vo/orthomatch_*.json` |
+| F21 | Dead-reckoning simulation: Monte Carlo error ellipses, fix events, fix-interval map | Optional add-on (suspended 2026-11-14 14:19, user) | WS9 | `nav/*.json`, `fields/fix_interval_*.png` |
+| F22 | Skyline-matching navigation fix on real Navcam (promoted from X6) | Optional add-on (suspended 2026-11-14 14:19, user) | WS9 | `localisation/*.json`, `nav/fixes.json` |
+| X8 | Visual-odometry drift calibration on Curiosity drives | Optional add-on (suspended 2026-11-14 14:19, user) | WS10 | `vo/*.json` |
+| X9 | MGL-style ground-image matching (stereo panorama → top-down view → HiRISE match) | Optional add-on (suspended 2026-11-14 14:19, user) | WS10 | `vo/orthomatch_*.json` |
 | X7 | 3D free walk (keyboard or touch, slope-limited speed, O₂ drain) | Stretch, realistically not built | WS8 | — |
 
 **Cut order**, first to last: X9 → X7 → X8 → X4 → X3 → X2 → X1 → F20 (3D falls back to a link to the 2D HUD) → F22 (fixes at rover and stations only) → F21 (fall back to F19's flat drift rule; keep the uncertainty circle) → cuff-card PDF (keep HTML) → suit masses 80/120 (keep 104) → V2 from 30 stops to 10. If F18 itself slips, ship the **HUD-on-card fallback** (§2.3).
+
+> ⏸️ **2026-11-14 14:19 (user):** X9, X8, F22 and F21 are now **out of core** (optional add-ons, see §2.4). The core uses their cut-order fallbacks: F19's flat drift rule with the uncertainty circle, and fixes at the rover pad and surveyed stations only.
 
 **Never cut:** F1 cell states, bands, co-registration, V1, one skyline overlay, F10 at nominal mass, the RAD tripwire, F16.
 
@@ -159,7 +161,7 @@ $$
 ### F6 — Scenario picker
 
 - **Grid:** 3 variants × 3 suit masses (80 / 104 / 120 kg; 80 kg is _our_ sensitivity value) = 9 return fields. Walkback length is just a contour level (30/60), so it needs no extra runs.
-- **Haul:** 2 casualty masses × nominal variant × 2 cases (cart, drag) = 4 haul fields.
+- **Haul:** 2 casualty masses × nominal variant × cart case = 2 haul fields. _(2026-11-14, D20: was 2 cases (cart, drag) = 4; the drag case is not drawn, only reported as a finding, see F10.)_
 - **`scenarios/index.json`** lists the scenario IDs, parameters and file paths. Frozen at Sat 23:00.
 
 ### F7 — Station science scoring
@@ -183,10 +185,12 @@ $$
 
 ### F10 — Partner line (design question)
 
-- **Haul force:** F = m_IC·g·(μ cos θ + sin θ). Cart case μ = 0.1–0.4; drag case μ ≈ 0.5–0.7 _(assumed)_.
+> 🛒 **2026-11-14 14:22 (user, D20):** the partner line is the **cart haul only** (60 min). Dragging is reported as a finding, not drawn: with the config values it exceeds boot traction on every cell, even on flat ground.
+
+- **Haul force:** F = m_IC·g·(μ cos θ + sin θ). Cart case μ = 0.1–0.4; drag case μ ≈ 0.5–0.7 _(assumed)_. _(2026-11-14, D20: the drag case is computed only for the infeasibility finding, never drawn.)_
 - **Haul speed:** v_haul = min(v_safe/2 downhill, ε·P_avail / F), with ε = 0.20–0.25 and P_avail = rescuer power at 60–80% of VO₂max minus their own walking cost (via F3). Infeasible if v_haul < 0.1 m/s or F exceeds traction (μ_boot ≈ 0.5, assumed). Ridge cells (F2) are masked.
 - **Casualty masses:** 165–186 kg (suited crewmate, follows the suit slider) and NASA's 343 kg rescue specification as the bound.
-- **Output:** the 60-min haul contour (Scoville's Artemis III 1 h benchmark), drawn dashed and off by default, captioned "Design question. Every haul parameter is an assumed band."
+- **Output:** the 60-min haul contour (Scoville's Artemis III 1 h benchmark), drawn dashed and off by default, captioned "Design question. Every haul parameter is an assumed band." _(2026-11-14, D20: layer label "Partner line (cart haul, 60 min)"; the partner layer and the station cards carry the note "One astronaut cannot drag a suited crewmate on Mars without a cart or sled: the pull needed exceeds boot grip even on flat ground." Its numbers (drag force, traction limit, max draggable mass) come from the manifest.)_
 
 ### F11 — Trade table
 
@@ -299,6 +303,9 @@ $$
 
 **Simulated drift** (assumed, labelled; this flat rule is the **fallback**. When F21 lands by G2, its Monte Carlo ellipses replace it, see §2.4):
 
+> ⏸️ **Core plan since 2026-11-14 14:19:** this flat rule and the circle are the default; F21 and F22 are optional add-ons (§2.4). Core fixes are the rover pad and surveyed stations only.
+
+
 - σ grows at **2% of distance walked** since the last fix (`config/hud.yaml`), with a floor of 5 m.
 - Fixes reset σ: at the rover pad → 2 m; at a surveyed station → 5 m; an F22 skyline fix → its measured error.
 - A HUD line shows "Position: dead reckoning · ±N m · last fix M min ago".
@@ -320,7 +327,9 @@ $$
 - **Budget:** ≤ 30 MB total download; ≥ 30 fps on a mid-range laptop.
 - **Acceptance:** camera height 1.7 ± 0.1 m above the terrain; the rendered skyline at each station within 0.5° of the computed horizon.
 
-### F22 — Skyline-matching navigation fix (core; formerly X6, full spec in §2.4)
+### F22 — Skyline-matching navigation fix (optional add-on since 2026-11-14, D19; formerly X6, full spec in §2.4)
+
+> ⏸️ **2026-11-14 14:19:** optional add-on, not core (§2.4). The core HUD takes fixes at the rover pad and surveyed stations only.
 
 1. Take a Navcam frame from a known drive end, hiding the true position.
 2. Compute predicted horizons on a 50 m candidate grid over 1 km² around a prior position, then refine at 10 m around the best three.
@@ -353,9 +362,19 @@ If F18 slips past G2: every station card gets a static HUD strip over the Navcam
 | Performance, loading, fallback | 2 | WS8 |
 | Capture | 1 | WS8 |
 | **WS8 total** | **≈ 13–15** |  |
-| F22 skyline-matching fix (see §2.4) | 3–4 | WS9 |
+| F22 skyline-matching fix (see §2.4; optional add-on since 2026-11-14, D19) | 3–4 | WS9 |
 
 ## 2.4 Navigation block (F21, F22, X8, X9)
+
+> ⏸️ **Suspended softly, 2026-11-14 14:19 CET (user).** Odometry and position determination (F21, F22, X8, X9) are no longer core; they are **optional add-ons**, done only if time allows. No new jobs start on them. Merged work stays in place and keeps working (WS9 nav outputs, `/nav`, the HUD ellipse, the WS10 VO results, `nav.yaml` `vo:`), labelled as an optional add-on. The core does not depend on it.
+>
+> **Why** (numbers from STATUS.md):
+> 1. **F22 does not constrain position at this site.** 35 frames: median error 657 m, none within 100 m; station frames S1/S2/S4 788/280/966 m, none passes the 10 m gate. The far skyline is not seen (haze) in 21 north-facing far-fail frames (D7 manual check pending).
+> 2. **F21's fix-interval headline (median 50.7 m) is dominated by the fragmented terrain**, not the drift model. N's review of the model conventions is pending (reserve set to 0; does σ_b per hour of rover driving carry over to a walker?).
+> 3. **X8 is a rover analogue only:** it works only at 256²; the reference positions (MMGIS drive ends) are not independent of Curiosity's own VO; the plausibility thresholds were proposed by the agent and are unconfirmed by N.
+> 4. **X9** was always a stretch goal (after G2 only).
+>
+> **Core fallbacks (the default plan):** F19's flat drift rule plus the uncertainty circle instead of F21's ellipses (§2.1 cut order); fixes at the rover pad and surveyed stations only instead of F22.
 
 > 🧭 **The idea.** Rovers already solve "where am I?" without GPS with a two-part loop: continuous odometry that drifts, plus periodic fixes by matching camera views to orbital maps. Perseverance does both on board; Mars Global Localization has been used in operations since Feb 2026 and reaches about 25 cm. HOMELINE adapts the same loop to a walking crew: **suit odometry (concept) + periodic map-matching fixes**. The accuracy of both feeds straight into the homeline, the HUD margins and a new planning number: **how often the crew must take a fix**.
 >
@@ -409,6 +428,8 @@ If F18 slips past G2: every station card gets a static HUD strip over the Navcam
 
 ### HUD integration (extends F18/F19)
 
+> ⏸️ **2026-11-14 14:19:** optional add-on. In the core plan the HUD keeps F19's circle and flat drift rule, with fixes at the rover pad and surveyed stations only.
+
 - **Position panel:** "Odometry ±N m · next fix due in M m · last fix: _type_, K min ago". M = D_max at the estimated position minus distance walked since the last fix.
 - **Take fix:** in playback, a button (or an automatic prompt when a fix is due) applies the next fix event. At stations with an F22 result, the HUD shows the real Navcam photo with the matched skyline and the measured error; the ellipse shrinks and the margins recover.
 - **Uncertainty shape:** the F21 ellipse replaces F19's circle on the map and minimap. Worst-case lookups use the smallest precomputed radius ≥ the ellipse's semi-major axis.
@@ -429,6 +450,8 @@ At a drive end, turn the Navcam stereo panorama into a top-down image (heights f
 
 ### Navigation effort (with agents)
 
+> ⏸️ **2026-11-14 (D19):** every row below is an optional add-on; no new jobs start on them. Merged work stays.
+
 | Item | Wall clock | Owner |
 | --- | --- | --- |
 | F21 error model + Monte Carlo + ellipses | 2–2.5 h | WS9 agent (reviewer N) |
@@ -447,7 +470,7 @@ At a drive end, turn the Navcam stereo panorama into a top-down image (heights f
 | 1 | Gale merged DEM primary from H0, with a source mask; HiRISE only as cross-check | F1 |
 | 2 | Dose-budget leash τ = D_allow / Ḋ replaces tripwire-to-peak; excess-dose test 1.7–1.9 mGy | F4 margin, F14 |
 | 3 | Two-beat video; partner line dashed, off by default, with ridges masked | F10, §9 |
-| 4 | Partner μ 0.1–0.4, a drag case, a ridge mask | F10 |
+| 4 | Partner μ 0.1–0.4, a drag case, a ridge mask _(2026-11-14, D20: drag case is a finding only, not a line)_ | F10 |
 | 5 | RAD and REMS sign-off moves to G; fixed CRISM rule; scenario freeze 23:00 | F7, §7 |
 | 6 | Skyline error by distance class; far-field figure only in the video | F13 |
 | 7 | Co-registration search ±200 m, residuals published | F1 |
@@ -606,7 +629,7 @@ nasa-space-app/          # existing team repo
 | Mass sensitivity; η | IST-2 increments; 0.20–0.25 | IST-2 | Low–medium |
 | Body mass | 75 kg | Our assumption | — |
 | Slope limit; safety speeds | 20° (25° optimistic); 1.0/0.6/0.3 m/s | Scoville; our assumption | Low–medium |
-| Haul μ, ε, ceiling, traction | 0.1–0.4 (cart), 0.5–0.7 (drag); 0.20–0.25; 60–80%; 0.5 | Assumed bands | Low |
+| Haul μ, ε, ceiling, traction | 0.1–0.4 (cart), 0.5–0.7 (drag, infeasibility finding only, D20); 0.20–0.25; 60–80%; 0.5 | Assumed bands | Low |
 | Casualty mass | 165–186 kg; 343 kg bound | ICES suit; NASA 2024 rescue challenge | Medium |
 | Dose allowance per EVA | 0.5 mGy | Our assumption, adjustable | Low |
 | Suit O₂ budget (metabolic) | Primary 504 L (8 h at 1,200 BTU/h), secondary 157 L (1 h at 3,000 BTU/h); margins plan against the primary only | Derived from NASA EVA-EXP-0075, ICES-2026-127, ICES 2026 Mars PLSS study | Medium; no leakage or venting modelled |
@@ -714,8 +737,8 @@ Each workstream runs as one coding-agent session briefed from this page, with a 
 | **WS6 Provenance** | V1 figures; manifest writer; H0 timestamp check in CI; final clean-run regeneration | F13, F16 | 4 | G |
 | **WS7 HUD** | HUD components on dummy data (from H2); field PNG export + decoder; playback and drag; alarms; position interface, worst-case fields, uncertainty circle; drift and fixes; fallback HUD strip | F18, F19 | 14.5 | Agent; human reviewers D (UI) and C (data) |
 | **WS8 3D** | Terrain chunks and textures; Three.js scene; camera path; sky and haze; shared HUD; performance and fallback | F20 | 13–15 | R, working with an agent session |
-| **WS9 Navigation** | Error model + Monte Carlo on a synthetic route (from H1); ellipses; fix-interval map on real fields; F22 skyline fixes after V2; HUD nav panel, Take fix, ellipse, alarm, `/nav` page | F21, F22 | 8–10 | Agent; reviewers N (model), C (skyline fix), D (HUD) |
-| **WS10 Visual odometry** | X8 data probe (H0–H2) → go/no-go; if go, VO pipeline and drift per drive → calibrated set for WS9; X9 only after G2 | X8, X9 | 0.5 / 6–10 / 10–15 | Agent; reviewer N. Stops at H2 on no-go |
+| **WS9 Navigation** | Error model + Monte Carlo on a synthetic route (from H1); ellipses; fix-interval map on real fields; F22 skyline fixes after V2; HUD nav panel, Take fix, ellipse, alarm, `/nav` page | F21, F22 (optional add-on since 2026-11-14, D19) | 8–10 | Agent; reviewers N (model), C (skyline fix), D (HUD) |
+| **WS10 Visual odometry** | X8 data probe (H0–H2) → go/no-go; if go, VO pipeline and drift per drive → calibrated set for WS9; X9 only after G2 | X8, X9 (optional add-on since 2026-11-14, D19) | 0.5 / 6–10 / 10–15 | Agent; reviewer N. Stops at H2 on no-go |
 
 **HUD workstreams** run as their own agent sessions. They read only the frozen data contracts (§6, §6.1) and never touch the pipeline modules, so they can't block the critical path. WS7 starts at H2 on dummy data generated from the contract schemas. WS8 starts after G0, when the DEM window exists.
 
@@ -759,7 +782,7 @@ Each workstream runs as one coding-agent session briefed from this page, with a 
 | H2–H10 | Ellipses, r95 fit, KATs; HUD nav panel on dummy data | If go: VO pipeline on one drive |
 | H10–H16 | After G1: fix-interval map on real fields; worst-case radii linked to ellipses | Drift on all usable drives |
 | H16–H23 | Monte Carlo on the real route and timeline; F22 fixes once V2 frames and detections exist (≈ H20); fix events in playback | Calibrated parameter set handed to WS9 by H20, or dropped |
-| **G2, Sun 08:00** | **F21 + F22 complete**; otherwise fall back to F19's flat drift rule and station fixes | Done or stopped; X9 only if G2 is green and C is free |
+| **G2, Sun 08:00** | **F21 + F22 complete**; otherwise fall back to F19's flat drift rule and station fixes _(2026-11-14, D19: the fallback is now the core plan; F21/F22 are optional add-ons)_ | Done or stopped; X9 only if G2 is green and C is free |
 | 12:00 | Freeze | Freeze |
 
 **Fallback if Saturday goes badly** (G0 after 13:00, or G1 slipping to Sunday): ship the physiology bands, V1, the RAD chart and one hand-checked skyline frame. Cut the trade table and partner line before the skyline.
@@ -839,6 +862,8 @@ Keep the partner line, the storm, the scorecard and any near-field number out of
 > | D14 | HUD default level | Minimal, expanded one click away |
 > | D15 | Dead-reckoning parameter sets | Low / medium / high as in §2.4, medium default |
 > | D18 | Reviewer allocation for WS9 and WS10 | WS9: N (model), C (skyline fix), D (HUD); WS10: N, only on a go |
+> | D19 | Odometry and position determination (F21, F22, X8, X9) | **2026-11-14 14:19 CET, user: suspended softly → optional add-ons** (reasons in §2.4). No new jobs; merged work stays, labelled optional. Core: F19 flat drift rule + uncertainty circle, fixes at the rover pad and surveyed stations only |
+> | D20 | Partner haul case (F10) | **2026-11-14 14:22 CET, user: cart only.** Dragging is reported as a finding, not drawn as a line: drag force 179 kg × 3.71 × 0.6 ≈ 398 N exceeds the boot traction limit 0.5 × 189 kg × 3.71 ≈ 351 N (maximum draggable mass ≈ 157 kg), so the drag case is infeasible on every cell, even on flat ground |
 >
 > Decided items are removed from the open table below and written into the plan. **Still open:** D3, D7, D8, D16 and D17 are settled at the event by the rules in their rows.
 >
