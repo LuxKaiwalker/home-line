@@ -443,7 +443,13 @@ def test_main_d21_on_synthetic_terrain(tmp_path, monkeypatch):
     validate(pj, "pad.schema.json")
     assert (pj["pad"]["lon"], pj["pad"]["lat"]) == (off[0]["lon"], off[0]["lat"])
     assert pj["pad"]["score"] == off[0]["score"] and pj["pad"]["source"] == padpick.SOURCE
-    ids = [a["id"] for a in pj["alternatives"]]
+    # team lead 20:59 (decision 1a): no wall-clock time in published files (byte-identical
+    # reruns); the screening time stays in the internal summary.json
+    assert "screening_s" not in idx["screening"]
+    assert "screening_s" not in pj["d21"]["screening"]
+    summ_run = json.loads((out / "summary.json").read_text())
+    assert isinstance(summ_run["d21"]["screening"]["screening_s"], float)
+    ids =[a["id"] for a in pj["alternatives"]]
     assert "pad_default" in ids or off[0]["id"] == "pad_default"
     # the official pad is the best of the top 5 by (score, tiebreak 1, elevation)
     top = [r for r in idx["pads"] if r["rank"] <= 5]
