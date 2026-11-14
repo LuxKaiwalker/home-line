@@ -175,6 +175,64 @@ def test_headline_contract_shape(world):
     assert envelope.reachable_pct(grid, f.t_min, pad, 30, speed) is None
 
 
+def test_d41_in_data_share_known_answer():
+    """D41 (user 17:22): a disc that leaves the grid gives the share over its part inside the
+    terrain data, plus that part's size. Pad on the west edge (col 0), radius 30 cells: the
+    in-grid part is the half-disc incl. the centre column (61 cells): (N + 61) / 2 of the full
+    disc's N cells. Reachable = every in-grid disc cell with col >= 1: (N - 61) / 2 cells."""
+    n, res = 101, 3.0
+    g = make_grid(np.zeros((n, n)), res)
+    pad = (50, 0)
+    radius_m = 30 * res
+    speed = radius_m / 60.0  # 1-min disc of 30 cells
+    full = sum(1 for dr in range(-30, 31) for dc in range(-30, 31) if np.hypot(dr, dc) <= 30)
+    t = np.zeros((n, n))
+    t[:, 0] = np.inf  # the centre column is not reachable
+    assert envelope.reachable_pct(g, t, pad, 1, speed) is None  # strict rule unchanged
+    share = envelope.reachable_pct(g, t, pad, 1, speed, in_data=True)
+    assert share == pytest.approx(100.0 * (full - 61) / (full + 61))
+    assert envelope.disc_in_data_pct(g, pad, 1, speed) == pytest.approx(
+        100.0 * (full + 61) / 2 / full)
+    # a disc fully inside: 100 % in data, same share as the strict rule
+    t2 = np.zeros((n, n))
+    assert envelope.disc_in_data_pct(g, (50, 50), 1, speed) == pytest.approx(100.0)
+    assert envelope.reachable_pct(g, t2, (50, 50), 1, speed, in_data=True) == \
+        envelope.reachable_pct(g, t2, (50, 50), 1, speed) == pytest.approx(100.0)
+    # unknown cells are not terrain data: out of the share and out of the in-data part
+    state = np.zeros((n, n), np.uint8)
+    state[:, 25:] = UNKNOWN
+    gu = make_grid(np.zeros((n, n)), res, cellstate=state)
+    rr, cc = np.indices((n, n))
+    disc = (np.hypot(rr - 50, cc) <= 30)
+    known = disc & (cc < 25)
+    assert envelope.disc_in_data_pct(gu, pad, 1, speed) == pytest.approx(
+        100.0 * known.sum() / full)
+    assert envelope.reachable_pct(gu, t, pad, 1, speed, in_data=True) == pytest.approx(
+        100.0 * (known & (cc >= 1)).sum() / known.sum())
+
+
+def test_d41_headline_entry():
+    """scenarios.headline_entry: strict when the disc is inside the grid (basis full_disc),
+    the in-data share with in_data_pct and the label when it leaves it (basis in_data)."""
+    from pipeline.engine import scenarios
+
+    n, res = 101, 3.0
+    g = make_grid(np.zeros((n, n)), res)
+    speed = 30 * res / 60.0
+    t = np.zeros((n, n))
+    t[:, 0] = np.inf
+    e = scenarios.headline_entry(g, t, t * 2, t * 0.5, (50, 0), 1, speed, in_data=True)
+    assert e["basis"] == "in_data" and e["budget_min"] == 1
+    assert e["reachable_pct"] == round(envelope.reachable_pct(g, t, (50, 0), 1, speed,
+                                                              in_data=True), 1)  # fmt: skip
+    assert e["in_data_pct"] == round(envelope.disc_in_data_pct(g, (50, 0), 1, speed), 1)
+    assert e["label"] == f"{e['in_data_pct']:.1f} % of the circle lies inside the terrain data"
+    assert len(e["range_pct"]) == 2
+    f = scenarios.headline_entry(g, t, t, t, (50, 50), 1, speed, in_data=True)
+    assert scenarios.headline_entry(g, t, t, t, (50, 0), 1, speed)["reachable_pct"] is None
+    assert f["basis"] == "full_disc" and f["in_data_pct"] == 100.0 and f["label"] is None
+
+
 # ------------------------------------------------- display size filter (C decision 11:42)
 
 

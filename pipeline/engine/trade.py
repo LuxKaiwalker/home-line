@@ -24,8 +24,15 @@ def science_value(t_home_at_station: dict[str, float], values: dict[str, float],
 def table(rows, cols, cells: dict[tuple, dict]) -> dict:
     """trade_table.json (contract trade_table): cells[row][col]."""
     keys = ("science_value", "reachable_pct", "partner_area_km2")
+
+    def cell(d):
+        out = {k: d.get(k) for k in keys}
+        if d.get("in_data_pct") is not None:  # D41 extra: % of the flat disc inside the data
+            out["in_data_pct"] = d["in_data_pct"]
+        return out
+
     return {
         "rows": list(rows),
         "cols": list(cols),
-        "cells": [[{k: cells[(r, c)].get(k) for k in keys} for c in cols] for r in rows],
+        "cells": [[cell(cells[(r, c)]) for c in cols] for r in rows],
     }

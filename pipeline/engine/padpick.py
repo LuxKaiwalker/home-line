@@ -452,8 +452,10 @@ def run(grid: Grid, st: list[dict], cond: dict, dose_fn, timing_cb=None) -> dict
 
 def _headline(grid: Grid, rc, home_t: np.ndarray, sid: str, budgets, speed: float) -> dict:
     """Headline at 30/60 min: nominal reachable % (picker files are nominal only) and the range
-    [conservative, optimistic] from the same pad's con/opt return fields (in memory only)."""
+    [conservative, optimistic] from the same pad's con/opt return fields (in memory only), via
+    scenarios.headline_entry (D41: in-data share + in_data_pct at the 60-min budget)."""
     from . import physio
+    from .scenarios import headline_entry
 
     _, suit = physio.parse_scenario(sid)
     rng_t = {}
@@ -461,15 +463,46 @@ def _headline(grid: Grid, rc, home_t: np.ndarray, sid: str, budgets, speed: floa
         p = physio.scenario_params(f"{v}_{suit}")
         rng_t[v] = dijkstra.return_field(grid.with_nogo(p.nogo_deg), physio.grade_table(p), rc,
                                          tmax_min=max(budgets)).t_min  # fmt: skip
-    out = {}
-    for b in budgets:
-        def pct(t, b=b):
-            x = envelope.reachable_pct(grid, t, rc, b, speed)
-            return None if x is None else round(float(x), 1)
+    return {str(int(b)): headline_entry(grid, home_t, rng_t["con"], rng_t["opt"], rc, b, speed)
+            for b in budgets}  # fmt: skip
 
-        out[str(int(b))] = {"budget_min": int(b), "reachable_pct": pct(home_t),
-                            "range_pct": [pct(rng_t["con"]), pct(rng_t["opt"])]}  # fmt: skip
-    return out
+
+EXCLUDED_NOTE = ("station combinations the planning rule excludes: screening count (walk + dwell "
+                 "<= the EVA budget, no margin check) minus the full-run count (exact DP with "
+                 "the margin >= 0 on every leg; O2 used before each leg bounded at the 1.35 L/min "
+                 "effort cap). The screening breaks equal access-cell distances by row/col, the "
+                 "full run by T_home (access.py).")  # fmt: skip
+
+
+def feasible_block(screen_score: int | None, score: int | None) -> dict:
+    """User 17:28 (supersedes D43's switch): the planning rule stays the effort-cap bound; per
+    pad report how many station combinations it excludes (screening - full run)."""
+    exc = None if screen_score is None or score is None else int(screen_score) - int(score)
+    return {"screen_count": screen_score, "full_run_count": score,
+            "excluded_by_effort_cap_rule": exc, "note": EXCLUDED_NOTE}  # fmt: skip
+
+
+def record_feasible(kp: str, block: dict, file: str) -> None:
+    from . import provenance
+
+    for k in ("excluded_by_effort_cap_rule", "screen_count"):
+        if block.get(k) is not None:
+            provenance.record(f"{kp}feasible.{k}", block[k], "EVAs", file, SCRIPT)
+
+
+def record_headline(kp: str, head: dict, file: str) -> None:
+    from . import provenance
+
+    for b, h in head.items():
+        if h["reachable_pct"] is not None:
+            provenance.record(f"{kp}headline.{b}.reachable_pct", h["reachable_pct"], "%", file,
+                              SCRIPT)  # fmt: skip
+        for end, v in zip(("low", "high"), h["range_pct"], strict=True):
+            if v is not None:
+                provenance.record(f"{kp}headline.{b}.range_pct.{end}", v, "%", file, SCRIPT)
+        if h.get("basis") == "in_data":
+            provenance.record(f"{kp}headline.{b}.in_data_pct", h["in_data_pct"], "%", file,
+                              SCRIPT)  # fmt: skip
 
 
 def write_products(grid: Grid, d21: dict, st: list[dict], cond: dict, dose_fn, settings, ridge,
@@ -529,6 +562,7 @@ def write_products(grid: Grid, d21: dict, st: list[dict], cond: dict, dose_fn, s
             "pad": {"lon": c.lon, "lat": c.lat, "elev_m": c.elev_m},
             "rank": c.rank, "official": False, "score": c.score, "score_kind": SCORE_KIND,
             "tiebreak": tiebreak(c, s), "headline": head,
+            "feasible": feasible_block(c.screen_score, c.score),
             "route": {"stops": res.order, "total_min": round(res.total_min, 2),
                       "n_feasible_subsets": res.n_feasible_subsets,
                       "unreachable": res.unreachable, "no_access": no_access,
@@ -550,17 +584,13 @@ def write_products(grid: Grid, d21: dict, st: list[dict], cond: dict, dose_fn, s
         sf = rel + "summary.json"
         _write_web(public, sf, summ, None)
         _record_pad(kp, c, s, sf)
-        for b, h in head.items():
-            if h["reachable_pct"] is not None:
-                provenance.record(f"{kp}headline.{b}.reachable_pct", h["reachable_pct"], "%", sf,
-                                  SCRIPT)  # fmt: skip
-            for end, v in zip(("low", "high"), h["range_pct"], strict=True):
-                if v is not None:
-                    provenance.record(f"{kp}headline.{b}.range_pct.{end}", v, "%", sf, SCRIPT)
+        record_headline(kp, head, sf)
+        record_feasible(kp, summ["feasible"], sf)
         if lowest is not None:
             provenance.record(f"{kp}route.lowest_margin_min", lowest["margin_min"], "min", sf,
                               SCRIPT)  # fmt: skip
-        info[pid] = {k: summ[k] for k in ("pad", "rank", "score", "tiebreak", "headline", "route")}
+        info[pid] = {k: summ[k] for k in ("pad", "rank", "score", "tiebreak", "headline", "route",
+                                          "feasible")}  # fmt: skip
     # index (ranking table incl. the official pad)
     for c in d21["final"]:
         pid = pad_id(c)
@@ -569,6 +599,7 @@ def write_products(grid: Grid, d21: dict, st: list[dict], cond: dict, dose_fn, s
                "rank": c.rank, "score": c.score, "official": c is d21["official"],
                "picker": is_pick, "tiebreak": tiebreak(c, s),
                "screen_score": c.screen_score, "screen_rank": c.screen_rank,
+               "feasible": feasible_block(c.screen_score, c.score),
                "summary": f"scenarios/pads/{pid}/summary.json" if is_pick else None}  # fmt: skip
         if c is d21["official"]:
             row["files"] = "official pad: the main scenario files (scenarios/index.json)"
@@ -578,6 +609,7 @@ def write_products(grid: Grid, d21: dict, st: list[dict], cond: dict, dose_fn, s
         rows.append(row)
         if not is_pick:
             _record_pad(f"pads.{pid}.", c, s, "scenarios/pads/index.json")
+            record_feasible(f"pads.{pid}.", row["feasible"], "scenarios/pads/index.json")
     index = {"dummy": False, "scenario": sid, "score_kind": SCORE_KIND, "order": ORDER_TEXT,
              "official": pad_id(d21["official"]), "decision": d21["block"]["decision"],
              "ids": "official pad and picker pads: rank{n} = D21 rank n; pad_default keeps its "

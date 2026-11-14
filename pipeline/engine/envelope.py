@@ -85,18 +85,40 @@ def flat_disc(grid: Grid, pad_rc, radius_m: float) -> np.ndarray:
     return np.hypot(r - pad_rc[0], c - pad_rc[1]) * grid.res_m <= radius_m
 
 
-def reachable_pct(grid: Grid, t_min, pad_rc, budget_min: float, disc_speed_ms: float):
+def disc_in_grid(grid: Grid, pad_rc, radius_m: float) -> bool:
+    r0, c0 = pad_rc
+    n = int(np.ceil(radius_m / grid.res_m))
+    return not (r0 - n < 0 or c0 - n < 0 or r0 + n >= grid.shape[0] or c0 + n >= grid.shape[1])
+
+
+def full_disc_cells(radius_m: float, res_m: float) -> int:
+    """Cells of the flat disc on an unbounded grid (same centre-distance test as flat_disc)."""
+    n = int(np.ceil(radius_m / res_m))
+    r, c = np.mgrid[-n : n + 1, -n : n + 1]
+    return int((np.hypot(r, c) * res_m <= radius_m).sum())
+
+
+def disc_in_data_pct(grid: Grid, pad_rc, budget_min: float, disc_speed_ms: float) -> float:
+    """D41: % of the flat disc (r = disc_speed x budget) that lies inside the terrain data
+    (inside the routing grid and not unknown), of the whole disc's cells."""
+    radius = disc_speed_ms * budget_min * 60.0
+    inside = flat_disc(grid, pad_rc, radius) & (grid.cellstate != UNKNOWN)
+    return 100.0 * int(inside.sum()) / full_disc_cells(radius, grid.res_m)
+
+
+def reachable_pct(grid: Grid, t_min, pad_rc, budget_min: float, disc_speed_ms: float,
+                  in_data: bool = False):  # fmt: skip
     """% of the assessed flat disc (r = disc_speed x budget) with T_home <= budget.
 
     Unknown cells are left out of numerator and denominator (SPEC F1). Returns None when the
-    disc holds no assessed cell or runs off the grid (the number would be wrong, not small).
+    disc holds no assessed cell or runs off the grid (the number would be wrong, not small),
+    unless ``in_data`` (D41, user 17:22): then the share is over the part of the disc inside
+    the terrain data (report its size with ``disc_in_data_pct``).
     """
     if grid.cellstate is None:
         raise ValueError("headline needs the cell-state grid")
     radius = disc_speed_ms * budget_min * 60.0
-    r0, c0 = pad_rc
-    n = int(np.ceil(radius / grid.res_m))
-    if r0 - n < 0 or c0 - n < 0 or r0 + n >= grid.shape[0] or c0 + n >= grid.shape[1]:
+    if not in_data and not disc_in_grid(grid, pad_rc, radius):
         return None
     disc = flat_disc(grid, pad_rc, radius) & (grid.cellstate != UNKNOWN)
     den = int(disc.sum())
