@@ -45,6 +45,8 @@ jobs:
       - run: npm ci
       - name: Type check
         run: npx tsc --noEmit
+      - name: vitest (web KATs)
+        run: npm test
       - name: Vite build
         run: npx vite build
 

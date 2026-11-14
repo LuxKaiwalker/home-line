@@ -5,6 +5,7 @@ import bandsSchema from '../../../contracts/bands.schema.json'
 import cardSchema from '../../../contracts/card.schema.json'
 import clockSchema from '../../../contracts/clock.schema.json'
 import coregSchema from '../../../contracts/coreg.schema.json'
+import katsSchema from '../../../contracts/kats.schema.json'
 import coverageSchema from '../../../contracts/coverage.schema.json'
 import donkiSchema from '../../../contracts/donki.schema.json'
 import edgesSchema from '../../../contracts/edges.schema.json'
@@ -61,6 +62,7 @@ export const SCHEMA_MAP: [pattern: string, schema: JsonSchema][] = [
   ['validation/v2.json', v2Schema],
   ['validation/coverage.json', coverageSchema],
   ['validation/coreg.json', coregSchema],
+  ['validation/kats.json', katsSchema],
   ['conditions/rems.json', remsSchema],
   ['conditions/clock.json', clockSchema],
   ['conditions/donki.json', donkiSchema],
