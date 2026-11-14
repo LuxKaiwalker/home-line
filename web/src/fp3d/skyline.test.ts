@@ -9,7 +9,7 @@ import { gunzipSync } from 'node:zlib'
 import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { FP3D_CONFIG } from './config'
-import { codecOf, decodeHeights, parseIndex, type Fp3dIndex } from './format'
+import { codecOf, decodeHeights, farOrigin, parseIndex, type Fp3dIndex } from './format'
 import { lonLatToXY, parseEqc, type Eqc } from './geo'
 import { parseRing, ringCrossings, type MeshSquare } from './ring'
 import { DrawnSurface, compareSkylines, renderedSkyline } from './skyline'
@@ -33,11 +33,10 @@ function loadTerrain(root: string): { idx: Fp3dIndex; t: Terrain } {
   return { idx, t }
 }
 
-const squareOf = (idx: Pick<Fp3dIndex, 'chunk_grid' | 'far'>): MeshSquare => ({
-  west: idx.chunk_grid.origin_xy_m[0],
-  north: idx.chunk_grid.origin_xy_m[1],
-  size: idx.far.width * idx.far.res_m,
-})
+const squareOf = (idx: Pick<Fp3dIndex, 'chunk_grid' | 'far'>): MeshSquare => {
+  const [west, north] = farOrigin(idx)
+  return { west, north, size: idx.far.width * idx.far.res_m }
+}
 
 interface CheckStation {
   id: string
@@ -156,17 +155,17 @@ describe('far-skyline ring', () => {
     expect(z).toBeCloseTo(height, 6)
   })
 
-  it('skips points inside the terrain square and breaks at distance jumps', () => {
+  it('skips points inside the terrain square; joins across distance jumps unless a ratio is set', () => {
     const dist = Array.from({ length: n }, (_, k) => (k < 90 ? 500 : k < 180 ? 15000 : 40000))
-    const c = parseRing(
-      { ...ws3, dist_m: dist, east_m: undefined, north_m: undefined },
-      eqc,
-      sq,
-      opts,
-    )
-    expect(c.covered).toBe(90)
-    expect(c.drawn).toBe(270)
-    expect(c.segments.map((s) => s.length).sort((a, b) => a - b)).toEqual([90, 180])
+    const raw = { ...ws3, dist_m: dist, east_m: undefined, north_m: undefined }
+    const broken = parseRing(raw, eqc, sq, { ...opts, maxDistanceRatio: 1.5 })
+    expect(broken.covered).toBe(90)
+    expect(broken.drawn).toBe(270)
+    expect(broken.segments.map((s) => s.length).sort((a, b) => a - b)).toEqual([90, 180])
+    expect(FP3D_CONFIG.ring.maxDistanceRatio).toBe(Infinity) // config/fp3d.yaml null
+    const joined = parseRing(raw, eqc, sq, opts)
+    expect(joined.drawn).toBe(270)
+    expect(joined.segments.map((s) => s.length)).toEqual([270])
   })
 
   it('unknown (null) ring entries break the curtain instead of inventing points', () => {
@@ -191,8 +190,12 @@ describe('far-skyline ring', () => {
 function runCheck(root: string, check: SkylineCheck, label: string) {
   const { idx, t } = loadTerrain(root)
   let ring = null
-  if (idx.horizon_ring && existsSync(resolve(root, idx.horizon_ring))) {
-    const raw = JSON.parse(readFileSync(resolve(root, idx.horizon_ring)).toString())
+  // WS3 writes the ring; before make web it sits in data/interim/horizon/public/
+  const ringPath = idx.horizon_ring
+    ? [resolve(root, idx.horizon_ring), resolve(REPO, 'data/interim/horizon/public', idx.horizon_ring)].find((p) => existsSync(p))
+    : undefined
+  if (ringPath) {
+    const raw = JSON.parse(readFileSync(ringPath).toString())
     ring = parseRing(raw, parseEqc(idx.chunk_grid.crs), squareOf(idx), {
       skirtDeg: FP3D_CONFIG.ring.skirtDeg,
       maxDistanceRatio: FP3D_CONFIG.ring.maxDistanceRatio,
@@ -209,7 +212,7 @@ function runCheck(root: string, check: SkylineCheck, label: string) {
     )
     return { id: st.id, cmp }
   })
-  console.log(`[F20 skyline check, ${label}] tolerance ${check.tolerance_deg} deg\n  ${rows.join('\n  ')}`)
+  console.log(`[F20 skyline check, ${label}] ring: ${ring?.note ?? 'none'}; tolerance ${check.tolerance_deg} deg\n  ${rows.join('\n  ')}`)
   return results
 }
 
@@ -249,7 +252,9 @@ describe('SPEC F20: rendered skyline within 0.5 deg of the computed horizon', ()
   const real = realRoot
     ? (JSON.parse(readFileSync(resolve(realRoot, 'fp3d/index.json')).toString()) as { skyline_check?: SkylineCheck })
     : null
-  it.skipIf(!real?.skyline_check)('real data: every station within tolerance (fp3d/index.json skyline_check)', () => {
+  // Data acceptance check, run by `make fp3d-check` (FP3D_REAL_CHECK=1), not by CI: its verdict
+  // depends on other workstreams' data (STATUS WS8 records the result).
+  it.skipIf(!real?.skyline_check || !process.env.FP3D_REAL_CHECK)('real data: every station within tolerance (fp3d/index.json skyline_check)', () => {
     // the ring is WS3's file; before make web it sits in data/interim/horizon/public/fp3d/
     const res = runCheck(realRoot!, real!.skyline_check!, 'real')
     for (const r of res) expect(r.cmp.maxAbsDeg).toBeLessThanOrEqual(real!.skyline_check!.tolerance_deg)

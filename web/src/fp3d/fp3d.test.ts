@@ -1,6 +1,6 @@
 // Known-answer tests for the 3D view's pure logic (WS8, F20): config, projection, chunk decode,
 // terrain sampling/meshing, camera eye height on the dummy route, path timing, fps fallback.
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { gunzipSync, gzipSync } from 'node:zlib'
 import { resolve } from 'node:path'
 import { parse } from 'yaml'
@@ -208,6 +208,23 @@ describe('terrain', () => {
     expect(cut.index.length).toBeLessThan(all.index.length)
     expect(cut.index.length % 3).toBe(0)
   })
+  it('reads a far grid larger than the chunk grid at its own origin (far.origin_xy_m)', () => {
+    // chunk grid 3 x 4 m at (0, 100); far grid 2 m cells over (-8, 108) .. (20, 80)
+    const h = (x: number, y: number) => 10 + 0.5 * x - 0.25 * y
+    const fw = 14
+    const farData = new Float32Array(fw * fw)
+    for (let r = 0; r < fw; r++) for (let c = 0; c < fw; c++) farData[r * fw + c] = h(-8 + (c + 0.5) * 2, 108 - (r + 0.5) * 2)
+    const idx = {
+      chunk_grid: { origin_xy_m: [0, 100] as [number, number], chunk_px: 4, res_m: 1, cols: 3, rows: 3, chunks: [], crs: '' },
+      far: { file: '', res_m: 2, width: fw, height: fw, origin_xy_m: [-8, 108] as [number, number] },
+    } as unknown as Fp3dIndex
+    const t = new Terrain(idx, farData)
+    expect(t.far.west).toBe(-8)
+    expect(t.far.north).toBe(108)
+    expect(t.heightAt(-5.3, 104.1)).toBeCloseTo(h(-5.3, 104.1), 5) // outside the chunk grid
+    expect(t.heightAt(6.2, 95.7)).toBeCloseTo(h(6.2, 95.7), 5)
+    expect(t.x0).toBe(0) // near lattice unchanged
+  })
   it('HeightGrid bilinear clamps at the edges', () => {
     const g = new HeightGrid(0, 2, 1, 2, 2, Float32Array.from([1, 2, 3, 4]))
     expect(g.bilinear(0.5, 1.5)).toBe(1)
@@ -283,56 +300,79 @@ describe('path', () => {
   })
 })
 
-// --------------------------------------------- eye height on the dummy route (brief WS8 Tests)
-describe('camera on the dummy route', () => {
-  it('stays 1.7 +- 0.1 m above the drawn mesh everywhere along the route', async () => {
-    const idx = parseIndex(JSON.parse(readDummy('fp3d/index.json').toString()))
-    const codec = codecOf(idx)
-    const far = decodeHeights(toAB(gunzipSync(readDummy(idx.far.file))), idx.far.width, idx.far.height, codec)
-    const t = new Terrain(idx, far)
-    const P = idx.chunk_grid.chunk_px
-    for (const ch of idx.chunk_grid.chunks) t.setChunk(ch.i, ch.j, decodeHeights(toAB(gunzipSync(readDummy(ch.file))), P, P, codec))
-    const eqc = parseEqc(idx.chunk_grid.crs)
-    const route = buildRoute(
-      JSON.parse(readDummy('route_nom_104.geojson').toString()),
-      JSON.parse(readDummy('timeline_nom_104.json').toString()),
-      eqc,
-      FP3D_CONFIG.lookAheadM,
-    )
-    const start = route.poseAt(route.startMin)
-    const anchor = { x: start.x, y: start.y, h: t.heightAt(start.x, start.y) }
-    const meshes = new Map<string, ReturnType<typeof nearChunkMesh>>()
-    const eye = FP3D_CONFIG.eyeHeightM
-    let worst = 0
-    let n = 0
-    const check = (x: number, y: number) => {
-      const owner = t.meshChunkAt(x, y)
-      expect(owner).not.toBeNull() // the whole route is on near chunks
-      const [i, j] = owner!
-      const key = `${i}_${j}`
-      if (!meshes.has(key)) meshes.set(key, nearChunkMesh(t, i, j, anchor))
-      const m = meshes.get(key)!
-      // locate the triangle in the mesh arrays and interpolate its vertex heights
-      const u = (x - t.x0) / t.res - 0.5 - i * P
-      const v = (t.y0 - y) / t.res - 0.5 - j * P
-      const c = Math.floor(u)
-      const r = Math.floor(v)
-      const nv = m.vertsPerSide
-      const hy = (rr: number, cc: number) => m.positions[3 * (rr * nv + cc) + 1]
-      const meshY = triInterp(hy(r, c), hy(r, c + 1), hy(r + 1, c), hy(r + 1, c + 1), u - c, v - r)
-      const cam = cameraPosition(t, anchor, x, y, eye)
-      const agl = cam[1] - meshY
-      worst = Math.max(worst, Math.abs(agl - eye))
-      n++
+// ------------------------------------- eye height along the route (brief WS8 Tests, SPEC F20)
+function eyeHeightCheck(fp3dRoot: string, routePath: string, timelinePath: string | null) {
+  const read = (p: string) => readFileSync(resolve(fp3dRoot, p))
+  const idx = parseIndex(JSON.parse(read('fp3d/index.json').toString()))
+  const codec = codecOf(idx)
+  const far = decodeHeights(toAB(gunzipSync(read(idx.far.file))), idx.far.width, idx.far.height, codec)
+  const t = new Terrain(idx, far)
+  const P = idx.chunk_grid.chunk_px
+  for (const ch of idx.chunk_grid.chunks) t.setChunk(ch.i, ch.j, decodeHeights(toAB(gunzipSync(read(ch.file))), P, P, codec))
+  const eqc = parseEqc(idx.chunk_grid.crs)
+  const route = buildRoute(
+    JSON.parse(readFileSync(routePath).toString()),
+    timelinePath && existsSync(timelinePath) ? JSON.parse(readFileSync(timelinePath).toString()) : null,
+    eqc,
+    FP3D_CONFIG.lookAheadM,
+  )
+  const start = route.poseAt(route.startMin)
+  const anchor = { x: start.x, y: start.y, h: t.heightAt(start.x, start.y) }
+  const meshes = new Map<string, ReturnType<typeof nearChunkMesh>>()
+  const eye = FP3D_CONFIG.eyeHeightM
+  let worst = 0
+  let n = 0
+  let offNear = 0
+  const check = (x: number, y: number) => {
+    const owner = t.meshChunkAt(x, y)
+    if (!owner) {
+      offNear++ // the whole route must be on near chunks (asserted below)
+      return
     }
-    for (const [x, y] of route.samples(1)) check(x, y)
-    for (let tm = route.startMin; tm <= route.endMin; tm += 0.5) {
-      const p = route.poseAt(tm)
-      check(p.x, p.y)
-    }
-    expect(n).toBeGreaterThan(5000)
-    expect(worst).toBeLessThanOrEqual(0.1)
-    expect(worst).toBeLessThan(1e-3) // camera and mesh share one surface (float32 vertices)
+    const [i, j] = owner
+    const key = `${i}_${j}`
+    if (!meshes.has(key)) meshes.set(key, nearChunkMesh(t, i, j, anchor))
+    const m = meshes.get(key)!
+    // locate the triangle in the mesh arrays and interpolate its vertex heights
+    const u = (x - t.x0) / t.res - 0.5 - i * P
+    const v = (t.y0 - y) / t.res - 0.5 - j * P
+    const c = Math.floor(u)
+    const r = Math.floor(v)
+    const nv = m.vertsPerSide
+    const hy = (rr: number, cc: number) => m.positions[3 * (rr * nv + cc) + 1]
+    const meshY = triInterp(hy(r, c), hy(r, c + 1), hy(r + 1, c), hy(r + 1, c + 1), u - c, v - r)
+    const cam = cameraPosition(t, anchor, x, y, eye)
+    worst = Math.max(worst, Math.abs(cam[1] - meshY - eye))
+    n++
+  }
+  for (const [x, y] of route.samples(1)) check(x, y)
+  for (let tm = route.startMin; tm <= route.endMin; tm += 0.5) {
+    const p = route.poseAt(tm)
+    check(p.x, p.y)
+  }
+  return { n, worst, offNear, lengthM: route.lengthM }
+}
+
+describe('camera on the route: 1.7 +- 0.1 m above the drawn mesh', () => {
+  it('dummy route', () => {
+    const r = eyeHeightCheck(DUMMY, resolve(DUMMY, 'route_nom_104.geojson'), resolve(DUMMY, 'timeline_nom_104.json'))
+    expect(r.offNear).toBe(0)
+    expect(r.n).toBeGreaterThan(5000)
+    expect(r.worst).toBeLessThanOrEqual(0.1)
+    expect(r.worst).toBeLessThan(1e-3) // camera and mesh share one surface (float32 vertices)
+  })
+  // real data: the exporter output + WS2 route before make web, else the public tree
+  const real = [
+    [resolve(REPO, 'data/interim/export'), resolve(REPO, 'data/interim/engine/public')],
+    [resolve(REPO, 'web/public/data'), resolve(REPO, 'web/public/data')],
+  ].find(([f, r]) => existsSync(resolve(f, 'fp3d/index.json')) && existsSync(resolve(r, 'route_nom_104.geojson')))
+  it.skipIf(!real)('real route (nom_104)', () => {
+    const [f, r] = real!
+    const res = eyeHeightCheck(f, resolve(r, 'route_nom_104.geojson'), resolve(r, 'timeline_nom_104.json'))
+    console.log(`[F20 eye height, real] ${res.n} points over ${Math.round(res.lengthM)} m, max |agl - eye| ${res.worst.toExponential(2)} m`)
+    expect(res.offNear).toBe(0)
+    expect(res.n).toBeGreaterThan(5000)
+    expect(res.worst).toBeLessThanOrEqual(0.1)
   })
 })
 

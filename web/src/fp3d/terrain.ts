@@ -1,5 +1,5 @@
-// Terrain model of the 3D view (pure; no Three.js). Heights live on two lattices of pixel centres
-// sharing the index's NW corner chunk_grid.origin_xy_m:
+// Terrain model of the 3D view (pure; no Three.js). Heights live on two lattices of pixel centres,
+// the near one from chunk_grid.origin_xy_m and the far one from far.origin_xy_m (NW corners):
 //   near: x = x0 + (gc + 0.5) res, y = y0 - (gr + 0.5) res   (global column gc, row gr; row 0 north)
 //   far:  same with far.res_m.
 // Each near chunk (i, j) is meshed over lattice vertices gc = iP .. iP + P (P = chunk_px), so
@@ -7,7 +7,7 @@
 // the far grid where the neighbour is not part of the corridor. Every cell is split along its
 // NE-SW diagonal; heightAt() interpolates on exactly those triangles, so the camera height is
 // measured against the surface that is drawn.
-import type { Fp3dIndex } from './format'
+import { farOrigin, type Fp3dIndex } from './format'
 
 export class HeightGrid {
   readonly west: number
@@ -82,7 +82,8 @@ export class Terrain {
     this.res = g.res_m
     this.chunkPx = g.chunk_px
     this.nChunks = g.cols
-    this.far = new HeightGrid(this.x0, this.y0, index.far.res_m, index.far.width, index.far.height, farData)
+    const [fw, fn] = farOrigin(index)
+    this.far = new HeightGrid(fw, fn, index.far.res_m, index.far.width, index.far.height, farData)
   }
 
   private key(i: number, j: number): number {

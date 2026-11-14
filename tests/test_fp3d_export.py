@@ -275,8 +275,9 @@ def test_far_shape_matches_dummy(dummy_grid, dummy_index):
 def test_far_block_mean_exact_on_aligned_dem():
     g = ChunkGrid(x0=-1000.0, y0=-280000.0, chunk_px=32, res_m=1.0, n=2)
     dem, tr = _synthetic_dem(g)
-    far = far_mesh.far_heights([(dem, tr)], g, 8.0)
+    far, counts = far_mesh.far_heights([(dem, tr)], g, 8.0)
     assert far.shape == (8, 8)
+    assert counts == [64, 0]
     core = dem[10:10 + 64, 10:10 + 64]
     ref = core.reshape(8, 8, 8, 8).mean(axis=(1, 3))
     np.testing.assert_allclose(far, ref, atol=1e-9)
@@ -288,8 +289,9 @@ def test_far_falls_back_to_coarser_source():
     fine_tr = Affine(1.0, 0, 0.0, 0, -1.0, 64.0)
     coarse = np.full((4, 4), 20.0)  # 16 m cells over everything
     coarse_tr = Affine(16.0, 0, 0.0, 0, -16.0, 64.0)
-    far = far_mesh.far_heights([(fine, fine_tr), (coarse, coarse_tr)], g, 8.0)
+    far, counts = far_mesh.far_heights([(fine, fine_tr), (coarse, coarse_tr)], g, 8.0)
     assert far.shape == (8, 8)
+    assert counts == [32, 32, 0]
     np.testing.assert_array_equal(far[:, :4], 10.0)
     np.testing.assert_array_equal(far[:, 4:], 20.0)
 
@@ -299,11 +301,30 @@ def test_far_plane_at_cell_centres():
     tr = Affine(1.0, 0, 0.0, 0, -1.0, 128.0)
     rr, cc = np.mgrid[0:128, 0:128]
     dem = 0.5 * (cc + 0.5) - 0.25 * (128.0 - rr - 0.5)
-    far = far_mesh.far_heights([(dem, tr)], g, 8.0)
+    far, _ = far_mesh.far_heights([(dem, tr)], g, 8.0)
     xs = (np.arange(16) + 0.5) * 8.0
     ys = 128.0 - (np.arange(16) + 0.5) * 8.0
     xx, yy = np.meshgrid(xs, ys)
     np.testing.assert_allclose(far, 0.5 * xx - 0.25 * yy, atol=1e-9)
+
+
+def test_far_grid_extends_by_whole_chunks_around_the_same_centre(dummy_grid):
+    assert far_mesh.far_grid(dummy_grid, None) is dummy_grid
+    assert far_mesh.far_grid(dummy_grid, 1000.0) is dummy_grid  # smaller than the near square
+    fg = far_mesh.far_grid(dummy_grid, 6000.0)
+    assert fg.n == 47 and fg.extent_m == 47 * 256.0  # 2 ceil((6000 - 128) / 256) + 1
+    assert fg.x0 + fg.extent_m / 2 == pytest.approx(dummy_grid.x0 + dummy_grid.extent_m / 2)
+    assert fg.y0 - fg.extent_m / 2 == pytest.approx(dummy_grid.y0 - dummy_grid.extent_m / 2)
+    assert (dummy_grid.x0 - fg.x0) % 256.0 == pytest.approx(0.0)  # near and far lattices align
+    assert far_mesh.far_shape(fg, 8.0) == (1504, 1504)
+
+
+def test_corridor_includes_station_points():
+    g = ChunkGrid(x0=0.0, y0=1000.0, chunk_px=100, res_m=1.0, n=10)
+    line = np.array([[150.0, 850.0], [450.0, 850.0]])
+    got = corridor_chunks(g, [line], 10.0, points=[(750.0, 250.0)])
+    assert (7, 7) in got and (7, 6) not in got
+    assert set(corridor_chunks(g, [line], 10.0)) | {(7, 7)} == set(got)
 
 
 def test_dummy_far_file_matches_dummy_surface(dummy_grid, dummy_index, geo):
@@ -320,8 +341,11 @@ def test_dummy_far_file_matches_dummy_surface(dummy_grid, dummy_index, geo):
 def test_export_far_writes_file(tmp_path):
     g = ChunkGrid(x0=0.0, y0=64.0, chunk_px=64, res_m=1.0, n=1)
     dem = np.full((64, 64), -4000.0)
-    entry = far_mesh.export_far([(dem, Affine(1.0, 0, 0.0, 0, -1.0, 64.0))], g, 8.0, tmp_path, Q)
+    entry = far_mesh.export_far([(dem, Affine(1.0, 0, 0.0, 0, -1.0, 64.0))], g, 8.0, tmp_path, Q,
+                                source_names=["dem"])
     assert entry["width"] == 8 and entry["height"] == 8 and entry["res_m"] == 8.0
+    assert entry["origin_xy_m"] == [0.0, 64.0]
+    assert entry["cells_by_source"] == {"dem": 64, "filled_nearest": 0}
     h = decode_heights((tmp_path / entry["file"]).read_bytes(), (8, 8))
     np.testing.assert_array_equal(h, -4000.0)
     assert entry["bytes"] == (tmp_path / entry["file"]).stat().st_size
@@ -416,6 +440,15 @@ def test_build_index_validates_and_matches_dummy_shape(dummy_grid, dummy_index, 
     assert ch["bounds"] == pytest.approx(dummy_grid.chunk_bounds_lonlat(14, 14, geo))
     assert idx["far"]["bounds"] == idx["bounds"]
     assert idx["download_bytes"] == 10 + 5 + 7
+    # a far grid larger than the chunk grid records its own origin and bounds
+    fg = far_mesh.far_grid(dummy_grid, 6000.0)
+    far2 = {**far, "width": 1504, "height": 1504, "origin_xy_m": [fg.x0, fg.y0]}
+    idx2 = terrain_chunks.build_index(dummy_grid, geo, near, tex, far2, quantum_m=Q, datum="t",
+                                      eye_height_m=1.7, sources={})
+    w, s_, e, n = idx2["far"]["bounds"]
+    assert (w, s_) == pytest.approx(geo.lonlat(fg.x0, fg.y0 - fg.extent_m), abs=1e-6)
+    assert (e, n) == pytest.approx(geo.lonlat(fg.x0 + fg.extent_m, fg.y0), abs=1e-6)
+    assert w < idx2["bounds"][0] and n > idx2["bounds"][3]
     assert idx["horizon_ring"] == "fp3d/horizon_ring.json"
 
 

@@ -75,7 +75,7 @@ export interface Fp3dConfig {
     nightFloor: number
   }
   ring: { skirtDeg: number; maxDistanceRatio: number; hazeHalfM: number }
-  skylineCheck: { toleranceDeg: number; azStepDeg: number }
+  skylineCheck: { toleranceDeg: number; azStepDeg: number; probeFovDeg: number }
 }
 
 const rgb3 = (v: number[]): [number, number, number] => [v[0], v[1], v[2]]
@@ -132,12 +132,14 @@ export function buildConfig(
     },
     ring: {
       skirtDeg: num(fp3d, 'ring.skirt_deg', F),
-      maxDistanceRatio: num(fp3d, 'ring.max_distance_ratio', F),
+      // null in config = no limit: always join neighbouring ring points
+      maxDistanceRatio: get(fp3d, 'ring.max_distance_ratio', F) === null ? Infinity : num(fp3d, 'ring.max_distance_ratio', F),
       hazeHalfM: num(fp3d, 'ring.haze_half_m', F),
     },
     skylineCheck: {
       toleranceDeg: num(fp3d, 'skyline_check.tolerance_deg', F),
       azStepDeg: num(fp3d, 'skyline_check.az_step_deg', F),
+      probeFovDeg: num(fp3d, 'skyline_check.probe_fov_deg', F),
     },
   }
 }

@@ -4,7 +4,7 @@ import * as THREE from 'three'
 import { PlaybackClock, type Fp3dClock } from './clock'
 import type { Fp3dConfig } from './config'
 import type { FallbackReason } from './fallback'
-import { codecOf, decodeHeights, gunzipIfNeeded, parseIndex, type Fp3dChunk, type Fp3dIndex } from './format'
+import { codecOf, decodeHeights, farOrigin, gunzipIfNeeded, parseIndex, type Fp3dChunk, type Fp3dIndex } from './format'
 import { FpsWatchdog } from './fps'
 import { parseEqc, xyToLonLat, type Eqc } from './geo'
 import { createSky, hazeDensity, rgb, ringGeometry, withCurvature } from './look'
@@ -137,7 +137,7 @@ async function loadAll(
   let ring: RingCurtain | null = null
   if (index.horizon_ring) {
     try {
-      const [west, north] = index.chunk_grid.origin_xy_m
+      const [west, north] = farOrigin(index)
       const square = { west, north, size: index.far.width * index.far.res_m }
       ring = parseRing(await getJson(index.horizon_ring), eqc, square, {
         skirtDeg: opts.cfg.ring.skirtDeg,
@@ -488,6 +488,11 @@ export async function startView(container: HTMLElement, opts: ViewOptions): Prom
     const size = r.getDrawingBufferSize(new THREE.Vector2())
     const W = size.x
     const H = size.y
+    const fov0 = camera.fov
+    for (const c of [camera, bgCamera]) {
+      c.fov = cfg.skylineCheck.probeFovDeg
+      c.updateProjectionMatrix()
+    }
     const f = H / 2 / Math.tan((camera.fov * Math.PI) / 360)
     const hfov = 2 * Math.atan(W / 2 / f)
     const steps = Math.ceil((2 * Math.PI) / (hfov * 0.9))
@@ -527,7 +532,9 @@ export async function startView(container: HTMLElement, opts: ViewOptions): Prom
               break
             }
           }
-          if (top < 0) continue
+          // no terrain, or terrain already in the top row (skyline above the frame: at wide
+          // azimuth offsets the top row looks lower) -> another heading covers this azimuth
+          if (top <= 0) continue
           const xc = c + 0.5 - W / 2
           const yc = H / 2 - top // boundary between sky row top-1 and terrain row top
           azDeg.push(((((h + Math.atan2(xc, f)) * 180) / Math.PI) % 360 + 360) % 360)
@@ -535,6 +542,10 @@ export async function startView(container: HTMLElement, opts: ViewOptions): Prom
         }
       }
     } finally {
+      for (const c of [camera, bgCamera]) {
+        c.fov = fov0
+        c.updateProjectionMatrix()
+      }
       scene.overrideMaterial = null
       bg.overrideMaterial = null
       scene.fog = saved.fog

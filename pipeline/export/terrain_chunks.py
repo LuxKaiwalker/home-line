@@ -258,14 +258,17 @@ def route_lines_xy(fc: dict, geo: Geo) -> list[np.ndarray]:
     return lines
 
 
-def corridor_chunks(grid: ChunkGrid, lines: list[np.ndarray], half_width_m: float
-                    ) -> list[tuple[int, int]]:
-    """Chunks (i, j) whose square touches the route buffered by ``half_width_m``; j-major order."""
-    from shapely.geometry import LineString, MultiLineString, box
+def corridor_chunks(grid: ChunkGrid, lines: list[np.ndarray], half_width_m: float,
+                    points: list[tuple[float, float]] | None = None) -> list[tuple[int, int]]:
+    """Chunks (i, j) whose square touches the route (plus optional points, e.g. the stations)
+    buffered by ``half_width_m``; j-major order."""
+    from shapely.geometry import LineString, MultiLineString, MultiPoint, box
 
     geom = MultiLineString([LineString(ln) for ln in lines if len(ln) >= 2])
     if geom.is_empty:
         raise ValueError("route has no line geometry: no corridor")
+    if points:
+        geom = geom.union(MultiPoint([tuple(p) for p in points]))
     corridor = geom.buffer(half_width_m)
     out = []
     for j in range(grid.n):
@@ -335,6 +338,15 @@ def build_index(grid: ChunkGrid, geo: Geo, near: list[dict], tex: list[dict], fa
     fe, fn = geo.lonlat(grid.x0 + grid.extent_m, grid.y0)
     bounds = [round(fw, 6), round(fs, 6), round(fe, 6), round(fn, 6)]
     total = sum(c["bytes"] + c.get("tex_bytes", 0) for c in chunks) + far.get("bytes", 0)
+    far = dict(far)
+    if "origin_xy_m" in far and "width" in far:
+        fx0, fy0 = far["origin_xy_m"]
+        ext = far["width"] * far["res_m"]
+        a = geo.lonlat(fx0, fy0 - ext)
+        b = geo.lonlat(fx0 + ext, fy0)
+        far["bounds"] = [round(a[0], 6), round(a[1], 6), round(b[0], 6), round(b[1], 6)]
+    else:
+        far["bounds"] = bounds
     idx = {
         "dummy": False,
         "bounds": bounds,
@@ -350,7 +362,7 @@ def build_index(grid: ChunkGrid, geo: Geo, near: list[dict], tex: list[dict], fa
                    "sample": "cell centres", "offset_m": 0.0, "units": "m",
                    "quantum_m": quantum_m, "datum": datum,
                    "nodata": "filled from the nearest valid pixel (count per chunk: filled_px)"},
-        "far": {**far, "bounds": bounds},
+        "far": far,
         "texture": texture_note or "HiRISE ortho JPEG per near chunk",
         "eye_height_m": eye_height_m,
         "sources": sources,
@@ -459,12 +471,19 @@ def main(argv: list[str] | None = None) -> int:
     if fc.get("dummy") or fc.get("synthetic"):
         raise SystemExit(f"{args.route}: dummy/synthetic route refused (AGENTS rule 7)")
     lines = route_lines_xy(fc, geo)
-    chunks = corridor_chunks(grid, lines, f3["near"]["corridor_half_width_m"])
+    stations = json.loads(args.stations.read_text()) if args.stations.exists() else []
+    # every station (visited or not) gets 1 m terrain around it: the F20 skyline check is "at each
+    # station", and the station cards link to the 3D view
+    st_xy = [geo.xy(s["lon"], s["lat"]) for s in stations]
+    chunks = corridor_chunks(grid, lines, f3["near"]["corridor_half_width_m"], st_xy)
 
     dem, tr = _read_raster(args.dem_1m)
     near = export_near(dem, tr, grid, chunks, args.out, q)
     far_sources = [(dem, tr)] + [_read_raster(p) for p in far_sources_p]
-    far = far_mesh.export_far(far_sources, grid, f3["far"]["res_m"], args.out, q)
+    fgrid = far_mesh.far_grid(grid, f3["far"].get("half_extent_m"))
+    far = far_mesh.export_far(far_sources, fgrid, f3["far"]["res_m"], args.out, q,
+                              source_names=[_repo_rel(args.dem_1m)]
+                              + [_repo_rel(p) for p in far_sources_p])
     del dem, far_sources
     ground = cfg["horizon"]["panorama"]["ground_rgb"]
     tex = ortho_chunks.export_textures_from_file(
@@ -476,9 +495,7 @@ def main(argv: list[str] | None = None) -> int:
                "far": [rel(args.dem_1m)] + [rel(p) for p in far_sources_p],
                "ortho": rel(args.ortho), "route": rel(args.route)}
     check = None
-    ids = ["pad"]
-    if args.stations.exists():
-        ids += [s["id"] for s in json.loads(args.stations.read_text())]
+    ids = ["pad"] + [s["id"] for s in stations]
     profs = read_station_horizons(args.station_horizons, ids)
     if profs:
         check = skyline_reference(profs, geo, cfg,
@@ -498,6 +515,7 @@ def main(argv: list[str] | None = None) -> int:
     record("fp3d.near_chunks", len(near), None, out_index, __file__)
     record("fp3d.near_res_m", grid.res_m, "m", out_index, __file__)
     record("fp3d.far_res_m", f3["far"]["res_m"], "m", out_index, __file__)
+    record("fp3d.far_extent_m", round(fgrid.extent_m, 1), "m", out_index, __file__)
     record("fp3d.corridor_half_width_m", f3["near"]["corridor_half_width_m"], "m", out_index,
            __file__)
     print(f"fp3d: {len(near)} near chunks, {len(tex)} textures, far {far['width']}x{far['height']}"

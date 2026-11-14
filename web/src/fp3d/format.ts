@@ -38,7 +38,8 @@ export interface Fp3dIndex {
   /** metres per stored unit */
   height_scale: number
   height: Fp3dHeight
-  far: { file: string; res_m: number; width: number; height: number; bytes?: number }
+  /** origin_xy_m: NW corner of the far grid (absent: the chunk grid's; the M0 dummy) */
+  far: { file: string; res_m: number; width: number; height: number; origin_xy_m?: [number, number]; bytes?: number }
   horizon_ring?: string
   eye_height_m?: number
   download_bytes?: number
@@ -69,6 +70,12 @@ export function parseIndex(raw: unknown): Fp3dIndex {
   const f = o.far
   if (!f || typeof f.file !== 'string' || !(f.width > 0) || !(f.height > 0) || !(f.res_m > 0)) fail('far grid')
   return o as Fp3dIndex
+}
+
+/** NW corner of the far grid (analysis CRS): far.origin_xy_m, else the chunk grid's. */
+export function farOrigin(idx: Pick<Fp3dIndex, 'chunk_grid' | 'far'>): [number, number] {
+  const o = idx.far.origin_xy_m
+  return Array.isArray(o) && o.length === 2 ? [o[0], o[1]] : [idx.chunk_grid.origin_xy_m[0], idx.chunk_grid.origin_xy_m[1]]
 }
 
 /** gunzip when the bytes start with the gzip magic (servers may already have decoded it). */
