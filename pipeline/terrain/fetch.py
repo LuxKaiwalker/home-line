@@ -300,6 +300,38 @@ def fetch_red() -> Path:
     return p
 
 
+# --------------------------------------------------------------------------- MOLA-HRSC (WS3)
+
+
+def mola_radius_m() -> float:
+    """MOLA-HRSC band outer edge (horizon.yaml sampling, source mola_hrsc_200m) + planning
+    radius + raw_fetch_margin_m."""
+    import yaml
+
+    h = yaml.safe_load((G.CONFIG / "horizon.yaml").read_text())
+    to_m = max(b["to_m"] for b in h["sampling"] if b["source"] == "mola_hrsc_200m")
+    s = G.site()
+    return float(to_m + s["planning_radius_m"] + s["raw_fetch_margin_m"])
+
+
+def fetch_mola() -> Path:
+    """MOLA-HRSC blend 200 m (geographic lon/lat, uncompressed 1-row strips): window of
+    mola_radius_m around the pad. GTIFF_DIRECT_IO=YES range-reads only the needed bytes of each
+    strip (D0 2.5: an 80 km window cost 2.2 MB instead of ~170 MB)."""
+    s = G.site()
+    url = s["d0_sources"]["mola_hrsc_200m_href"]
+    r = mola_radius_m()
+    px, py = G.pad_xy()
+    lon_w, lat_n = G.lonlat_of_xy(px - r, py + r)
+    lon_e, lat_s = G.lonlat_of_xy(px + r, py - r)
+    p = gdal_translate("mola_hrsc_200m_win", url, G.RAW / "mola" / "mola_hrsc_200m_win.tif",
+                       projwin=(lon_w, lat_n, lon_e, lat_s), estimate=10_000_000,
+                       extra=["--config", "GTIFF_DIRECT_IO", "YES", "-co", "COMPRESS=DEFLATE",
+                              "-co", "TILED=YES"])
+    print(f"mola ok ({downloaded_total() / 1e6:.0f} MB total)", flush=True)
+    return p
+
+
 # --------------------------------------------------------------------------- CRISM
 
 
@@ -462,7 +494,8 @@ def fetch_ctx(radius_m: float, exclude: frozenset = frozenset()) -> list[tuple[d
 
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("what", choices=["dem", "hirise", "crism", "ctx", "lrgb", "red", "status"])
+    ap.add_argument("what", choices=["dem", "hirise", "crism", "ctx", "mola", "lrgb", "red",
+                                     "status"])
     ap.add_argument("--workers", type=int, default=4)
     a = ap.parse_args(argv)
     if a.what == "dem":
@@ -478,6 +511,8 @@ def main(argv=None) -> int:
         fetch_red()
     elif a.what == "ctx":
         fetch_ctx(ctx_radius_m())
+    elif a.what == "mola":
+        fetch_mola()
     idx = load_index()
     print(f"cache entries: {len(idx)}, downloaded {downloaded_total(idx) / 1e6:.1f} MB")
     return 0

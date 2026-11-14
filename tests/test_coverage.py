@@ -281,3 +281,18 @@ def test_grid_spec_fields_grid_corner():
     assert spec["res_m"] == s["grids_m"]["fields"]
     assert spec["transform_gdal"] == [gf.x0, gf.res, 0.0, gf.y0, 0.0, -gf.res]
     assert spec["bounds_lonlat"] == webout.lonlat_bounds(gf)
+
+
+# -------------------------------------------------- basemap zooms (brief WS1 task 7)
+
+
+def test_basemap_zoom_range_for_025_to_10_m():
+    """Mars lon/lat passed to MapLibre as-is (D4): m/px at zoom z = 2 pi R / (256 * 2^z).
+    R = 3,396,190 m -> z18 = 0.318 m/px (nearest to 0.25 m), z13 = 10.18 m/px (nearest to 10 m)."""
+    from pipeline.terrain import build
+
+    r = 3396190.0
+    assert 2 * math.pi * r / (256 * 2 ** 18) == pytest.approx(0.31798, abs=1e-4)
+    assert build._zoom_for(0.25) == 18
+    assert build._zoom_for(10.0) == 13
+    assert build._zoom_for(1.0) == 16

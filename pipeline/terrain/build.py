@@ -521,7 +521,7 @@ def step_farfield() -> dict:
     band = {b["source"]: b for b in hz["sampling"]}
     pr = G.site()["planning_radius_m"]
     # MOLA-HRSC
-    mola_src = G.REPO / G.site()["d0_sources"]["mola_hrsc_cached_window"]
+    mola_src = fetch.fetch_mola()
     gm = G.pad_grid(band["mola_hrsc_200m"]["to_m"] + pr, band["mola_hrsc_200m"]["step_m"])
     rio.warp_to_grid(mola_src, OUT / "mola_hrsc_200m.tif", gm, "bilinear", src_nodata=-32768,
                      out_type="Float32")

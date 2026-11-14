@@ -78,3 +78,7 @@ merged_dem_hirise_pairs:
   - [19698, 19988]   # T3
 texture_check: {highpass_window_m: 9, rms_window_m: 25, assumed: true}  # D3 evidence only (HiRISE vs upsampled CTX texture), never the mask
 basemap_res_m: [0.25, 10]       # WS1 brief: XYZ zoom levels for 0.25-10 m
+ctx_qa:                         # WS3 mid-field CTX DTMs vs the MOLA-HRSC 200 m blend
+  max_abs_median_vs_mola_m: 50  # reject an item whose median offset to MOLA-HRSC is larger
+  level_to_mola: true           # subtract each accepted item's median offset (merged DEM is MOLA-tied)
+  assumed: true
