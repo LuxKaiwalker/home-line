@@ -64,16 +64,43 @@ def load_config() -> dict[str, dict]:
 
 
 # ------------------------------------------------------------------------------ geography ----
-class Geo:
-    """Analysis-CRS metres <-> lon/lat on the Mars 2000 sphere (config/site.yaml ``crs``)."""
+PAD_JSON = REPO / "data" / "interim" / "engine" / "public" / "pad.json"
 
-    def __init__(self, site: dict):
+
+def official_pad(pad_json: str | Path = PAD_JSON) -> dict:
+    """The official pad (D21, user 2026-11-14 16:14): WS2 ``pad.json``'s top-level ``pad``.
+
+    Never ``site.yaml pad_default``, an ``alternatives`` entry or the ``proposal`` block. A
+    missing file, a dummy file or one without a top-level pad is refused (no silent fallback).
+    Returns {id, lon, lat, source, pad_source}."""
+    p = Path(pad_json)
+    doc = json.loads(p.read_text(encoding="utf-8"))  # FileNotFoundError when missing
+    if doc.get("dummy"):
+        raise ValueError(f"{p}: dummy pad.json refused (AGENTS rule 7)")
+    d = doc.get("pad") or {}
+    try:
+        lon, lat = float(d["lon"]), float(d["lat"])
+    except (KeyError, TypeError, ValueError) as e:
+        raise ValueError(f"{p}: no top-level pad with lon/lat (D21)") from e
+    return {"id": str(d.get("id", "pad")), "lon": lon, "lat": lat,
+            "source": f"WS2 {_repo_rel(p)} top-level pad (D21 official pad)",
+            "pad_source": d.get("source")}
+
+
+class Geo:
+    """Analysis-CRS metres <-> lon/lat on the Mars 2000 sphere (config/site.yaml ``crs``).
+
+    ``pad`` = the official pad ({lon, lat}, from :func:`official_pad`). Without it the pad is
+    ``site.yaml pad_default``: only the M0 dummy tree (built on pad_default) and tests use that;
+    ``make fp3d`` always passes the official pad (D21)."""
+
+    def __init__(self, site: dict, pad: dict | None = None):
         crs = site["crs"]
         geog = f"+proj=longlat +R={crs['mars_radius_m']} +no_defs"
         self.analysis_proj = crs["analysis_proj"]
         self._fwd = Transformer.from_crs(geog, self.analysis_proj, always_xy=True)
         self._inv = Transformer.from_crs(self.analysis_proj, geog, always_xy=True)
-        pad = site["pad_default"]
+        pad = pad if pad is not None else site["pad_default"]
         self.pad_lonlat = (float(pad["lon"]), float(pad["lat"]))
         self.pad_xy = self.xy(*self.pad_lonlat)
 
@@ -137,6 +164,19 @@ def pad_centred_grid(pad_xy: tuple[float, float], planning_radius_m: float, chun
     n = 2 * math.ceil((planning_radius_m - size / 2) / size) + 1
     return ChunkGrid(x0=pad_xy[0] - n * size / 2, y0=pad_xy[1] + n * size / 2,
                      chunk_px=int(chunk_px), res_m=float(res_m), n=n)
+
+
+def snap_grid_to_lattice(grid: ChunkGrid, transform: Affine) -> ChunkGrid:
+    """Move ``grid`` by less than half a pixel per axis so its pixel centres are the DEM's
+    (``transform``, same resolution, north-up). The official pad (D21) is not on WS1's dem_1m
+    lattice; without this every near chunk would be a half-pixel bilinear resample (smoothed)."""
+    t = transform
+    same_res = math.isclose(t.a, grid.res_m) and math.isclose(-t.e, grid.res_m)
+    if t.b != 0 or t.d != 0 or not same_res:
+        raise ValueError(f"DEM lattice {tuple(t)[:6]} is not north-up at {grid.res_m} m")
+    x0 = t.c + round((grid.x0 - t.c) / t.a) * t.a
+    y0 = t.f - round((t.f - grid.y0) / -t.e) * -t.e
+    return ChunkGrid(x0=x0, y0=y0, chunk_px=grid.chunk_px, res_m=grid.res_m, n=grid.n)
 
 
 def grid_from_config(geo: Geo, cfg: dict | None = None) -> ChunkGrid:
@@ -307,6 +347,27 @@ def export_near(dem: np.ndarray, transform: Affine, grid: ChunkGrid,
     return entries
 
 
+def prune_stale_chunks(out_dir: Path, idx: dict) -> list[str]:
+    """Delete near/near_tex files under ``<out_dir>/fp3d`` that ``idx`` does not list (make web
+    copies those directories by glob). Returns the removed paths, relative to ``out_dir``."""
+    out_dir = Path(out_dir)
+    keep = set()
+    for ch in idx["chunk_grid"]["chunks"]:
+        keep.add(ch["file"])
+        if ch.get("tex"):
+            keep.add(ch["tex"])
+    removed = []
+    for d in (NEAR_DIR, TEX_DIR):
+        if not (out_dir / d).is_dir():
+            continue
+        for f in sorted((out_dir / d).iterdir()):
+            rel = f"{d}/{f.name}"
+            if f.is_file() and rel not in keep:
+                f.unlink()
+                removed.append(rel)
+    return removed
+
+
 # ---------------------------------------------------------------------------------- index ----
 @cache
 def _index_validator() -> Draft202012Validator:
@@ -320,8 +381,10 @@ def validate_index(idx: dict) -> None:
 def build_index(grid: ChunkGrid, geo: Geo, near: list[dict], tex: list[dict], far: dict, *,
                 quantum_m: float, datum: str, eye_height_m: float, sources: dict,
                 ring_file: str | None = RING_FILE, skyline_check: dict | None = None,
-                texture_note: str | None = None) -> dict:
-    """fp3d/index.json (real data: ``dummy`` false), same shape as the M0 dummy index."""
+                texture_note: str | None = None, pad: dict | None = None,
+                station_rings: dict | None = None) -> dict:
+    """fp3d/index.json (real data: ``dummy`` false), same shape as the M0 dummy index.
+    ``pad`` = the pad the grids are centred on (:func:`official_pad`), recorded as ``pad``."""
     tex_by = {(t["i"], t["j"]): t for t in tex}
     chunks = []
     for e in near:
@@ -375,6 +438,10 @@ def build_index(grid: ChunkGrid, geo: Geo, near: list[dict], tex: list[dict], fa
         idx["horizon_ring"] = ring_file
     if skyline_check is not None:
         idx["skyline_check"] = skyline_check
+    if pad is not None:
+        idx["pad"] = pad
+    if station_rings is not None:
+        idx["station_rings"] = station_rings
     validate_index(idx)
     return idx
 
@@ -425,6 +492,58 @@ def skyline_reference(profiles: list, geo: Geo, cfg: dict | None = None, *, sour
         "stations": stations,
         "pass_rule_note": "pass_rule true = in the F20 pass rule (pad and route stations, "
                           "C 12:35); false = reported only (excluded_reason)",
+    }
+
+
+def check_pad_observer(profiles: list, geo: Geo) -> None:
+    """Refuse a WS3 ``pad`` horizon whose observer is not the official pad ``geo`` is centred on
+    (compared at pad.json's 6-decimal precision): a stale pad horizon is never compared."""
+    for sid, prof in profiles:
+        if sid != "pad":
+            continue
+        lon, lat = geo.lonlat(float(prof.observer["x"]), float(prof.observer["y"]))
+        if (round(lon, 6), round(lat, 6)) != (round(geo.pad_lonlat[0], 6),
+                                              round(geo.pad_lonlat[1], 6)):
+            raise ValueError(f"WS3 pad horizon observer ({lon:.6f}, {lat:.6f}) is not the "
+                             f"official pad {geo.pad_lonlat} (D21): re-run make horizons")
+
+
+def station_rings(profiles: list, square: dict, radius_m: float, *, source: str) -> dict:
+    """fp3d/index.json ``station_rings`` (F20 "the computed horizon as a far-skyline ring"):
+    WS3's ring (horizon_ring.json) holds the pad's far skyline only. For each station's WS3
+    horizon (not the pad), the horizon points beyond the far-mesh ``square`` ({west, north,
+    size}, analysis CRS m) are placed at their true position, z = z_eye + d tan(el) + d^2/2R
+    (WS3 ring_doc's formula), in the viewer's ring format (dist_m/z_m per azimuth, observer x/y).
+    Points inside the square or unknown stay null: the mesh draws those."""
+    rings = []
+    w, n, size = float(square["west"]), float(square["north"]), float(square["size"])
+    for sid, prof in profiles:
+        if sid == "pad":
+            continue
+        ox, oy = float(prof.observer["x"]), float(prof.observer["y"])
+        z_eye = float(prof.observer["z"])
+        a = np.radians(np.asarray(prof.az_deg, dtype=float))
+        d = np.asarray(prof.distance_m, dtype=float)
+        el = np.asarray(prof.elevation_deg, dtype=float)
+        with np.errstate(invalid="ignore"):
+            x, y = ox + d * np.sin(a), oy + d * np.cos(a)
+            inside = (x >= w) & (x <= w + size) & (y <= n) & (y >= n - size)
+            ok = np.isfinite(d) & np.isfinite(el) & (d > 0) & ~inside
+            z = z_eye + d * np.tan(np.radians(el)) + d * d / (2.0 * radius_m)
+        rings.append({
+            "id": sid, "observer": {"x": round(ox, 3), "y": round(oy, 3)},
+            "az_step_deg": float(prof.az_step_deg),
+            "elev_deg": [round(float(v), 4) if k else None for v, k in zip(el, ok, strict=True)],
+            "dist_m": [round(float(v), 1) if k else None for v, k in zip(d, ok, strict=True)],
+            "z_m": [round(float(v), 2) if k else None for v, k in zip(z, ok, strict=True)],
+        })
+    return {
+        "source": source,
+        "note": "per station: WS3 horizon points beyond the far-mesh square at their true "
+                "position (z = z_eye + d tan(el) + d^2/2R, R = config/site.yaml "
+                "crs.mars_radius_m); null = inside the square (drawn by the mesh) or unknown. "
+                "Drawn as extra far-skyline curtains next to WS3's pad ring",
+        "rings": rings,
     }
 
 
@@ -508,13 +627,17 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--stations", type=Path,
                     default=REPO / "data/interim/engine/public/stations.json",
                     help="stations.json (ids for --station-horizons)")
+    ap.add_argument("--pad-json", type=Path, default=PAD_JSON,
+                    help="WS2 pad.json: its top-level pad is the official pad (D21)")
     ap.add_argument("--out", type=Path, default=DEFAULT_OUT)
     args = ap.parse_args(argv)
     cfg = load_config()
     far_sources_p = args.far_source or default_far_sources(cfg)
     f3 = cfg["fp3d"]
-    geo = Geo(cfg["site"])
-    grid = grid_from_config(geo, cfg)
+    pad = official_pad(args.pad_json)
+    geo = Geo(cfg["site"], pad=pad)
+    dem, tr = _read_raster(args.dem_1m)
+    grid = snap_grid_to_lattice(grid_from_config(geo, cfg), tr)
     q = f3["height"]["quantum_m"]
     fc = json.loads(args.route.read_text())
     if fc.get("dummy") or fc.get("synthetic"):
@@ -526,7 +649,6 @@ def main(argv: list[str] | None = None) -> int:
     st_xy = [geo.xy(s["lon"], s["lat"]) for s in stations]
     chunks = corridor_chunks(grid, lines, f3["near"]["corridor_half_width_m"], st_xy)
 
-    dem, tr = _read_raster(args.dem_1m)
     near = export_near(dem, tr, grid, chunks, args.out, q)
     far_sources = [(dem, tr)] + [_read_raster(p) for p in far_sources_p]
     fgrid = far_mesh.far_grid(grid, f3["far"].get("half_extent_m"))
@@ -547,21 +669,33 @@ def main(argv: list[str] | None = None) -> int:
     rel = _repo_rel
     sources = {"dem": rel(args.dem_1m),
                "far": [rel(args.dem_1m)] + [rel(p) for p in far_sources_p],
-               "ortho": rel(args.ortho), "route": rel(args.route)}
+               "ortho": rel(args.ortho), "route": rel(args.route),
+               "pad": rel(args.pad_json)}
     check = None
     ids = ["pad"] + [s["id"] for s in stations]
     profs = read_station_horizons(args.station_horizons, ids)
+    check_pad_observer(profs, geo)
+    rings = None
     if profs:
         check = skyline_reference(profs, geo, cfg,
                                   source=f"WS3 horizon engine, {rel(args.station_horizons)}",
                                   excluded=skyline_exclusions(stations))
+        fx0, fy0 = far["origin_xy_m"]
+        rings = station_rings(
+            profs, {"west": fx0, "north": fy0, "size": far["width"] * far["res_m"]},
+            cfg["site"]["crs"]["mars_radius_m"],
+            source=f"WS3 horizon engine, {rel(args.station_horizons)}")
     idx = build_index(
         grid, geo, near, tex, far, quantum_m=q, datum=args.datum,
         eye_height_m=cfg["hud"]["eye_height_m"], sources=sources, skyline_check=check,
         texture_note="WS1 HiRISE LRGB ortho (colour, greyscale where the mosaic is greyscale), "
-                     "JPEG per near chunk; no-ortho texels = horizon.yaml panorama.ground_rgb")
+                     "JPEG per near chunk; no-ortho texels = horizon.yaml panorama.ground_rgb",
+        pad=pad, station_rings=rings)
     out_index = args.out / "fp3d" / "index.json"
     out_index.write_text(json.dumps(idx, indent=1) + "\n", encoding="utf-8")
+    stale = prune_stale_chunks(args.out, idx)
+    if stale:
+        print(f"fp3d: removed {len(stale)} chunk files of an earlier grid")
 
     mb = record_manifest(download_bytes=idx["download_bytes"], near_chunks=len(near),
                          near_res_m=grid.res_m, far_res_m=f3["far"]["res_m"],

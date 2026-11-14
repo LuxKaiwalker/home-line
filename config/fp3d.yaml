@@ -66,6 +66,12 @@ ring:
   # between the two horizon points): seen from a route point away from the ring observer, a
   # break at a distance jump would open a hole in the skyline (F20 check: 8.8 deg at S2 az 297).
   max_distance_ratio: null        # null = no limit (always join)
+  # Station rings (fp3d/index.json station_rings: each station's own WS3 horizon beyond the far
+  # square) break where neighbouring points' distances differ by more than this ratio: joined,
+  # the top edge between a 12 km and an 8 km point hangs in the air and stood 0.36 deg above the
+  # pad's horizon (S1 az 141). The break costs one 0.25 deg step at the station itself (its own
+  # horizon points stay exact); WS3's ring and the mesh lie behind it. assumed, rendering only
+  station_max_distance_ratio: 1.25
   haze_half_m: 15000               # haze of the distant ring (its own pass; terrain uses sky.haze_half_m)
 
 skyline_check:

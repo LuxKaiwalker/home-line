@@ -187,3 +187,52 @@ export function ringCrossings(c: RingCurtain, x: number, y: number, azDeg: numbe
   }
   return out
 }
+
+/** One curtain from several (segments side by side; counts summed; first observer kept). */
+export function mergeCurtains(parts: RingCurtain[]): RingCurtain | null {
+  if (!parts.length) return null
+  if (parts.length === 1) return parts[0]
+  return {
+    segments: parts.flatMap((c) => c.segments),
+    bottoms: parts.flatMap((c) => c.bottoms),
+    observer: parts[0].observer,
+    drawn: parts.reduce((s, c) => s + c.drawn, 0),
+    covered: parts.reduce((s, c) => s + c.covered, 0),
+    note: parts.map((c) => c.note).join('; '),
+  }
+}
+
+/**
+ * The far-skyline curtains the view draws: WS3's pad ring (horizon_ring.json, null when absent)
+ * plus fp3d/index.json `station_rings` (pipeline/export/terrain_chunks.py station_rings: each
+ * station's WS3 horizon points beyond the far square, same per-azimuth format). A station ring's
+ * points are real horizon points at their true position, so from that station the drawn far
+ * skyline is its computed horizon (F20 "computed horizon as a far-skyline ring"). Station rings
+ * break at distance jumps over `stationMaxDistanceRatio` (config ring.station_max_distance_ratio):
+ * a top edge joining a near and a far point hangs in the air when seen from elsewhere.
+ */
+export function farCurtains(
+  ws3Ring: unknown,
+  stationRings: unknown,
+  eqc: Eqc,
+  square: MeshSquare,
+  opts: { skirtDeg: number; maxDistanceRatio: number; stationMaxDistanceRatio?: number },
+): RingCurtain | null {
+  const parts: RingCurtain[] = []
+  const so = { skirtDeg: opts.skirtDeg, maxDistanceRatio: opts.stationMaxDistanceRatio ?? opts.maxDistanceRatio }
+  if (ws3Ring) parts.push(parseRing(ws3Ring, eqc, square, opts))
+  const rings = stationRings && typeof stationRings === 'object' ? (stationRings as Obj).rings : null
+  let k = 0
+  if (Array.isArray(rings)) {
+    for (const r of rings) {
+      const c = parseRing(r, eqc, square, so)
+      if (c.segments.length) {
+        parts.push(c)
+        k++
+      }
+    }
+  }
+  const m = mergeCurtains(parts)
+  if (m && k) m.note += ` (+ ${k} station ring${k === 1 ? '' : 's'})`
+  return m
+}

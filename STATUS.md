@@ -1608,6 +1608,50 @@ Branch: `ws8-3d`
   now uses WS2's withheld `pad.json` (137.402443, −4.769028 ≠ `pad_default`). Previous index restored; **C to decide**.
 
 
+#### Session 4 (2026-11-14, D21 official pad, route pad → S7 → S6 → S1 → S4 → pad)
+
+- **Pad = WS2 `pad.json` top-level pad (D21)** (`terrain_chunks.official_pad`, KATs first): `make fp3d`
+  centres the chunk and far grids on rank1 (137.401783, −4.77748), never `pad_default`, an
+  alternative or the proposal; refuses a missing/dummy/padless file; records `pad` in
+  `fp3d/index.json`; refuses a WS3 `pad` horizon that is not at that pad (6 decimals).
+- **Grid snapped to the dem_1m lattice** (`snap_grid_to_lattice`, < 0.5 m move): WS1's 1 m lattice
+  was built on pad_default, so a grid centred on rank1 resampled every near chunk half a pixel off
+  (bilinear smoothing; S7 az 306, a 5 m feature, was 0.65° low). KATs first.
+- **Station far-skyline rings** (`station_rings` in `fp3d/index.json`; `ring.ts farCurtains`; view
+  and skyline check draw the same curtains). WS3's ring holds the **pad's** far skyline; from
+  stations 1–2 km away the 12–20 km Mount Sharp slopes (az 108–115, 138) and the 70 km rim
+  (az 224–227) are hidden from the pad and were missing: first real run at rank1 gave S1 0.69°,
+  S6 0.70°, S7 1.08°, S8 0.78°. Each station's own WS3 horizon points beyond the far square are now
+  placed at their true position (z = z_eye + d tan(el) + d²/2R). **Caveat for the record:** beyond
+  the 12 km far square, the skyline at a station is drawn from WS3's computed horizon (as the pad
+  ring already was), so the F20 check there tests placement, not independent terrain. Station rings
+  break at distance jumps > `ring.station_max_distance_ratio` 1.25 (new, assumed): joined, a
+  12 km→8 km top edge hung in the air 0.36° above the pad's horizon (S1 az 141).
+- **Stale chunks pruned** (`prune_stale_chunks`): make web copies `fp3d/near*/*` by glob; 70 files
+  of the old grid removed.
+- **`make fp3d` at clean 46b7e4f** (manifest keys at that commit): **57 near chunks** (route corridor
+  + all 6 stations), 57 textures, far 1,504² at 8 m (948,676 dem_1m, 1,312,987 ctx_20m_v2, 353
+  MOLA, 0 filled), far texture. **Size 12.66 MB** (12,659,877 B) + index.json 373 kB (station
+  rings) + WS3 ring 87 kB = **13.12 MB of the 30 MB budget**.
+- **F20 (`make fp3d-check` + GPU probe, headless Chromium/SwiftShader on a scratch build with the
+  real fp3d tree), tolerance 0.5°; every station has an access cell, so all are in the pass rule:**
+  | Station | Geometry | GPU | |
+  | --- | --- | --- | --- |
+  | pad | 0.168° (az 258) | 0.330° | PASS |
+  | S1 | 0.089° (az 257) | 0.163° | PASS |
+  | S2 | 0.262° (az 78) | 0.264° | PASS |
+  | S4 | 0.251° (az 70) | 0.245° | PASS |
+  | S6 | 0.089° (az 77) | 0.148° | PASS |
+  | S7 | 0.321° (az 313) | 0.339° | PASS |
+  | S8 | 0.163° (az 150) | 0.164° | PASS |
+  Means 0.006–0.029° (geometry). Camera on the route: 11,080 points over 8,652 m, max |agl − 1.7 m|
+  6 × 10⁻⁶ m; camera = WS7 playback position at 841 times (8 × 10⁻¹⁰ m). Camera start = route start
+  = the official pad.
+- KATs: pytest +9 (official pad ×5, prune, snap ×2, station rings); vitest +4 (station rings ×4).
+  Full suite: **869 pytest pass, 1 fail** (`test_fields_png::test_real_index_valid_and_pad_zero`,
+  WS7 real fields not yet re-exported at rank1); **461 vitest pass, 2 fail** (WS7 `hud/real.test.ts`
+  T_home at pad, `hud/wayhome.test.ts` pointer: same stale WS7 fields). ruff, tsc clean.
+
 ### Doing
 
 - —
@@ -1629,7 +1673,8 @@ Branch: `ws8-3d`
 1. ~~F20 at S2~~: resolved (C 12:35 + WS3 session 3): 0.288° / 0.345° GPU.
 2. ~~F20 at S1~~: resolved by C 12:35 (excluded from the pass rule, reported: 0.543° / 0.582°).
 3. Config: `config/fp3d.yaml` accepted by C 12:35 (all `assumed: true`); R to review.
-4. **Pad source (C / WS3, heads-up).** WS2 session 4 wrote `engine/public/pad.json` (F8 proposal:
+4. ~~Pad source~~: resolved by D21 (16:14); session 4 reads pad.json's top-level pad.
+   Old note: **Pad source (C / WS3, heads-up).** WS2 session 4 wrote `engine/public/pad.json` (F8 proposal:
    137.402443, −4.769028, ≈ 2.5 km NE of `pad_default`). WS3's pad order reads WS2's pad.json
    first, so the next `make horizons` would move the pad horizon there, while the 3D grid, the
    route and the decision log (11:24) keep `pad_default`. If the proposal is not accepted, WS3's
@@ -1648,6 +1693,9 @@ Branch: `ws8-3d`
   `download_bytes`, `skyline_check` (WS3 horizons at 1°). The schema is loose; WS8 is the only
   reader. C may fold the structure into the contract.
 - `make fp3d` is not in `make all` (C's Makefile): run it after `engine` and `horizons`.
+- Session 4: `fp3d.yaml ring.station_max_distance_ratio: 1.25` (rendering only); `fp3d/index.json`
+  adds `pad` and `station_rings` (WS8 is the only reader); the chunk grid is the pad-centred grid
+  moved < 0.5 m onto the dem_1m lattice.
 - Session 2: `fp3d.yaml far.texture` (4 m/texel, JPEG q82; 3,008 px stays under 4,096, the
   WebGL2 minimum texture size); far-mesh sources = `horizon.yaml bands` (not repeated in
   fp3d.yaml); F20 pass rule "route stations" = stations with an access cell in WS2's

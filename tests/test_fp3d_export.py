@@ -688,3 +688,152 @@ def test_skyline_pass_rule_excludes_stations_without_access_cell(geo):
     assert by["pad"]["pass_rule"] is True and by["S2"]["pass_rule"] is True
     assert by["S1"]["pass_rule"] is False and by["S1"]["excluded_reason"] == excl["S1"]
     assert "pass_rule" in ref["pass_rule_note"]
+
+
+# ------------------------------------------------------------- official pad (D21, user 16:14) ----
+def _pad_json(tmp_path, pad: dict | None, **top) -> Path:
+    doc = {"dummy": False, **({"pad": pad} if pad is not None else {}),
+           "alternatives": [{"id": "pad_default", "lon": SITE["pad_default"]["lon"],
+                             "lat": SITE["pad_default"]["lat"], "rank": 5}],
+           "proposal": {"lon": 137.0, "lat": -4.0, "adopted": False}, **top}
+    p = tmp_path / "pad.json"
+    p.write_text(json.dumps(doc))
+    return p
+
+
+OFFICIAL = {"id": "rank1", "lon": 137.401783, "lat": -4.77748, "elev_m": -3742.4,
+            "source": "D21 (user 2026-11-14 16:14): the candidate pad with the most feasible EVAs"}
+
+
+def test_official_pad_is_pad_json_top_level_pad(tmp_path):
+    """D21: every pad reader uses WS2 pad.json's top-level pad, never site.yaml pad_default,
+    an alternative or the proposal block."""
+    pad = terrain_chunks.official_pad(_pad_json(tmp_path, OFFICIAL))
+    assert (pad["lon"], pad["lat"]) == (137.401783, -4.77748)
+    assert pad["id"] == "rank1" and "pad.json" in pad["source"] and "D21" in pad["source"]
+    assert (pad["lon"], pad["lat"]) != (SITE["pad_default"]["lon"], SITE["pad_default"]["lat"])
+
+
+def test_official_pad_refuses_missing_dummy_or_padless_file(tmp_path):
+    with pytest.raises(FileNotFoundError):
+        terrain_chunks.official_pad(tmp_path / "nope.json")
+    with pytest.raises(ValueError, match="dummy"):
+        terrain_chunks.official_pad(_pad_json(tmp_path, OFFICIAL, dummy=True))
+    with pytest.raises(ValueError, match="top-level pad"):
+        terrain_chunks.official_pad(_pad_json(tmp_path, None))
+
+
+def test_geo_and_grid_centre_on_the_official_pad(tmp_path):
+    pad = terrain_chunks.official_pad(_pad_json(tmp_path, OFFICIAL))
+    g = Geo(SITE, pad=pad)
+    assert g.pad_lonlat == (137.401783, -4.77748)
+    assert g.pad_xy == pytest.approx(Geo(SITE).xy(137.401783, -4.77748), abs=1e-9)
+    grid = terrain_chunks.grid_from_config(g)
+    mid = grid.n // 2
+    assert grid.chunk_of(*g.pad_xy) == (mid, mid)
+    w, s, e, n = grid.chunk_bounds_xy(mid, mid)
+    assert ((w + e) / 2, (s + n) / 2) == pytest.approx(g.pad_xy, abs=1e-6)
+
+
+def test_pad_horizon_must_be_at_the_official_pad(tmp_path):
+    """The F20 reference at 'pad' must come from WS3's horizon at the same pad (6 decimals):
+    a stale pad horizon (e.g. at pad_default) is refused, not silently compared."""
+    from pipeline.horizon.rays import HorizonProfile
+
+    g = Geo(SITE, pad=terrain_chunks.official_pad(_pad_json(tmp_path, OFFICIAL)))
+
+    def prof(x, y):
+        return HorizonProfile(az_deg=np.arange(360) * 1.0, elevation_deg=np.zeros(360),
+                              distance_m=np.full(360, 1e3), source=["dem_1m"] * 360,
+                              observer={"x": x, "y": y, "z": 0.0}, eye_height_m=1.7,
+                              az_step_deg=1.0)
+    terrain_chunks.check_pad_observer([("pad", prof(*g.pad_xy))], g)  # same pad: fine
+    old = Geo(SITE).pad_xy
+    with pytest.raises(ValueError, match="official pad"):
+        terrain_chunks.check_pad_observer([("pad", prof(*old)), ("S2", prof(*old))], g)
+    terrain_chunks.check_pad_observer([("S2", prof(*old))], g)  # no pad horizon: nothing to check
+
+
+def test_index_records_the_pad_it_is_centred_on(dummy_grid, geo):
+    pad = {"id": "rank1", "lon": 1.0, "lat": 2.0, "source": "WS2 pad.json top-level pad (D21)"}
+    far = {"file": "fp3d/far.f32.gz", "width": 4, "height": 4, "res_m": 8.0, "bytes": 10}
+    idx = terrain_chunks.build_index(dummy_grid, geo, [], [], far, quantum_m=Q, datum="t",
+                                     eye_height_m=1.7, sources={}, pad=pad)
+    assert idx["pad"] == pad
+
+
+def test_prune_removes_chunk_files_the_index_does_not_list(tmp_path):
+    """make web copies fp3d/near/*.f32.gz and near_tex/*.jpg by glob: chunks of an earlier grid
+    (e.g. before the D21 pad move) must not stay in the export directory."""
+    for d, names in (("near", ["1_1.f32.gz", "2_2.f32.gz"]), ("near_tex", ["1_1.jpg", "2_2.jpg"])):
+        (tmp_path / "fp3d" / d).mkdir(parents=True)
+        for n in names:
+            (tmp_path / "fp3d" / d / n).write_bytes(b"x")
+    (tmp_path / "fp3d" / "far.f32.gz").write_bytes(b"x")
+    idx = {"chunk_grid": {"chunks": [{"i": 1, "j": 1, "file": "fp3d/near/1_1.f32.gz",
+                                      "tex": "fp3d/near_tex/1_1.jpg"}]}}
+    removed = terrain_chunks.prune_stale_chunks(tmp_path, idx)
+    assert sorted(removed) == ["fp3d/near/2_2.f32.gz", "fp3d/near_tex/2_2.jpg"]
+    assert sorted(p.name for p in (tmp_path / "fp3d").rglob("*") if p.is_file()) == \
+        ["1_1.f32.gz", "1_1.jpg", "far.f32.gz"]
+
+
+def test_grid_snaps_to_the_dem_lattice_within_half_a_pixel():
+    """The official pad (D21) is not on WS1's dem_1m lattice (built on pad_default): an unsnapped
+    pad-centred grid would resample every near chunk half a pixel off (bilinear smoothing of
+    1 m features). The grid moves by < res/2 per axis onto the lattice; nothing else changes."""
+    g = pad_centred_grid((695.984, -283183.682), SITE["planning_radius_m"], 256, 1.0)
+    tr = Affine(1.0, 0, -4372.5345, 0, -1.0, -280974.1963)
+    s = terrain_chunks.snap_grid_to_lattice(g, tr)
+    assert (s.n, s.chunk_px, s.res_m) == (g.n, g.chunk_px, g.res_m)
+    assert abs(s.x0 - g.x0) <= 0.5 and abs(s.y0 - g.y0) <= 0.5
+    for off in ((s.x0 - tr.c) / tr.a, (tr.f - s.y0) / -tr.e):
+        assert off == pytest.approx(round(off), abs=1e-6)
+    assert s.chunk_of(695.984, -283183.682) == (g.n // 2, g.n // 2)
+    # a lattice of another resolution is refused (no silent resampling)
+    with pytest.raises(ValueError):
+        terrain_chunks.snap_grid_to_lattice(g, Affine(2.0, 0, 0, 0, -2.0, 0))
+
+
+def test_snapped_grid_exports_dem_values_exactly(tmp_path):
+    g0 = ChunkGrid(x0=-1000.4, y0=-279999.7, chunk_px=32, res_m=1.0, n=3)
+    dem, tr = _synthetic_dem(ChunkGrid(x0=-1000.0, y0=-280000.0, chunk_px=32, res_m=1.0, n=3))
+    g = terrain_chunks.snap_grid_to_lattice(g0, tr)
+    (e,) = terrain_chunks.export_near(dem, tr, g, [(1, 1)], tmp_path, Q)
+    h = decode_heights((tmp_path / e["file"]).read_bytes(), (32, 32))
+    c0 = int(round(g.x0 - tr.c)) + 32
+    r0 = int(round(tr.f - g.y0)) + 32
+    assert np.abs(h - dem[r0:r0 + 32, c0:c0 + 32]).max() <= Q / 2 + 1e-3
+
+
+def test_station_rings_place_far_horizon_points_outside_the_far_square(geo):
+    """F20 'computed horizon as a far-skyline ring': WS3's pad ring only holds the pad's far
+    skyline. Each station's own WS3 horizon point beyond the far-mesh square is added as a ring
+    point at its true position: z = z_eye + d tan(el) + d^2/2R (WS3 ring_doc's formula), so the
+    elevation seen from the station is exactly WS3's. Points inside the square stay null (the
+    mesh draws them); the pad is left to WS3's ring."""
+    from pipeline.horizon.rays import HorizonProfile
+
+    R = SITE["crs"]["mars_radius_m"]
+    sq = {"west": -1000.0, "north": 1000.0, "size": 2000.0}
+    az = np.arange(8) * 45.0
+    d = np.array([500.0, 5000.0, 20000.0, 70000.0, np.nan, 300.0, 9000.0, 2000.0])
+    el = np.array([1.0, 2.0, 3.0, 1.5, np.nan, -1.0, 0.5, 0.0])
+    prof = HorizonProfile(az_deg=az, elevation_deg=el, distance_m=d, source=["x"] * 8,
+                          observer={"x": 0.0, "y": 0.0, "z": -3700.0, "z_ground": -3701.7},
+                          eye_height_m=1.7, az_step_deg=45.0)
+    doc = terrain_chunks.station_rings([("pad", prof), ("S7", prof)], sq, R, source="t")
+    (ring,) = doc["rings"]
+    assert ring["id"] == "S7" and ring["observer"] == {"x": 0.0, "y": 0.0}
+    assert ring["az_step_deg"] == 45.0 and len(ring["dist_m"]) == len(ring["z_m"]) == 8
+    # inside the square (500 m, 300 m) or unknown: null
+    assert [ring["dist_m"][k] is None for k in range(8)] == [True, False, False, False, True,
+                                                            True, False, False]
+    # 2000 m at az 315 lies at (-1414, 1414): outside the 2 km square
+    for k in (1, 2, 3, 6, 7):
+        z = ring["z_m"][k]
+        back = np.degrees(np.arctan((z - (-3700.0) - d[k] ** 2 / (2 * R)) / d[k]))
+        assert back == pytest.approx(el[k], abs=1e-4)
+        assert ring["elev_deg"][k] == pytest.approx(el[k], abs=1e-4)
+    assert ring["dist_m"][3] == 70000.0 and ring["elev_deg"][0] is None
+    assert "source" in doc and "note" in doc

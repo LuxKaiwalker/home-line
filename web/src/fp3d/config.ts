@@ -77,7 +77,7 @@ export interface Fp3dConfig {
     nightSunElDeg: number
     nightFloor: number
   }
-  ring: { skirtDeg: number; maxDistanceRatio: number; hazeHalfM: number }
+  ring: { skirtDeg: number; maxDistanceRatio: number; stationMaxDistanceRatio: number; hazeHalfM: number }
   skylineCheck: { toleranceDeg: number; azStepDeg: number; probeFovDeg: number }
 }
 
@@ -139,6 +139,7 @@ export function buildConfig(
       skirtDeg: num(fp3d, 'ring.skirt_deg', F),
       // null in config = no limit: always join neighbouring ring points
       maxDistanceRatio: get(fp3d, 'ring.max_distance_ratio', F) === null ? Infinity : num(fp3d, 'ring.max_distance_ratio', F),
+      stationMaxDistanceRatio: num(fp3d, 'ring.station_max_distance_ratio', F),
       hazeHalfM: num(fp3d, 'ring.haze_half_m', F),
     },
     skylineCheck: {
