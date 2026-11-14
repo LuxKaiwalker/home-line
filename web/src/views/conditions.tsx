@@ -394,7 +394,7 @@ export function StormNumbers({ r }: { r: Rad }) {
           ).
         </p>
       )}
-      {s.tripwire_halfwidth_rule && <p class="caption">Tripwire time ± : {s.tripwire_halfwidth_rule}.</p>}
+      {s.tripwire_halfwidth_rule && <p class="caption">Tripwire time uncertainty: {s.tripwire_halfwidth_rule}.</p>}
     </>
   )
 }

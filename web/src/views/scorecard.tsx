@@ -176,8 +176,8 @@ function V1Section() {
             </p>
             <p class="finding">
               <b>{ctx.role ?? 'V1 = validation of the slope model, not a safety margin'}</b> (D23).{' '}
-              {ctx.nogoText ? <>{ctx.nogoText}</> : <>conservative no-go</>}:{' '}
-              <CfgNum v={CITED.nogoConservativeDeg.value} units="deg" source={CITED.nogoConservativeDeg.source} />
+              Conservative no-go <CfgNum v={CITED.nogoConservativeDeg.value} units="deg" source={CITED.nogoConservativeDeg.source} /> from config, not derived from V1
+              {ctx.nogoText ? <> (v1.json: “{ctx.nogoText}”)</> : null}
               {ctx.agreesWithConfig === false ? <b class="bad"> (v1.json cites a different value)</b> : null}. Cell slope: <CellSlopeNote />.
               {con30 && (
                 <>
