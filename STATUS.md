@@ -162,15 +162,16 @@ Branch: `c-integration` (merged to `main` by the orchestrator)
     `stencil` (pointer on WS2's 3 m grid; README notes the own grid).
   - Real WS2 stations/timeline/route and WS3 ring validate. Version assertions in
     `tests/test_contracts.py` and `web/src/data/contracts.test.ts` accept 1.1.1.
-- 2026-11-14T11:20Z: **Real web data committed (WS8, WS9 skipped):** `make web --skip-owner WS8
-  --skip-owner WS9`: 2,831 files, **146.7 MB** (scenarios 79.5, tiles 33.1, fields 28.4,
-  validation 2.4, cards 2.2, terrain 0.6, rest < 0.3). All validate, no dummy flag, H0 check OK,
-  no dangling reference, largest file 9.95 MB (`scenarios/opt_80/isochrones.geojson`), manifest
-  674 keys. Present: WS1 all, WS2 (scenarios, stations, route/timeline nom_104, trade table,
-  card parts), WS3 (v2, ring, cards + images), WS4 all 4, WS7 fields (20 PNGs + index), WS10
-  probe + drift. Missing: WS2 `pad.json`, `siting.png`, `siting_png.json` (F8 waits on V1); WS6
-  `validation/{v1.json,v1.svg,kats.json}`. Skipped: WS8 (running, unmerged); WS9 (its real run
-  of 12:16 CET is on unmerged code, `7908eda-dirty`; outputs validate, publish after merge).
+- 2026-11-14T11:30Z: **Real web data committed (WS8 skipped):** after merging main (WS7 cde10c1,
+  WS9 2b976dc), `make web --skip-owner WS8`: 2,877 files, **147.9 MB** (scenarios 79.5, tiles
+  33.1, fields 29.1, validation 2.4, cards 2.2, terrain 0.6, nav 0.5, rest < 0.3). All validate,
+  no dummy flag, H0 check OK, no dangling reference, no `*.timeline.json`, largest file 9.95 MB
+  (`scenarios/opt_80/isochrones.geojson`), manifest 846 keys (WS8's 6 keys left out).
+  Present: WS1 all; WS2 scenarios, stations, route/timeline nom_104, trade table (+ card parts);
+  WS3 v2, ring, cards S1/S2/S4 + images; WS4 all 4; WS7 fields (20 PNGs + index); WS9 nav
+  (montecarlo/tracks low/medium/high, fixes, fix-interval summary + 3 PNGs, localisation);
+  WS10 probe + drift. Missing: WS2 `pad.json`, `siting.png`, `siting_png.json` (F8 waits on V1);
+  WS6 `validation/{v1.json,v1.svg,kats.json}`. Skipped: WS8 (running, unmerged).
 
 ### Doing
 
@@ -180,7 +181,9 @@ Branch: `c-integration` (merged to `main` by the orchestrator)
 
 - Re-run `make web` when WS8 and WS9 merge, and after V1 (con_* scenarios, WS2 F8 pad/siting,
   WS6 v1/kats).
-- WS7: run `make fields --with-pointer` for nom_104 now that v1.1.1 has the pointer entry.
+- WS7: re-run `make fields --with-pointer`: v1.1.1 has the pointer entry, and WS7's
+  `fields/index.json` (12:08 CET) predates WS9's `fields_index_nav.json` (12:16), so the published
+  `fields/fix_interval_{set}.png` are not yet named in `fields/index.json` (HUD D_max).
 
 ### Blocked
 

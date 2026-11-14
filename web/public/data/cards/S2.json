@@ -1,0 +1,83 @@
+{
+ "station": "S2",
+ "scenario": "nom_104",
+ "on_route": true,
+ "timeline": {
+  "arrive": 108.73,
+  "leave": 138.73,
+  "turn_back": 409.15
+ },
+ "margin_binding": "dose",
+ "margin_min": 14.89,
+ "contingency": "Partner down: haul home by cart from the access cell, 108 min (casualty 179 kg; haul parameters assumed); outside the 60-min partner line.",
+ "t_home_min": 71.01,
+ "o2_home_L": 95.56,
+ "science": {
+  "lon": 137.383058,
+  "lat": -4.776687
+ },
+ "access": {
+  "lon": 137.382736,
+  "lat": -4.777025,
+  "dist_m": 27.6,
+  "t_home_min": 71.01,
+  "o2_home_L": 95.56,
+  "reason": null,
+  "walk_in": {
+   "dist_m": 27.6,
+   "modelled": false,
+   "rise_m": 7.79,
+   "mean_slope_deg": 15.77,
+   "max_slope_deg": 21.99,
+   "max_terrain_slope_deg": 43.44
+  },
+  "radius_m": 50.0,
+  "rule": "nearest cell with cell state assessed and a walk home in the scenario, within access_radius_m of the science point; walk-in leg not modelled"
+ },
+ "provisional": false,
+ "observer": {
+  "id": "S2",
+  "name": "Fracture-network survey",
+  "science_lon": 137.383058,
+  "science_lat": -4.776687,
+  "lon": 137.382736,
+  "lat": -4.777025,
+  "position": "access_cell",
+  "provisional": false,
+  "access": {
+   "radius_m": 50.0,
+   "dist_m": 27.6,
+   "reason": null
+  }
+ },
+ "navcam": {
+  "sol": 4414,
+  "image_id": "NLB_789347468EDR_F1120798NCAM00279M_",
+  "url_local": "cards/S2/navcam.png",
+  "overlay_png": "cards/S2/overlay.png",
+  "stop_id": "v112_798",
+  "dist_to_observer_m": 924.8,
+  "credit": "NASA/JPL-Caltech (Curiosity Navcam)"
+ },
+ "skyline_error_deg": {
+  "near": null,
+  "mid": null,
+  "far": 3.183
+ },
+ "skyline_error_scope": "median |detected - predicted| skyline elevation per distance class on this card's Navcam frame (automatic sky detector; far class pending the D7 manual check)",
+ "panorama_png": "cards/S2/panorama.png",
+ "landmarks": [],
+ "landmarks_note": "only 0 landmark(s) qualify (fewer than 3): the others are below the computed skyline and farther than 5 km",
+ "parts": {
+  "merged_by": "tools/make_web.py",
+  "WS3": {
+   "source": "data/interim/horizon/public/cards/S2.json",
+   "producer": "WS3 pipeline/horizon/cards.py",
+   "built_utc": "2026-11-14T11:04:16Z"
+  },
+  "WS2": {
+   "source": "data/interim/engine/public/cards/S2.timeline.json",
+   "producer": "WS2 pipeline/engine/cards.py"
+  }
+ }
+}

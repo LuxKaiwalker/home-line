@@ -1,0 +1,80 @@
+{
+ "station": "S1",
+ "scenario": "nom_104",
+ "on_route": false,
+ "timeline": {
+  "arrive": null,
+  "leave": null,
+  "turn_back": null
+ },
+ "margin_binding": null,
+ "margin_min": null,
+ "contingency": "No access cell within 50 m (38 assessed cells within 50 m, none with a walk home in this scenario): no walk home or partner haul computed for this station.",
+ "t_home_min": null,
+ "o2_home_L": null,
+ "science": {
+  "lon": 137.391523,
+  "lat": -4.810007
+ },
+ "access": {
+  "lon": null,
+  "lat": null,
+  "dist_m": null,
+  "t_home_min": null,
+  "o2_home_L": null,
+  "reason": "38 assessed cells within 50 m, none with a walk home in this scenario",
+  "walk_in": null,
+  "radius_m": 50.0,
+  "rule": "nearest cell with cell state assessed and a walk home in the scenario, within access_radius_m of the science point; walk-in leg not modelled"
+ },
+ "provisional": false,
+ "observer": {
+  "id": "S1",
+  "name": "Boxwork ridge-hollow transect",
+  "science_lon": 137.391523,
+  "science_lat": -4.810007,
+  "lon": 137.391523,
+  "lat": -4.810007,
+  "position": "science_coordinate_no_access",
+  "provisional": false,
+  "note": "no access cell (WS2: 38 assessed cells within 50 m, none with a walk home in this scenario); horizon at the science coordinate"
+ },
+ "navcam": {
+  "sol": 4834,
+  "image_id": "NLB_826633404EDR_F1210000NCAM00262M_",
+  "url_local": "cards/S1/navcam.png",
+  "overlay_png": "cards/S1/overlay.png",
+  "stop_id": "v121_0",
+  "dist_to_observer_m": 523.1,
+  "credit": "NASA/JPL-Caltech (Curiosity Navcam)"
+ },
+ "skyline_error_deg": {
+  "near": null,
+  "mid": null,
+  "far": 4.236
+ },
+ "skyline_error_scope": "median |detected - predicted| skyline elevation per distance class on this card's Navcam frame (automatic sky detector; far class pending the D7 manual check)",
+ "panorama_png": "cards/S1/panorama.png",
+ "landmarks": [
+  {
+   "name": "Gediz Vallis",
+   "bearing_deg": 134.47,
+   "dist_km": 3.7,
+   "kind": "official",
+   "above_skyline": false
+  }
+ ],
+ "landmarks_note": "only 1 landmark(s) qualify (fewer than 3): the others are below the computed skyline and farther than 5 km",
+ "parts": {
+  "merged_by": "tools/make_web.py",
+  "WS3": {
+   "source": "data/interim/horizon/public/cards/S1.json",
+   "producer": "WS3 pipeline/horizon/cards.py",
+   "built_utc": "2026-11-14T11:04:16Z"
+  },
+  "WS2": {
+   "source": "data/interim/engine/public/cards/S1.timeline.json",
+   "producer": "WS2 pipeline/engine/cards.py"
+  }
+ }
+}
