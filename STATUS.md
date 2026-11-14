@@ -831,24 +831,30 @@ Branch: `ws5-web`
   - **Route legs** (WS6 audit): console route section has a leg table (walk, distance, O₂, walk-in) on `route.{sid}.leg.{i}.*`; station value cites `stations.{S}.value`.
   - **Smoke test** (vite dev on the scratch tree, every route incl. /nav, /hud, /hud3d): **0 unbacked numbers on every view** (`/` 24 backed, S1 8, S2 32, S4 37, `/trade` 21, `/conditions` 50, `/scorecard` 123, `/cuff` 64, `/nav` 17), no data problems, no console errors; one console warning from WS7's HUD ("optional pad.json unavailable", expected while pad.json is unpublished).
 
+- 2026-11-14T14:37Z (session 4, commit 423b45f): **pad.json v1.1.2** (WS2 session 5, C 15:31). vitest **434 pass, 3 skipped** on main's tree; **436 pass, 1 skipped** on a scratch real tree (`make_web.run` from today's interim into the scratchpad, incl. `pad.json`; make web OK, 1,121 keys, validate/H0 OK; `web/public/data` untouched); `tsc` clean; build 2.5 MB without data.
+  - **Proposal shape**: `padProposal()` reads `proposal.pad.{lon,lat,elev_m,score,checks}` and `proposal.site_rule_version`; the session-3 assumed shape is not read (KAT). Panel shows the **tie** (5 of 742 candidate blocks at 0.475, `pad.proposal.tie.*`, tiebreak text), `checks_note` (disc leaves the 3 m grid: "not assessed", rule "not evaluated"), ranked alternatives table (`pad.proposal.alternatives.{rank}.{lon,lat,score}`), stations scored (S4) and `no_access` reasons. KATs use WS2's real pad.json verbatim (validates in the browser checker).
+  - **Pad in use**: new "Rover pad" section on the console (always shown) and the scorecard pad line: F8 score 0 (`pad.score`; no station within a conservative 30-min walk home), **steepest slope in the 21 m pad block** 28.06° (`pad.checks.max_slope_deg`; rule ≤ 5° from `site.yaml siting.max_slope_deg`; caption: not the slope at the pad cell), disc 100 % → "**pad_default fails the F8 rule**"; S decides. The 21 m is derived in the browser (`DerivedNum`) from `siting.block_m` on `grids_m.route` as WS2 siting.py does. Old fallback wording (WS2 session-4 quote when the block was missing) removed.
+  - **Smoke test** (vite dev on the scratch tree, every route): **0 unbacked numbers on every view** (`/` 27 backed, 44 with the siting layer on; S1 8, S2 32, S4 37, `/trade` 21, `/conditions` 50, `/scorecard` 126, `/cuff` 64, `/nav` 17), no data problems, no console errors or warnings (WS7's "optional pad.json unavailable" warning is gone).
+
 ### Doing
 
 - —
 
 ### Next
 
-- Re-run the smoke test on C's session-3 `make web` (the session-3 real-tree KATs in `web/src/data/real.test.ts` switch on when `validation/v1.json` is in the tree).
+- Re-run the smoke test on C's next `make web` with pad.json (the session-4 pad KATs in `web/src/data/real.test.ts` switch on when `pad.json` is in the tree).
+- Polish: the console route-legs table is ~20 px wider than the side panel (horizontal scroll).
 - HUD-on-card strip if WS7 is not green at G2; about page licences/SI text (needs the team).
 
 ### Blocked
 
 - (user) GitHub Pages: repo private and `gh` not logged in; `pages.yml` ready but cannot deploy yet.
 - (C / WS6) `.github/workflows/ci.yml`: please add `npm test` (vitest) to the `web` job.
-- (WS2 / C) `pad.json` `proposal` block: shape assumed (`lon`, `lat`, `score`, `checks{assessed_pct_30min, max_slope_deg, rule_passed}`, `alternatives[]`, `rule`) and keys assumed `pad.proposal.{lon,lat,score,checks.*}`; please confirm in the contract. Without the block only the heatmap is shown.
 - (WS3) D7 wording: SPEC's "far rim (41–57 km) … in 21 north-facing frames" has no data field or manifest key, so the app says it without the numbers. Please add them to `validation/v2.json` (e.g. `far_note` or `far.rim_km`, `far.haze_frames`) with keys, and drop "far class pending the D7 manual check" from the card `skyline_error_scope`.
 - (WS3) `validation/v2.json n_frames_ok` has no key; the scorecard counts `frames[]` in the browser instead.
 - (S / WS2, content) Turn-back times (S4 438.55, S2 409.15 min) are after the 390-min EVA (`clock.eva.eva_min`); shown as written (WS2 question 13).
 - Resolved this session: station value key (WS1), route-leg keys (WS2), V1 + KAT list (WS6), headline range low end (con_*).
+- Resolved session 4: pad.json `proposal` shape (contract v1.1.2, WS2 session 5).
 
 ### Assumptions added
 
@@ -860,6 +866,7 @@ Branch: `ws5-web`
 - Session 2: the F22 table uses each station card's Navcam frame (`navcam.image_id`) and `localisation/{id}.json error_m`; pass = error_m ≤ `skyline_fix.refine_grid_m` (nav.yaml gate, C 11:58).
 - Session 3: `<Num dp signed>` rounds only the display (V1/V2 statistics); the manifest link and tooltip carry the stored value. KAT area counts and the V2 frame count are computed in the browser and labelled so (`DerivedNum`).
 - Session 3: the D7 far-class text is a fixed string in `web/src/views/validation.ts` (no numbers) until WS3 puts the far note in the data.
+- Session 4: the F8 pad block side (21 m) is computed in the browser from `site.yaml siting.block_m` and `grids_m.route` with WS2 siting.py's formula ((2·round(block/grid/2)+1) cells, Python rounding); no manifest key exists for it.
 
 ## WS6 Provenance
 
@@ -1510,7 +1517,7 @@ Branch: `ws10-vo`
 | 2026-11-14 14:58 | pad.json vs F8 siting proposal | `pad.json` describes the pad in use = `pad_default` (user 11:24). The F8 siting result is a **proposal** carried separately (siting files + an optional `proposal` block), never as the pad. WS2 fixes its writer; until then make web does not publish pad.json; WS3 keeps the pad_default horizon | C |
 | 2026-11-14 15:01 | D7 sky detection (revised) | **No manual review.** Automatic detector only; near/mid V2 quoted (0.09° / 0.20°). Far class reported as "not validated: far rim hidden by haze in 21 north-facing frames" with WS3's evidence (counts and rim distances from `validation/v2.json far_note` keys, never typed: 17 of 21 match terrain within 2 km, rim 41.4–53.6 km as of WS3 session 4). The manual-check sheet stays available but is not required. Reason: localisation (F22) is an optional add-on (D19), so the far class carries no core claim | User |
 | 2026-11-14 15:31 | pad.json release | Published again: WS2 session 5 writes pad = pad_default (in use) with the F8 result as `proposal` (adopted false). Finding for S: pad_default fails the F8 rule (score 0, no station within con 30 min) | C |
-| 2026-11-14 15:40 | WS2 Q (α encoding, review C-note 1) | **Switch** α to the IST-2 weight-span encoding (span = gravity change 0.12→0.32 g on 121 + 80.7 kg ≈ 106.6 kg carried mass at Mars g, not `delta_mass_kg: 60`); WS2 implements, re-runs all scenarios and reports before/after | User (for S) |
-| 2026-11-14 15:40 | `O2_station_tasks` reading | **Confirmed**: task O₂ still to do at the current station; 0 while walking | User (for S) |
-| 2026-11-14 15:40 | O₂ energy conversion | **Use the review's** ICES-2026-127 conversion (≈ 5.02 kcal per L O₂ at RER 0.85) instead of 20.1 J/mL for the O₂ budget (primary ≈ 482 L instead of 504 L); WS2 implements | User (for S) |
-| 2026-11-14 15:40 | Casualty mass | User delegated to C → **keep the `haul.yaml` rule** (body + suit: 155 / 179 / 195 kg; consistent with crew.yaml and already implemented); SPEC's 165–186 kg text aligned to it | C |
+| 2026-11-14 15:35 | WS2 Q (α encoding, review C-note 1) | **Switch** α to the IST-2 weight-span encoding (span = gravity change 0.12→0.32 g on 121 + 80.7 kg ≈ 106.6 kg carried mass at Mars g, not `delta_mass_kg: 60`); WS2 implements, re-runs all scenarios and reports before/after | User (for S) |
+| 2026-11-14 15:35 | `O2_station_tasks` reading | **Confirmed**: task O₂ still to do at the current station; 0 while walking | User (for S) |
+| 2026-11-14 15:35 | O₂ energy conversion | **Use the review's** ICES-2026-127 conversion (≈ 5.02 kcal per L O₂ at RER 0.85) instead of 20.1 J/mL for the O₂ budget (primary ≈ 482 L instead of 504 L); WS2 implements | User (for S) |
+| 2026-11-14 15:35 | Casualty mass | User delegated to C → **keep the `haul.yaml` rule** (body + suit: 155 / 179 / 195 kg; consistent with crew.yaml and already implemented); SPEC's 165–186 kg text aligned to it | C |

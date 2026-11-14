@@ -146,30 +146,51 @@ export interface SitingPng {
   rule: string
 }
 
+export interface PadChecks {
+  assessed_pct_30min: number | null
+  max_slope_deg: number | null
+  rule_passed: boolean | null
+}
+
+export interface PadPoint {
+  lon: number
+  lat: number
+  elev_m: number | null
+  score: number | null
+  checks: PadChecks
+}
+
+export interface PadAlternative {
+  rank: number
+  lon: number
+  lat: number
+  elev_m: number | null
+  score: number | null
+}
+
 export interface PadFile {
   dummy: boolean
-  pad: {
-    lon: number
-    lat: number
-    elev_m: number | null
-    score: number | null
-    checks: { assessed_pct_30min: number | null; max_slope_deg: number | null; rule_passed: boolean | null }
-  }
-  alternatives: { rank: number; lon: number; lat: number; elev_m: number | null; score: number | null }[]
+  /** The pad in use (contract v1.1.2, C 14:58): config/site.yaml pad_default, with the F8 rule evaluated there. */
+  pad: PadPoint & { source?: string }
+  alternatives: PadAlternative[]
   hop_options: { pads: number[][]; note: string }[]
   site_rule_version: string | number
-  /** Optional F8 siting proposal (C 14:58): never the pad in use. Shape assumed until WS2/C fix it. */
+  /** Optional F8 siting proposal (contract v1.1.2): never the pad in use. */
   proposal?: PadProposalBlock
 }
 
+/** pad.json `proposal` (contract v1.1.2; `tie`, `stations`, `no_access`, `checks_note` are WS2 extras). */
 export interface PadProposalBlock {
-  lon: number
-  lat: number
-  elev_m?: number | null
-  score?: number | null
-  checks?: { assessed_pct_30min?: number | null; max_slope_deg?: number | null; rule_passed?: boolean | null }
-  alternatives?: { rank: number; lon: number; lat: number; elev_m?: number | null; score?: number | null }[]
-  rule?: string
+  adopted?: false
+  note?: string
+  pad: PadPoint
+  alternatives?: PadAlternative[]
+  hop_options?: { pads: number[][]; note: string }[]
+  site_rule_version?: string | number
+  tie?: { top_score?: number | null; n_blocks_at_top_score?: number | null; n_candidate_blocks?: number | null; tiebreak?: string; note?: string }
+  stations?: string[]
+  no_access?: Record<string, string>
+  checks_note?: string
   [k: string]: unknown
 }
 

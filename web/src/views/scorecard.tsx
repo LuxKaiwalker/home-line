@@ -13,6 +13,8 @@ import type { Route } from '../router'
 import { DummyNote, StatusTag } from '../components/labels'
 import { LooseTable } from '../components/Loose'
 import { CfgNum, DerivedNum, Num } from '../components/Num'
+import { PadInUseText } from '../components/PadInUse'
+import { padInUse } from '../map/pad'
 import { f22Rows, f22Verdict, type F22Frame } from './f22'
 import { ADDON_LABEL } from './slot'
 import { confusionThresholds, FAR_NOT_VALIDATED, katAreas, v1Sensitivities, v2Classes, type Confusion, type KatTest } from './validation'
@@ -308,14 +310,7 @@ function CoverageSection() {
       {({ coverage, coreg, pad }) => (
         <>
           {coverage ? <CoverageTable c={coverage} /> : <p class="muted">validation/coverage.json not available yet (WS1).</p>}
-          {pad && (
-            <p>
-              Pad in use (pad.json = pad_default): {CONFIG.walkbackBudgetsMin[0]}-min flat disc assessed{' '}
-              <Num v={pad.pad.checks.assessed_pct_30min} units="%" file="pad.json" k="pad.checks.assessed_pct_30min" />, steepest slope at the pad{' '}
-              <Num v={pad.pad.checks.max_slope_deg} units="deg" file="pad.json" k="pad.checks.max_slope_deg" />. The F8 siting result is a proposal only (planning
-              console, layer "Pad siting proposal").
-            </p>
-          )}
+          {pad && <PadInUseText u={padInUse(pad)!} />}
           {coreg ? (
             <p>
               Co-registration shift to Curiosity drive ends: dx <Num v={coreg.dx_m} units="m" file="validation/coreg.json" k="coreg.dx_m" />, dy{' '}

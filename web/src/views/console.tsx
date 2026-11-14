@@ -12,7 +12,7 @@ import { dataUrl } from '../env'
 import { ConsoleMap, DEFAULT_VISIBLE, type LayerGroup } from '../map/consoleMap'
 import { BASEMAP_CREDIT, basemapSources } from '../map/basemap'
 import { loadAlpha } from '../map/hatch'
-import { padMarker, padProposal, type PadMarkerInfo, type PadProposal } from '../map/pad'
+import { padInUse, padMarker, padProposal, type PadInUse, type PadMarkerInfo, type PadProposal } from '../map/pad'
 import { binEdges, binLabelsFor } from '../map/legend'
 import { isochroneMinutes, keyStep, snapMinutes, uniformStep } from '../map/slider'
 import { href } from '../router'
@@ -20,6 +20,7 @@ import { THEME } from '../theme'
 import { AssumedTag, DataProblem, DummyNote } from '../components/labels'
 import { CfgNum, Num } from '../components/Num'
 import { DragNote } from '../components/DragNote'
+import { PadBlockLabel, PadInUseText } from '../components/PadInUse'
 import { ensureManifest } from './common'
 import { routeSummary, type RouteLeg } from './route'
 import type { View } from './types'
@@ -68,6 +69,7 @@ function ConsolePanel({ cmap }: { cmap: ConsoleMap }) {
   const [notes, setNotes] = useState<Partial<Record<LayerGroup, ComponentChildren>>>({})
   const [padInfo, setPadInfo] = useState<PadMarkerInfo | null>(null)
   const [proposal, setProposal] = useState<PadProposal | null>(null)
+  const [padUse, setPadUse] = useState<PadInUse | null>(null)
   const [sitingShown, setSitingShown] = useState(false)
   const [partner, setPartner] = useState<PartnerFC | null>(null)
   const [route, setRoute] = useState<RouteFC | null>(null)
@@ -89,14 +91,17 @@ function ConsolePanel({ cmap }: { cmap: ConsoleMap }) {
         if (alive) setError(e)
         return
       }
-      // The pad in use: pad.json (C 14:58: it describes pad_default), else config/site.yaml pad_default.
-      // The F8 siting result is a proposal only: siting.png + siting_png.json (+ optional pad.json proposal).
+      // The pad in use: pad.json `pad` (contract v1.1.2: = pad_default, F8 rule evaluated there), else
+      // config/site.yaml pad_default. The F8 siting result is a proposal only: siting.png + siting_png.json
+      // + the pad.json `proposal` block.
       let pad = padMarker(null, CONFIG.padDefault)
       let pp: PadProposal | null = null
+      let pu: PadInUse | null = null
       try {
         const pf = await L.optional(() => L.pad())
         pad = padMarker(pf, CONFIG.padDefault)
         pp = padProposal(pf)
+        pu = padInUse(pf)
       } catch (e) {
         note('stations', `pad.json: ${e instanceof Error ? e.message : String(e)}`)
       }
@@ -104,6 +109,7 @@ function ConsolePanel({ cmap }: { cmap: ConsoleMap }) {
         const sp = await L.optional(() => L.sitingPng())
         if (!alive) return
         setProposal(pp)
+        setPadUse(pu)
         setSitingShown(!!sp)
         if (sp || pp) {
           await cmap.setSiting(
@@ -342,6 +348,13 @@ function ConsolePanel({ cmap }: { cmap: ConsoleMap }) {
         partner={visible.partner ? { fc: partner, label: partnerLabel(partner), file: scenario.files.partner, defaultFile: defaultPartnerFile } : null}
         proposal={visible.siting ? proposal : null}
       />
+
+      {padUse && (
+        <section>
+          <h3>Rover pad</h3>
+          <PadInUseText u={padUse} />
+        </section>
+      )}
 
       {visible.siting && <PadProposalSection p={proposal} heatmap={sitingShown} pad={padInfo} />}
 
@@ -642,10 +655,11 @@ function RouteLegs({ scenarioId, legs }: { scenarioId: string; legs: RouteLeg[] 
   )
 }
 
-/** F8 pad siting proposal (C 14:58): siting.png heatmap + optional pad.json `proposal`; never the pad in use. */
+/** F8 pad siting proposal (C 14:58, contract pad v1.1.2): siting.png heatmap + the pad.json `proposal` block; never the pad in use. */
 function PadProposalSection({ p, heatmap, pad }: { p: PadProposal | null; heatmap: boolean; pad: PadMarkerInfo | null }) {
   const F = 'pad.json'
   const b = CONFIG.walkbackBudgetsMin[0]
+  const ak = (rank: number, f: string) => `pad.proposal.alternatives.${rank}.${f}`
   return (
     <section>
       <h3>
@@ -653,34 +667,83 @@ function PadProposalSection({ p, heatmap, pad }: { p: PadProposal | null; heatma
       </h3>
       <p>
         <b>pad_default is kept; S decides.</b> The pad in use is {pad?.file ? 'pad.json (= pad_default)' : 'config/site.yaml pad_default'}; every route, band
-        and number in the plan uses it. The F8 siting rule's result is shown here only as a proposal
-        {heatmap ? ' (grey heatmap: siting score, white = highest)' : ' (siting.png not available yet)'}.
+        and number in the plan uses it. The F8 siting rule's result is shown here only as a proposal, not adopted
+        {heatmap ? ' (grey heatmap: siting score, white = highest)' : ' (siting.png not in this tree)'}.
       </p>
       {p ? (
         <>
           <p>
-            Proposed pad <Num v={p.lon} file={F} k="pad.proposal.lon" />, <Num v={p.lat} file={F} k="pad.proposal.lat" /> (score{' '}
-            <Num v={p.score} file={F} k="pad.proposal.score" />, steepest slope in its block{' '}
-            <Num v={p.maxSlopeDeg} units="deg" file={F} k="pad.proposal.checks.max_slope_deg" />
-            ); {b}-min disc assessed <Num v={p.assessedPct} units="%" file={F} k="pad.proposal.checks.assessed_pct_30min" />, pad rule {p.ruleLabel}.
+            Proposed pad <Num v={p.lon} file={F} k="pad.proposal.lon" />, <Num v={p.lat} file={F} k="pad.proposal.lat" />, elevation{' '}
+            <Num v={p.elevM} units="m" file={F} k="pad.proposal.elev_m" />: score <Num v={p.score} file={F} k="pad.proposal.score" />
+            {p.stations.length > 0 && <> (stations within the conservative {b}-min walk home: {p.stations.join(', ')})</>}; <PadBlockLabel />{' '}
+            <Num v={p.maxSlopeDeg} units="deg" file={F} k="pad.proposal.checks.max_slope_deg" />; {b}-min disc{' '}
+            {p.assessedPct === null ? (
+              <b>not assessed</b>
+            ) : (
+              <>
+                assessed <Num v={p.assessedPct} units="%" file={F} k="pad.proposal.checks.assessed_pct_30min" />
+              </>
+            )}
+            ; pad rule {p.ruleLabel}.
           </p>
-          {p.assessedPct === null && (
+          {p.checksNote ? (
+            <p class="caption">Why: {p.checksNote}.</p>
+          ) : (
+            p.assessedPct === null && <p class="caption">The disc check is null in pad.json (no reason given).</p>
+          )}
+          {p.tie && (
+            <p>
+              <b>Tie:</b> <Num v={p.tie.nAtTop} file={F} k="pad.proposal.tie.n_blocks_at_top_score" /> of{' '}
+              <Num v={p.tie.nCandidates} file={F} k="pad.proposal.tie.n_candidate_blocks" /> candidate blocks share the top score{' '}
+              <Num v={p.tie.topScore} file={F} k="pad.proposal.tie.top_score" />: the rule cannot tell them apart
+              {p.tie.tiebreak ? <>; the tiebreak alone picks rank 1 ({p.tie.tiebreak})</> : null}.
+            </p>
+          )}
+          {p.ranked.length > 0 && (
+            <table class="mini">
+              <thead>
+                <tr>
+                  <th>Rank</th>
+                  <th class="r">Lon, lat</th>
+                  <th class="r">Score</th>
+                </tr>
+              </thead>
+              <tbody>
+                {p.ranked.map((a) => (
+                  <tr>
+                    <td title={a.isProposal ? 'rank 1 = the proposed pad' : 'same rule, not adopted'}>
+                      #{a.rank}
+                      {a.isProposal ? '*' : ''}
+                    </td>
+                    <td class="r">
+                      <Num v={a.lon} file={F} k={ak(a.rank, 'lon')} />, <Num v={a.lat} file={F} k={ak(a.rank, 'lat')} />
+                    </td>
+                    <td class="r">
+                      <Num v={a.score} file={F} k={ak(a.rank, 'score')} />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+          {p.ranked.some((a) => a.isProposal) && <p class="caption">* the proposed pad (rank 1 of the alternatives).</p>}
+          {!p.tie && p.tied && <p class="caption">Every listed alternative has the proposal's score: the rule cannot tell the candidates apart.</p>}
+          {p.noAccess.length > 0 && (
             <p class="caption">
-              The disc check is null: the {b}-min flat disc around the proposed pad runs off the edge of the 3 m routing grid, so WS2 cannot assess it.
+              Not scored (no access cell with a walk home in this scenario):{' '}
+              {p.noAccess.map(([sid, why], i) => (
+                <>
+                  {i > 0 ? '; ' : ''}
+                  {sid}: {why}
+                </>
+              ))}
+              .
             </p>
           )}
           {p.rule && <p class="caption">Rule: {p.rule}.</p>}
         </>
       ) : (
-        <p class="caption">
-          WS2 (STATUS, session 4): the proposal's {b}-min disc check is null because the disc runs off the 3 m routing grid, and with only one station reachable
-          under the conservative variant the top candidate blocks tie, so the rule cannot discriminate between them.
-        </p>
-      )}
-      {p?.tied && (
-        <p class="caption">
-          Every listed alternative has the proposal's score: with one reachable station the rule cannot tell the candidates apart (WS2 STATUS reports the full tie).
-        </p>
+        <p class="caption">No proposal block in pad.json: only the heatmap is shown.</p>
       )}
     </section>
   )
