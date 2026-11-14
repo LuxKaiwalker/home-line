@@ -27,21 +27,6 @@
    }
   },
   {
-   "name": "ground temperature (REMS GTS BRIGHTNESS_TEMP)",
-   "units": "degC",
-   "n_sols": 152,
-   "daily_min": {
-    "median": -101.9,
-    "p10": -116.6,
-    "p90": -92.2
-   },
-   "daily_max": {
-    "median": -4.6,
-    "p10": -9.3,
-    "p90": 3.8
-   }
-  },
-  {
    "name": "pressure (REMS PRESSURE)",
    "units": "Pa",
    "n_sols": 159,
@@ -55,21 +40,6 @@
     "p10": 846.1,
     "p90": 883.9
    }
-  },
-  {
-   "name": "UV irradiance A+B+C (REMS UV_ABC)",
-   "units": "W/m2",
-   "n_sols": 153,
-   "daily_min": {
-    "median": 0.0,
-    "p10": 0.0,
-    "p90": 0.0
-   },
-   "daily_max": {
-    "median": 9.49,
-    "p10": 8.43,
-    "p90": 11.46
-   }
   }
  ],
  "latest_feed": {
@@ -82,11 +52,8 @@
    "min_temp_degC": -71.0,
    "max_temp_degC": -5.0,
    "pressure_Pa": 777.0,
-   "min_gts_temp_degC": -84.0,
-   "max_gts_temp_degC": 4.0,
    "ls_deg": 341.0,
    "atmo_opacity": "Sunny",
-   "local_uv_irradiance_index": "Moderate",
    "sunrise": "06:46",
    "sunset": "18:51",
    "season": "Month 12"
@@ -105,15 +72,7 @@
   "min_temp_degC": {
    "n_sols": 144,
    "median_diff_degC": -0.2
-  },
-  "max_gts_temp_degC": {
-   "n_sols": 143,
-   "median_diff_degC": -2.9
-  },
-  "min_gts_temp_degC": {
-   "n_sols": 143,
-   "median_diff_degC": -17.2
   }
  },
- "build_utc": "2026-11-14T10:09:10Z"
+ "build_utc": "2026-11-14T16:22:25Z"
 }

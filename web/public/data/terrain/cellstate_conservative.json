@@ -16,8 +16,8 @@
   "2": "unknown"
  },
  "pct": {
-  "assessed": 54.14,
-  "blocked": 45.86,
+  "assessed": 69.5,
+  "blocked": 30.5,
   "unknown": 0.0
  },
  "source": "data/interim/terrain/cellstate_3m_conservative.tif (WS1)"

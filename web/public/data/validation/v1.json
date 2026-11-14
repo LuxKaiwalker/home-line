@@ -1190,6 +1190,7 @@
   "bias_definition": "mean(DEM tilt - IMU tilt)",
   "positive_class": "tilt >= threshold (DEM = prediction, IMU = reference)",
   "caveat": "The rover chose gentle ground.",
+  "role": "V1 = validation of the slope model, not a safety margin",
   "n_drive_ends": 1389,
   "n_in_focus": 290,
   "aoi_focus": {
@@ -1575,10 +1576,12 @@
       "set": "all drive ends, no focus filter"
     }
   },
-  "conservative_nogo": {
-    "formula": "20 - v1_rmse_deg",
-    "rmse_deg": 5.447021418084812,
-    "nogo_deg": 14.552978581915188,
-    "source": "config/variants.yaml variants.conservative.nogo_deg"
+  "nogo_context": {
+    "conservative_nogo_deg": 17.0,
+    "source": "config/site.yaml slope.nogo_deg.conservative",
+    "decision": "D23",
+    "derived_from_v1": false,
+    "text": "conservative no-go = 17\u00b0 (D23, config)",
+    "note": "Config citation for context, not a V1 output."
   }
 }
