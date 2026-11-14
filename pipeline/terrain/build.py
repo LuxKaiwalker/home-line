@@ -806,17 +806,26 @@ def _norm(a: np.ndarray, lo_hi) -> tuple[np.ndarray, list[float]]:
 
 
 def step_stations() -> dict:
-    """S1-S5 positions and values per stations.yaml (values part of stations.json).
+    """Station science points and values per stations.yaml (values part of stations.json).
 
     value = w_crism * CRISM (normalised) + w_ridge * ridge density (normalised)
             + w_manual * manual_priority   (SPEC F7; normalisations in scoring_assumptions)
-    S3/S5 are S's hand picks: position and value stay null until S records them.
+
+    D26/D32 (user 2026-11-14 16:20 CET), on the D22 nominal cell states (cellstate_3m.tif):
+    order S4, S1, S2, then up to ``extras.max`` F7-scored stations (S6...); every science point is
+    walkable (assessed 3 m cell), in the focus area and >= ``min_spacing_m`` from every station
+    placed before it. S3/S5 (``status: dropped``) are listed under ``dropped``, not placed.
+    WS2 computes the access cells and reachability from these science points.
     """
     from scipy.ndimage import convolve
+
+    from . import stations as ST
 
     st = G.stations_cfg()
     asm = st["scoring_assumptions"]
     w = st["scoring_weights"]
+    ex = st["extras"]
+    min_sp = float(st["min_spacing_m"])
     ridge, g1 = rio.read(OUT / "ridge_index.tif")
     thr = float(G.site()["ridge"]["threshold_m"])
     # ridge density on a 5 m lattice: fraction of 1 m ridge cells per 5 m block, then the mean
@@ -843,18 +852,25 @@ def step_stations() -> dict:
         a, g18 = rio.read(OUT / f"crism_{idx.lower()}_18m.tif")
         n18, crism_rng[idx] = _norm(a, asm["crism_norm_percentiles"])
         crism_n[idx] = coreg.sample_bilinear(n18, g18, x5.ravel(), y5.ravel()).reshape(x5.shape)
-    crism_n["max"] = np.fmax(*crism_n.values())
+    idx_names = list(crism_n)
+    crism_n["max"] = np.fmax(*[crism_n[i] for i in idx_names])
 
     def crism_for(sid):
-        return crism_n[asm["station_crism_index"][sid]]
+        return crism_n[asm["station_crism_index"].get(sid, ex["crism_index"])]
 
-    # pick domain: focus area and flat 30-min disc, on 25 m cells
+    # D22 nominal cell states: the walkable filter (D26)
+    state3, g3 = rio.read(OUT / "cellstate_3m.tif")
+    var_states = {v: rio.read(OUT / f)[0] for v, f in VARIANT_FILES.items()}
+    slope3, _ = rio.read(OUT / "slope_3m.tif")
+    sg3, _ = rio.read(OUT / "stepguard_3m.tif")
+
+    # pick lattice: 25 m cells; S1/S2 domain = focus area and flat 30-min disc around pad_default
     f = G.site()["aoi_focus"]
     lon5, lat5 = G.lonlat_of_xy(x5, y5)
     pad = G.pad_xy()
     r30 = disc_radii_m()[min(disc_radii_m())]
-    dom = ((lon5 >= f["west"]) & (lon5 <= f["east"]) & (lat5 >= f["south"])
-           & (lat5 <= f["north"]) & (np.hypot(x5 - pad[0], y5 - pad[1]) <= r30))
+    focus5 = ST.in_focus(lon5, lat5, f)
+    dom = focus5 & (np.hypot(x5 - pad[0], y5 - pad[1]) <= r30)
     kc = int(asm["pick_cell_m"] / g5.res)
     hh, ww = (g5.height // kc) * kc, (g5.width // kc) * kc
 
@@ -865,61 +881,134 @@ def step_stations() -> dict:
             return np.nanmean(b, axis=2)
 
     dom_c = routing._blocks(dom[:hh, :ww], kc).all(axis=2)
+    focus_c = routing._blocks(focus5[:hh, :ww], kc).all(axis=2)
     gc = G.Grid(g5.x0, g5.y0, g5.res * kc, ww // kc, hh // kc)
     xc, yc = gc.xy_of_rc(*np.mgrid[0:gc.height, 0:gc.width])
+    walk_c = ST.walkable_at(state3, g3, xc.ravel(), yc.ravel()).reshape(xc.shape)
     dens_c = cells(dens_n)
 
-    def value(sid, crism_v, dens_v, manual):
+    def value(crism_v, dens_v, manual):
         if crism_v is None or dens_v is None or not np.isfinite(crism_v) \
                 or not np.isfinite(dens_v):
             return None
         return w["crism"] * crism_v + w["ridge_density"] * dens_v + w["manual"] * manual
 
-    out = []
+    def best(score):
+        if not np.isfinite(score).any():
+            return None
+        i = np.unravel_index(np.nanargmax(score), score.shape)
+        return (float(xc[i]), float(yc[i]))
+
+    placed: list[tuple[float, float]] = []
+    pos: dict[str, tuple] = {}
+    # S4: drive end nearest sol 4200 that is walkable and in the focus area (D26)
+    ends = sorted(drive_ends(), key=lambda e: (abs(e["sol"] - 4200), e["sol"]))
+    e0 = ends[0]
+    e4 = next((e for e in ends
+               if ST.walkable_at(state3, g3, *G.xy_of_lonlat(e["lon"], e["lat"]))[0]
+               and ST.in_focus(e["lon"], e["lat"], f)), None)
+    s4_xy = None if e4 is None else tuple(float(v) for v in G.xy_of_lonlat(e4["lon"], e4["lat"]))
+    moved = None
+    if e4 is not None and e4 is not e0:
+        x0_, y0_ = G.xy_of_lonlat(e0["lon"], e0["lat"])
+        moved = {"rmc": e0["RMC"], "sol": e0["sol"], "lon": e0["lon"], "lat": e0["lat"],
+                 "dist_m": _r(float(np.hypot(s4_xy[0] - x0_, s4_xy[1] - y0_)), 1),
+                 "cellstate_nominal": int(state3[tuple(int(v) for v in g3.rc_of_xy(x0_, y0_))])}
+    if s4_xy:
+        placed.append(s4_xy)
+    pos["S4"] = (s4_xy, None if e4 is None else
+                 f"MMGIS drive end {e4['RMC']} (sol {e4['sol']}): nearest sol 4200 that is "
+                 "walkable (D22 nominal) and in the focus area", moved)
+    # S1: max(ridge density + clay index) in focus area and 30-min disc, walkable, spaced
+    sp = ST.spacing_ok(xc, yc, placed, min_sp)
+    s1_xy = best(np.where(dom_c & walk_c & sp, dens_c + cells(crism_for("S1")), -np.inf))
+    if s1_xy:
+        placed.append(s1_xy)
+    pos["S1"] = (s1_xy, "rule: max(ridge density + clay index) 25 m cell in focus area and "
+                        f"30-min disc; walkable (D22 nominal); >= {min_sp:g} m from S4", None)
+    sp = ST.spacing_ok(xc, yc, placed, min_sp)
+    s2_xy = best(np.where(dom_c & walk_c & sp, dens_c, -np.inf))
+    if s2_xy:
+        placed.append(s2_xy)
+    pos["S2"] = (s2_xy, f"rule: max ridge density 25 m cell (same domain as S1, assumed); "
+                        f"walkable; >= {min_sp:g} m from S4 and S1", None)
+    # extras (D26): F7 value on 25 m cells, focus area, walkable, spaced from every station
+    val_c = (w["crism"] * cells(crism_n[ex["crism_index"]]) + w["ridge_density"] * dens_c
+             + w["manual"] * float(ex["manual_priority"]))
+    elig = focus_c & walk_c
+    picks = ST.place_extras(xc.ravel(), yc.ravel(), val_c.ravel(), elig.ravel(), placed,
+                            int(ex["max"]), min_sp)
+    for n, i in enumerate(picks):
+        sid = ex["ids"][n]
+        pos[sid] = ((float(xc.ravel()[i]), float(yc.ravel()[i])),
+                    f"D26 extra #{n + 1}: highest F7 value 25 m cell (crism = {ex['crism_index']} "
+                    f"index, manual 0) in the focus area, walkable, >= {min_sp:g} m from every "
+                    f"station placed before it (25 m cell value {val_c.ravel()[i]:.4f})", None)
+
     s_cfg = {s["id"]: s for s in st["stations"]}
-    # S1
-    s1_score = np.where(dom_c, dens_c + cells(crism_for("S1")), -np.inf)
-    i1 = np.unravel_index(np.nanargmax(s1_score), s1_score.shape)
-    s1_xy = (float(xc[i1]), float(yc[i1]))
-    # S2
-    sep = np.hypot(xc - s1_xy[0], yc - s1_xy[1]) >= asm["s2_min_separation_m"]
-    s2_score = np.where(dom_c & sep, dens_c, -np.inf)
-    i2 = np.unravel_index(np.nanargmax(s2_score), s2_score.shape)
-    s2_xy = (float(xc[i2]), float(yc[i2]))
-    # S4: drive end nearest sol 4200 (D0 3.2)
-    ends = drive_ends()
-    e4 = min(ends, key=lambda e: (abs(e["sol"] - 4200), e["sol"]))
-    s4_xy = tuple(float(v) for v in G.xy_of_lonlat(e4["lon"], e4["lat"]))
-    pos = {"S1": (s1_xy, "rule: max(ridge density + clay index) 25 m cell in focus area and "
-                         "30-min disc"),
-           "S2": (s2_xy, f"rule: max ridge density 25 m cell >= {asm['s2_min_separation_m']} m "
-                         "from S1 (same domain, assumed)"),
-           "S3": (None, "pending: hand pick by S on the HiRISE ortho"),
-           "S4": (s4_xy, f"MMGIS drive end {e4['RMC']} (sol {e4['sol']})"),
-           "S5": (None, "pending: hand pick by S on the HiRISE ortho")}
-    for sid, (xy, how) in pos.items():
-        sc = s_cfg[sid]
-        rec = {"id": sid, "name": sc["name"], "lon": None, "lat": None, "value": None,
-               "components": None, "position_rule": how, "dwell_min": st["dwell_min"],
-               "manual_priority": sc["manual_priority"]}
-        if xy is not None:
-            lon, lat = G.lonlat_of_xy(*xy)
-            r, c = g5.rc_of_xy(*xy)
-            cv = float(crism_for(sid)[r, c])
-            dv = float(dens_n[r, c])
-            rec.update(lon=round(float(lon), 6), lat=round(float(lat), 6),
-                       x=round(xy[0], 2), y=round(xy[1], 2),
-                       components={"crism_index": asm["station_crism_index"][sid],
-                                   "crism_norm": _r(cv, 4), "ridge_density_norm": _r(dv, 4),
-                                   "ridge_density_raw": _r(float(dens[r, c]), 4)})
-            v = value(sid, cv, dv, sc["manual_priority"])
-            rec["value"] = _r(v, 4) if v is not None else None
+    out, dropped = [], []
+    for s in st["stations"]:
+        if s.get("status") == "dropped":
+            dropped.append({"id": s["id"], "name": s["name"], "status": "dropped",
+                            "reason": "D26 (user 16:20 CET): dropped unless S hand-picks it by "
+                                      "Sat 19:00 CET; the imagery behind the claim is unchecked"})
+    order = ["S1", "S2", "S4"] + [ex["ids"][n] for n in range(len(picks))]
+    for sid in order:
+        xy, how, moved_from = pos[sid]
+        extra = sid not in s_cfg
+        manual = float(ex["manual_priority"]) if extra else float(s_cfg[sid]["manual_priority"])
+        rec = {"id": sid, "name": None if extra else s_cfg[sid]["name"], "lon": None,
+               "lat": None, "value": None, "components": None, "position_rule": how,
+               "placement": "F7 extra (D26)" if extra else "rule (D26 re-placed after D22)",
+               "dwell_min": st["dwell_min"], "manual_priority": manual}
+        if xy is None:
+            rec["name"] = rec["name"] or sid
+            rec["position_rule"] = "no cell passes the D26 filters"
+            out.append(rec)
+            continue
+        lon, lat = G.lonlat_of_xy(*xy)
+        r, c = g5.rc_of_xy(*xy)
+        cv = float(crism_for(sid)[r, c])
+        dv = float(dens_n[r, c])
+        both = {i: float(crism_n[i][r, c]) for i in idx_names}
+        name, finding = ST.finding_name(both, dv, min_norm=float(ex["name_min_norm"]),
+                                        index_words=ex["index_words"])
+        r3, c3 = g3.rc_of_xy(*xy)
+        rec.update(lon=round(float(lon), 6), lat=round(float(lat), 6),
+                   x=round(xy[0], 2), y=round(xy[1], 2),
+                   components={"crism_index": asm["station_crism_index"].get(sid,
+                                                                             ex["crism_index"]),
+                               "crism_norm": _r(cv, 4), "ridge_density_norm": _r(dv, 4),
+                               "ridge_density_raw": _r(float(dens[r, c]), 4),
+                               "crism_norm_by_index": {i: _r(v, 4) for i, v in both.items()}},
+                   finding=name,
+                   finding_detail=finding,
+                   cell={"slope_3m_deg": _r(float(slope3[r3, c3]), 2),
+                         "stepguard": int(sg3[r3, c3]),
+                         "state": {v: int(a[r3, c3]) for v, a in var_states.items()}})
+        if extra:
+            rec["name"] = name
+        if moved_from:
+            rec["moved_from"] = moved_from
+        v = value(cv, dv, manual)
+        rec["value"] = _r(v, 4) if v is not None else None
         out.append(rec)
+    # spacing check over the final list (D32)
+    pts = [(r_["x"], r_["y"]) for r_ in out if r_.get("x") is not None]
+    dmin = min((float(np.hypot(a[0] - b[0], a[1] - b[1])) for i, a in enumerate(pts)
+                for b in pts[i + 1:]), default=None)
+    if dmin is not None and dmin < min_sp:
+        raise ValueError(f"stations closer than {min_sp} m: {dmin:.1f} m")
     doc = {"note": "values part of stations.json (F7); objective/tasks/t_home/cards are filled "
-                   "downstream. Internal file, not the web contract.",
-           "weights": w, "normalisation": {"crism_p2_p98": crism_rng,
-                                           "ridge_density_p98": _r(p98, 5)},
-           "assumptions": asm, "stations": out}
+                   "downstream. Internal file, not the web contract. Science points only: WS2 "
+                   "computes the access cells and reachability (a station nobody can reach "
+                   f"stays on the map, labelled '{st['placement']['unreachable_label']}', D26).",
+           "weights": w, "weights_assumed": bool(st.get("scoring_weights_assumed")),
+           "min_spacing_m": min_sp, "min_pairwise_m": _r(dmin, 1),
+           "placement": st["placement"], "extras_rule": ex,
+           "cellstate_source": "data/interim/terrain/cellstate_3m.tif (D22 nominal)",
+           "normalisation": {"crism_p2_p98": crism_rng, "ridge_density_p98": _r(p98, 5)},
+           "assumptions": asm, "stations": out, "dropped": dropped}
     _w(OUT / "stations.json", doc)
     _record_stations(doc)
     rio.write_cog(OUT / "ridge_density_5m.tif", dens.astype(np.float32), g5,

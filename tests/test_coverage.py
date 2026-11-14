@@ -605,3 +605,91 @@ def test_every_ws1_manifest_key_cites_a_web_path_that_holds_its_value(tmp_path, 
                 or k == "terrain.nogo_conservative_deg"]
     assert frag["stations.S1.value"]["file"] == "stations.json"
     assert "stations.S3.value" not in frag                    # unknown stays unrecorded
+
+
+# ---------------------------------------------------------------- stations (D26, D32; F7)
+
+
+def test_station_spacing_rule_300m():
+    from pipeline.terrain import stations as ST
+
+    x = np.array([0.0, 299.9, 300.0, 0.0, 500.0])
+    y = np.array([0.0, 0.0, 0.0, -300.0, 400.0])
+    ok = ST.spacing_ok(x, y, [(0.0, 0.0)], 300.0)
+    assert ok.tolist() == [False, False, True, True, True]     # >= 300 m from every station
+    ok2 = ST.spacing_ok(x, y, [(0.0, 0.0), (500.0, 300.0)], 300.0)
+    assert ok2.tolist() == [False, False, True, True, False]
+    assert ST.spacing_ok(x, y, [], 300.0).all()
+
+
+def test_station_focus_area_filter_is_inclusive_box():
+    from pipeline.terrain import stations as ST
+
+    f = {"west": 137.37, "east": 137.42, "south": -4.82, "north": -4.77}
+    lon = np.array([137.37, 137.395, 137.42, 137.3699, 137.4201, 137.40, 137.40])
+    lat = np.array([-4.82, -4.80, -4.77, -4.80, -4.80, -4.8201, -4.7699])
+    assert ST.in_focus(lon, lat, f).tolist() == [True, True, True, False, False, False, False]
+
+
+def test_station_walkable_filter_uses_the_3m_cell_under_the_point():
+    from pipeline.terrain import stations as ST
+
+    g3 = Grid(x0=0.0, y0=30.0, res=3.0, width=10, height=10)
+    st = np.zeros((10, 10), np.uint8)
+    st[0, 1] = routing.BLOCKED
+    st[0, 2] = routing.UNKNOWN
+    x = np.array([1.5, 4.5, 7.5, 10.5, -1.0, 31.0])
+    y = np.array([28.5, 28.5, 28.5, 28.5, 28.5, 28.5])
+    # assessed -> walkable; blocked, unknown, off the grid -> not walkable
+    assert ST.walkable_at(st, g3, x, y).tolist() == [True, False, False, True, False, False]
+
+
+@pytest.mark.parametrize("crism,ridge,expected", [
+    ({"D2300": 0.92, "SINDEX2": 0.10}, 0.20, "high D2300 clay signal"),
+    ({"D2300": 0.10, "SINDEX2": 0.81}, 0.00, "high SINDEX2 sulfate signal"),
+    ({"D2300": 0.30, "SINDEX2": 0.20}, 1.00, "dense ridge network"),
+    ({"D2300": 0.60, "SINDEX2": 0.20}, 1.00, "dense ridge network + high D2300 clay signal"),
+    ({"D2300": 0.90, "SINDEX2": 0.20}, 0.70, "high D2300 clay signal + dense ridge network"),
+    ({"D2300": 0.30, "SINDEX2": 0.20}, 0.40, "F7 score without a dominant component"),
+])
+def test_station_name_comes_from_the_score_components(crism, ridge, expected):
+    from pipeline.terrain import stations as ST
+
+    words = {"D2300": "clay", "SINDEX2": "sulfate"}
+    name, finding = ST.finding_name(crism, ridge, min_norm=0.5, index_words=words)
+    assert name == expected
+    # the finding states the numbers the name rests on, never a geological claim
+    assert "D2300" in finding and "SINDEX2" in finding and "ridge density" in finding
+    for bad in ("nodule", "boulder", "vein", "sulfur", "water", "ancient"):
+        assert bad not in name.lower()
+
+
+def test_station_extras_are_greedy_by_value_and_respect_every_filter():
+    from pipeline.terrain import stations as ST
+
+    #           0      1      2      3      4      5      6
+    x = np.array([0.0, 100.0, 500.0, 900.0, 1300.0, 2000.0, 2600.0])
+    y = np.zeros(7)
+    value = np.array([0.9, 0.95, 0.7, 0.8, 0.6, 0.99, 0.5])
+    eligible = np.array([True, True, True, True, True, False, True])  # 5: off focus/unwalkable
+    placed = [(0.0, 400.0)]                                           # 500 m from 0, 412 from 1
+    pick = ST.place_extras(x, y, value, eligible, placed, n_max=3, min_m=300.0)
+    # 1 (0.95) first; 0 is 100 m from 1 -> out; 3 (0.8); 2 is 400 m from 3 and 400 from 1 -> ok
+    assert pick == [1, 3, 2]
+    pts = placed + [(x[i], y[i]) for i in pick]
+    for i, a in enumerate(pts):
+        for b in pts[i + 1:]:
+            assert math.hypot(a[0] - b[0], a[1] - b[1]) >= 300.0
+    assert ST.place_extras(x, y, value, np.zeros(7, bool), placed, 3, 300.0) == []
+    assert len(ST.place_extras(x, y, value, eligible, [], n_max=2, min_m=300.0)) == 2
+
+
+def test_stations_config_d26_d32():
+    from pipeline.terrain import grid as G
+
+    st = G.stations_cfg()
+    assert st["scoring_weights"] == {"crism": 0.4, "ridge_density": 0.4, "manual": 0.2}
+    assert st["scoring_weights_assumed"] is True                                 # D32
+    assert st["min_spacing_m"] == 300                                            # D32
+    assert st["extras"]["max"] == 3 and st["extras"]["manual_priority"] == 0
+    assert {s["id"] for s in st["stations"] if s.get("status") == "dropped"} == {"S3", "S5"}
