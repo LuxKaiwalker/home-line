@@ -392,3 +392,23 @@ the web tree; one there would fail the card schema).
 
 Checked against WS2 session 8's real interim files (`scenarios/index.json`, `scenarios/pads/**`,
 `trade_table.json`, `physio/golden.json`): 0 errors.
+
+## Design contracts v1 (DESIGN §6; D3)
+
+A separate family for the design block (WS15–WS18), **v1.0.0, frozen at merge**: an additive change
+is a minor bump (1.1.0, …); a breaking change is human-gated. Each schema carries
+`"x-contract-version": "1.0.0"` and says "Design contracts v1" in its description. Producers: WS16
+(`pipeline/export/labels.py`, `terrain_tiles.py`, `relief_lowzoom.py`, `highlights.py`; storyboards
+by hand). Tests: `tests/test_design_contracts.py`.
+
+| Data path | Schema / doc | Source |
+| --- | --- | --- |
+| `labels.json` | `labels.schema.json` (`version` "1"; kinds from `config/design.yaml labels.priority`) | §6.2, U13 |
+| `web/public/story/{id}.json` (not under the data root) | `storyboard.schema.json` (`version` "1"; camera absolute lon/lat or `target` code) | §6.3, U6 |
+| `terrain/tiles.json`, `terrain_low/tiles.json` (+ `{z}/{x}/{y}.png`, Terrarium, elevation × 1.878) | `terrain_tiles.schema.json` | §6.1, U1 |
+| `highlights/{ridges,mineral,blocked}.geojson` | `highlights.schema.json` (`preliminary` flag until R9) | §6.1, U7 |
+| field layer (shader uniforms, texture decode, `fieldAt`) | `field_shader.md` | §6.4, U2, U3 |
+
+Not yet in `SCHEMA_MAP` (C's `tools/validate_contracts.py` + `web/src/data/contracts.ts`): the
+three data paths above need rows there once the producers write them; the storyboard path is
+outside the data root and is checked by `tests/test_design_contracts.py`.
