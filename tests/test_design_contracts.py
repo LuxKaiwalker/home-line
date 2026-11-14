@@ -101,7 +101,8 @@ def test_labels_rejects(mutate):
 
 def test_label_kinds_follow_config_priority():
     """config/design.yaml labels.priority minus the runtime-only 'selected'."""
-    kinds = load("labels.schema.json")["properties"]["labels"]["items"]["properties"]["kind"]["enum"]
+    item = load("labels.schema.json")["properties"]["labels"]["items"]
+    kinds = item["properties"]["kind"]["enum"]
     assert kinds == ["pad", "route_station", "station", "scored_site", "user_point", "landmark",
                      "overlay"]
 
