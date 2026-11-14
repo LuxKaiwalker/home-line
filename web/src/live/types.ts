@@ -124,3 +124,37 @@ export const ENGINE_VERSION_KEYS: KeyMap<EngineVersion> = {
   backend_contract_version: 'required', bundle_contract_version: 'optional', terrain_hash: 'required', world_version: 'optional',
 }
 export const IMPORT_RESULT_KEYS: KeyMap<ImportResult> = { hash: 'required', inputs: 'required', computed: 'optional', range_flags: 'optional' }
+
+// --- results and provenance (F28, F35) ---
+
+export const RUN_ORIGINS = ['computed_live', 'precomputed'] as const
+export type RunOrigin = (typeof RUN_ORIGINS)[number]
+
+export const RUN_STATUSES = ['done', 'partial', 'error', 'timeout'] as const
+export type RunStatus = (typeof RUN_STATUSES)[number]
+
+/** contracts/backend/run_record.schema.json: GET /results/{hash}/provenance. */
+export interface RunRecord {
+  contract_version: string
+  hash: string
+  origin: RunOrigin
+  label: string
+  inputs: PlanInputs
+  engine: { tree: string; commit: string; config_hash: string; web_contract_version?: string; backend_contract_version?: string }
+  terrain_hash: string
+  status: RunStatus
+  started_utc: string
+  finished_utc?: string
+  stages: { name: string; started_utc?: string; seconds: number; files?: string[] }[]
+  files: { path: string; sha256: string; bytes: number; contract?: string | null }[]
+  range_flags?: { key: string; value?: number; note: string }[]
+  infeasible?: { leg: number; from: string; to: string; margin_min?: number; binding: string } | null
+  error?: string | null
+  dummy: boolean
+}
+
+export const RUN_RECORD_KEYS: KeyMap<RunRecord> = {
+  contract_version: 'required', hash: 'required', origin: 'required', label: 'required', inputs: 'required', engine: 'required',
+  terrain_hash: 'required', status: 'required', started_utc: 'required', finished_utc: 'optional', stages: 'required', files: 'required',
+  range_flags: 'optional', infeasible: 'optional', error: 'optional', dummy: 'required',
+}
