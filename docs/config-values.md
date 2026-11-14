@@ -157,7 +157,7 @@ casualty_kg:
   bound: 343                       # NASA 2024 Lunar Rescue System challenge
 cases:
   cart: {mu_range: [0.1, 0.4], mu_nominal: 0.2}
-  drag: {mu_range: [0.5, 0.7], mu_nominal: 0.6}
+  drag: {mu_range: [0.5, 0.7], mu_nominal: 0.6}   # 2026-11-14, D20: infeasibility finding only, no drag fields
 efficiency_eps: {range: [0.20, 0.25], nominal: 0.225}
 rescuer_effort_frac: {range: [0.6, 0.8], nominal: 0.7}
 boot_mu: 0.5
@@ -220,7 +220,7 @@ default_speed: 60                  # decided (D13)
 default_level: minimal             # decided (D14)
 margin_amber_min: 10
 worst_case_radii_m: [10, 50, 100]
-fallback_drift:                    # used only if F21 misses G2
+fallback_drift:                    # used only if F21 misses G2 (2026-11-14, D19: now the core default)
   pct_of_distance: 2               # decided (D12)
   sigma_floor_m: 5
 fix_sigma_m: {rover: 2, station: 5}
@@ -237,6 +237,8 @@ performance: {fps_2d_min: 60, fps_3d_min: 30, fps_3d_fallback_below: 20, budget_
 ```
 
 ## config/nav.yaml (WS9)
+
+> ⏸️ **2026-11-14 (D19):** the F21 (sets, Monte Carlo, ellipses), F22 (skyline search) and `vo_probe` blocks serve an **optional add-on**. The core uses `fallback_drift` with the uncertainty circle and fix σ at the rover pad and stations.
 
 ```yaml
 sets:                              # decided (D15), all assumed

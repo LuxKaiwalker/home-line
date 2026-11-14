@@ -22,7 +22,7 @@
 | `route_nom_104.geojson`  • `timeline_nom_104.json` | Pad → S1 → S2 → S3 → pad as straight legs at 0.9 m/s, 30 min dwell; margins computed from the dummy `t_home` |
 | `trade_table.json` | 2 × 3 cells with plausible monotonic values |
 | `conditions/rad.json` | Baseline 9 µGy/h; a storm with onset after 2 h, rising to 350 µGy/h over 3 h, decaying over 24 h; tripwire time computed by the real rule |
-| `nav/montecarlo_medium.json`, `nav/fixes.json`, `nav/tracks_medium.geojson` | Ellipses growing linearly at 2% of distance; fixes at the pad and each station; a sample estimated track offset sideways |
+| `nav/montecarlo_medium.json`, `nav/fixes.json`, `nav/tracks_medium.geojson` _(2026-11-14, D19: serve an optional add-on)_ | Ellipses growing linearly at 2% of distance; fixes at the pad and each station; a sample estimated track offset sideways |
 | `fp3d/` | Height chunks and the far mesh from the synthetic DEM; a flat tan texture; horizon ring from a simple ray cast |
 | `manifest.json` | Entries for every dummy number, script `tools/make_dummy.py` |
 
