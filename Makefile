@@ -36,6 +36,7 @@ fp3d:        ## WS8: 3D near chunks, ortho textures, far mesh, index -> data/int
 fp3d-check:  ## WS8: F20 data checks on the export (eye height on the route, rendered skyline vs WS3 horizons)
 	cd web && FP3D_REAL_CHECK=1 npx vitest run src/fp3d --silent=false
 web:         ## C: copy/transform data/interim -> web/public/data, merge manifest, validate, H0 check
+	$(PY) -m pipeline.export.labels
 	$(PY) tools/make_web.py
 web-plan:    ## C: what make web would copy, and what is missing per owner (no writes)
 	$(PY) tools/make_web.py --plan
