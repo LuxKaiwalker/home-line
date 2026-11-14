@@ -51,11 +51,16 @@ navcam_selection:
 #  presmooth_sigma_px: Gaussian pre-smoothing before the gradient; 0 = rule as written.
 sky_detector_params: {grad_ratio: 3.0, ref_top_frac: 0.10, zero_median_guard: one_count,
                       border_px: 2, presmooth_sigma_px: 2.0, assumed: true}
-# DEM bands for the ray engine (pipeline/horizon/bands.py). URLs and assets from docs/discovery.md
-# 2.4/2.5; radii, item counts and resolution choices are WS3 assumptions.
+# DEM bands for the ray engine (pipeline/horizon/bands.py). `path` = the band the engine reads.
+# Canonical far-field bands (C decision, STATUS Decision log 2026-11-14 11:15): WS1's
+# terrain/ctx_20m.tif + mola_hrsc_200m.tif (farfield.json; CTX items levelled to MOLA-HRSC).
+# The other keys describe WS3's own reference build (`python -m pipeline.horizon.bands --build`,
+# written to data/interim/horizon/bands/, no longer used by the engine). URLs and assets from
+# docs/discovery.md 2.4/2.5; radii, item counts and resolution choices are WS3 assumptions.
 bands:
   dem_1m: {path: data/interim/terrain/dem_1m.tif}       # WS1 (7,800 x 7,800 at 1 m, pad +/- 3.9 km)
   ctx_20m:
+    path: data/interim/terrain/ctx_20m.tif              # WS1, canonical (C, 11:15)
     listing: data/raw/discovery/stac_ctx_pad_point_idbbox.json   # D0: first 500 STAC items at the pad
     stac_item_url: "https://stac.astrogeology.usgs.gov/api/collections/mro_ctx_controlled_usgs_dtms/items/{id}"
     asset: geoid_adjusted_dem      # discovery 2.4: plain `dem` is 567 m lower at the pad
@@ -67,6 +72,7 @@ bands:
     max_rejects: 5
     assumed: true
   mola_hrsc_200m:
+    path: data/interim/terrain/mola_hrsc_200m.tif       # WS1, canonical (C, 11:15)
     url: "https://asc-pds-services.s3.us-west-2.amazonaws.com/mosaic/Mars/HRSC_MOLA_Blend/Mars_HRSC_MOLA_BlendDEM_Global_200mp_v2.tif"
     res_m: 200
     radius_m: 84000                # 80 km sampling limit + planning radius 3.7 km, rounded up
@@ -79,4 +85,36 @@ v2_frame_fail: {max_in_ref_band_frac: 0.5, assumed: true}
 overlay: {line_rgba: [255, 90, 0, 255], line_width_px: 2, tick_rgba: [255, 215, 0, 255],
           tick_len_px: 14, detected_rgba: [0, 200, 255, 255], assumed: true}
 panorama: {px_per_deg: 4, el_margin_deg: 2, sky_rgb: [210, 168, 140], ground_rgb: [118, 84, 62],
-           line_rgb: [255, 255, 255], tick_rgb: [255, 215, 0], assumed: true}
+           line_rgb: [255, 255, 255], tick_rgb: [255, 215, 0], min_el_span_deg: 10,
+           label_band_px: 34, font_px: 13, assumed: true}
+# --- WS3 session 2 additions (2026-11-14; each assumed: true unless cited, flagged in STATUS.md) ---
+# Landmarks: the IAU gazetteer CSV D0 cached (docs/discovery.md 3.5, file written after H0);
+# "within 80 km of the pad" and "Adopted by IAU" are landmarks.yaml sources.official (cited).
+landmarks_source: {csv: data/raw/discovery/iau_mars.csv, max_dist_km: 80, approval: "Adopted by IAU"}
+# Structured copy of landmarks.yaml `rule` / `drop_if` (3-6 landmarks; above the skyline or within
+# 5 km). WS3 additions: the label point is the gazetteer centre (a large feature's centre is not
+# its summit, discovery 3.5); it counts as above the skyline when its elevation angle is at most
+# above_skyline_tol_deg under the computed skyline at its bearing (ray sampling tolerance); when
+# more than max_n qualify, the nearest are kept.
+landmark_rule: {min_n: 3, max_n: 6, near_km: 5, above_skyline_tol_deg: 0.05, order: nearest_first,
+                assumed: true}
+# Far skyline ring for WS8 (fp3d/horizon_ring.json): horizon from the pad at eye height, counting
+# only terrain beyond the near mesh (SPEC F20 "one 8 m mesh over the planning extent" =
+# site.yaml planning_radius_m); az step = az_step_deg.
+horizon_ring: {observer: pad, min_range: site.planning_radius_m, assumed: true}
+# Station-card Navcam frame (brief WS3 "nearest suitable frame"): the frame whose stop is nearest
+# the station observer among V2 frames with status ok and manual_ok not false (no choice by error).
+card_frame: {rule: "nearest V2 frame with status ok and manual_ok != false", assumed: true}
+# D7 preparation only (D7 is C's / the user's decision): frames put on the manual-check sheet are
+# the 20 % sample (v2.manual_check_frac), every ok frame whose far-class median error exceeds
+# far_fail_abs_deg (the hazy north-facing group sits at -3.2 to -7.6 deg), and the failed frames.
+# Diagnostic on the sheet (evidence for the reviewer, not a verdict): the predicted skyline is
+# recomputed counting only terrain within each cut range (same sampling, truncated); the range
+# whose skyline best matches the detector (smallest median |detected - predicted| over the
+# frame's far columns) is reported and drawn in cut_rgba. A short best range on a far-failed
+# frame means only nearby terrain is seen (haze); a range at the longest cut with a large error
+# points to the model or the detector.
+manual_check_sheet: {far_fail_abs_deg: 2.0, include_failed_frames: true,
+                     verdicts: [ok, rim_not_visible, detector_wrong, model_wrong, unsure],
+                     cut_ranges_km: [2, 5, 10, 20, 30], cut_rgba: [80, 230, 80, 255],
+                     assumed: true}
