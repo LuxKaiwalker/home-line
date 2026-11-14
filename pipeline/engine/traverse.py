@@ -77,6 +77,12 @@ class Result:
     dose: dict | None = None  # D39 summary (t*, tau at t*, lowest dose margin, violation)
     track_min_margin: dict = field(default_factory=dict)  # lowest margin per term on the track
     n_feasible_subsets: int | None = None  # D21: station subsets with a feasible route
+    # D40 golden cases (physio/golden.json): the walked legs and each visited station's way
+    # home as dicts {cells, tau, o2, t_home, o2_home, t_start, u_start}, and the dense track
+    # (t, O2 used, T_home, O2_home). Not written to any product.
+    leg_paths: list = field(default_factory=list)
+    back_paths: dict = field(default_factory=dict)
+    track: tuple | None = None
 
 
 def _forward_leg(fld: dijkstra.Field, dst, home: dijkstra.Field) -> LegPath:
@@ -175,6 +181,7 @@ def plan(grid: Grid, table: GradeTable, home: dijkstra.Field, pad, stations: lis
         t, used = 0.0, 0.0
         track_t, track_u, track_th, track_oh = [0.0], [0.0], [0.0], [0.0]
         items, legs, events = [], [], []
+        paths.clear()
         dwell_iv = []  # (t_arrive, t_leave) per visited station, for O2_station_tasks
 
         def tasks_left(tm):
@@ -213,6 +220,8 @@ def plan(grid: Grid, table: GradeTable, home: dijkstra.Field, pad, stations: lis
                 track_oh.append(float(lp.o2_home[0]))
                 ev(t, "leave", frm, used, lp.t_home[0], lp.o2_home[0], tasks=0.0)
             times = t + lp.tau
+            if emit:
+                paths.append({"from": frm, "to": to, "path": lp, "t_start": t, "u_start": used})
             track_t.extend(times[1:].tolist())
             track_u.extend((used + lp.o2[1:]).tolist())
             track_th.extend(lp.t_home[1:].tolist())
@@ -263,6 +272,7 @@ def plan(grid: Grid, table: GradeTable, home: dijkstra.Field, pad, stations: lis
                 ev(float(tc), "o2_checkpoint", None, u, tr[2][j], tr[3][j])
         return tr, items, legs, events
 
+    paths: list[dict] = []
     mi_ev = mi
     t_star_min, dose = None, None
     if dose_fn is not None and p.order:
@@ -284,9 +294,16 @@ def plan(grid: Grid, table: GradeTable, home: dijkstra.Field, pad, stations: lis
                 "source": dt.source}  # fmt: skip
     events.sort(key=lambda e: (e["t_min"], e["event"] != "depart"))
     route = feature_collection(items, grid.crs)
+    def as_dict(lp: LegPath) -> dict:
+        return {"cells": lp.cells, "tau": lp.tau, "o2": lp.o2, "t_home": lp.t_home,
+                "o2_home": lp.o2_home}  # fmt: skip
+
+    leg_paths = [{**as_dict(x["path"]), "from": x["from"], "to": x["to"], "t_start": x["t_start"],
+                  "u_start": x["u_start"]} for x in paths]  # fmt: skip
+    back = {names[k]: as_dict(back_legs[k]) for k in p.order}
     return Result([names[k] for k in p.order], unreachable, float(p.total_min), float(p.value),
                   route, events, legs, mi_ev.terms, t_star_min, dose, track_min,
-                  n_feasible)  # fmt: skip
+                  n_feasible, leg_paths, back, tr)  # fmt: skip
 
 
 def _track_min_margin(mi: MarginInputs, tr) -> dict:
