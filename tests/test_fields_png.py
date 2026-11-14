@@ -530,7 +530,9 @@ def test_real_index_valid_and_pad_zero():
     sc = VARIANTS["scenarios"]["default"]
     if f"{sc}/t_home" in idx["fields"]:
         t = fp.decode_png(REAL_IDX.parent.parent / idx["fields"][f"{sc}/t_home"]["file"], 0.1)
-        assert np.nanmin(t) == 0.0
+        # since D21 the pad is not the grid anchor: no 5 m centre need fall on WS2's single
+        # T_home = 0 cell, so the field minimum is within the HUD's 0.5 min tolerance of 0
+        assert 0.0 <= np.nanmin(t) <= 0.5
         assert t.shape == (idx["height"], idx["width"])
 
 

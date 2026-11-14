@@ -102,20 +102,16 @@ describe('HUD storm replay on the EVA clock (D39)', () => {
   const series = routeTHomeSeries(plan, tHome)
   const rep = stormReplay(rad, series.evaMin, series.tHomeMin)!
 
-  it('samples every route vertex at its EVA minute with the T_home field there', () => {
-    const nVert = plan.legs.reduce((s, L) => s + L.coords.length, 0)
-    expect(series.evaMin.length).toBe(nVert)
-    for (let k = 1; k < series.evaMin.length; k++) expect(series.evaMin[k]).toBeGreaterThanOrEqual(series.evaMin[k - 1])
-    // the first vertex is the pad at the EVA start, T_home 0
-    expect(series.evaMin[0]).toBe(plan.legs[0].t0)
-    expect(series.tHomeMin[0]).toBe(0)
+  it("samples WS2's timeline rows along the walk (turn_back annotations excluded)", () => {
+    expect(series.evaMin).toEqual(plan.events.map((e) => e.t_min))
+    expect(series.tHomeMin).toEqual(plan.events.map((e) => e.t_home_min))
+    expect(plan.events.some((e) => e.event === 'turn_back')).toBe(false)
   })
   it('t* = the EVA minute of the largest route T_home (first on a tie)', () => {
-    const known = series.tHomeMin.filter((v): v is number => v !== null)
-    const max = Math.max(...known)
-    const first = series.tHomeMin.findIndex((v) => v === max)
-    expect(rep.tripwireEvaMin).toBe(series.evaMin[first])
-    expect(tHome.valueAt(plan.stateAt(rep.tripwireEvaMin).lon, plan.stateAt(rep.tripwireEvaMin).lat)).toBeCloseTo(max, 6)
+    // M0 dummy: T_home 25.9 at S3 from arrive (122) to leave (152) -> the first, 122
+    expect(rep.tripwireEvaMin).toBe(122)
+    const max = Math.max(...series.tHomeMin.filter((v): v is number => v !== null))
+    expect(series.tHomeMin[series.evaMin.indexOf(rep.tripwireEvaMin)]).toBe(max)
   })
   it('the tripwire fires at t* whenever the switch is turned on', () => {
     const t = rep.tripwireEvaMin
@@ -134,7 +130,7 @@ describe('HUD storm replay on the EVA clock (D39)', () => {
     const ctx: HudContext = { cfg, fields: { tHome }, plan, budgetMin: cfg.walkbackBudgetsMin[0], pad: plan.start }
     const at = (pos: { lon: number; lat: number }, t: number) =>
       computeReadout({ ...pos, sigma_m: 0, source: 'playback', t_eva_min: t, last_fix: null }, { ...ctx, radiation: radiationInput(stormState(rep, t)) })
-    const p = plan.stateAt(rep.tripwireEvaMin)
+    const p = plan.stateAt(rep.tripwireEvaMin + 1) // dwell at the t* station
     const th = tHome.valueAt(p.lon, p.lat)!
     const tPred = rep.tripwireEvaMin + rad.leash.tau_min_at_peak! - th
     expect(at(p, tPred - 0.05).alarm?.rule).not.toBe(2)
@@ -182,5 +178,21 @@ describe.skipIf(!existsSync(REAL_RAD))('real rad.json (WS4 session 2): ± label'
     expect(r.halfwidthLabel).toBe('± 9 min')
     expect(r.onsetEvaMin!).toBeCloseTo(60 - 41.25, 9)
     expect(r.peakEvaMin!).toBeCloseTo(60 + 22.75, 9)
+  })
+})
+
+const REAL_TL = resolve(REPO, 'data/interim/engine/public/timeline_nom_104.json')
+const REAL_ROUTE = resolve(REPO, 'data/interim/engine/public/route_nom_104.geojson')
+describe.skipIf(!existsSync(REAL_TL) || !existsSync(REAL_ROUTE) || !existsSync(REAL_RAD))('real nom_104: D39 t* from WS2 timeline', () => {
+  it('t* = first maximum of the real timeline T_home (WS2 session 7: 44.39 min, arrive S7)', () => {
+    const pub = resolve(REPO, 'data/interim/engine/public')
+    const tl = readJson<TimelineEvent[]>('timeline_nom_104.json', pub)
+    const plan = new Plan(readJson<RouteFC>('route_nom_104.geojson', pub), tl, dummyGrid('nom_104/t_home'))
+    const s = routeTHomeSeries(plan)
+    const rows = tl.filter((e) => e.event !== 'turn_back' && e.t_home_min !== null)
+    const max = Math.max(...rows.map((e) => e.t_home_min!))
+    const first = rows.find((e) => e.t_home_min === max)!
+    const r = stormReplay(readJson<Rad>('conditions/rad.json', resolve(REPO, 'data/interim')), s.evaMin, s.tHomeMin)!
+    expect(r.tripwireEvaMin).toBe(first.t_min)
   })
 })

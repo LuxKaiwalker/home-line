@@ -9,8 +9,8 @@
 // t* - (tripwire_utc - onset_utc) and the peak at t* + (peak_utc - tripwire_utc). The switch only
 // turns the replay on or off; it never moves it. After the tripwire the dose budget counts down from
 // tau_dose at the storm peak (rad.json leash.tau_min_at_peak); alarm 2 when T_home >= budget left.
-// The HUD's route T_home samples are every route vertex at its EVA minute (route times_min, else
-// uniform speed: plan.ts) with the nominal T_home field there (assumption A-WS7-4, STATUS.md).
+// The HUD's route T_home samples are WS2's timeline rows along the walk (t_min, t_home_min; the
+// turn_back annotations excluded), the same numbers WS2 uses (assumption A-WS7-4, STATUS.md).
 // Unknown stays unknown: no route T_home, no tripwire or no tau -> no replay (switch disabled).
 import type { FieldGrid } from './fields'
 import type { Plan } from './plan'
@@ -63,17 +63,15 @@ export function evaMinOf(stormMs: number, tripwireMs: number, targetMin: number)
   return (stormMs - stormOffsetUtcMs(tripwireMs, targetMin)) / MIN_MS
 }
 
-/** Route T_home samples: every route vertex at its EVA minute, T_home from the field (null = unknown). */
-export function routeTHomeSeries(plan: Plan, tHome: FieldGrid): { evaMin: number[]; tHomeMin: (number | null)[] } {
-  const evaMin: number[] = []
-  const tHomeMin: (number | null)[] = []
-  for (const L of plan.legs) {
-    L.coords.forEach(([lon, lat], k) => {
-      evaMin.push(L.times ? L.times[k] : L.length > 0 ? L.t0 + ((L.t1 - L.t0) * L.cum[k]) / L.length : L.t0)
-      tHomeMin.push(tHome.valueAt(lon, lat))
-    })
-  }
-  return { evaMin, tHomeMin }
+/**
+ * Route T_home samples: WS2's timeline rows (t_min, t_home_min) along the walk, turn_back
+ * annotations excluded (plan.events). These are the numbers WS2 reads for the same key, so both
+ * place the tripwire at the same minute (a 5 m field lookup along the route vertices can reach a
+ * station's value one vertex early). `_tHome` kept for callers; unused.
+ */
+export function routeTHomeSeries(plan: Plan, _tHome?: FieldGrid): { evaMin: number[]; tHomeMin: (number | null)[] } {
+  if (!plan.legs.length) return { evaMin: [], tHomeMin: [] } // no route: no placement (unknown)
+  return { evaMin: plan.events.map((e) => e.t_min), tHomeMin: plan.events.map((e) => e.t_home_min) }
 }
 
 export interface StormReplay {
