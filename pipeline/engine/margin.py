@@ -9,7 +9,8 @@
   station work at the task rate (0.84 L/min = 1,000 BTU/hr), which replaces the resting V0.
 * O2_return_route = O2_home(x) from the return field (no (1 + r) factor any more).
 * O2_station_tasks = task O2 still to do at the station the crew is working at (0 while
-  walking): the margin on arrival already covers finishing that station's tasks.
+  walking): the margin on arrival already covers finishing that station's tasks. Confirmed
+  (decision log 2026-11-14 15:40, user for S).
 * O2_reserve = fixed 30 min at the effort cap = 40.5 L. crew.o2_reserve_frac (r) is NOT used.
 * t_dark (min since EVA start) and tau_dose (min) come from WS4 (daylight, dose leash). While
   they are missing their terms are left out and ``terms`` says which were used.

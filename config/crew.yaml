@@ -33,7 +33,7 @@ o2_budget:                        # added 13 Nov (gap found by WS2); derived, se
   margin_uses: primary_L           # O2_left = primary_L - consumed; secondary is shown, never planned against
   assumed: true
 o2_margin:                         # added by WS2 2026-11-14 per docs/review/2026-11-14-ist2-and-o2-margin.md (S review, binding)
-  formula: "margin_min = (O2_left - O2_return_route - O2_station_tasks - O2_reserve) / effort_rate_L_min"   # all terms in litres
+  formula: "margin_min = (O2_left - O2_return_route - O2_station_tasks - O2_reserve) / effort_rate_L_min"   # all terms in litres; O2_station_tasks = task O2 still to do at the current station, 0 while walking (confirmed, decision 2026-11-14 15:40)
   label: "minutes at maximum effort"
   effort_rate_L_min: "effort_cap_frac * vo2max_ml_kg_min * body_mass_kg / 1000"   # 1.35 L/min ~ 1,600 BTU/hr; S review: conversion at the effort cap confirmed
   station_task_rate_L_min: 0.84    # 1,000 BTU/hr (ISS/EMU average metabolic rate) at RER 0.85; S review; replaces the resting rate V0 while at a station
