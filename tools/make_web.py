@@ -612,8 +612,18 @@ def cellstate_png(dst: Path) -> str:
     return dst.with_suffix(".png").as_posix()
 
 
-def write_cellstate(c: Copy, public: Path, site: dict, out=print,
-                    fragment_dir: Path | None = None) -> dict:
+@dataclass
+class CellState:
+    copy: Copy
+    png: bytes
+    doc: dict
+
+
+def prepare_cellstate(c: Copy, site: dict, out=print,
+                      fragment_dir: Path | None = None) -> CellState:
+    """Read and encode one cell-state raster and record its ``pct`` keys. Runs before the
+    public tree is cleared: ``git_commit()`` reads '-dirty' once the tracked web/public/data/
+    files are rewritten, so recording later marks clean code dirty (WS6 audit 1)."""
     import rasterio
 
     with rasterio.open(c.src) as ds:
@@ -624,25 +634,28 @@ def write_cellstate(c: Copy, public: Path, site: dict, out=print,
         res = float(ds.transform.a)
     png, pct = encode_cellstate(state)
     js = c.dst.as_posix()
-    im = cellstate_png(c.dst)
-    (public / im).parent.mkdir(parents=True, exist_ok=True)
-    (public / im).write_bytes(png)
     variant = cellstate_variant(c.src)
-    doc = {"image": im, "bounds": bounds, "width": int(state.shape[1]),
+    doc = {"image": cellstate_png(c.dst), "bounds": bounds, "width": int(state.shape[1]),
            "height": int(state.shape[0]), "res_m": res, "variant": variant,
            "codes": CELLSTATE_CODES, "pct": pct,
            "source": f"data/interim/{c.src.relative_to(c.src.parents[1]).as_posix()} (WS1)"}
-    (public / js).write_text(json.dumps(doc, indent=1) + "\n", encoding="utf-8")
-    for p in (im, js):
-        keep_mtime(c.src, public / p)
     from pipeline.provenance.manifest import record
 
     for k, v in pct.items():
         record(f"{CELLSTATE_KEYS[variant]}.{k}", v, "%", js, SCRIPT, fragment_dir=fragment_dir)
-    out(f"cellstate ({variant}): {state.shape[1]} x {state.shape[0]} at {res:g} m -> {im} "
-        f"({len(png) / 1e6:.2f} MB; assessed {pct['assessed']} %, blocked {pct['blocked']} %, "
-        f"unknown {pct['unknown']} %)")
-    return doc
+    out(f"cellstate ({variant}): {state.shape[1]} x {state.shape[0]} at {res:g} m -> "
+        f"{doc['image']} ({len(png) / 1e6:.2f} MB; assessed {pct['assessed']} %, blocked "
+        f"{pct['blocked']} %, unknown {pct['unknown']} %)")
+    return CellState(c, png, doc)
+
+
+def write_cellstate(cs: CellState, public: Path) -> None:
+    im, js = cs.doc["image"], cs.copy.dst.as_posix()
+    (public / im).parent.mkdir(parents=True, exist_ok=True)
+    (public / im).write_bytes(cs.png)
+    (public / js).write_text(json.dumps(cs.doc, indent=1) + "\n", encoding="utf-8")
+    for p in (im, js):
+        keep_mtime(cs.copy.src, public / p)
 
 
 # --------------------------------------------------------------------------- manifest
@@ -815,20 +828,22 @@ def run(interim: Path = INTERIM, public: Path = PUBLIC, *, fragments: Path | Non
             out(f"make web: REFUSED ({len(p.refused)}); {public} left unchanged")
             return 1
 
+        # record before the tracked public tree is touched (else the commit reads '-dirty')
+        cellstates = [prepare_cellstate(c, site, out, fragment_dir=record_dir or fragments)
+                      for c in p.copies if c.kind == "cellstate"]
+        if cellstates:
+            # the cell-state keys were just recorded: stage that fragment again, through the
+            # same filter (a key of a cell-state file not written this run stays out)
+            manifest_fragments(record_dir or fragments, interim, staged, out, skip_files,
+                               written, pattern="tools__make_web*.json", bridge=False)
         removed = clear_public(public)
         for c in p.copies:
             if c.kind in ("copy", "card_image"):
                 (public / c.dst).parent.mkdir(parents=True, exist_ok=True)
                 shutil.copy2(c.src, public / c.dst)
         write_cards(p.cards, public)
-        for c in p.copies:
-            if c.kind == "cellstate":
-                write_cellstate(c, public, site, out, fragment_dir=record_dir or fragments)
-        if any(c.kind == "cellstate" for c in p.copies):
-            # the cell-state keys were just recorded: stage that fragment again, through the
-            # same filter (a key of a cell-state file not written this run stays out)
-            manifest_fragments(record_dir or fragments, interim, staged, out, skip_files,
-                               written, pattern="tools__make_web*.json", bridge=False)
+        for cs in cellstates:
+            write_cellstate(cs, public)
         write_tiles(p.tiles, public, settings, interim, out)
         n_src = len(p.copies) + sum(len(c.parts) for c in p.cards)
         out(f"make web: {n_src} source files, {len(p.cards)} cards merged ({removed} old files "

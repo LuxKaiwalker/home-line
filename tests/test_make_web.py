@@ -246,6 +246,24 @@ def test_run_conservative_cellstate_own_web_path(tree):
     assert not any(line.startswith("DANGLING") for line in lines)
 
 
+def test_run_records_cellstate_keys_before_clearing_public(tree, monkeypatch):
+    """git_commit() is '-dirty' once make web has rewritten the tracked public tree, so the
+    cell-state keys are recorded first (WS6 audit 1: terrain.cellstate.pct.* were dirty)."""
+    seen = {}
+    real_clear = mw.clear_public
+
+    def spy(public):
+        f = tree["rec"] / "tools__make_web.json"
+        seen["keys"] = set(json.loads(f.read_text())) if f.is_file() else set()
+        return real_clear(public)
+
+    monkeypatch.setattr(mw, "clear_public", spy)
+    rc, lines = run(tree)
+    assert rc == 0, "\n".join(lines)
+    assert {"terrain.cellstate.pct.assessed", "terrain.cellstate.pct.blocked",
+            "terrain.cellstate.pct.unknown"} <= seen["keys"]
+
+
 def test_run_without_conservative_drops_its_keys(tree):
     """A stale conservative key in make_web's own fragment never cites an unwritten file."""
     (tree["rec"]).mkdir()
