@@ -1075,6 +1075,30 @@ Branch: `ws6-provenance`
   To include vitest: `cd web && npx vitest run --reporter=json --outputFile=<f>` then
   `python -m pipeline.provenance.kats --exit-zero --vitest-json <f>`.
 - `tests/test_provenance.py`: 54 pass; ruff clean.
+- 2026-11-14T15:51Z (session 3, **D23**): **V1 is a validation, not a margin.** `v1.json` no longer
+  derives a conservative no-go: `conservative_nogo` removed; new `role` = "V1 = validation of the
+  slope model, not a safety margin" (for the WS5 scorecard); new `nogo_context` = config citation
+  `{conservative_nogo_deg: 17, source, decision: "D23", derived_from_v1: false, text:
+  "conservative no-go = 17° (D23, config)", note}`. Reads `variants.yaml
+  variants.conservative.nogo_deg` first, `site.yaml slope.nogo_deg.conservative` as fallback;
+  a number or the legacy "20 - v1_rmse_deg" text is accepted and never evaluated; disagreeing
+  numbers or no number give `null` with a note. Manifest key `v1.conservative_nogo.nogo_deg`
+  **retired** (dropped from the v1_tilt fragment by the new `manifest.drop`, own fragment only);
+  `nogo_context` gets no `v1.*` key (it is not a V1 output; WS5 cites config). KATs first (8 new /
+  updated). V1 re-run from clean commit 2ed9594: same numbers (n 290, bias +1.31°, RMSE 5.45°,
+  r 0.50; 10°: 84/55/20/131, 20°: 1/15/2/272); schema-valid.
+- 2026-11-14T15:55Z: **KAT list** re-run at 2ed9594 (pytest+vitest): **1,294 tests: 1,291 passed,
+  1 failed, 2 skipped**. The failure is WS7's real-data check
+  `tests/test_fields_png.py::test_real_pointer_leads_home_downhill_in_t_home`: the shared
+  `data/interim/export/fields/` (15:15) predates WS2's D21–D39 re-run of `data/interim/engine/`
+  (16:47), so pointer and T_home masks differ; it fails identically without the WS6 change and
+  clears when WS7 re-exports fields (C downstream). Skips: fp3d F20 real check, D21 pads index.
+- **D30 (IST-2 pass/miss) and `kats.json`: not mapped, by design.** `kats.json` is one row per
+  pytest/vitest test (contract `kats.schema.json`; `summary.failed` counts failing tests). WS2's
+  `physio.ist2.{variant}.{grade}.pass` is a model-check finding under "no tuning" (D30), where an
+  honest "miss" is a result, not a failing KAT; mapping it would count misses as failed tests.
+  D30 puts them in the manifest; the WS5 scorecard reads `physio.ist2.*` from `manifest.json`
+  directly (with `band_lo`/`band_hi`/`reported`).
 
 ### Audit 1 (2026-11-14T13:20Z): main's `web/public/data/` (C's make web 3fe841a, 846 keys)
 
@@ -1139,8 +1163,14 @@ of today's 20 fragments in `data/interim/manifest/` gives 929 unique keys (no du
 
 ### Next
 
-- C: `make web` to publish `validation/{v1.json,v1.svg,kats.json}` (+ `v1.*`, `kats.summary.*`);
-  WS2 `make engine` for con_* and WS1 `cellstate_3m_conservative.tif` with rmse 5.447°.
+- C: `make web` to publish the D23 `validation/v1.json` (+ `kats.json`). **Consumers to update
+  (not WS6 paths):** WS5 `web/src/views/scorecard.tsx` V1 section still reads
+  `v.conservative_nogo` (renders nothing once it is gone) → show `v.role` and
+  `v.nogo_context.text` (cite 17° from config); WS5 `web/src/data/real.test.ts` "conservative
+  no-go 14.55 deg" will fail on the new public v1.json → assert `role` / `nogo_context`
+  instead. C: `contracts/README.md` line on `cellstate_conservative.json` still says
+  "20° − V1 RMSE". WS2 `scenarios.py v1_from_file` docstring ("the slope RMSE that sets the
+  conservative limit") is out of date.
 - Audit 2 at about 17:20Z (after the next make web): re-run the audit on the public tree.
 - Freeze: `make clean all` from a clean checkout, provenance audit, sign-off.
 

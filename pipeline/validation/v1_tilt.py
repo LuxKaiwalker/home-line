@@ -8,11 +8,13 @@ matrix per threshold (``v1.confusion_thresholds_deg``; positive = tilt >= thresh
 prediction, IMU the reference). Drive ends whose footprint touches nodata or leaves the DEM are
 excluded and counted, never filled. Caveat (SPEC F13): the rover chose gentle ground.
 
-The top-level ``rmse_deg`` (config footprint, MMGIS ``tilt``, focus area) is the one number WS1
-and WS2 use for the conservative no-go limit (``config/variants.yaml`` ``20 - v1_rmse_deg``);
-``conservative_nogo`` in v1.json spells it out. Sensitivities (other footprint candidates, IMU
-tilt from roll/pitch, every drive end on the DEM regardless of the focus area) sit beside it and
-never replace it.
+V1 is a validation of the slope model, not a safety margin (SPEC §11 D23, user 2026-11-14
+16:16/16:20 CET). The top-level ``rmse_deg`` (config footprint, MMGIS ``tilt``, focus area) is the
+primary result; no slope limit is derived from it. v1.json carries ``role`` (that sentence, for the
+WS5 scorecard) and ``nogo_context``: the conservative no-go cited from config (17°, D23), marked
+``derived_from_v1: false`` and never recorded as a ``v1.*`` manifest key. Sensitivities (other
+footprint candidates, IMU tilt from roll/pitch, every drive end on the DEM regardless of the focus
+area) sit beside the primary result and never replace it.
 
 ``footprint_m`` is 3 m (user decision 2026-11-14 12:37, config/validation.yaml); the real run
 refuses to start if it is null. The array API (``dem_tilt_at``, ``compare``) takes it as an
@@ -24,7 +26,6 @@ from __future__ import annotations
 import json
 import math
 import os
-import re
 from functools import lru_cache
 from pathlib import Path
 from typing import Any
@@ -32,7 +33,7 @@ from typing import Any
 import numpy as np
 import yaml
 
-from pipeline.provenance.manifest import record
+from pipeline.provenance.manifest import drop, record
 
 REPO = Path(__file__).resolve().parents[2]
 CONFIG_DIR = REPO / "config"
@@ -42,6 +43,9 @@ DEFAULT_SVG = DEFAULT_OUT.with_suffix(".svg")
 WEB_JSON = "validation/v1.json"
 WEB_SVG = "validation/v1.svg"
 CAVEAT = "The rover chose gentle ground."  # SPEC F13
+ROLE = "V1 = validation of the slope model, not a safety margin"  # SPEC §11 D23
+# Manifest keys from before D23 (V1-derived no-go); run_real removes them from its fragment.
+RETIRED_KEYS = ("v1.conservative_nogo.nogo_deg",)
 
 
 class V1Blocked(RuntimeError):
@@ -65,16 +69,61 @@ def _variants() -> dict[str, Any]:
     return yaml.safe_load((CONFIG_DIR / "variants.yaml").read_text())
 
 
-def conservative_nogo(rmse_deg: float | None) -> dict[str, Any]:
-    """The conservative slope limit from ``config/variants.yaml`` (``"<limit> - v1_rmse_deg"``)
-    evaluated with ``rmse_deg``; ``nogo_deg`` is None when the RMSE is unknown."""
-    spec = str(_variants()["variants"]["conservative"]["nogo_deg"])
-    m = re.fullmatch(r"\s*([\d.]+)\s*-\s*v1_rmse_deg\s*", spec)
-    if m is None:
-        raise ValueError(f"variants.yaml conservative nogo_deg {spec!r} != '<deg> - v1_rmse_deg'")
-    return {"formula": spec, "rmse_deg": rmse_deg,
-            "nogo_deg": None if rmse_deg is None else float(m.group(1)) - float(rmse_deg),
-            "source": "config/variants.yaml variants.conservative.nogo_deg"}
+NOGO_SOURCES = (
+    ("config/variants.yaml variants.conservative.nogo_deg",
+     lambda: _variants()["variants"]["conservative"]["nogo_deg"]),
+    ("config/site.yaml slope.nogo_deg.conservative",
+     lambda: _site()["slope"]["nogo_deg"]["conservative"]),
+)
+
+
+def _as_deg(v: Any) -> float | None:
+    """A config no-go as a number; None for the legacy text ("20 - v1_rmse_deg") or anything
+    else that is not a plain number. The legacy text is never evaluated (D23)."""
+    if isinstance(v, bool):
+        return None
+    if isinstance(v, int | float):
+        return float(v) if math.isfinite(v) else None
+    try:
+        f = float(str(v).strip())
+    except ValueError:
+        return None
+    return f if math.isfinite(f) else None
+
+
+def nogo_context() -> dict[str, Any]:
+    """The conservative no-go cited from config for the scorecard's context (D23: 17°).
+
+    Not a V1 output: V1 validates the slope model and derives no limit. Accepts a number or the
+    legacy ``"<deg> - v1_rmse_deg"`` text in either config file without raising; variants.yaml
+    (the engine's value) wins, site.yaml is the fallback. Two numbers that disagree, or no
+    number at all, give ``conservative_nogo_deg: None`` with a note (unknown stays unknown)."""
+    found: list[tuple[str, float]] = []
+    legacy: list[str] = []
+    for src, get in NOGO_SOURCES:
+        try:
+            raw = get()
+        except (KeyError, TypeError):
+            continue
+        deg = _as_deg(raw)
+        if deg is None:
+            legacy.append(f"{src} = {raw!r}")
+        else:
+            found.append((src, deg))
+    base = {"decision": "D23", "derived_from_v1": False}
+    if found and all(d == found[0][1] for _, d in found):
+        src, deg = found[0]
+        return {"conservative_nogo_deg": deg, "source": src, **base,
+                "text": f"conservative no-go = {deg:g}° (D23, config)",
+                "note": "Config citation for context, not a V1 output."}
+    if found:
+        text = "conservative no-go: config files disagree (D23)"
+        note = "config files disagree: " + ", ".join(f"{s} = {d:g}" for s, d in found)
+    else:
+        text = "conservative no-go: not a number in config (D23)"
+        note = ("no number in config; legacy formula not evaluated (V1 is a validation, not a "
+                "margin): " + "; ".join(legacy))
+    return {"conservative_nogo_deg": None, "source": None, **base, "text": text, "note": note}
 
 
 def confusion_thresholds() -> tuple[float, ...]:
@@ -251,6 +300,7 @@ def write_result(
         "bias_definition": "mean(DEM tilt - IMU tilt)",
         "positive_class": "tilt >= threshold (DEM = prediction, IMU = reference)",
         "caveat": CAVEAT,
+        "role": ROLE,
         **(extra or {}),
     }
     out_path.parent.mkdir(parents=True, exist_ok=True)
@@ -376,8 +426,7 @@ def run_real(
         "coreg_file": _rel(coreg_path),
         "sensitivity": sensitivity,
     }
-    res = compare(dem_t, imu[keep], thr)
-    extra["conservative_nogo"] = conservative_nogo(res["rmse_deg"])
+    extra["nogo_context"] = nogo_context()  # config citation (D23), not a V1 output
     doc = run(dem_path, de["lon"], de["lat"], imu, out_path, svg_path, footprint_m=fp,
               shift_xy_m=shift, extra=extra)
     for name, sres in sensitivity.items():
@@ -388,8 +437,7 @@ def run_real(
             for cell, v in cm.items():
                 record(f"v1.sensitivity.{name}.confusion.{thr_k}.{cell}", v, "count", WEB_JSON,
                        __file__)
-    cons = doc["conservative_nogo"]
-    record("v1.conservative_nogo.nogo_deg", cons["nogo_deg"], "deg", WEB_JSON, __file__)
+    drop(RETIRED_KEYS, __file__)
     return doc
 
 
