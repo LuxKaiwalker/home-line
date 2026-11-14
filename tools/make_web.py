@@ -91,6 +91,14 @@ CARD_PART_NAME = {"WS3": "horizon part (WS3)", "WS2": "timeline part (WS2)"}
 CARD_PART_SRC = {"WS3": "data/interim/horizon/public/cards/{S}.json",
                  "WS2": "data/interim/engine/public/cards/{S}.timeline.json"}
 CARD_DROP = {"WS3": ("station", "producer", "built_utc"), "WS2": ("station",)}
+# Web paths a producer writes but that must not be published yet (web path -> reason). Reported
+# as "withheld" (never copied, never "missing"); their manifest entries are left out.
+WITHHELD = {
+    "pad.json": "C decision 2026-11-14 14:58: pad.json must describe the pad in use "
+                "(pad_default, user 11:24); WS2's file carries the F8 siting proposal as the "
+                "pad. Withheld until WS2 writes pad_default (proposal in the optional "
+                "`proposal` block, contracts v1.1.2)",
+}
 WS1_PENDING = "terrain/manifest_pending.json"
 WS1_FRAGMENT = "pipeline__terrain__build.json"
 
@@ -311,6 +319,10 @@ def plan(interim: Path = INTERIM, rules: list[Rule] = RULES, dummy_tree: Path = 
                 dst = Path(rule.to)
             else:
                 dst = src.relative_to(interim / rule.root)
+            if dst.as_posix() in WITHHELD:
+                p.skipped.append(f"withheld: data/interim/{src.relative_to(interim).as_posix()} "
+                                 f"-> {dst.as_posix()} ({WITHHELD[dst.as_posix()]})")
+                continue
             if dst in seen:
                 p.refused.append(f"refused: {src} and {seen[dst]} both map to {dst}")
                 continue
@@ -770,6 +782,19 @@ def dangling(public: Path) -> list[str]:
         for ref in (nav.get("url_local"), nav.get("overlay_png"), doc.get("panorama_png")):
             if isinstance(ref, str):
                 need(ref, f"cards/{card.name}")
+    f3 = public / "fp3d" / "index.json"
+    if f3.is_file():
+        doc = json.loads(f3.read_text())
+        for ch in (doc.get("chunk_grid") or {}).get("chunks") or []:
+            for key in ("file", "tex"):
+                if isinstance(ch.get(key), str):
+                    need(ch[key], f"fp3d/index.json chunk {ch.get('i')}_{ch.get('j')}")
+        far = doc.get("far") or {}
+        for key in ("file", "tex"):
+            if isinstance(far.get(key), str):
+                need(far[key], "fp3d/index.json far")
+        if isinstance(doc.get("horizon_ring"), str):
+            need(doc["horizon_ring"], "fp3d/index.json")
     for rel, key in (("siting_png.json", "image"), (CELLSTATE_JSON, "image"),
                      (CELLSTATE_CONS_JSON, "image")):
         if (public / rel).is_file():

@@ -31,7 +31,7 @@ Paths are relative to both `web/public/data/` (real) and `web/public/data-dummy/
 | `route_{scenario}.geojson` | `route.schema.json` | §6 |
 | `timeline_{scenario}.json` | `timeline.schema.json` | §6 |
 | `trade_table.json` | `trade_table.schema.json` | §6 |
-| `pad.json` (carries `dummy`) | `pad.schema.json` | §6 (F8, added 13 Nov) |
+| `pad.json` (carries `dummy`) | `pad.schema.json` | §6 (F8, added 13 Nov); `pad` = the pad in use, F8 result in `proposal` (v1.1.2) |
 | `conditions/rad.json` | `rad.schema.json` | §6 |
 | `manifest.json` | `manifest.schema.json` | §6 |
 | `fields/index.json` (**index**) | `fields_index.schema.json` | §6.1, §6.2 |
@@ -233,7 +233,7 @@ its run is in progress), with its manifest entries.
 | WS1 | `terrain/cellstate_3m.tif` | `terrain/cellstate.png` + `.json` (transform) |
 | WS1 | `terrain/cellstate_3m_conservative.tif` | `terrain/cellstate_conservative.png` + `.json` (transform, v1.1.2) |
 | WS1 | `terrain/tiles/basemap/{z}/{x}/{y}.png` | `tiles/basemap/{z}/{x}/{y}.webp` + `tilejson.json` (transform) |
-| WS2 | `engine/public/**` (mirror of the web tree: `scenarios/`, `stations.json`, `route_*`, `timeline_*`, `trade_table.json`, `pad.json`, `siting.png`, `siting_png.json`) | same path |
+| WS2 | `engine/public/**` (mirror of the web tree: `scenarios/`, `stations.json`, `route_*`, `timeline_*`, `trade_table.json`, `pad.json`, `siting.png`, `siting_png.json`) | same path; **`pad.json` withheld** (C 14:58, below) |
 | WS3 | `horizon/validation/v2.json` | `validation/v2.json` |
 | WS3 + WS2 | `horizon/public/cards/{S}.json` + `engine/public/cards/{S}.timeline.json` | `cards/{S}.json` (merged, see "Station cards") |
 | WS3 | `horizon/public/cards/{S}/*.png` (built cards only), `horizon/public/fp3d/horizon_ring.json` | same path |
@@ -243,6 +243,11 @@ its run is in progress), with its manifest entries.
 | WS8 | `export/fp3d/{index.json, near/*.f32.gz, near_tex/*.jpg, far.f32.gz, far_tex.jpg}` | `fp3d/…` |
 | WS9 | `navigation/{nav,localisation,fields}/…` (real run only) | same path |
 | WS10 | `vo/probe.json`, `vo/drift.json` | `vo/…` |
+
+**Withheld (`WITHHELD` in `tools/make_web.py`):** a web path a producer writes but that must not
+be published yet is reported as `withheld: …` (not copied, not "missing"), and manifest entries
+citing it are left out. Now: `pad.json` (C decision 14:58: WS2's file puts the F8 siting proposal
+in `pad`; it is withheld until WS2 writes `pad_default` there and the proposal in `proposal`).
 
 Manifest: every fragment in `data/interim/manifest/` is merged (WS6 `manifest.merge`); WS1's
 `terrain/manifest_pending.json` is merged as WS1's fragment until WS1 records through
@@ -295,5 +300,6 @@ the web tree; one there would fail the card schema).
 | --- | --- | --- |
 | `partner.schema.json` | D20 (user 14:22, cart only): feature properties `label`, `drag_note` (`caption` already there); top-level `drag_finding` {`case`, `theta_deg`, `suit_kg`, `casualty_kg`, `rescuer_system_kg`, `mu`, `boot_mu`, `g_ms2`, `force_N`, `traction_limit_N`, `max_mass_kg`, `feasible`, `reason`, `note`} (WS2 `haul.drag_flat`; manifest `haul.drag.flat.*`, file `scenarios/nom_104/partner.geojson`; per suit `haul.drag.flat.nom_{suit}.*`). Drag is text, never a line | WS5 |
 | `card.schema.json` | `drag_note` (WS2 timeline part) | WS5 |
+| `pad.schema.json` | C decision 14:58: `pad` is the pad in use (`config/site.yaml pad_default`, user 11:24), never the siting result; optional `pad.source`; optional `proposal` {`adopted` (const false), `note`, `pad` (required, same shape), `alternatives`, `hop_options`, `site_rule_version`} for the F8 result. Until WS2 writes it that way, `make web` withholds `pad.json` | WS2 (writer), WS5 (marker: pad from `pad`, never from `proposal`) |
 | `cellstate.schema.json` + `SCHEMA_MAP` | new web path `terrain/cellstate_conservative.json` (+ `.png`), same schema; `variant: conservative`; keys `terrain.cellstate_conservative.pct.*` | WS5 (optional conservative hatch) |
 | `fp3d/far_tex.jpg` (format table) | new non-JSON file, WS8 far-mesh texture; `make web` copies `data/interim/export/fp3d/far_tex.jpg` | WS8 |

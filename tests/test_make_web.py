@@ -281,6 +281,28 @@ def test_run_without_conservative_drops_its_keys(tree):
         tree["interim"], settings=SETTINGS, dummy_tree=tree["dummy"], h0=H0).missing
 
 
+def test_run_withholds_pad_json(tree):
+    """C decision 14:58: WS2's pad.json carries the F8 proposal as the pad, so it is withheld
+    (reported, never copied; its manifest entries left out); siting files publish as normal."""
+    pub_src = tree["interim"] / "engine" / "public"
+    pub_src.mkdir(parents=True)
+    (pub_src / "pad.json").write_text(json.dumps({"dummy": False, "pad": {}}))
+    (pub_src / "siting.png").write_bytes(b"png")
+    (pub_src / "siting_png.json").write_text(json.dumps(
+        {"image": "siting.png", "coordinates": [[0, 1], [1, 1], [1, 0], [0, 0]]}))
+    (tree["frags"] / "pipeline__engine__siting.json").write_text(json.dumps({
+        "pad.lon": entry("pad.json", 137.4), "siting.x": entry("siting_png.json", 1.0)}))
+    p = mw.plan(tree["interim"], settings=SETTINGS, dummy_tree=tree["dummy"], h0=H0)
+    assert "pad.json" not in {c.dst.as_posix() for c in p.copies}
+    assert not any(w == "pad.json" for _, w, _ in p.missing)
+    assert any(s.startswith("withheld: data/interim/engine/public/pad.json") for s in p.skipped)
+    rc, lines = run(tree)
+    pub = tree["public"]
+    assert not (pub / "pad.json").exists() and (pub / "siting.png").is_file()
+    m = json.loads((pub / "manifest.json").read_text())
+    assert "pad.lon" not in m and "siting.x" in m
+
+
 def test_plan_ws8_far_texture_rule(tree):
     """WS8 STATUS: far texture fp3d/far_tex.jpg (8 m ortho over the far mesh)."""
     src = tree["interim"] / "export" / "fp3d" / "far_tex.jpg"
@@ -518,6 +540,21 @@ def test_run_skip_ws2_builds_no_card(tree):
     assert not (tree["public"] / "cards").exists()
     assert "skipped: cards/S2.json not built (WS2 skipped)" in lines
     assert not any(line.startswith("  WS2:") for line in lines)
+
+
+def test_dangling_fp3d_index(tmp_path):
+    (tmp_path / "fp3d" / "near").mkdir(parents=True)
+    (tmp_path / "fp3d" / "near" / "1_2.f32.gz").write_bytes(b"x")
+    (tmp_path / "fp3d" / "far.f32.gz").write_bytes(b"x")
+    (tmp_path / "fp3d" / "index.json").write_text(json.dumps({
+        "dummy": False, "horizon_ring": "fp3d/horizon_ring.json",
+        "far": {"file": "fp3d/far.f32.gz", "tex": "fp3d/far_tex.jpg"},
+        "chunk_grid": {"chunks": [{"i": 1, "j": 2, "file": "fp3d/near/1_2.f32.gz",
+                                   "tex": "fp3d/near_tex/1_2.jpg"}]}}))
+    assert mw.dangling(tmp_path) == [
+        "fp3d/near_tex/1_2.jpg (named in fp3d/index.json chunk 1_2)",
+        "fp3d/far_tex.jpg (named in fp3d/index.json far)",
+        "fp3d/horizon_ring.json (named in fp3d/index.json)"]
 
 
 def test_dangling_card_images(tmp_path):

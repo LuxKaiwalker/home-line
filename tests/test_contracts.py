@@ -270,3 +270,28 @@ def test_card_drag_note_optional():
 
 def test_conservative_cellstate_path_mapped():
     assert vc.match_schema("terrain/cellstate_conservative.json") == "cellstate.schema.json"
+
+
+def test_pad_proposal_block_optional():
+    """v1.1.2 (C 14:58): pad.json = the pad in use (pad_default); the F8 siting result goes in an
+    optional `proposal` block, never in `pad`."""
+    checks = {"assessed_pct_30min": 100.0, "max_slope_deg": 2.1, "rule_passed": True}
+    doc = {"dummy": False,
+           "pad": {"lon": 137.382, "lat": -4.806, "elev_m": -3627.7, "score": None,
+                   "checks": checks, "source": "config/site.yaml pad_default"},
+           "alternatives": [], "hop_options": [], "site_rule_version": "x"}
+    assert errs("pad.schema.json", doc) == []
+    doc["proposal"] = {
+        "adopted": False, "note": "F8 proposal for S; not the pad in use",
+        "pad": {"lon": 137.402443, "lat": -4.769028, "elev_m": -3811.3, "score": 0.475,
+                "checks": {"assessed_pct_30min": None, "max_slope_deg": 3.95,
+                           "rule_passed": None}},
+        "alternatives": [{"rank": 2, "lon": 137.405846, "lat": -4.764625, "elev_m": -3810.1,
+                          "score": 0.475}],
+        "hop_options": [], "site_rule_version": "site.yaml siting"}
+    assert errs("pad.schema.json", doc) == []
+    doc["proposal"]["adopted"] = True
+    assert errs("pad.schema.json", doc)  # a proposal is never the pad in use
+    doc["proposal"]["adopted"] = False
+    doc["proposal"]["pad"]["lon"] = "east"
+    assert errs("pad.schema.json", doc)
