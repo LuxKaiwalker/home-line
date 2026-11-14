@@ -55,10 +55,11 @@ export class DataError extends Error {
 /** Returns the file text, or null when the file does not exist. */
 export type TextFetcher = (path: string) => Promise<string | null>
 
+/** `base`: root of another tree in the same contracts (a live result, D48); default the static tree. */
 export const browserFetcher =
-  (mode: DataMode): TextFetcher =>
+  (mode: DataMode, base?: string): TextFetcher =>
   async (path) => {
-    const res = await fetch(dataUrl(path, mode))
+    const res = await fetch(dataUrl(path, mode, base))
     if (res.status === 404) return null
     if (!res.ok) throw new DataError(path, 'missing', `HTTP ${res.status}`)
     const text = await res.text()
