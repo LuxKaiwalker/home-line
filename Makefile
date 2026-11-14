@@ -12,8 +12,10 @@ terrain:     ## WS1
 	@echo "terrain: stub (WS1 adds pipeline/terrain CLI)"
 engine:      ## WS2
 	@echo "engine: stub (WS2 adds pipeline/engine CLI)"
-horizons:    ## WS3
-	@echo "horizons: stub (WS3 adds pipeline/horizon CLI)"
+horizons:    ## WS3: far-field bands, Navcam frames + stop horizons, V2 (needs WS1 dem_1m.tif)
+	$(PY) -m pipeline.horizon.bands
+	$(PY) -m pipeline.horizon.navcam fetch
+	$(PY) -m pipeline.validation.v2_skyline
 conditions:  ## WS4
 	@echo "conditions: stub (WS4 adds pipeline/conditions CLI)"
 nav:         ## WS9

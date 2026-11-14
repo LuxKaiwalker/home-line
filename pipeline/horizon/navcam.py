@@ -448,9 +448,12 @@ def candidates_at_stop(cache: Cache, de: dict, sel: dict, instruments) -> tuple[
 
 
 def stop_xy(de: dict, recs: list[dict] | None = None) -> tuple[float, float]:
-    """Analysis-CRS position of the Navcam at a stop: the drive end (WS1 coreg shift is 0, so MMGIS
-    = DEM frame) plus the mean horizontal camera offset from the rover origin (site N, E)."""
+    """Analysis-CRS position of the Navcam at a stop: the MMGIS drive end plus WS1's coreg shift,
+    plus the mean horizontal camera offset from the rover origin (site N, E)."""
     x, y = (float(v) for v in lonlat_to_xy(de["lon"], de["lat"]))
+    sh = coreg_shift()
+    if sh is not None:
+        x, y = x + sh[0], y + sh[1]
     if recs:
         off = np.mean([camera_offset_site(r) for r in recs], axis=0)
         x, y = x + float(off[1]), y + float(off[0])
@@ -500,6 +503,25 @@ def check_jpeg(path: Path, rec: dict) -> str | None:
     return None
 
 
+COREG = REPO / "data" / "interim" / "terrain" / "coreg.json"
+
+
+def coreg_shift() -> tuple[float, float] | None:
+    """WS1 coreg.json (dx, dy) in m, added to MMGIS positions (its ``sign`` field); None if
+    absent."""
+    if not COREG.exists():
+        return None
+    d = json.loads(COREG.read_text())
+    return float(d["dx"]), float(d["dy"])
+
+
+def coreg_note() -> str:
+    sh = coreg_shift()
+    if sh is None:
+        return "MMGIS MSL_waypoints drive end (WS1 coreg.json not available: not co-registered)"
+    return f"MMGIS MSL_waypoints drive end + WS1 coreg.json shift dx={sh[0]} m, dy={sh[1]} m"
+
+
 def frame_record(rec: dict, de: dict, path: Path) -> dict:
     ypr = rover_ypr(rec)
     a_az, a_el = a_vector_rover_az_el(rec)
@@ -510,8 +532,7 @@ def frame_record(rec: dict, de: dict, path: Path) -> dict:
         "stop_id": stop_id(de),
         "rmc": de["rmc"],
         "lon": de["lon"], "lat": de["lat"],
-        "position_source": "MMGIS MSL_waypoints drive end (not co-registered; WS1 coreg.json "
-                           "pending)",
+        "position_source": coreg_note(),
         "drive_end_sol": de["sol"],
         "mmgis_yaw_pitch_roll_deg": [de["yaw_deg"], de["pitch_deg"], de["roll_deg"]],
         "rover_yaw_pitch_roll_deg": [round(v, 4) for v in ypr],
@@ -563,7 +584,7 @@ def build(*, dry_run: bool = False, max_mb: float | None = None, offline: bool =
                 prof = engine.horizon(*stop_xy(de, passing), eye_height_m=cfg["navcam_height_m"])
                 prof.meta = {"kind": "stop", "rmc": de["rmc"], "lon": de["lon"],
                              "lat": de["lat"], "height_kind": "navcam",
-                             "position": "MMGIS drive end + mean camera offset (WS1 coreg 0 m)"}
+                             "position": coreg_note() + " + mean camera offset"}
                 hdir = Path(horizons_dir or OUT.parent / "horizons")
                 prof.write_json(hdir / f"{stop_id(de)}.json", observer_id=stop_id(de))
                 passing, rej2 = filter_by_predicted_skyline(

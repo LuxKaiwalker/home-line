@@ -564,3 +564,21 @@ def test_v2_hand_aligned_and_too_few_stops_are_not_available():
     assert doc["available"] is False and doc["method"] == "hand-aligned"
     doc = build_v2([e], manual={rec["image_id"]: False})
     assert doc["method"] == "automatic+manual_check" and doc["n_stops"] == 0
+
+
+def test_predicted_skyline_frac_known_answer():
+    """Level camera facing east, flat skyline at +2 deg: testable in every column; pitched up
+    so the skyline lands in the detector's top reference band: testable in none."""
+    from pipeline.horizon.navcam import predicted_skyline_frac
+
+    def rec(pitch):
+        m = base_cahv(pitch)
+        return {"camera_model": {"type": "CAHV", "C": m.C.tolist(), "A": m.A.tolist(),
+                                 "H": m.H.tolist(), "V": m.V.tolist()},
+                "attitude_quaternion": ypr_to_quat(90.0, 0.0, 0.0).tolist(),
+                "width": W, "height": H_IMG}
+
+    prof = wavy_profile(amp=0.0)
+    assert predicted_skyline_frac(rec(0.0), prof) > 0.99
+    # skyline row = CY - F tan(2 deg - pitch) < top band (~10 % of rows) for pitch -19 deg
+    assert predicted_skyline_frac(rec(-19.0), prof) == 0.0
