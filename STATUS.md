@@ -668,24 +668,40 @@ Branch: `ws10-vo`
 
   Contract `stereo_pairs` counts all non-thumbnail pairs (256² + full res: 37, 33, 126, 25, 108). Frames decode at 256 × 256; ORB (defaults) finds ~440 keypoints per left frame, median L/R fundamental inliers 151–234, frame-to-frame 34–112 (min 19): indicative only, not a VO result.
 - **Go rule (`nav.yaml vo_probe.go_rule`), mechanical result: go**, met on 5/5 drives at 256² and 0/5 at full resolution. **D16 is N's decision**; WS10 stops here until N records it.
+- **X8 stereo VO at 256² (brief step 2), 10:47 UTC, D16 = go at 256² only.** `pipeline/navigation/vo.py` (ported from the pre-H0 reference code, run fresh on this session's frames), 22 new KATs in `tests/test_vo.py` (48 pass): CAHV/CAHVOR triangulation, known baseline → depth = f·b/d, linearised pinhole exact for rays, same pose → zero motion, 1 m + 4° step with 30 % outliers, metric scale from stereo, rendered 256² textured-ground stereo (same pose; 0.95 m + 3° step), chain/endpoint metrics, bridged steps counted, drift table lists every drive incl. no-data, per-pose attitude comparison, stop rule. Output `data/interim/vo/drift.json` (valid against `vo_drift.schema.json`, every row labelled "rover analogue: a rover is not an astronaut") + `vo_report.json` (per-pose, onboard and calibrated-set detail); manifest keys `vo.drift.*`. 19.5 MB downloaded (all 256² TRAV pairs of the 5 drives; `data/raw/vo/` now 29 MB).
+- Method: SIFT, mutual ratio-test L/R matching, midpoint triangulation on each frame's own CAHVOR (≤ 1 px reprojection, 0.5–25 m), frame-to-frame PnP + RANSAC on the linearised next-left camera + LM refinement; a failed step is bridged with the rover's onboard relative pose and counted. Start = MMGIS previous drive end (position + yaw/pitch/roll); compared with the MMGIS drive end and, per pose, with the API `attitude`/`xyz`.
+
+  | Sol | Drive | MMGIS m | VO steps (failed) | Bridged m | End error m | Drift % | Heading drift ° | Per-pose heading vs attitude RMS / max ° | Onboard vs MMGIS m |
+  | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+  | 5073 | 125_2274 → 2490 | 27.9 | 36/36 (0) | 0 | 0.241 | 0.86 | −0.98 | 0.58 / 1.09 | 0.153 |
+  | 5070 | 125_2082 → 2274 | 28.7 | 31/32 (1: no end pair) | 0.90 | 0.199 | 0.69 | +0.29 | 0.19 / 0.38 | 0.264 |
+  | 5069 | 125_1326 → 2082 | 101.3 | 125/125 (0) | 0 | 1.884 | 1.86 | −2.44 | 1.20 / 2.18 | 0.342 |
+  | 5045 | 125_1194 → 1326 | 12.6 | 21/22 (1: 12 matches) | 1.19 | 0.099 | 0.79 | −0.76 | 0.50 / 0.74 | 0.004 |
+  | 5041 | 125_558 → 1194 | 83.9 | 100/103 (3: 3 matches, RANSAC, no matches) | 1.14 | 0.566 | 0.68 | −0.88 | 0.80 / 1.39 | 0.413 |
+
+  End error is horizontal; drift % = end error / MMGIS `dist_m`. 4 off-pointing pairs dropped on sol 5041. **Caveat: MMGIS drive ends are Curiosity's own localisation (onboard wheel + IMU + VO, ground-updated), not independent truth**; the onboard-vs-MMGIS column shows how close they are (0.0–0.4 m), so our VO error is close to that floor only on the short drives.
+- **Stop rule (D16, deadline H8 = 17:00 CET): verdict plausible at 11:47 CET**, 5/5 drives pass (rule, assumed: ≥ `go_rule.min_drives` = 2 drives with drift ≤ 10 %, |heading drift| ≤ 10°, ≥ 80 % of steps by VO). X8 stays in.
+- Curiosity-calibrated set (in `vo_report.json`, label "rover analogue: a rover is not an astronaut"): σ_s = 0.0064 (RMS along-track scale error, 5 drives), σ_b = 1.25 °/h of *rover driving* (RMS heading drift / drive duration); ψ₀ and slip are not measurable by VO → null, WS9 keeps its assumed values. Not yet handed to WS9 (brief: by H20; N to review first).
 
 ### Doing
 
-- — (stopped after the probe, waiting for D16)
+- — (step 2 done; waiting for N's review of the drift table and the calibrated set)
 
 ### Next
 
-- On go: brief step 2 (stereo VO at 256², drift per drive → `vo/drift.json`, calibrated set for WS9). On no-go: stop.
+- N reviews; then hand the calibrated set to WS9 (by H20). X9 only after G2, if green and N is free.
 
 ### Blocked
 
-- D16 (go/no-go) — N.
+- VO constants are in `vo.py PENDING_VO_CONFIG` (all assumed: resolution, TRAV tag, pointing tolerance 5°, ratio 0.8, stereo reprojection 1 px, range 0.5–25 m, PnP 1.5 px / 2000 it / 0.999, min inliers 15, max step 3 m / 45°, plausibility 10 % / 10° / 0.8). WS9 owns `config/nav.yaml`: please add them as a `vo:` block with `assumed: true` (the code reads `nav.yaml vo` as soon as it exists). WS9 / C.
+- N: confirm the stop-rule plausibility thresholds above (proposal) and whether σ_b per hour of rover driving is the right quantity for F21 (rover drives ~1 m/min; a walker ~1 m/s).
 
 ### Assumptions added
 
 - Probe conventions (code, not config): a stereo pair = L and R with the same spacecraft clock, `subframe_rect` and `scale_factor`; API `sample_type: thumbnail` (64²) never counts; pairs at one (site, drive) are one pose; runs are counted within one resolution class; a step across a site change is unknown.
 - Each drive's previous end is on an earlier sol, so only the end sol was queried; frames from intermediate sols would be missed (can only undercount).
 - Caveat for step 2: 256² only (f ≈ 306 px); the mast looks right and down (az 90°, el −29°) on 4 drives and forward on sol 5070, so VO sees near-field ground.
+- VO: a failed step or a missing drive-end pair is bridged with the onboard relative pose (reported as `bridged_m`, never hidden); at the start pose the last pair before driving is used, elsewhere the first pair at a pose.
 
 ## Decision log (fresh run, recorded by C)
 
