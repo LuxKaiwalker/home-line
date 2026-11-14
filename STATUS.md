@@ -534,20 +534,34 @@ Branch: `ws10-vo`
 
 ### Done
 
-- —
+- **X8 data probe (brief step 1), 10:13 UTC.** `pipeline/navigation/vo_probe.py` (ported from the pre-H0 reference code, re-run fresh), KATs in `tests/test_vo.py` (26 pass). Output `data/interim/vo/probe.json`, valid against `vo_probe.schema.json`; manifest keys `nav.vo_probe.*`. 8.3 MB downloaded to `data/raw/vo/` (raw-API metadata, MMGIS waypoints, 10 pairs of 256² frames per drive for a decode/feature check).
+- The 5 most recent MMGIS drives, all site 125. "During" = `prev_end < drive < end` at the same site. Spacing = 3-D distance between consecutive pose `xyz` (site frame).
+
+  | Sol | Drive (prev → end) | MMGIS m | 256² L/R pairs | Spacing median (max) | Longest run ≤ 2 m | CAHVOR + attitude | Full-res pairs | Mast az/el |
+  | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+  | 5073 | 125_2274 → 125_2490 | 27.9 | 35 | 0.946 m (1.13) | 35 | all | 2 (1 pose) | 90° / −29° |
+  | 5070 | 125_2082 → 125_2274 | 28.7 | 31 | 0.945 m (1.02) | 31 | all | 2 (1 pose) | 0° / −29° |
+  | 5069 | 125_1326 → 125_2082 | 101.3 | 124 | 0.953 m (1.20) | 124 | all | 2 (1 pose) | 90° / −29° |
+  | 5045 | 125_1194 → 125_1326 | 12.6 | 21 | 0.933 m (1.19) | 21 | all | 4 (2 poses) | 90° / −29° |
+  | 5041 | 125_558 → 125_1194 | 83.9 | 106 (103 poses) | 0.985 m (1.29) | 103 | all | 2 (1 pose) | 90° / −29° |
+
+  Contract `stereo_pairs` counts all non-thumbnail pairs (256² + full res: 37, 33, 126, 25, 108). Frames decode at 256 × 256; ORB (defaults) finds ~440 keypoints per left frame, median L/R fundamental inliers 151–234, frame-to-frame 34–112 (min 19): indicative only, not a VO result.
+- **Go rule (`nav.yaml vo_probe.go_rule`), mechanical result: go**, met on 5/5 drives at 256² and 0/5 at full resolution. **D16 is N's decision**; WS10 stops here until N records it.
 
 ### Doing
 
-- —
+- — (stopped after the probe, waiting for D16)
 
 ### Next
 
-- —
+- On go: brief step 2 (stereo VO at 256², drift per drive → `vo/drift.json`, calibrated set for WS9). On no-go: stop.
 
 ### Blocked
 
-- —
+- D16 (go/no-go) — N.
 
 ### Assumptions added
 
-- —
+- Probe conventions (code, not config): a stereo pair = L and R with the same spacecraft clock, `subframe_rect` and `scale_factor`; API `sample_type: thumbnail` (64²) never counts; pairs at one (site, drive) are one pose; runs are counted within one resolution class; a step across a site change is unknown.
+- Each drive's previous end is on an earlier sol, so only the end sol was queried; frames from intermediate sols would be missed (can only undercount).
+- Caveat for step 2: 256² only (f ≈ 306 px); the mast looks right and down (az 90°, el −29°) on 4 drives and forward on sol 5070, so VO sees near-field ground.
