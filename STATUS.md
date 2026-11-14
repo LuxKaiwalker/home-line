@@ -524,11 +524,11 @@ and **>= 300 m** from every station placed before it (min pairwise distance: 602
 | S7 | 137.373323, -4.789762 | dense ridge network + high SINDEX2 sulfate signal | 0.6986 | 11.6 deg; 0/0/0 | D26 extra 2 (same rule) |
 | S8 | 137.386021, -4.770783 | dense ridge network + high D2300 clay signal | 0.6878 | 6.9 deg; 0/0/0 | D26 extra 3 (same rule) |
 
-- **S3, S5 dropped** (D26): listed under `dropped` in `stations.json`, not in `stations`; they come
-  back only if S hand-picks them by 19:00 CET (`stations.yaml status`, re-run `build stations`).
+- **S3, S5 dropped** (D26, final per D44): listed under `dropped` in `stations.json`, not in
+  `stations`.
 - S1 and S2 are walkable at nominal and optimistic but **blocked at conservative 17 deg**: con
   scenarios need WS2's access cell (50 m, D27).
-- S6 and S7 have the same name (same finding); the id tells them apart.
+- S6 and S7 have the same finding; since session 5 (D44) their names carry a compass suffix.
 - Names: a component (normalised) >= 0.5 is named, larger first: "high D2300 clay signal", "high
   SINDEX2 sulfate signal", "dense ridge network" (index words from SPEC F7). `finding_detail` has
   the numbers. No geological claim beyond SPEC F7's index-to-mineral wording.
@@ -537,6 +537,29 @@ and **>= 300 m** from every station placed before it (min pairwise distance: 602
   `min_spacing_m`, `min_pairwise_m`, `placement`, `extras_rule`.
 - The S1/S2 domain is still pad_default's 30-min disc (stations.yaml rule text). If D21 moves the
   pad, the S1/S2 rule is unchanged unless C says otherwise.
+
+#### Session 5 (16:40Z): D44 final station list + compass suffix
+
+- **D44 (user 17:28, set A): list final S1, S2, S4, S6, S7, S8**; S3/S5 dropped (no more 19:00
+  wording in `stations.yaml` or `build.py`). Placement assumptions (walkable at 20 deg, extras
+  manual priority 0, named after any part >= 0.5) kept `assumed: true` with D44 notes.
+- **Same-name stations get the 8-point compass of the bearing from the official pad**:
+  `data/interim/engine/public/pad.json` top-level `pad` (rank1, 137.401783, -4.77748); `site.yaml
+  pad_default` only if that file is missing. Rule in `stations.yaml extras.same_name_suffix`.
+- **Collision rule (WS1, assumed):** S6 and S7 are both south-west (237.9 and 246.6 deg), so the
+  next rule is the distance from the pad: "nearer"/"farther" (3+: nearest, 2nd nearest, ...,
+  farthest; a distance tie falls back to the id). No new on-screen number.
+  - S6 = "dense ridge network + high SINDEX2 sulfate signal (south-west, nearer)" (1,276 m)
+  - S7 = "dense ridge network + high SINDEX2 sulfate signal (south-west, farther)" (1,832 m)
+  - S1, S2, S4, S8 unchanged (no duplicate name).
+- `stations.json`: only `name` changed, plus `name_base`/`name_suffix` on S6/S7 and a top-level
+  `same_name_suffix` (rule, pad used). Every coordinate, value and component is byte-identical
+  to session 4. Manifest re-recorded from clean commit 63a5630.
+- KATs first (30 new): compass sectors and boundaries x 20, bearing x 6, suffix only for duplicate
+  names (input untouched), collision by distance (2, 3, tie), unplaced skipped, pad from pad.json
+  with fallback, config D44.
+- Downstream to re-run (C): WS2's `engine/public/stations.json` copy (names), WS3 station cards,
+  WS5 (reads stations.json via `make web`).
 
 KATs first: 42 new, 6 pre-D23 max-slope/conservative tests removed; WS1 KATs 77 pass (plane-fit exact plane x 20, = 3x3 plane fit at the centre, NaN, spike step
 guard, strict 30 deg, unknown stays unknown in all variants, blocked iff rule x 3 variants incl.
@@ -553,17 +576,15 @@ walkable, naming x 6, greedy extras, config D26/D32). Full suite 806 pass; ruff 
 
 ### Doing
 
-- Waiting for G0 sign-off (S). Session 4 done (D22/D23/D26/D32); WS2 can start its re-run.
+- Session 5 done (D44 names). WS2 copy, WS3 cards and WS5 need the new names (C re-runs).
 
 ### Next
 
-- If S hand-picks S3/S5 by 19:00 CET: add lon/lat to `stations.yaml`, drop `status: dropped`,
-  extend `step_stations`, then `build stations manifest`.
 - V1's RMSE no longer changes any WS1 output (D23).
 
 ### Blocked
 
-- S3, S5 hand picks (S): dropped per D26 unless picked by 19:00 CET.
+- None.
 
 ### Assumptions added
 
@@ -581,6 +602,9 @@ walkable, naming x 6, greedy extras, config D26/D32). Full suite 806 pass; ruff 
   `stations.yaml extras` (`manual_priority: 0` per SPEC F7 "hand picks", `name_min_norm: 0.5`,
   ids S6-S8) `assumed: true`; `placement.walkable` = nominal 20 deg cell states (assumed reading
   of D26 "walkable"); `scoring_weights_assumed: true` and `min_spacing_m: 300` (D32, decided).
+- Session 5: D44 accepted the session 4 placement assumptions (still `assumed: true`, notes cite
+  D44). New: `stations.yaml extras.same_name_suffix` (compass rule per D44; the distance
+  tie-break is WS1's) `assumed: true`.
 
 ## WS2 Engine
 
