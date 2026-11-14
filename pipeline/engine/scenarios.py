@@ -547,6 +547,101 @@ def headline_patch(grid: Grid, settings: Settings, pub: Path) -> int:
     return 0
 
 
+def _rename_walk(obj, by_id: dict[str, dict]):
+    """(obj with the name fields of every station-keyed dict that carries a ``name`` replaced,
+    changed?). A station-keyed dict has ``id`` or ``station`` equal to a WS1 station id."""
+    if isinstance(obj, list):
+        pairs = [_rename_walk(v, by_id) for v in obj]
+        return [v for v, _ in pairs], any(c for _, c in pairs)
+    if not isinstance(obj, dict):
+        return obj, False
+    changed = False
+    out = {}
+    for k, v in obj.items():
+        out[k], c = _rename_walk(v, by_id)
+        changed |= c
+    sid = obj.get("id") if isinstance(obj.get("id"), str) else obj.get("station")
+    if "name" in out and isinstance(sid, str) and sid in by_id:
+        new = stations.with_names(out, by_id[sid])
+        if new != out or list(new) != list(out):
+            out, changed = new, True
+    return out, changed
+
+
+def stations_names_patch(terrain_dir: Path, pub: Path) -> int:
+    """--stations-only (D44): copy WS1's current station names (``name``, ``name_base``,
+    ``name_suffix``) into the published files that carry them: ``stations.json`` and any card
+    timeline part, picker summary, timeline or route that has a station-keyed ``name``. Nothing
+    is recomputed (no grid is read); every other byte stays as published.
+
+    Refuses (returns 3, writes nothing) unless the stations are the ones the published files
+    were computed from: same ids, same lon/lat (6 decimals, as published), same ``value`` and
+    ``dwell_min`` (route inputs), and card ``science`` points equal to WS1's. A moved station
+    needs a full re-run."""
+    import json
+
+    ws1, _missing = stations.load_ws1_stations(terrain_dir / "stations.json")
+    by_id = {s["id"]: s for s in ws1}
+    pub_path = pub / "stations.json"
+    recs = json.loads(pub_path.read_text(encoding="utf-8"))
+    dwell0 = load("stations")["dwell_min"]
+    bad = []
+    if set(by_id) != {r["id"] for r in recs}:
+        bad.append(f"station ids: WS1 {sorted(by_id)} vs published "
+                   f"{sorted(r['id'] for r in recs)}")  # fmt: skip
+    for r in recs:
+        s = by_id.get(r["id"])
+        if s is None:
+            continue
+        for k, want in (("lon", round(float(s["lon"]), 6)), ("lat", round(float(s["lat"]), 6)),
+                        ("value", s.get("value")), ("dwell_min", s.get("dwell_min", dwell0))):
+            if r.get(k) != want:
+                bad.append(f"{r['id']} {k}: WS1 {want} vs published {r.get(k)}")
+    cards_dir = pub / "cards"
+    for p in sorted(cards_dir.glob("*.timeline.json")) if cards_dir.is_dir() else []:
+        card = json.loads(p.read_text(encoding="utf-8"))
+        s, sci = by_id.get(card.get("station")), card.get("science")
+        if s is None or not sci:
+            continue
+        for k in ("lon", "lat"):
+            if sci.get(k) != round(float(s[k]), 6):
+                bad.append(f"{card['station']} card science {k}: WS1 {round(float(s[k]), 6)} "
+                           f"vs published {sci.get(k)}")  # fmt: skip
+    if bad:
+        print("stations-only refused: the published files were computed from other stations; "
+              "do a full re-run (python -m pipeline.engine.scenarios ...) instead:")
+        for b in bad:
+            print(f"  {b}")
+        return 3
+
+    written = []
+    new_recs = [stations.with_names(r, by_id[r["id"]]) for r in recs]
+    if json.dumps(new_recs) != json.dumps(recs):
+        _write_web(pub, "stations.json", new_recs, "stations.schema.json")
+        written.append("stations.json")
+    others = [p for p in sorted(pub.rglob("*.json")) if p != pub_path]
+    others += sorted(pub.rglob("route_*.geojson"))
+    for p in others:
+        doc, changed = _rename_walk(json.loads(p.read_text(encoding="utf-8")), by_id)
+        if changed:
+            rel = p.relative_to(pub).as_posix()
+            write_json(p, doc, None)
+            provenance.record_file(rel, p, SCRIPT)
+            written.append(rel)
+    summ_path = pub.parent / "summary.json"
+    if summ_path.exists():
+        doc = json.loads(summ_path.read_text(encoding="utf-8"))
+        doc["stations_names_patch"] = {
+            "note": "D44 names (scenarios --stations-only); nothing recomputed",
+            "written": written,
+            "names": {r["id"]: r["name"] for r in new_recs}}  # fmt: skip
+        summ_path.write_text(json.dumps(doc, indent=1, default=str), encoding="utf-8")
+    print(f"stations-only: rewrote {written or 'nothing (names already current)'}")
+    for r in new_recs:
+        print(f"  {r['id']}: {r['name']}")
+    return 0
+
+
 def diagnostics(grid: Grid, pad, fields: dict[str, dijkstra.Field], settings: Settings) -> dict:
     """Sanity numbers per scenario (internal, not shown in the app): reachable % of the
     assessed flat disc and envelope area / flat-circle area at every budget, edge cause shares
@@ -826,8 +921,13 @@ def main(argv=None) -> int:
     ap.add_argument("--d21", action="store_true",
                     help="D21: screen every candidate pad, full runs for the top 5, run "
                          "everything on the official pad, write the pad picker")
+    ap.add_argument("--stations-only", action="store_true",
+                    help="D44: copy WS1's current station names into the published files only "
+                         "(no recompute; refuses if a station moved)")
     a = ap.parse_args(argv)
     out, pub = a.out, a.out / "public"
+    if a.stations_only:
+        return stations_names_patch(a.terrain, pub)
     need = [a.terrain / f for f in ("elev_3m.tif", "maxslope_3m.tif", "cellstate_3m.tif",
                                     "slope_3m.tif", "stepguard_3m.tif")]  # fmt: skip
     if not all(f.exists() for f in need):
