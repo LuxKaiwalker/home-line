@@ -281,9 +281,10 @@ def test_run_without_conservative_drops_its_keys(tree):
         tree["interim"], settings=SETTINGS, dummy_tree=tree["dummy"], h0=H0).missing
 
 
-def test_run_withholds_pad_json(tree):
-    """C decision 14:58: WS2's pad.json carries the F8 proposal as the pad, so it is withheld
-    (reported, never copied; its manifest entries left out); siting files publish as normal."""
+def test_run_withholds_pad_json(tree, monkeypatch):
+    """The WITHHELD mechanism (used for pad.json 14:58-15:30, C decision): a withheld web path is
+    reported, never copied, and its manifest entries are left out; other files publish as normal."""
+    monkeypatch.setitem(mw.WITHHELD, "pad.json", "test: withheld")
     pub_src = tree["interim"] / "engine" / "public"
     pub_src.mkdir(parents=True)
     (pub_src / "pad.json").write_text(json.dumps({"dummy": False, "pad": {}}))
@@ -301,6 +302,16 @@ def test_run_withholds_pad_json(tree):
     assert not (pub / "pad.json").exists() and (pub / "siting.png").is_file()
     m = json.loads((pub / "manifest.json").read_text())
     assert "pad.lon" not in m and "siting.x" in m
+
+
+def test_pad_json_published_when_not_withheld(tree):
+    """After WS2 session 5 (pad = pad_default, proposal block) pad.json is published again."""
+    assert "pad.json" not in mw.WITHHELD
+    pub_src = tree["interim"] / "engine" / "public"
+    pub_src.mkdir(parents=True)
+    (pub_src / "pad.json").write_text(json.dumps({"dummy": False, "pad": {}}))
+    p = mw.plan(tree["interim"], settings=SETTINGS, dummy_tree=tree["dummy"], h0=H0)
+    assert "pad.json" in {c.dst.as_posix() for c in p.copies}
 
 
 def test_plan_ws8_far_texture_rule(tree):
