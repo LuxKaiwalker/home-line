@@ -789,3 +789,7 @@ Branch: `ws10-vo`
 | 2026-11-14 11:42 | Isochrone display size (nom_104 2.7 MB gz vs 1.5 MB budget) | Display filter: drop holes < 100 m² (measured 1.19 MB gz); keep 1-min steps if within budget, else the 2-min fallback | C |
 | 2026-11-14 11:42 | Station card producer | WS3 writes `horizon/public/cards/{S}.json` fragments (navcam, skyline error, panorama, landmarks); WS2 writes the timeline/margin part; `make web` (C) merges into `cards/{S}.json` | C |
 | 2026-11-14 11:42 | Basemap | WebP q80, z13–18, 33.1 MB (`config/web.yaml`) | C |
+| 2026-11-14 11:58 | F22 skyline fix presentation | Per SPEC §12 risk 15: report the result honestly (scratch trial: median 617 m, none within 100 m; the far-field skyline barely constrains position here) as a validation finding; the HUD/nav plan falls back to **station fixes**; no skyline fix is shown as a position fix unless a real frame passes the F22 KAT tolerance | C |
+| 2026-11-14 11:58 | Frame↔station pairing for F22 | WS3 sets `station` in `navcam_frames.json` for each station's overlay frame | C |
+| 2026-11-14 11:58 | Nav playback values provenance | Per-minute ellipse/r95/distance rows are covered by the Monte Carlo file's manifest entry (row-level keys not required); every static number keeps its own key | C |
+| 2026-11-14 11:58 | Fix-interval summary sets | Keep contract v1.1 (one file, default set) for G1; an all-sets bump only if time after G1 | C |
