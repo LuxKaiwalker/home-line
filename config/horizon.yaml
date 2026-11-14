@@ -10,3 +10,8 @@ navcam_height_m: 1.9               # verify_at_h0 from camera model C-vector
 distance_classes_km: [0.5, 2.0]
 v2: {min_stops: 10, target_stops: 30, manual_check_frac: 0.2}
 sky_detector: "per column, top-down: first pixel where vertical gradient > 3x the median gradient of the top 10% rows"
+
+# --- WS3 additions (fresh run, 2026-11-14; each assumed: true and flagged in STATUS.md) ------
+# Ray engine: DEM bands are north-up rasters in the analysis CRS (site.yaml); a sample with no
+# data in its configured source falls back to the next coarser source given (never finer).
+band_fallback: {value: coarser, assumed: true}
