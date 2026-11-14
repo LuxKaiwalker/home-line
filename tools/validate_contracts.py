@@ -72,6 +72,10 @@ SCHEMA_MAP: list[tuple[str, str]] = [
     ("conditions/rems.json", "rems.schema.json"),
     ("conditions/clock.json", "clock.schema.json"),
     ("conditions/donki.json", "donki.schema.json"),
+    # v1.1.0: siting image corners (WS2), basemap TileJSON and cell-state image index (make web)
+    ("siting_png.json", "siting_png.schema.json"),
+    ("tiles/basemap/tilejson.json", "tilejson.schema.json"),
+    ("terrain/cellstate.json", "cellstate.schema.json"),
 ]
 
 # Pipeline-internal JSON (not web-facing), relative to data/interim/. Checked only with

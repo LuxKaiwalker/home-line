@@ -66,8 +66,8 @@ describe('loader guards', () => {
   })
 
   it('a path no contract covers is refused, even if the file exists', async () => {
-    const L = createLoader(fsFetcher(DUMMY, { 'tiles/basemap/tilejson.json': '{}' }), 'dummy')
-    await expect(L.json('tiles/basemap/tilejson.json')).rejects.toMatchObject({ kind: 'no-contract' })
+    const L = createLoader(fsFetcher(DUMMY, { 'tiles/other/index.json': '{}' }), 'dummy')
+    await expect(L.json('tiles/other/index.json')).rejects.toMatchObject({ kind: 'no-contract' })
   })
 
   it('real mode refuses any file flagged dummy (never show dummy numbers as real)', async () => {

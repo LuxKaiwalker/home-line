@@ -524,6 +524,24 @@ def generate(out_dir: Path = OUT_DIR, config_dir: Path = CONFIG_DIR) -> list[Pat
         "dummy": True, "bounds": [w_, s_, e_, n_], "width": grid.n, "height": grid.n,
         "res_m": res, "fields": fields})
 
+    # terrain/cellstate.{png,json} (contracts v1.1.0): 0 assessed, 1 blocked (slope over the
+    # nominal no-go limit), 2 unknown (hole or CTX strip) = A 0. On the 5 m field grid here; the
+    # real file is on WS1's 3 m routing grid (res_m says which).
+    cs_unknown = hole | world.ctx(gx, gy) | ~np.isfinite(slope5)
+    cs_blocked = ~cs_unknown & (np.nan_to_num(slope5) > site["slope"]["nogo_deg"]["nominal"])
+    cs = np.where(cs_blocked, 1.0, 0.0)
+    cs[cs_unknown] = np.nan
+    o.write_bytes("terrain/cellstate.png", encode_png(cs, 1))
+    n_cs = cs.size
+    o.write_json("terrain/cellstate.json", {
+        "dummy": True, "image": "terrain/cellstate.png", "bounds": [w_, s_, e_, n_],
+        "width": grid.n, "height": grid.n, "res_m": res, "variant": "nominal",
+        "codes": {"0": "assessed", "1": "blocked", "2": "unknown"},
+        "pct": {"assessed": r2(100 * np.count_nonzero(cs == 0) / n_cs),
+                "blocked": r2(100 * np.count_nonzero(cs_blocked) / n_cs),
+                "unknown": r2(100 * np.count_nonzero(cs_unknown) / n_cs)},
+        "source": "tools/make_dummy.py (synthetic world)"})
+
     # fix-interval summary (SPEC §6.2)
     classes = nav["fix_interval"]["classes_m"]
     vals = dmax[inside30 & np.isfinite(dmax)]

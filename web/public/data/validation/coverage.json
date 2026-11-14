@@ -1,0 +1,191 @@
+{
+ "pad": {
+  "lon": 137.382,
+  "lat": -4.806,
+  "xy": [
+   -472.53,
+   -284874.2
+  ]
+ },
+ "grid": {
+  "res_m": 3.0,
+  "rule": "3 m cell assessed if all nine 1 m cells are HiRISE (source mask 1) and valid; blocked counts as assessed"
+ },
+ "disc_speed_ms": 0.98,
+ "pad_disc_assessed_min_pct": 90,
+ "source_fractions_dem_window": {
+  "0": 0.0,
+  "1": 1.0,
+  "2": 0.0,
+  "3": 0.0
+ },
+ "source_fractions_focus": {
+  "0": 0.0,
+  "1": 1.0,
+  "2": 0.0,
+  "3": 0.0
+ },
+ "codes": {
+  "0": "nodata",
+  "1": "HiRISE",
+  "2": "non-HiRISE (CTX or HRSC, not separable without mosaic footprints)",
+  "3": "HRSC/MOLA (not used: not separable)"
+ },
+ "d3": {
+  "status": "recommended default applied, awaiting confirmation at G0",
+  "applied": "STAC footprint quads (mro_hirise_socet_dtms) of the HiRISE pairs the merged DEM's Astropedia page lists",
+  "note": "mosaic footprints are not published (D0 2.2); CTX vs HRSC cannot be told apart, non-HiRISE valid cells are coded 2",
+  "decided": false,
+  "stac_items": [
+   {
+    "id": "DTEEC_040770_1755_039280_1755_A01",
+    "in_mosaic_list": false
+   },
+   {
+    "id": "DTEEC_019698_1750_019988_1750_U01",
+    "in_mosaic_list": true
+   },
+   {
+    "id": "DTEEC_009650_1755_009716_1755_U01",
+    "in_mosaic_list": true
+   },
+   {
+    "id": "DTEEC_009149_1750_009294_1750_U01",
+    "in_mosaic_list": true
+   },
+   {
+    "id": "DTEEC_001488_1750_001752_1750_U02",
+    "in_mosaic_list": true
+   }
+  ],
+  "options": {
+   "A_listed_pairs_quads (recommended default, applied)": {
+    "30": {
+     "radius_m": 1764.0,
+     "cells": 1086232,
+     "assessed_frac": 1.0,
+     "unknown_frac": 0.0
+    },
+    "60": {
+     "radius_m": 3528.0,
+     "cells": 4344808,
+     "assessed_frac": 1.0,
+     "unknown_frac": 0.0
+    }
+   },
+   "B_all_stac_quads": {
+    "30": {
+     "radius_m": 1764.0,
+     "cells": 1086232,
+     "assessed_frac": 1.0,
+     "unknown_frac": 0.0
+    },
+    "60": {
+     "radius_m": 3528.0,
+     "cells": 4344808,
+     "assessed_frac": 1.0,
+     "unknown_frac": 0.0
+    }
+   },
+   "C_listed_quads_and_texture_above_ctx_p95": {
+    "30": {
+     "radius_m": 1764.0,
+     "cells": 1086232,
+     "assessed_frac": 0.9383,
+     "unknown_frac": 0.0617
+    },
+    "60": {
+     "radius_m": 3528.0,
+     "cells": 4344808,
+     "assessed_frac": 0.7908,
+     "unknown_frac": 0.2092
+    }
+   }
+  },
+  "texture_rms_m": {
+   "inside_listed_quads": {
+    "p5": 0.035,
+    "median": 0.111,
+    "p95": 0.433
+   },
+   "outside_listed_quads": null,
+   "ctx_20m_upsampled_reference": {
+    "file": "data/raw/discovery/ctx_T01_000815_geoidadj_win2560m_pad.tif",
+    "p50": 0.015,
+    "p95": 0.0553,
+    "p99": 0.102
+   },
+   "frac_30min_disc_below_ctx_p95": 0.0551,
+   "params": {
+    "highpass_window_m": 9,
+    "rms_window_m": 25,
+    "assumed": true
+   }
+  }
+ },
+ "source_mask": "data/interim/terrain/source_mask.tif",
+ "discs_by_budget": {
+  "30": {
+   "radius_m": 1764.0,
+   "cells": 1086232,
+   "assessed_frac": 1.0,
+   "unknown_frac": 0.0
+  },
+  "60": {
+   "radius_m": 3528.0,
+   "cells": 4344808,
+   "assessed_frac": 1.0,
+   "unknown_frac": 0.0
+  }
+ },
+ "discs": [
+  {
+   "budget_min": 30,
+   "radius_m": 1764.0,
+   "assessed_pct": 58.77,
+   "blocked_pct": 41.23,
+   "unknown_pct": 0.0
+  },
+  {
+   "budget_min": 60,
+   "radius_m": 3528.0,
+   "assessed_pct": 68.64,
+   "blocked_pct": 31.36,
+   "unknown_pct": 0.0
+  }
+ ],
+ "source_fractions_pct": {
+  "hirise": 100.0,
+  "ctx": 0.0,
+  "hrsc_mola": 0.0,
+  "nodata": 0.0
+ },
+ "source_mask_origin": "D3 recommended default applied, awaiting confirmation at G0: STAC footprint quads (mro_hirise_socet_dtms) of the HiRISE pairs the merged DEM's Astropedia page lists, intersected with valid DEM cells; the mosaic publishes no footprints (docs/discovery.md 2.2)",
+ "pad_check": {
+  "budget_min": 30,
+  "min_assessed_pct": 90,
+  "pass": true,
+  "known_pct": 100.0,
+  "basis": "data coverage: assessed + blocked cells (state != unknown) of the flat 30-min disc >= min_assessed_pct (SPEC F1 acceptance; blocked terrain is assessed data, only unknown cells fail the check)"
+ },
+ "map": {
+  "png": "validation/coverage.png",
+  "bounds": [
+   137.319325,
+   -4.868455,
+   137.444675,
+   -4.743545
+  ],
+  "legend": {
+   "#3c8c3c": "assessed (HiRISE 1 m, max slope <= nominal limit)",
+   "#b03a2e": "blocked (HiRISE 1 m, max slope > nominal limit)",
+   "#9a9a9a": "unknown (non-HiRISE or no data)",
+   "#ffd400": "flat 30- and 60-min discs",
+   "#0aa0ff": "pad (site.yaml pad_default)"
+  },
+  "res_m": 3.0,
+  "source": "data/interim/terrain/cellstate_3m.tif (3 m cell states)"
+ },
+ "source_fractions_note": "share of the planning extent (disc of planning_radius_m around the pad) on the 1 m source mask; 'ctx' = code 2 = any non-HiRISE source (CTX or HRSC, not separable without mosaic footprints), 'hrsc_mola' (code 3) is never assigned",
+ "discs_note": "cell states of cellstate_3m.tif inside each flat disc (radius = crew.yaml anchor.speed_ms x budget); assessed + blocked + unknown = 100"
+}
