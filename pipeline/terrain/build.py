@@ -115,10 +115,10 @@ def texture_rms(z: np.ndarray, res: float) -> np.ndarray:
 
 
 def _d3_state() -> dict:
-    """D3 is OPEN (SPEC 11): the recommended default is applied, awaiting confirmation at G0."""
+    """D3 (SPEC 11) state from site.yaml d3 (decided A by the user at 11:24 CET, session 2)."""
     d = G.site()["d3"]
     return {"status": d["status"], "applied": d["applied"], "note": d["note"],
-            "decided": False}
+            "decided": bool(d.get("decided", False))}
 
 
 def disc_radii_m() -> dict[int, float]:
@@ -401,12 +401,17 @@ def step_xcheck() -> dict:
                                    "note": "(dx, dy) added to HiRISE positions to land on the "
                                            "merged DEM; median = merged - HiRISE after shift"}
         out["items"][pid] = item
+    _w(OUT / "hirise_xcheck.json", out)
+    _record_xcheck(out)
+    return out
+
+
+def _record_xcheck(out: dict) -> None:
+    for pid, item in out["items"].items():
         record(f"terrain.xcheck.{pid}.median", item["median_m"], "m", OUT / "hirise_xcheck.json",
                SCRIPT)
         record(f"terrain.xcheck.{pid}.p90_abs", item["p90_abs_m"], "m",
                OUT / "hirise_xcheck.json", SCRIPT)
-    _w(OUT / "hirise_xcheck.json", out)
-    return out
 
 
 # --------------------------------------------------------------------------- slope, ridge, routing
@@ -499,12 +504,17 @@ def step_slope() -> dict:
                 ((max3[known] > site["slope"]["flag_beyond_tested_deg"])
                  & (max3[known] <= nogo)).mean()), 3),
             "data_edge_cells": int((edge3 & dsk).sum())}
-        record(f"terrain.blocked_pct.{b}min", out["discs"][str(b)]["blocked_pct_of_known"], "%",
-               OUT / "cellstate_3m.tif", SCRIPT)
-    record("terrain.slope_compare.median_abs_diff", cmp_["median_abs_diff_deg"], "deg",
-           OUT / "slope_5m.tif", SCRIPT)
     _w(OUT / "slope_summary.json", out)
+    _record_slope(out)
     return out
+
+
+def _record_slope(out: dict) -> None:
+    for b, row in out["discs"].items():
+        record(f"terrain.blocked_pct.{b}min", row["blocked_pct_of_known"], "%",
+               OUT / "cellstate_3m.tif", SCRIPT)
+    record("terrain.slope_compare.median_abs_diff", out["slope_compare"]["median_abs_diff_deg"],
+           "deg", OUT / "slope_5m.tif", SCRIPT)
 
 
 # --------------------------------------------------------------------------- far field (WS3)
@@ -592,6 +602,83 @@ def step_farfield() -> dict:
                               "source": str(mola_src.relative_to(G.REPO)),
                               "valid_frac": _r(float(np.isfinite(mola).mean()), 4)}}
     _w(OUT / "farfield.json", out)
+    return out
+
+
+def step_farfield_v2() -> dict:
+    """ctx_20m_v2.tif: the same accepted CTX items as ctx_20m.tif, each co-registered to dem_1m
+    in their overlap (horizontal MAD grid search + median offset, site.yaml ctx_v2) instead of
+    levelled to MOLA-HRSC by one whole-disc median. Writes a new file; ctx_20m.tif is untouched
+    (C decides the switch). Report: farfield_v2.json (before/after vs dem_1m and vs MOLA-HRSC
+    by distance ring, the 2 km handover step and its elevation-angle equivalent)."""
+    from . import farfield as FF
+
+    cfg = G.site()["ctx_v2"]
+    ff = json.loads((OUT / "farfield.json").read_text())["ctx_20m"]
+    dem, g1 = rio.read(OUT / "dem_1m.tif")
+    mola, gm = rio.read(OUT / "mola_hrsc_200m.tif")
+    v1, gc = rio.read(OUT / "ctx_20m.tif")
+    pad = G.pad_xy()
+    dem20 = FF.reference_on(gc, dem, g1)
+    del dem
+    items, fits = [c["id"] for c in ff["items"]], {}
+    v2 = np.full(gc.shape, np.nan, np.float32)
+    for iid in reversed(items):  # first pick wins: paint in reverse priority (as ctx_20m.tif)
+        z, gz = rio.read(OUT / "xcheck" / f"ctx_item_{iid}.tif")
+        assert gz == gc, f"{iid}: item grid differs from ctx_20m.tif"
+        fit = FF.coregister_to_reference(z, gc, dem20, gc, search_m=cfg["shift_search_m"],
+                                         step_m=cfg["shift_step_m"], n_sample=cfg["sample_cells"],
+                                         min_cells=cfg["min_overlap_cells"], seed=0)
+        lvl = None
+        ok = np.isfinite(z) & np.isfinite(dem20)
+        if ok.sum():
+            off = float(np.median((z - dem20)[ok]))
+            lvl = {"offset_m": _r(off), "after_mad_m": _r(float(np.median(np.abs(
+                (z - dem20)[ok] - off))))}
+        if fit is None:
+            fit = {"dx": 0.0, "dy": 0.0, "offset_m": float(ff["qa"][iid]["minus_mola_median_m"]),
+                   "method": "fallback: levelled to MOLA-HRSC (no dem_1m overlap)"}
+        else:
+            fit["method"] = "co-registered to dem_1m (20 m block mean) in the overlap"
+        fit["level_only_alternative"] = lvl
+        fit["v1_mola_offset_m"] = ff["qa"][iid]["minus_mola_median_m"]
+        fits[iid] = fit
+        zc = FF.apply_fit(z, gc, fit)
+        v2 = np.where(np.isfinite(zc), zc, v2)
+    rio.write_cog(OUT / "ctx_20m_v2.tif", v2, gc, tags={
+        "source": "USGS controlled CTX DTMs, geoid_adjusted_dem; each item shifted and levelled "
+                  "onto dem_1m in the overlap (farfield_v2.json)"})
+
+    def mola_at(x, y):
+        return coreg.sample_bilinear(mola, gm, x, y)
+
+    def dem_at(x, y):
+        return coreg.sample_bilinear(dem20, gc, x, y)
+
+    near = [(0, 1000), (1000, 2000), (2000, 3000), (3000, 3900), (1500, 3900)]
+    far = [(0, 4000), (4000, 8000), (8000, 16000), (16000, 24000), (24000, 30000),
+           (30000, 34000)]
+    hand = float(yaml.safe_load((G.CONFIG / "horizon.yaml").read_text())["sampling"][0]["to_m"])
+    rep = {}
+    for name, z in (("v1", v1), ("v2", v2)):
+        dn = FF.ring_stats(z, gc, dem_at, pad, near)
+        rep[name] = {"minus_dem_1m_by_ring_m": dn,
+                     "minus_mola_by_ring_m": FF.ring_stats(z, gc, mola_at, pad, far),
+                     "handover_step_m": dn["1500-3900"]["median_m"],
+                     "handover_step_deg_at_handover": None if dn["1500-3900"]["median_m"] is None
+                     else _r(math.degrees(math.atan2(dn["1500-3900"]["median_m"], hand)), 3),
+                     "valid_frac": _r(float(np.isfinite(z).mean()), 4)}
+    rr, cc = np.where(np.isfinite(dem20))
+    mz = np.full(gc.shape, np.nan, np.float32)
+    mz[rr, cc] = mola_at(*gc.xy_of_rc(rr, cc))
+    out = {"file": "data/interim/terrain/ctx_20m_v2.tif", "replaces": "ctx_20m.tif (if C "
+           "switches)", "config": cfg, "handover_m": hand,
+           "reference": "dem_1m block-averaged to the 20 m CTX lattice (same pad-centred lattice)",
+           "sign": "corrected(x, y) = item(x + dx, y + dy) - offset_m; (dx, dy) = where the item's "
+                   "content sits relative to dem_1m (east, north, m)",
+           "items": fits, "compare": rep,
+           "mola_minus_dem_1m_by_ring_m": FF.ring_stats(mz, gc, dem_at, pad, near)}
+    _w(OUT / "farfield_v2.json", out)
     return out
 
 
@@ -762,9 +849,6 @@ def step_stations() -> dict:
                                    "ridge_density_raw": _r(float(dens[r, c]), 4)})
             v = value(sid, cv, dv, sc["manual_priority"])
             rec["value"] = _r(v, 4) if v is not None else None
-            if rec["value"] is not None:
-                record(f"stations.{sid}.value", rec["value"], "1", OUT / "stations.json",
-                       SCRIPT)
         out.append(rec)
     doc = {"note": "values part of stations.json (F7); objective/tasks/t_home/cards are filled "
                    "downstream. Internal file, not the web contract.",
@@ -772,10 +856,18 @@ def step_stations() -> dict:
                                            "ridge_density_p98": _r(p98, 5)},
            "assumptions": asm, "stations": out}
     _w(OUT / "stations.json", doc)
+    _record_stations(doc)
     rio.write_cog(OUT / "ridge_density_5m.tif", dens.astype(np.float32), g5,
                   tags={"method": f"fraction of 1 m ridge cells within "
                                   f"{st['ridge_density_radius_m']} m"})
     return doc
+
+
+def _record_stations(doc: dict) -> None:
+    for rec in doc["stations"]:
+        if rec.get("value") is not None:
+            record(f"stations.{rec['id']}.value", rec["value"], "1", OUT / "stations.json",
+                   SCRIPT)
 
 
 # --------------------------------------------------------------------------- ortho + basemap
@@ -907,7 +999,8 @@ def step_validation() -> dict:
     src = webout.source_fractions_pct(mask, coverage.disc(g1, pad, site["planning_radius_m"]))
     del mask
     min_pct = site["coverage"]["pad_disc_assessed_min_pct"]
-    pchk = webout.pad_check(discs, min(radii), min_pct)
+    pchk = webout.pad_check(discs, min(radii), min_pct,
+                            reading=site["coverage"].get("pad_check_reading"))
     rgba, legend = webout.coverage_map_rgba(st, g3, pad, list(radii.values()))
     png = OUT / "coverage.png"
     tmp = png.with_name("coverage.tmp.png")
@@ -937,8 +1030,14 @@ def step_validation() -> dict:
                           step_m=c["step_m"])
     _w(OUT / "coreg.json", cg)
 
+    _record_validation(doc, cg)
+    return {"discs": discs, "pad_check": pchk, "source_fractions_pct": src}
+
+
+def _record_validation(doc: dict, cg: dict) -> None:
+    """Manifest keys of validation/coverage.json (+ .png) and validation/coreg.json."""
     F = "validation/coverage.json"
-    for i, row in enumerate(discs):
+    for i, row in enumerate(doc["discs"]):
         b = row["budget_min"]
         for k in ("assessed_pct", "blocked_pct", "unknown_pct"):
             record(f"coverage.disc_{b}.{k}", row[k], "%", F, SCRIPT)
@@ -946,16 +1045,33 @@ def step_validation() -> dict:
         record(f"validation.coverage.discs.{i}.radius_m", row["radius_m"], "m", F, SCRIPT)
     for k, v in doc["source_fractions_pct"].items():
         record(f"coverage.source_fractions_pct.{k}", v, "%", F, SCRIPT)
-    for k, u in (("budget_min", "min"), ("min_assessed_pct", "%"), ("pass", None)):
+    pchk = doc["pad_check"]
+    for k, u in (("budget_min", "min"), ("min_assessed_pct", "%"), ("pass", None),
+                 ("reading", None), ("known_pct", "%")):
         record(f"validation.coverage.pad_check.{k}", pchk[k], u, F, SCRIPT)
-    record("validation.coverage.pad_check.known_pct", pchk["known_pct"], "%", F, SCRIPT)
+    for name, rd in pchk["readings"].items():
+        record(f"validation.coverage.pad_check.readings.{name}.pct", rd["pct"], "%", F, SCRIPT)
+        record(f"validation.coverage.pad_check.readings.{name}.pass", rd["pass"], None, F,
+               SCRIPT)
     for k, u in (("dx_m", "m"), ("dy_m", "m"), ("residual_median_m", "m"),
                  ("residual_mad_m", "m"), ("n", "1")):
         record(f"coreg.{k}", cg[k], u, "validation/coreg.json", SCRIPT)
     _record_file("validation/coverage.json", OUT / "coverage.json")
-    _record_file("validation/coverage.png", png)
+    _record_file("validation/coverage.png", OUT / "coverage.png")
     _record_file("validation/coreg.json", OUT / "coreg.json")
-    return {"discs": discs, "pad_check": pchk, "source_fractions_pct": src}
+
+
+def step_manifest() -> dict:
+    """Re-record every WS1 manifest key from the outputs on disk (no raster is read or written):
+    hirise_xcheck.json, slope_summary.json, stations.json, coverage.json, coreg.json."""
+    def j(name):
+        return json.loads((OUT / name).read_text())
+
+    _record_xcheck(j("hirise_xcheck.json"))
+    _record_slope(j("slope_summary.json"))
+    _record_stations(j("stations.json"))
+    _record_validation(j("coverage.json"), j("coreg.json"))
+    return {"replayed": True}
 
 
 def step_grid() -> dict:
@@ -1006,7 +1122,9 @@ STEPS = {"dem": step_dem, "mask": step_mask, "coreg": step_coreg, "xcheck": step
          "slope": step_slope, "farfield": step_farfield, "crism": step_crism,
          "stations": step_stations, "validation": step_validation, "grid": step_grid,
          "ortho": step_ortho}
-OPTIONAL = {"conservative": step_conservative}  # after V1 (WS6); not part of "all"
+OPTIONAL = {"conservative": step_conservative,  # after V1 (WS6); not part of "all"
+            "farfield_v2": step_farfield_v2,  # ctx_20m_v2.tif (C decides the switch)
+            "manifest": step_manifest}  # re-record every WS1 key from the outputs on disk
 
 
 def main(argv=None) -> int:

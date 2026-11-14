@@ -20,6 +20,7 @@ siting:                            # added 13 Nov (gap found by WS2); F8 rule
 coverage:
   pad_disc_assessed_min_pct: 90  # else move pad by the F8 rule
   source_edge_buffer_m: 20       # edges this close to a source boundary are labelled "data"
+  pad_check_reading: null        # OPEN (S/C): data_coverage (assessed + blocked) | state0_only; null = report both, pass null
 coreg: {search_m: 200, step_m: 2, metric: MAD}
 slope:
   method: horn_3x3
@@ -57,8 +58,9 @@ d0_sources:                     # exact hrefs verified by D0 today (docs/discove
   crism_band_1based: {D2300: 40, SINDEX2: 42}   # D0 2.7, ENVI .hdr band names
   crism_ignore_value: 65535
   mmgis_waypoints_cached: "data/raw/discovery/mmgis_MSL_waypoints.json"   # D0 3.1, sols 3-5073
-d3:                             # D3 (source mask origin): NOT decided. SPEC 11 recommended default applied.
-  status: "recommended default applied, awaiting confirmation at G0"
+d3:                             # D3 (source mask origin): decided A (user, 2026-11-14 11:24 CET, STATUS Decision log)
+  status: "decided: A (STAC footprint quads), user 2026-11-14 11:24 CET"
+  decided: true
   applied: "STAC footprint quads (mro_hirise_socet_dtms) of the HiRISE pairs the merged DEM's Astropedia page lists"
   note: "mosaic footprints are not published (D0 2.2); CTX vs HRSC cannot be told apart, non-HiRISE valid cells are coded 2"
 # HiRISE stereo pairs the merged DEM was built from (Astropedia page text, D0 2.2; orbit numbers,
@@ -81,4 +83,11 @@ basemap_res_m: [0.25, 10]       # WS1 brief: XYZ zoom levels for 0.25-10 m
 ctx_qa:                         # WS3 mid-field CTX DTMs vs the MOLA-HRSC 200 m blend
   max_abs_median_vs_mola_m: 50  # reject an item whose median offset to MOLA-HRSC is larger
   level_to_mola: true           # subtract each accepted item's median offset (merged DEM is MOLA-tied)
+  assumed: true
+ctx_v2:                         # ctx_20m_v2.tif (session 2, WS3 Blocked 3): each CTX item co-registered to dem_1m in the overlap; C decides the switch
+  reference: dem_1m             # block-averaged to 20 m; rover-tied (coreg MAD 0.04 m) and MOLA-consistent (median +0.5 m at 200 m)
+  shift_search_m: 400           # horizontal grid search, +/- (WS1 session-2 investigation found 20-130 m)
+  shift_step_m: 10
+  sample_cells: 20000           # overlap cells sampled for the search (seed 0)
+  min_overlap_cells: 1000       # fewer: keep the item's MOLA levelling (ctx_qa)
   assumed: true

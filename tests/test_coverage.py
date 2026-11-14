@@ -186,20 +186,70 @@ def test_disc_state_pct_is_a_partition_of_the_disc():
         "assessed_pct": None, "blocked_pct": None, "unknown_pct": None}
 
 
-def test_pad_check_counts_blocked_as_known():
-    """Pad check = data coverage (SPEC F1 acceptance, WS1 G0): assessed + blocked >= min."""
+_PAD_DISCS = [{"budget_min": 30, "radius_m": 1764.0, "assessed_pct": 55.0, "blocked_pct": 40.0,
+               "unknown_pct": 5.0},
+              {"budget_min": 60, "radius_m": 3528.0, "assessed_pct": 92.0, "blocked_pct": 3.0,
+               "unknown_pct": 5.0}]
+
+
+def test_pad_check_shows_both_readings_and_picks_none_while_open():
+    """Pad check (SPEC F1 acceptance, WS1 G0): the reading of "assessed" is open (S/C), so both
+    readings are reported - data coverage (assessed + blocked) and state 0 only - and pass is
+    null until site.yaml coverage.pad_check_reading names one."""
     from pipeline.terrain import webout
 
-    discs = [{"budget_min": 30, "radius_m": 1764.0, "assessed_pct": 55.0, "blocked_pct": 40.0,
-              "unknown_pct": 5.0},
-             {"budget_min": 60, "radius_m": 3528.0, "assessed_pct": 10.0, "blocked_pct": 10.0,
-              "unknown_pct": 80.0}]
-    pc = webout.pad_check(discs, budget_min=30, min_pct=90)
-    assert pc["budget_min"] == 30 and pc["min_assessed_pct"] == 90 and pc["pass"] is True
+    pc = webout.pad_check(_PAD_DISCS, budget_min=30, min_pct=90)
+    assert pc["budget_min"] == 30 and pc["min_assessed_pct"] == 90
+    assert pc["reading"] is None and pc["pass"] is None
+    r = pc["readings"]
+    assert set(r) == {"data_coverage", "state0_only"}
+    assert r["data_coverage"]["pct"] == pytest.approx(95.0) and r["data_coverage"]["pass"] is True
+    assert r["state0_only"]["pct"] == pytest.approx(55.0) and r["state0_only"]["pass"] is False
     assert pc["known_pct"] == pytest.approx(95.0)
-    assert webout.pad_check(discs, budget_min=60, min_pct=90)["pass"] is False
-    nulls = [{**discs[0], "assessed_pct": None, "blocked_pct": None, "unknown_pct": None}]
-    assert webout.pad_check(nulls, budget_min=30, min_pct=90)["pass"] is None
+    assert all(v["definition"] for v in r.values())
+    r60 = webout.pad_check(_PAD_DISCS, budget_min=60, min_pct=90)["readings"]
+    assert r60["data_coverage"]["pass"] is True and r60["state0_only"]["pass"] is True
+    nulls = [{**_PAD_DISCS[0], "assessed_pct": None, "blocked_pct": None, "unknown_pct": None}]
+    rn = webout.pad_check(nulls, budget_min=30, min_pct=90)
+    assert rn["pass"] is None
+    assert rn["readings"]["data_coverage"]["pass"] is None
+    assert rn["readings"]["state0_only"]["pass"] is None
+
+
+@pytest.mark.parametrize("reading,expected", [("data_coverage", True), ("state0_only", False)])
+def test_pad_check_pass_follows_a_decided_reading(reading, expected):
+    from pipeline.terrain import webout
+
+    pc = webout.pad_check(_PAD_DISCS, budget_min=30, min_pct=90, reading=reading)
+    assert pc["reading"] == reading and pc["pass"] is expected
+    with pytest.raises(ValueError):
+        webout.pad_check(_PAD_DISCS, budget_min=30, min_pct=90, reading="assessed")
+
+
+def test_pad_check_reading_is_open_in_config():
+    """Nobody has decided the reading: the config must not pick one (session 2 instruction)."""
+    from pipeline.terrain import grid as G
+
+    assert G.site()["coverage"]["pad_check_reading"] is None
+
+
+def test_prov_record_goes_through_ws6_fragment(tmp_path, monkeypatch):
+    """WS1 provenance uses WS6's manifest.record (per-script fragment, no pending file); a
+    non-finite value is recorded as None (unknown), never NaN."""
+    import json
+
+    from pipeline.terrain import prov
+
+    monkeypatch.setenv("HOMELINE_MANIFEST_DIR", str(tmp_path))
+    script = prov.REPO / "pipeline" / "terrain" / "build.py"
+    prov.record("terrain.test.value", np.float32(1.5), "m", "validation/coverage.json", script)
+    prov.record("terrain.test.unknown", float("nan"), "m", "validation/coverage.json", script)
+    frag = json.loads((tmp_path / "pipeline__terrain__build.json").read_text())
+    assert frag["terrain.test.value"]["value"] == 1.5
+    assert frag["terrain.test.value"]["file"] == "validation/coverage.json"
+    assert frag["terrain.test.value"]["script"] == "pipeline/terrain/build.py"
+    assert frag["terrain.test.unknown"]["value"] is None
+    assert not hasattr(prov, "PENDING")
 
 
 def test_source_fractions_pct_names_and_region():

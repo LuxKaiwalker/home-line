@@ -5,9 +5,9 @@ Pure functions: ``build.py step_validation`` reads the rasters / internal JSON a
 * ``validation/coverage.json``: per flat disc, the cell states of ``cellstate_3m.tif`` as a
   partition (assessed + blocked + unknown = 100 % of the disc cells, the contract's three
   columns); source-mask shares of the planning extent; the pad check; the coverage map.
-* Pad check (SPEC F1 acceptance "the pad's 30-min flat disc is >= 90 % assessed"; WS1 G0): it is a
-  *data-coverage* check, so blocked cells count as known: pass <=> assessed + blocked >= min,
-  i.e. unknown <= 100 - min. ``known_pct`` and ``basis`` say so in the document.
+* Pad check (SPEC F1 acceptance "the pad's 30-min flat disc is >= 90 % assessed"; WS1 G0): the
+  reading of "assessed" is open, so both are reported: data coverage (assessed + blocked) and
+  state 0 only. ``pass`` is null until site.yaml ``coverage.pad_check_reading`` names one.
 * ``validation/coreg.json``: the contract keys added next to WS1's internal ones.
 * ``grid.json``: every WS1 grid (NW corner, resolution, size, lon/lat bounds) for consumers that
   build rasters on the same lattice (WS7 field export).
@@ -50,16 +50,43 @@ def disc_state_pct(state: np.ndarray, disc_mask: np.ndarray) -> dict:
             "unknown_pct": _r(100 * np.count_nonzero((s != ASSESSED) & (s != BLOCKED)) / n)}
 
 
-def pad_check(discs: list[dict], budget_min: float, min_pct: float) -> dict:
+PAD_CHECK_READINGS = {
+    "data_coverage": "assessed + blocked cells (state != unknown): blocked terrain is assessed "
+                     "data, only unknown cells count against the pad",
+    "state0_only": "assessed cells only (state 0: known and within the nominal slope limit); "
+                   "blocked cells count against the pad",
+}
+
+
+def pad_check(discs: list[dict], budget_min: float, min_pct: float,
+              reading: str | None = None) -> dict:
+    """SPEC F1 acceptance "the pad's 30-min flat disc is >= 90 % assessed". Which cells count as
+    "assessed" is open (S/C): both readings are always reported; ``pass`` follows ``reading``
+    (site.yaml coverage.pad_check_reading) and stays None while it is open."""
+    if reading is not None and reading not in PAD_CHECK_READINGS:
+        raise ValueError(f"unknown pad-check reading {reading!r}; "
+                         f"one of {list(PAD_CHECK_READINGS)}")
     row = next(d for d in discs if d["budget_min"] == budget_min)
     a, b = row["assessed_pct"], row["blocked_pct"]
     known = None if a is None or b is None else round(a + b, 2)
+    state0 = None if a is None else round(a, 2)
+
+    def one(pct, key):
+        return {"pct": pct, "pass": None if pct is None else bool(pct >= min_pct),
+                "definition": PAD_CHECK_READINGS[key]}
+
+    readings = {"data_coverage": one(known, "data_coverage"),
+                "state0_only": one(state0, "state0_only")}
     return {"budget_min": budget_min, "min_assessed_pct": min_pct,
-            "pass": None if known is None else bool(known >= min_pct),
-            "known_pct": known,
-            "basis": "data coverage: assessed + blocked cells (state != unknown) of the flat "
-                     f"{budget_min:g}-min disc >= min_assessed_pct (SPEC F1 acceptance; blocked "
-                     "terrain is assessed data, only unknown cells fail the check)"}
+            "reading": reading,
+            "pass": readings[reading]["pass"] if reading else None,
+            "known_pct": known, "assessed_pct": state0,
+            "readings": readings,
+            "basis": (f"SPEC F1 acceptance: the pad's {budget_min:g}-min flat disc is "
+                      f">= {min_pct:g} % assessed. Two readings of 'assessed' are shown; "
+                      + (f"the decided reading is '{reading}'." if reading else
+                         "which one applies is OPEN (S/C decide; config/site.yaml "
+                         "coverage.pad_check_reading), so pass is null."))}
 
 
 def source_fractions_pct(mask: np.ndarray, region: np.ndarray) -> dict:
