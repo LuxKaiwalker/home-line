@@ -115,6 +115,28 @@ describe('F8 rule at the pad in use', () => {
     expect(u.source).toContain('pad_default')
   })
   it('none without pad.json', () => expect(padInUse(null)).toBeNull())
+  it('pre-D21 file: the pad score is the F8 score (key pad.score), not the official pad', () => {
+    const u = padInUse(REAL)!
+    expect([u.official, u.feasibleEvas, u.f8Key]).toEqual([false, null, 'pad.score'])
+  })
+  it('D21 / D42 official pad (WS2 session 7 pad.json): score = 38 feasible EVAs, F8 score from pad.f8_score, rule passed', () => {
+    const d21: PadFile = {
+      ...REAL,
+      pad: {
+        lon: 137.401783,
+        lat: -4.77748,
+        elev_m: -3742.4,
+        score: 38,
+        checks: { assessed_pct_30min: 100.0, max_slope_deg: 4.86, rule_passed: true },
+        source: 'D21 (user 2026-11-14 16:14): the candidate pad with the most feasible EVAs (nominal 104 kg; tiebreaks: reachable % of the assessed flat 30-min disc, then lower elevation); pipeline/engine/padpick.py',
+        f8_score: 0.4744,
+        score_kind: 'd21_feasible_eva_count',
+        id: 'rank1',
+      } as PadFile['pad'],
+    }
+    const u = padInUse(d21)!
+    expect([u.official, u.feasibleEvas, u.score, u.f8Key, u.rulePassed, u.maxSlopeDeg]).toEqual([true, 38, 0.4744, 'pad.f8_score', true, 4.86])
+  })
   it('pad block side: site.yaml block_m 20 on the 3 m route grid = 7 cells = 21 m (WS2 siting.py)', () => {
     expect(padBlockSideM(CITED.sitingBlockM.value, CITED.routeGridM.value)).toBe(21)
     expect(padBlockSideM(20, 3)).toBe(21)

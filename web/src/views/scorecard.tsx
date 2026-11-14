@@ -3,7 +3,8 @@
 // manifest (every on-screen number links here). Never in the default view (brief WS5 "Don't").
 import { useEffect, useMemo, useState } from 'preact/hooks'
 import type { ComponentChildren } from 'preact'
-import { CITED, CONFIG, effortRateLMin } from '../config'
+import { CITED, CONFIG } from '../config'
+import { o2Reserve } from './o2'
 import { data } from '../data/loader'
 import type { Localisation, Manifest, ManifestEntry } from '../data/types'
 import { contractVersions } from '../data/contracts'
@@ -17,9 +18,14 @@ import { PadInUseText } from '../components/PadInUse'
 import { padInUse } from '../map/pad'
 import { f22Rows, f22Verdict, type F22Frame } from './f22'
 import { ADDON_LABEL } from './slot'
-import { confusionThresholds, FAR_NOT_VALIDATED, katAreas, v1Sensitivities, v2Classes, type Confusion, type KatTest } from './validation'
+import { cellStateDisc, confusionThresholds, FAR_NOT_VALIDATED, katAreas, v1Context, v1Sensitivities, v2Classes, type Confusion, type KatTest } from './validation'
+import { ist2Rows } from './decisions'
+import { CellSlopeNote } from '../components/DecisionNotes'
+import { AssumedTag } from '../components/labels'
 import { dataUrl } from '../env'
 import { Page, preactView, Show, useLoad } from './page'
+
+export { o2Reserve }
 
 export function manifestEntries(m: Manifest | null): [string, ManifestEntry][] {
   if (!m) return []
@@ -136,10 +142,12 @@ function V1Section() {
         if (!v) return <p class="muted">validation/v1.json not available yet (WS6).</p>
         const sens = v1Sensitivities(v)
         const ts = confusionThresholds(v.confusion)
-        const nogo = (v.conservative_nogo ?? null) as { nogo_deg?: number; rmse_deg?: number; formula?: string } | null
-        const tc = (cov?.terrain_checks as { conservative?: { discs?: { budget_min: number; blocked_pct: number | null; nominal_blocked_pct?: number | null }[] } } | undefined)?.conservative
+        const ctx = v1Context(v)
         const hi = ts.length ? (v.confusion as Record<string, Confusion>)[ts[ts.length - 1]] : undefined
-        const d30 = tc?.discs?.find((d) => d.budget_min === CONFIG.walkbackBudgetsMin[0])
+        const b30 = CONFIG.walkbackBudgetsMin[0]
+        const con30 = cellStateDisc(cov?.terrain_checks, 'conservative', b30)
+        const nom30 = cellStateDisc(cov?.terrain_checks, 'nominal', b30)
+        const CF = 'validation/coverage.json'
         return (
           <>
             <p>
@@ -166,20 +174,26 @@ function V1Section() {
               ) : null}
               <b>Caveat: {typeof v.caveat === 'string' ? v.caveat.replace(/\.$/, '') : 'the rover chose gentle ground'}.</b>
             </p>
-            {nogo && (
-              <p class="finding">
-                <b>Conservative no-go</b> = <CfgNum v={CITED.nogoNominalDeg.value} units="deg" source={CITED.nogoNominalDeg.source} /> − V1 RMSE = <Num v={nogo.nogo_deg ?? null} units="deg" file={F} k="v1.conservative_nogo.nogo_deg" dp={2} /> (
-                {nogo.formula ?? '20 - v1_rmse_deg'}). The conservative variant blocks every cell steeper than this
-                {d30 ? (
-                  <>
-                    : <Num v={d30.blocked_pct} units="%" file="validation/coverage.json" k={`terrain.conservative.disc_${d30.budget_min}.blocked_pct`} /> of the{' '}
-                    {d30.budget_min}-min flat disc is blocked (nominal{' '}
-                    <Num v={d30.nominal_blocked_pct ?? null} units="%" file="validation/coverage.json" k={`terrain.conservative.disc_${d30.budget_min}.nominal_blocked_pct`} />)
-                  </>
-                ) : null}
-                . It sets the low end of the headline range.
-              </p>
-            )}
+            <p class="finding">
+              <b>{ctx.role ?? 'V1 = validation of the slope model, not a safety margin'}</b> (D23).{' '}
+              {ctx.nogoText ? <>{ctx.nogoText}</> : <>conservative no-go</>}:{' '}
+              <CfgNum v={CITED.nogoConservativeDeg.value} units="deg" source={CITED.nogoConservativeDeg.source} />
+              {ctx.agreesWithConfig === false ? <b class="bad"> (v1.json cites a different value)</b> : null}. Cell slope: <CellSlopeNote />.
+              {con30 && (
+                <>
+                  {' '}
+                  At the conservative no-go <Num v={con30.blockedPct} units="%" file={CF} k={`${con30.keyPrefix}.blocked_pct`} /> of the {b30}-min flat disc is blocked
+                  {nom30 && (
+                    <>
+                      {' '}
+                      (nominal <Num v={nom30.blockedPct} units="%" file={CF} k={`${nom30.keyPrefix}.blocked_pct`} />)
+                    </>
+                  )}
+                  ; the old max-slope rule ("rough footing") would block{' '}
+                  <Num v={con30.maxSlopeRulePct} units="%" file={CF} k={`${con30.keyPrefix}.maxslope_rule_blocked_pct`} /> (comparison only).
+                </>
+              )}
+            </p>
             {sens.length > 0 && (
               <>
                 <h4>Sensitivities</h4>
@@ -229,7 +243,7 @@ function V1Section() {
                     ))}
                   </tbody>
                 </table>
-                <p class="caption">Sensitivities only; the primary result (3 m footprint, focus area, MMGIS tilt) sets the conservative no-go.</p>
+                <p class="caption">Sensitivities only; the primary result is the 3 m footprint, focus area, MMGIS tilt. None of them sets a no-go (D23).</p>
               </>
             )}
           </>
@@ -353,8 +367,9 @@ function RadChecks() {
                 </td>
               </tr>
               <tr>
-                <td>Event excess dose</td>
+                <td>Event excess dose{r.storm_2024.excess_is_lower_bound ? ' (lower bound, D36)' : ''}</td>
                 <td class="r">
+                  {r.storm_2024.excess_is_lower_bound ? '≥ ' : ''}
                   <Num v={r.storm_2024.excess_mGy} units="mGy" file="conditions/rad.json" k="rad.storm_2024.excess_mGy" />
                 </td>
                 <td class="r">
@@ -369,13 +384,6 @@ function RadChecks() {
       }
     </Show>
   )
-}
-
-/** O2 reserve of the route margin (crew.yaml o2_margin, S review): minutes at the effort cap, and in litres. */
-export function o2Reserve(): { min: number; rateLMin: number; litres: number } {
-  const rateLMin = effortRateLMin({ effortCapFrac: CITED.effortCapFrac.value, vo2max: CITED.vo2maxMlKgMin.value, bodyMassKg: CITED.bodyMassKg.value })
-  const min = CITED.o2ReserveMinAtEffortCap.value
-  return { min, rateLMin: Math.round(rateLMin * 1000) / 1000, litres: Math.round(min * rateLMin * 100) / 100 }
 }
 
 function O2ReserveBasis() {
@@ -399,9 +407,12 @@ const ASSUMPTIONS: { what: string; c: { value: unknown; source: string }; units?
   { what: 'Suit O₂ budget planned against (primary)', c: CITED.o2PrimaryL, units: 'L', basis: 'Derived: NASA EVA-EXP-0075, ICES-2026-127; metabolic only' },
   { what: 'O₂ reserve in the route margin (minutes at the effort cap)', c: CITED.o2ReserveMinAtEffortCap, units: 'min', basis: <O2ReserveBasis /> },
   { what: 'O₂ use while working at a station', c: CITED.stationTaskRateLMin, units: 'L/min', basis: '1,000 BTU/hr ISS/EMU average; S review' },
-  { what: 'Access radius around a station', c: CITED.accessRadiusM, units: 'm', basis: 'Assumed (WS2); access-cell rule chosen by the user, 14 Nov 11:40' },
+  { what: 'Access radius around a station', c: CITED.accessRadiusM, units: 'm', basis: 'Decided (D27, user 16:20); access-cell rule chosen by the user, 14 Nov 11:40' },
+  { what: 'O₂ energy equivalent', c: CITED.o2EnergyJPerMl, units: 'J/mL', basis: 'Decided (D29): one value for the uphill term, heat, haul and the O₂ budget' },
   { what: 'Slope limit, nominal', c: CITED.nogoNominalDeg, units: 'deg', basis: 'Scoville; our assumption' },
   { what: 'Slope limit, optimistic', c: CITED.nogoOptimisticDeg, units: 'deg', basis: 'Our assumption' },
+  { what: 'Slope limit, conservative', c: CITED.nogoConservativeDeg, units: 'deg', basis: 'Decided (D23); V1 is a validation, not a margin' },
+  { what: 'Step guard (any 1 m slope inside a 3 m cell)', c: CITED.stepGuardDeg, units: 'deg', basis: <>D22; <AssumedTag note="Step guard: assumed (D22, config)" /></> },
   { what: 'Beyond tested suited data above', c: CITED.flagBeyondTestedDeg, units: 'deg', basis: 'IST-2 tested up to ≈17°' },
   { what: 'Dose allowance per EVA', c: CITED.dAllowMgy, units: 'mGy', basis: 'Our assumption, adjustable (D9)' },
   { what: 'Fix accuracy at the rover', c: CITED.fixSigmaRoverM, units: 'm', basis: 'Our assumption' },
@@ -458,6 +469,8 @@ function Scorecard({ focus }: { focus?: string }) {
         <CoverageSection />
         <h3>RAD checks</h3>
         <RadChecks />
+        <h3>Physiology model check: IST-2 (D30)</h3>
+        <Ist2Section />
         <h3>Known-answer tests</h3>
         <KatSection />
       </section>
@@ -798,6 +811,52 @@ function CoverageTable({ c }: { c: Record<string, unknown> }) {
           <Num v={pc.min_assessed_pct} units="%" file={F} k="validation.coverage.pad_check.min_assessed_pct" />): {pc.pass ? <b class="ok">pass</b> : <b class="bad">fail</b>}.
         </p>
       )}
+    </>
+  )
+}
+
+/** D30 (no tuning): IST-2 pass/miss per variant and grade from the manifest keys physio.ist2.* (WS2); D29 energy equivalent from config. */
+function Ist2Section() {
+  const rows = ist2Rows(getManifest())
+  return (
+    <>
+      {rows.length ? (
+        <table class="mini">
+          <thead>
+            <tr>
+              <th>Variant</th>
+              <th class="r">Grade</th>
+              <th class="r">IST-2 reported</th>
+              <th class="r">Model band</th>
+              <th>Result</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((r) => (
+              <tr>
+                <td>{r.variant}</td>
+                <td class="r">{r.grade} %</td>
+                <td class="r">
+                  <Num v={r.reported} file={r.file} k={`${r.keyPrefix}.reported`} />
+                </td>
+                <td class="r">
+                  <Num v={r.bandLo} file={r.file} k={`${r.keyPrefix}.band_lo`} /> to <Num v={r.bandHi} file={r.file} k={`${r.keyPrefix}.band_hi`} />
+                </td>
+                <td>
+                  <Num v={r.pass} file={r.file} k={`${r.keyPrefix}.pass`} boolText={['pass', 'miss']} className={r.pass === false ? 'bad' : ''} />
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      ) : (
+        <p class="muted">No physio.ist2.* entries in manifest.json (WS2).</p>
+      )}
+      <p class="caption">
+        Pass = the IST-2 reported value lies inside the model's band for that variant and grade. No tuning (D30): a miss is reported as a finding, not fixed. O₂
+        energy equivalent <CfgNum v={CITED.o2EnergyJPerMl.value} units="J/mL" source={CITED.o2EnergyJPerMl.source} /> for the uphill term, heat, haul and the O₂
+        budget (D29).
+      </p>
     </>
   )
 }

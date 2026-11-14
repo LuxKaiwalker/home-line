@@ -25,6 +25,8 @@ import { DragNote } from '../components/DragNote'
 import { PadBlockLabel, PadInUseText } from '../components/PadInUse'
 import { ensureManifest } from './common'
 import { routeSummary, type RouteLeg } from './route'
+import { EXCLUDED_NOTE, STORM_TIMING_NOTE, headline60, homeFor, marginLabel, tightestMargin, turnBacks } from './decisions'
+import { CellSlopeNote, PlanningRuleNote } from '../components/DecisionNotes'
 import type { View } from './types'
 
 const LAYER_LABELS: Record<LayerGroup, string> = {
@@ -342,10 +344,11 @@ function ConsolePanel({ cmap }: { cmap: ConsoleMap }) {
             {padIndex && (
               <>
                 <br />
-                Official pad: <Num v={padIndex.official.score} file={PADS_INDEX} k={padKey(padIndex.official.id, 'score')} /> feasible EVAs.
+                Official pad: <Num v={padIndex.official.score} file={PADS_INDEX} k={padKey(padIndex.official.id, 'score')} /> feasible EVAs (frozen, D42).
               </>
             )}
           </div>
+          <Headline60 entry={scenario} />
         </section>
       )}
 
@@ -473,20 +476,21 @@ function ConsolePanel({ cmap }: { cmap: ConsoleMap }) {
                       <a href={href({ name: 'station', id: s.id })}>
                         <b>{s.id}</b> {s.name}
                       </a>
+                      {s.reachability_label ? <span class="muted"> · {s.reachability_label}</span> : null}
                     </td>
                     <td class="r">
                       {a.state === 'access' ? (
                         <Num v={a.dist_m} units="m" file={a.file} k={`${a.keyPrefix}.dist_m`} />
                       ) : a.state === 'none' ? (
                         <span class="num-unknown" title={a.reason ?? ''}>
-                          no access cell
+                          none
                         </span>
                       ) : (
                         <span class="num-unknown">unknown</span>
                       )}
                     </td>
                     <td class="r">
-                      <Num v={s.t_home_min[scenario.id] ?? null} units="min" file="stations.json" k={`t_home_min.${s.id}.${scenario.id}`} />
+                      <HomeCell s={s} sid={scenario.id} />
                     </td>
                   </tr>
                 )
@@ -504,13 +508,19 @@ function ConsolePanel({ cmap }: { cmap: ConsoleMap }) {
         {stations && (
           <p class="caption">
             Access-cell rule: each station keeps its science point (filled marker); the route ends at the nearest walkable cell within{' '}
-            <CfgNum v={CITED.accessRadiusM.value} units="m" source={CITED.accessRadiusM.source} /> (open circle, dotted walk-in line).{' '}
-            <AssumedTag note="Access radius: assumed (WS2), user chose the rule 2026-11-14 11:40" /> The walk-in leg is not modelled.
-            {stations.some((s) => accessFor(s, scenario.id).state === 'none') && (
+            <CfgNum v={CITED.accessRadiusM.value} units="m" source={CITED.accessRadiusM.source} /> (open circle, dotted walk-in line; radius decided, D27). The walk-in
+            leg is not modelled.
+            {stations.some((s) => homeFor(s, scenario.id).kind === 'unreachable') && (
               <>
                 {' '}
-                <b>{stations.filter((s) => accessFor(s, scenario.id).state === 'none').map((s) => s.id).join(', ')}</b>: no access cell within the radius, so no walk home
-                is computed (hover for the reason).
+                <b>
+                  {stations
+                    .filter((s) => homeFor(s, scenario.id).kind === 'unreachable')
+                    .map((s) => s.id)
+                    .join(', ')}
+                </b>
+                : {CITED.unreachableLabel.value} in <code>{scenario.id}</code> (no access cell within the radius with a walk home; hover for WS2's reason). Shown as is
+                (D46).
               </>
             )}
           </p>
@@ -601,7 +611,8 @@ function Legend(p: {
         {v.bands && (
           <>
             <li>
-              <Swatch kind="fill" color={THEME.variant.conservative} /> {p.budget}-min homeline, conservative (inner)
+              <Swatch kind="fill" color={THEME.variant.conservative} /> {p.budget}-min homeline, conservative (inner; no-go{' '}
+              <CfgNum v={CITED.nogoConservativeDeg.value} units="deg" source={CITED.nogoConservativeDeg.source} />, D23)
             </li>
             <li>
               <Swatch kind="fill" color={THEME.variant.optimistic} /> … optimistic only (outer)
@@ -615,6 +626,7 @@ function Legend(p: {
           (['physiology', 'slope', 'data'] as const).map((c) => (
             <li>
               <Swatch kind="line" color={THEME.cause[c]} /> edge set by <b>{THEME.causeLabel[c]}</b>: {THEME.causeHelp[c]}
+              {c === 'slope' && <CellSlopeNote />}
             </li>
           ))}
         {v.unknown && (
@@ -698,6 +710,8 @@ function RouteSection(p: {
     )
   }
   const tl = p.timeline ?? []
+  const tight = tightestMargin(tl)
+  const tb = turnBacks(tl)
   const at = (event: string, station: string | null) => {
     const i = tl.findIndex((e) => e.event === event && e.station === station)
     return i < 0 ? null : <Num v={tl[i].t_min} units="min" file={tf} k={`${p.timelineKey}.${i}.t_min`} />
@@ -727,6 +741,17 @@ function RouteSection(p: {
         <label class="toggle inline">
           <input type="checkbox" checked={p.shown} onChange={(e) => p.onShow((e.target as HTMLInputElement).checked)} /> show on map
         </label>
+      </p>
+      {tight && (
+        <p>
+          Tightest margin <Num v={tight.e.margin_min} units="min" file={tf} k={`${p.timelineKey}.${tight.i}.margin_min`} /> ({marginLabel(tight.e.margin_binding)}
+          {tight.e.station ? `, ${tight.e.event} ${tight.e.station}` : ''})
+          {tight.dose && <span class="muted"> · {STORM_TIMING_NOTE}</span>}
+        </p>
+      )}
+      {tb.length > 0 && <TurnBackTable rows={tb} file={tf} keyPrefix={p.timelineKey} />}
+      <p class="caption">
+        <PlanningRuleNote />
       </p>
     </section>
   )
@@ -886,12 +911,20 @@ function PadHeadline({ id, summary, file, budget, error }: { id: string; summary
       <div class="headline-text">
         {h ? (
           <>
-            reachable of the <i>assessed</i> flat disc within {h.budget} min, from this parking option.
+            reachable of the <i>assessed</i> flat disc within {h.budget} min{h.inData ? ' (of the part inside the terrain data)' : ''}, from this parking option.
             {h.range && (
               <>
                 <br />
                 Range <Num v={h.range[0]} units="%" file={file} k={k('headline', h.budget, 'range_pct', 'low')} /> (conservative) to{' '}
                 <Num v={h.range[1]} units="%" file={file} k={k('headline', h.budget, 'range_pct', 'high')} /> (optimistic)
+              </>
+            )}
+            {h.inData && h.inDataPct !== null && (
+              <>
+                <br />
+                <b>
+                  <Num v={h.inDataPct} units="%" file={file} k={k('headline', h.budget, 'in_data_pct')} /> of the circle lies inside the terrain data
+                </b>
               </>
             )}
           </>
@@ -900,6 +933,12 @@ function PadHeadline({ id, summary, file, budget, error }: { id: string; summary
         )}
         <br />
         Feasible EVAs: <Num v={summary.score} file={file} k={k('score')} />
+        {summary.excluded !== null && (
+          <>
+            {' '}
+            · combinations excluded by the planning rule: at most <Num v={summary.excluded} file={file} k={k('feasible', 'excluded_by_effort_cap_rule')} />
+          </>
+        )}
       </div>
     </section>
   )
@@ -928,6 +967,9 @@ function PadPicker({ index, selected, onPick, suitKg }: { index: PadsIndexView; 
             <th>Pad</th>
             <th class="r" title="D21 score: station subsets with a feasible route from this pad">
               Feasible EVAs
+            </th>
+            <th class="r" title={`Excluded combinations: ${EXCLUDED_NOTE}`}>
+              Excl. <span class="unit">≤</span>
             </th>
             <th class="r">
               Elev. <span class="unit">m</span>
@@ -967,6 +1009,9 @@ function PadPicker({ index, selected, onPick, suitKg }: { index: PadsIndexView; 
                   <Num v={o.score} file={F} k={padKey(o.id, 'score')} />
                 </td>
                 <td class="r">
+                  {o.excluded === null ? <span class="muted">–</span> : <Num v={o.excluded} file={o.official ? F : `scenarios/pads/${o.id}/summary.json`} k={padKey(o.id, 'feasible', 'excluded_by_effort_cap_rule')} />}
+                </td>
+                <td class="r">
                   <Num v={o.elevM} file={F} k={padKey(o.id, 'elev_m')} />
                 </td>
               </tr>
@@ -977,8 +1022,81 @@ function PadPicker({ index, selected, onPick, suitKg }: { index: PadsIndexView; 
       <p class="caption">
         D21: the official pad is the candidate with the most feasible EVAs (station subsets with a feasible route); it is the default. Choosing another option
         switches the bands, route, partner line, headline and feasible-EVA count to that pad (nominal variant, {suitKg} kg suit only; no budget slider).{' '}
-        <b>The HUD, the 3D view and the station cards stay on the official pad.</b>
+        <b>The HUD, the 3D view and the station cards stay on the official pad.</b> The official pad is frozen (D42).
       </p>
+      {index.options.some((o) => o.excluded !== null) && (
+        <p class="caption">
+          <b>Excl. ≤</b>: {EXCLUDED_NOTE}. <PlanningRuleNote />
+        </p>
+      )}
     </section>
+  )
+}
+
+/** D43: the 60-min share over the part of the circle inside the terrain data, with the coverage label. */
+function Headline60({ entry }: { entry: ScenarioEntry }) {
+  const h = headline60(entry)
+  if (!h) return null
+  const F = 'scenarios/index.json'
+  const sid = entry.id
+  return (
+    <div class="headline-60 caption">
+      Within {h.budget} min: <Num v={h.reachablePct} units="%" file={F} k={`reachable_pct.${sid}.${h.budget}`} />
+      {h.range && (
+        <>
+          {' '}
+          (<Num v={h.range[0]} units="%" file={F} k={`reachable_pct_range.${sid}.${h.budget}.low`} /> to{' '}
+          <Num v={h.range[1]} units="%" file={F} k={`reachable_pct_range.${sid}.${h.budget}.high`} />)
+        </>
+      )}
+      {h.inData ? ' of the part of the circle inside the terrain data. ' : '. '}
+      {h.inDataPct !== null && h.inData && (
+        <b>
+          <Num v={h.inDataPct} units="%" file={F} k={`headline.${sid}.disc_${h.budget}.in_data_pct`} /> of the circle lies inside the terrain data
+        </b>
+      )}
+      . The {CONFIG.walkbackBudgetsMin[0]}-min figure stays the headline.
+    </div>
+  )
+}
+
+/** Walk home in a scenario; null = "not reachable on foot" (D26, D46: shown as is). */
+function HomeCell({ s, sid }: { s: Station; sid: string }) {
+  const h = homeFor(s, sid)
+  if (h.kind === 'time') return <Num v={h.v} units="min" file="stations.json" k={`t_home_min.${s.id}.${sid}`} />
+  if (h.kind === 'unreachable')
+    return (
+      <span class="num-unknown" title={h.reason ?? ''}>
+        {h.label}
+      </span>
+    )
+  return <span class="num-unknown">unknown</span>
+}
+
+/** D28: latest turn-back per station from the timeline's turn_back rows, with the binding term. */
+function TurnBackTable({ rows, file, keyPrefix }: { rows: ReturnType<typeof turnBacks>; file: string; keyPrefix: string }) {
+  return (
+    <table class="mini">
+      <thead>
+        <tr>
+          <th>Turn back by</th>
+          <th class="r">
+            t <span class="unit">min</span>
+          </th>
+          <th>Bound by</th>
+        </tr>
+      </thead>
+      <tbody>
+        {rows.map((r) => (
+          <tr>
+            <td>{r.station ?? '–'}</td>
+            <td class="r">
+              <Num v={r.t_min} file={file} k={`${keyPrefix}.${r.i}.t_min`} />
+            </td>
+            <td>{marginLabel(r.binding)}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
   )
 }

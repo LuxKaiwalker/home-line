@@ -1,5 +1,6 @@
 // Scorecard helpers for V1 (WS6 validation/v1.json) and the KAT list (validation/kats.json).
 // Structure only: every number shown still goes through <Num> with its manifest key.
+import { CITED } from '../config'
 
 export interface Confusion {
   tp: number
@@ -113,4 +114,57 @@ export function v2Classes(summary: Record<string, unknown>): V2Class[] {
 export function scopeText(s: string | undefined | null): string | null {
   if (!s) return null
   return s.replace(/;\s*far class pending the D7 manual check/i, '').replace(/\s*\(far class pending the D7 manual check\)/i, '')
+}
+
+export interface V1Context {
+  role: string | null
+  nogoText: string | null
+  nogoDeg: number | null
+  derivedFromV1: boolean | null
+  /** The cited no-go equals config/site.yaml slope.nogo_deg.conservative. */
+  agreesWithConfig: boolean | null
+}
+
+/** D23 (WS6 session 3): `role` and `nogo_context` of validation/v1.json; null on older files. */
+export function v1Context(v: Record<string, unknown>): V1Context {
+  const c = v.nogo_context && typeof v.nogo_context === 'object' ? (v.nogo_context as Record<string, unknown>) : null
+  const deg = c && typeof c.conservative_nogo_deg === 'number' ? c.conservative_nogo_deg : null
+  return {
+    role: typeof v.role === 'string' ? v.role : null,
+    nogoText: c && typeof c.text === 'string' ? c.text : null,
+    nogoDeg: deg,
+    derivedFromV1: c && typeof c.derived_from_v1 === 'boolean' ? c.derived_from_v1 : null,
+    agreesWithConfig: deg === null ? null : deg === CITED.nogoConservativeDeg.value,
+  }
+}
+
+export interface CellStateDisc {
+  variant: string
+  budget: number
+  nogoDeg: number | null
+  blockedPct: number | null
+  stepGuardOnlyPct: number | null
+  /** Old max-slope rule ("rough footing"), comparison only. */
+  maxSlopeRulePct: number | null
+  /** Manifest key prefix (WS1): terrain.cellstates.{variant}.disc_{budget}. */
+  keyPrefix: string
+}
+
+/** coverage.json terrain_checks.cell_states (WS1, D22/D23): one variant's disc at one budget. */
+export function cellStateDisc(terrainChecks: unknown, variant: string, budget: number): CellStateDisc | null {
+  const tc = terrainChecks && typeof terrainChecks === 'object' ? (terrainChecks as Record<string, unknown>) : null
+  const cs = tc?.cell_states as { variants?: Record<string, { nogo_deg?: number; discs?: Record<string, unknown>[] }> } | undefined
+  const vv = cs?.variants?.[variant]
+  const d = vv?.discs?.find((x) => x.budget_min === budget)
+  if (!vv || !d) return null
+  const n = (x: unknown) => (typeof x === 'number' && Number.isFinite(x) ? x : null)
+  return {
+    variant,
+    budget,
+    nogoDeg: n(vv.nogo_deg),
+    blockedPct: n(d.blocked_pct),
+    stepGuardOnlyPct: n(d.blocked_stepguard_only_pct),
+    maxSlopeRulePct: n(d.maxslope_rule_blocked_pct),
+    keyPrefix: `terrain.cellstates.${variant}.disc_${budget}`,
+  }
 }

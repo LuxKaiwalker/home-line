@@ -75,6 +75,16 @@ export interface PadOption {
   official: boolean
   /** Tiebreak values as written: [name, value]. */
   tiebreak: [string, number | null][]
+  /** D45 (WS2 session 8): screening count minus the full-run count (upper bound of what the effort-cap O₂ rule excludes). */
+  excluded: number | null
+  /** Screening count (walking time only, no margin check). */
+  screenCount: number | null
+}
+
+/** `feasible` block of an index row or summary (WS2 session 8). */
+function feasibleOf(r: Record<string, unknown>): { excluded: number | null; screenCount: number | null } {
+  const f = obj(r.feasible)
+  return { excluded: f ? num(f.excluded_by_effort_cap_rule) : null, screenCount: f ? num(f.screen_count) : null }
 }
 
 export interface PadsIndexView {
@@ -110,6 +120,7 @@ export function parsePadsIndex(raw: unknown): PadsIndexView {
       score: num(r.score),
       official,
       tiebreak: tiebreaks(r),
+      ...feasibleOf(r),
     }
   })
   options.sort((a, b) => (a.rank ?? Infinity) - (b.rank ?? Infinity))
@@ -122,6 +133,10 @@ export interface PadHeadline {
   budget: number
   reachablePct: number | null
   range: [number | null, number | null] | null
+  /** D43: share of the flat circle inside the terrain data (null when not written). */
+  inDataPct: number | null
+  /** The share is over the part of the circle inside the data (basis "in_data"). */
+  inData: boolean
 }
 
 export interface PadSummaryView {
@@ -133,11 +148,13 @@ export interface PadSummaryView {
   elevM: number | null
   headlines: PadHeadline[]
   route: { stops: string[] | null; totalMin: number | null } | null
+  /** D45: excluded-combination count (WS2 session 8). */
+  excluded: number | null
 }
 
 function headline(budget: number, h: Record<string, unknown>): PadHeadline {
   const r = Array.isArray(h.range_pct) && h.range_pct.length === 2 ? ([num(h.range_pct[0]), num(h.range_pct[1])] as [number | null, number | null]) : null
-  return { budget, reachablePct: num(h.reachable_pct), range: r }
+  return { budget, reachablePct: num(h.reachable_pct), range: r, inDataPct: num(h.in_data_pct), inData: h.basis === 'in_data' }
 }
 
 /** Reads scenarios/pads/{id}/summary.json; headline as {"30": {...}, "60": {...}} or [{budget_min, ...}]. */
@@ -167,6 +184,7 @@ export function parsePadSummary(raw: unknown, id: string): PadSummaryView {
     route: r
       ? { stops: Array.isArray(r.stops) ? r.stops.filter((x): x is string => typeof x === 'string') : null, totalMin: num(r.total_min) }
       : null,
+    excluded: feasibleOf(o).excluded,
   }
 }
 

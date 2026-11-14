@@ -214,3 +214,13 @@ table.mini.route-legs th { white-space: normal; vertical-align: bottom; }
 .pad-picker td.r { white-space: nowrap; }
 .legend li:has(.drag-note) { flex-wrap: wrap; }
 .legend li .drag-note { flex: 1 1 100%; min-width: 0; margin: 0.2rem 0 0; }
+
+/* --- session 6: D43 60-min line, D33 compass --- */
+.headline-60 { margin-top: 0.4rem; }
+.compass { margin: 0.5rem 0; }
+.compass svg { display: block; max-width: 100%; height: auto; }
+.compass-ring { fill: none; stroke: var(--line); stroke-width: 1.5; }
+.compass-cardinal { fill: var(--muted); font-size: 12px; font-weight: 600; }
+.compass-tick { stroke: var(--accent); stroke-width: 2.5; }
+.compass-tick.hidden { stroke: var(--muted); stroke-dasharray: 3 2; }
+.compass-centre { fill: var(--ink); }

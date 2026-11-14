@@ -5,8 +5,8 @@ import { data } from '../data/loader'
 import type { Card, Station, TimelineEvent } from '../data/types'
 import { DummyNote, SimulatedLabel } from '../components/labels'
 import { Num } from '../components/Num'
-import { CONFIG } from '../config'
-import { marginLabel } from './station'
+import { CITED, CONFIG } from '../config'
+import { homeFor, marginLabel } from './decisions'
 import { preactView, Show, useLoad } from './page'
 
 interface CuffData {
@@ -64,8 +64,9 @@ function Cuff() {
                             <Num v={e.t_min} file={tf} k={`timeline.${d.scenario}.${i}.t_min`} />
                           </td>
                           <td>
-                            {e.event}
+                            {e.event === 'turn_back' ? 'turn back by' : e.event}
                             {e.station ? ` ${e.station}` : ''}
+                            {e.event === 'turn_back' && e.margin_binding ? ` (${marginLabel(e.margin_binding)})` : ''}
                           </td>
                           <td class="r">
                             <Num v={e.o2_left_L} units="L" file={tf} k={`timeline.${d.scenario}.${i}.o2_left_L`} />
@@ -105,10 +106,15 @@ function Cuff() {
                     <dt class="strong">TURN BACK BY</dt>
                     <dd class="strong">
                       <Num v={c?.timeline.turn_back ?? null} units="min" file={s.card} k={`card.${s.id}.timeline.turn_back`} />
+                      {c?.turn_back_binding ? ` (${marginLabel(c.turn_back_binding)})` : ''}
                     </dd>
                     <dt>Home from here</dt>
                     <dd>
-                      <Num v={s.t_home_min[d.scenario] ?? null} units="min" file="stations.json" k={`t_home_min.${s.id}.${d.scenario}`} />
+                      {homeFor(s, d.scenario).kind === 'unreachable' ? (
+                        CITED.unreachableLabel.value
+                      ) : (
+                        <Num v={s.t_home_min[d.scenario] ?? null} units="min" file="stations.json" k={`t_home_min.${s.id}.${d.scenario}`} />
+                      )}
                     </dd>
                     <dt>Binding limit</dt>
                     <dd>{c ? marginLabel(c.margin_binding) : 'unknown'}</dd>

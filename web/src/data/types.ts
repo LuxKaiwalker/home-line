@@ -11,6 +11,8 @@ export interface ScenarioEntry {
   suit_kg: number
   files: { isochrones: string; bands: string; edges: string; partner: string }
   headline: { budget_min: number; reachable_pct: number | null; range_pct: [number | null, number | null] }
+  /** D43 (WS2 session 8): the 60-min share over the part of the circle inside the terrain data. */
+  headline_60?: { budget_min: number; reachable_pct: number | null; range_pct: [number | null, number | null]; basis?: string; in_data_pct?: number | null; label?: string | null }
 }
 
 export interface ScenariosIndex {
@@ -62,6 +64,12 @@ export interface Station {
   /** WS2 extras (access-cell rule, user 11:40; open stations schema): per scenario. */
   access_radius_m?: number
   access?: Record<string, StationAccess>
+  /** D26: false when no scenario reaches the station; then reachability_label (config label). */
+  reachable_on_foot?: boolean
+  reachability_label?: string | null
+  /** D44 (WS1 session 5): stations sharing a name get a compass suffix from the official pad. */
+  name_base?: string
+  name_suffix?: { compass?: string; bearing_deg?: number; distance_m?: number; distance_rank?: string } | null
 }
 
 /** Walk-in from the access cell to the science point: straight line, not modelled (WS2). */
@@ -92,11 +100,14 @@ export interface Card {
   navcam: { sol: number | null; image_id: string | null; url_local: string | null; overlay_png: string | null; credit?: string; dist_to_observer_m?: number }
   skyline_error_deg: { near: number | null; mid: number | null; far: number | null }
   panorama_png: string | null
-  landmarks: { name: string; bearing_deg: number; dist_km: number; kind?: string; above_skyline?: boolean }[]
+  /** D33: `display` "label" (above the skyline) or "bearing_tick" (below it, bearing only). */
+  landmarks: { name: string; bearing_deg: number; dist_km: number; kind?: string; above_skyline?: boolean; display?: 'label' | 'bearing_tick' }[]
   timeline: { arrive: number | null; leave: number | null; turn_back: number | null }
   /** null when the station has no route (contract v1.1.1; WS2 Q11). */
-  margin_binding: 'O2' | 'daylight' | 'dose' | null
+  margin_binding: 'O2' | 'daylight' | 'dose' | 'EVA duration' | null
   contingency: string
+  /** D28 (contract v1.1.3): the term that sets the latest turn-back, e.g. "EVA duration". */
+  turn_back_binding?: string | null
   // Extras merged by make web (WS3 fragment + WS2 timeline part; C 11:42):
   station?: string
   scenario?: string
@@ -121,12 +132,16 @@ export interface TimelineEvent {
   o2_left_L: number | null
   t_home_min: number | null
   margin_min: number | null
+  /** Binding margin term of the row (WS2); "EVA duration" on turn-back rows (D28). */
+  margin_binding?: string | null
 }
 
 export interface TradeCell {
   science_value: number | null
   reachable_pct: number | null
   partner_area_km2: number | null
+  /** D43: 60-min row, share of the circle inside the terrain data. */
+  in_data_pct?: number | null
 }
 
 export interface TradeTable {
@@ -171,7 +186,7 @@ export interface PadAlternative {
 export interface PadFile {
   dummy: boolean
   /** The pad in use (contract v1.1.2, C 14:58): config/site.yaml pad_default, with the F8 rule evaluated there. */
-  pad: PadPoint & { source?: string }
+  pad: PadPoint & { source?: string; score_kind?: string; f8_score?: number | null; id?: string; tiebreak?: Record<string, number | null> }
   alternatives: PadAlternative[]
   hop_options: { pads: number[][]; note: string }[]
   site_rule_version: string | number
@@ -204,7 +219,21 @@ export interface Rad {
     excess_mGy: number | null
     onset_utc: string | null
     tripwire_utc: string | null
+    // WS4 session 2 (D35, D36), optional on older trees:
+    tripwire_halfwidth_min?: number | null
+    tripwire_halfwidth_label?: string | null
+    tripwire_halfwidth_rule?: string | null
+    excess_is_lower_bound?: boolean | null
+    excess_label?: string | null
+    end_of_window_utc?: string | null
+    end_of_window_rate_uGy_day?: number | null
+    end_of_window_rate_minus_baseline_uGy_day?: number | null
+    end_of_window_rate_over_baseline_ratio?: number | null
+    dose_equivalent_mSv?: number | null
+    q_note?: string | null
   }
+  /** WS4 session 2 (D34, D35): dose column label and its status; time tag. */
+  source?: { component?: string; component_label?: string; component_status?: string; time_tag_status?: string; series_time?: string; [k: string]: unknown }
   leash: {
     D_allow_mGy: number | null
     tau_min_at_peak: number | null

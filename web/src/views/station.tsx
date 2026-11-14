@@ -14,14 +14,8 @@ import { DragNote } from '../components/DragNote'
 import { Page, preactView, Show, useLoad } from './page'
 import { FAR_NOT_VALIDATED, scopeText } from './validation'
 
-export const MARGIN_LABEL: Record<string, string> = { O2: 'oxygen', daylight: 'daylight', dose: 'radiation dose' }
-
-/** Binding margin term for display; null = the station has no route (contract v1.1.1). */
-export function marginLabel(b: string | null | undefined): string {
-  if (b === null) return 'none: no route to this station'
-  if (b === undefined || b === '') return 'unknown'
-  return MARGIN_LABEL[b] ?? b
-}
+import { STORM_TIMING_NOTE, compassTick, homeFor, isHiddenLandmark, landmarkNote, marginLabel, type Landmark } from './decisions'
+export { MARGIN_LABEL, marginLabel } from './decisions'
 
 /** Manifest key of a landmark number (WS3 pipeline/horizon/cards.py: spaces become underscores). */
 export function landmarkKey(station: string, name: string, f: 'bearing_deg' | 'dist_km'): string {
@@ -102,6 +96,7 @@ function CardBody({ d }: { d: StationData }) {
     <div class="card-grid">
       <section class="card-main">
         {s.objective && <p class="objective">{s.objective}</p>}
+        {s.reachability_label && <p class="finding">{s.reachability_label} in every scenario (D26).</p>}
         {d.cardError != null && <DataProblem error={d.cardError} what={`Station card ${cf}`} />}
         {!card && d.cardError == null && <p class="muted">Station card file {NO_CARD}: Navcam, panorama, landmarks and timeline are missing; values below come from stations.json.</p>}
         <figure class="navcam">
@@ -174,7 +169,7 @@ function CardBody({ d }: { d: StationData }) {
                 <tr>
                   <td>
                     {lm.name}
-                    {lm.above_skyline === false ? <span class="muted"> (within 5 km, below the skyline)</span> : null}
+                    {landmarkNote(lm) ? <span class="muted"> ({landmarkNote(lm)})</span> : null}
                   </td>
                   <td class="r">
                     <Num v={lm.bearing_deg} units="deg" file={cf} k={landmarkKey(s.id, lm.name, 'bearing_deg')} />
@@ -189,6 +184,7 @@ function CardBody({ d }: { d: StationData }) {
         )}
         {card && c.landmarks.length === 0 && <p>No landmark qualifies from this station.</p>}
         {c.landmarks_note && <p class="caption">{c.landmarks_note}. The list is not padded.</p>}
+        {c.landmarks.length > 0 && <Compass landmarks={c.landmarks} station={s.id} />}
       </section>
 
       <aside class="card-side">
@@ -211,6 +207,7 @@ function CardBody({ d }: { d: StationData }) {
             <dt>Turn back by</dt>
             <dd class="strong">
               <Num v={c.timeline.turn_back} units="min" file={cf} k={`card.${s.id}.timeline.turn_back`} />
+              {c.turn_back_binding ? <span class="muted"> · bound by {marginLabel(c.turn_back_binding)}</span> : null}
             </dd>
             <dt>Dwell</dt>
             <dd>
@@ -227,6 +224,7 @@ function CardBody({ d }: { d: StationData }) {
                 <dt>Margin</dt>
                 <dd>
                   <Num v={c.margin_min} units="min" file={cf} k={`card.${s.id}.margin_min`} />
+                  {c.margin_binding === 'dose' && <span class="muted"> · {STORM_TIMING_NOTE}</span>}
                 </dd>
               </>
             )}
@@ -238,15 +236,29 @@ function CardBody({ d }: { d: StationData }) {
             Walk home from the access cell <StatusTag kind="modelled" />
           </h3>
           <dl>
-            {Object.entries(s.t_home_min).map(([sc, v]) => (
-              <>
-                <dt>{sc}</dt>
-                <dd>
-                  <Num v={v} units="min" file="stations.json" k={`t_home_min.${s.id}.${sc}`} />
-                </dd>
-              </>
-            ))}
+            {Object.keys(s.t_home_min).map((sc) => {
+              const h = homeFor(s, sc)
+              return (
+                <>
+                  <dt>{sc}</dt>
+                  <dd>
+                    {h.kind === 'time' ? (
+                      <Num v={h.v} units="min" file="stations.json" k={`t_home_min.${s.id}.${sc}`} />
+                    ) : h.kind === 'unreachable' ? (
+                      <span class="num-unknown" title={h.reason ?? ''}>
+                        {h.label}
+                      </span>
+                    ) : (
+                      <span class="num-unknown">unknown</span>
+                    )}
+                  </dd>
+                </>
+              )
+            })}
           </dl>
+          {Object.keys(s.t_home_min).some((sc) => homeFor(s, sc).kind === 'unreachable') && (
+            <p class="caption">"{CITED.unreachableLabel.value}": no cell within the access radius has a walk home in that scenario (hover for WS2's reason). Shown as is (D46).</p>
+          )}
         </section>
 
         <section class="kv">
@@ -283,6 +295,7 @@ function CardBody({ d }: { d: StationData }) {
                   <th class="r">t</th>
                   <th class="r">O₂ left</th>
                   <th class="r">Margin</th>
+                  <th>Bound by</th>
                 </tr>
               </thead>
               <tbody>
@@ -298,6 +311,7 @@ function CardBody({ d }: { d: StationData }) {
                     <td class="r">
                       <Num v={e.margin_min} units="min" file={tfile} k={tk(i, 'margin_min')} />
                     </td>
+                    <td>{e.margin_binding === undefined ? <span class="muted">–</span> : marginLabel(e.margin_binding)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -370,7 +384,7 @@ function AccessBlock({ s, a, scenario }: { s: Station; a: AccessView; scenario: 
           </dl>
           <p class="caption">
             Walk-in is a straight line from the access cell to the science point and is <b>not modelled</b> (no time or O₂ for it). Access radius{' '}
-            <CfgNum v={CITED.accessRadiusM.value} units="m" source={CITED.accessRadiusM.source} /> <AssumedTag note="Access radius assumed by WS2" />.
+            <CfgNum v={CITED.accessRadiusM.value} units="m" source={CITED.accessRadiusM.source} /> (decided, D27).
           </p>
         </>
       )}
@@ -393,3 +407,44 @@ const EMPTY_CARD: Card = {
 }
 
 export const view = preactView((route: Route) => <StationCard id={route.name === 'station' ? route.id : ''} />)
+
+/**
+ * D33: compass of the station's landmarks. Hidden ones (display "bearing_tick") are bearing-only
+ * ticks marked "below skyline"; visible ones get a solid tick. Bearings come from the card (the
+ * table above prints them with their manifest keys); the drawing prints no number.
+ */
+function Compass({ landmarks, station }: { landmarks: Landmark[]; station: string }) {
+  const W = 220
+  const c = W / 2
+  const R = 70
+  const hidden = landmarks.filter(isHiddenLandmark)
+  return (
+    <figure class="compass">
+      <svg viewBox={`0 0 ${W} ${W}`} width={W} height={W} role="img" aria-label={`Landmark bearings from ${station}: ${hidden.length} below the skyline`}>
+        <circle cx={c} cy={c} r={R} class="compass-ring" />
+        {[0, 90, 180, 270].map((b, i) => {
+          const [, [x, y]] = compassTick(b, c, R + 4, 14)
+          return (
+            <text x={x} y={y + 4} text-anchor="middle" class="compass-cardinal">
+              {'NESW'[i]}
+            </text>
+          )
+        })}
+        {landmarks.map((lm) => {
+          const h = isHiddenLandmark(lm)
+          const [[x0, y0], [x1, y1]] = compassTick(lm.bearing_deg, c, h ? R - 16 : R - 22, h ? 16 : 22)
+          return (
+            <line x1={x0} y1={y0} x2={x1} y2={y1} class={h ? 'compass-tick hidden' : 'compass-tick'}>
+              <title>{`${lm.name}${h ? ' (below skyline)' : ''}`}</title>
+            </line>
+          )
+        })}
+        <circle cx={c} cy={c} r={3} class="compass-centre" />
+      </svg>
+      <figcaption>
+        <StatusTag kind="modelled" /> Bearings from {station}, north up. {hidden.length > 0 ? <>Dashed ticks: below skyline (bearing only, D33): {hidden.map((l) => l.name).join(', ')}.</> : null}
+        {landmarks.length > hidden.length ? ' Solid ticks: above the computed skyline.' : ''}
+      </figcaption>
+    </figure>
+  )
+}
