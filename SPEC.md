@@ -189,7 +189,7 @@ $$
 
 - **Haul force:** F = m_IC·g·(μ cos θ + sin θ). Cart case μ = 0.1–0.4; drag case μ ≈ 0.5–0.7 _(assumed)_. _(2026-11-14, D20: the drag case is computed only for the infeasibility finding, never drawn.)_
 - **Haul speed:** v_haul = min(v_safe/2 downhill, ε·P_avail / F), with ε = 0.20–0.25 and P_avail = rescuer power at 60–80% of VO₂max minus their own walking cost (via F3). Infeasible if v_haul < 0.1 m/s or F exceeds traction (μ_boot ≈ 0.5, assumed). Ridge cells (F2) are masked.
-- **Casualty masses:** 155 / 179 / 195 kg (suited crewmate = body + suit, follows the suit slider; `haul.yaml` rule, C decision 2026-11-14 15:40, was 165–186 kg) and NASA's 343 kg rescue specification as the bound.
+- **Casualty masses:** 155 / 179 / 195 kg (suited crewmate = body + suit, follows the suit slider; `haul.yaml` rule, C decision 2026-11-14 15:35, was 165–186 kg) and NASA's 343 kg rescue specification as the bound.
 - **Output:** the 60-min haul contour (Scoville's Artemis III 1 h benchmark), drawn dashed and off by default, captioned "Design question. Every haul parameter is an assumed band." _(2026-11-14, D20: layer label "Partner line (cart haul, 60 min)"; the partner layer and the station cards carry the note "One astronaut cannot drag a suited crewmate on Mars without a cart or sled: the pull needed exceeds boot grip even on flat ground." Its numbers (drag force, traction limit, max draggable mass) come from the manifest.)_
 
 ### F11 — Trade table
