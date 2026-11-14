@@ -1,6 +1,6 @@
 # HOMELINE pipeline entry points. Stub targets print a message until the owning workstream
 # adds its CLI (ownership: AGENTS.md "Folder ownership"; this file is owned by C).
-.PHONY: all terrain engine horizons conditions conditions-fetch nav fields web web-plan dummy test lint validate kats h0 clean
+.PHONY: all terrain engine horizons conditions conditions-fetch nav fields fp3d fp3d-check web web-plan dummy test lint validate kats h0 clean
 
 PY := uv run --no-sync python
 
@@ -29,6 +29,10 @@ nav:         ## WS9: F21 Monte Carlo + fix-interval map, F22 skyline fixes -> da
 	$(PY) -m pipeline.navigation.run real $(NAV_ARGS)
 fields:      ## WS7: HUD field PNGs + worst-case fields -> data/interim/export/fields/ (WS1 grid/slope, WS2 rasters; merges WS9 fields_index_nav.json)
 	$(PY) -m pipeline.export.fields_png
+fp3d:        ## WS8: 3D near chunks, ortho textures, far mesh, index -> data/interim/export/fp3d/ (needs WS1 terrain, WS2 route, WS3 horizons)
+	$(PY) -m pipeline.export.terrain_chunks $(FP3D_ARGS)
+fp3d-check:  ## WS8: F20 data checks on the export (eye height on the route, rendered skyline vs WS3 horizons)
+	cd web && FP3D_REAL_CHECK=1 npx vitest run src/fp3d --silent=false
 web:         ## C: copy/transform data/interim -> web/public/data, merge manifest, validate, H0 check
 	$(PY) tools/make_web.py
 web-plan:    ## C: what make web would copy, and what is missing per owner (no writes)
