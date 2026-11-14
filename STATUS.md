@@ -861,6 +861,23 @@ Branch: `ws3-horizon`
 - **Pad correction (C 14:58), commits 2bb16cc and d5407d2.** WS2's pad.json (14:45 CET) carried the F8 siting proposal (137.402443, −4.769028) as its top-level pad, and the 15:18 CET cards run built the pad horizon and `horizon_ring.json` there. Fixed: the pad observer is `site.yaml pad_default`. WS2's top-level pad is used only if it equals pad_default (6 decimals) and is not marked as a proposal; its `proposal` block is never read. KAT added. Re-run at 15:24 CET: **pad observer lon/lat = 137.382, −4.806 = pad_default** (from WS2's fixed pad.json). `horizon_ring.json` is **identical** to the session-3 pad_default ring on main (elev, dist, z: max |diff| 0), so WS8's `skyline_check` needs no refresh. Pad users checked: only WS8's export (restored by WS8); `conditions/clock.json` (11:09) predates the wrong window.
 - Tests: 4 new KATs (far note, far-note manifest keys, card scope per D7, pad observer vs proposal). Full suite **762 pass**; ruff clean; `make validate` OK.
 
+#### Session 5 (2026-11-14, D33 + D21; started 15:39Z)
+
+- 15:55Z **D33 hidden landmarks (user 16:20 CET), commits e73c098, 22cc043.** Rule in `horizon.yaml hidden_landmarks` (cites D33) + `panorama_hidden` (presentation, assumed). KATs first (4 new/rewritten).
+  - **Card fragment `landmarks`:** visible landmarks (centre above the computed skyline; 3-6 nearest first) carry `display: "label"`. **Every** gazetteer landmark below the skyline (within 80 km of the pad, at any distance, so Gediz Vallis at 3.7 km too) follows, nearest first, as `{name, kind, bearing_deg, dist_km, above_skyline: false, display: "bearing_tick"}` (no elevation). `landmarks_note` when < 3 are visible: "0 landmark(s) rise above the computed skyline (fewer than 3); 8 below skyline are listed as bearing-only ticks (D33)". Manifest keys `landmark.{S}.{name}.{bearing_deg,dist_km}` now cover the hidden ones too.
+  - **Card contract:** the fragment validates (landmark items are loose). **For C (optional, v1.1.x):** add `display` (enum `label`, `bearing_tick`) to the landmark item properties.
+  - **Panorama:** hidden landmarks are bearing-only: a dashed line through the ground from the skyline down at the bearing, and a bottom band with a tick and "Name 31.3 km (below skyline)" (rows stacked, no overlap). Visible landmarks are still labelled ticks at their elevation.
+  - **Navcam overlay:** ticks only for landmarks above the skyline seen from the photo's own stop (none today).
+  - **For WS5:** draw the compass from `landmarks[]` with `display == "bearing_tick"` (marked "below skyline"). The station table's "(within 5 km, below the skyline)" suffix is now wrong for the 5-80 km hidden ones; use `display`/`above_skyline` instead.
+  - Run on the session-4 stations (cards only, 15:49Z): S1, S2, S4 each 0 visible + 8 hidden; overlays without ticks. Superseded by the Part 2 re-run on the D26 stations.
+- 15:55Z **D21 pad observer.** `pad_observer` now takes WS2 `pad.json`'s top-level pad as the official pad when its `source` cites D21 (word match, not "D210") and it is not marked as a proposal; a pre-D21 file still counts only when its pad is `pad_default`; the `proposal` block is never read; anything else falls back to `site.yaml pad_default` with a `source_note`. KAT rewritten.
+- 16:15Z **Part 2 re-run at the D21 official pad and the D26 stations** (cards only, from clean commit 364a92a = main 706b6ee + ws3; WS1 session 4 on main, WS2 session 7 pushed 9c143fd, not merged; data read from WS2's `engine/public/pad.json` and `stations.json`, both 16:57-16:58 CET). Previous outputs in `data/interim/horizon/runs/before_d21_d26/`. Log `cards_d21_d26.log`.
+  - **Pad observer = D21 official pad 137.401783, −4.77748** (WS2 `rank1`, source cites D21; ground −3,742.4 m). `horizons/pad.json` and `public/fp3d/horizon_ring.json` rebuilt there. Ring vs the pad_default ring: mean +0.36°, max |diff| 2.40° (different observer). **WS8: the ring moved, so `skyline_check` / `make fp3d-check` need a refresh at the official pad.**
+  - **Stations (6, all at WS2 access cells):** S1 (137.379249, −4.80832), S2 (137.376083, −4.778391), S4 (137.408931, −4.785832), S6 (137.383549, −4.789172), S7 (137.373323, −4.789762), S8 (137.386021, −4.770783). S3/S5 not in stations.json (D26). S1 now has an access cell (was `science_coordinate_no_access`).
+  - **Card Navcam frames** (same rule: nearest V2-ok frame; frame set unchanged, so V2 is unchanged and was not re-run): S1 NLB_811540240 (stop v118_3156, 64 m; was NLB_826633404), S2 NLB_789347468 (1,270 m), S4 NLB_767161116 (138 m), S6 NLB_800007980 (529 m), S7 NLB_803472163 (867 m), S8 NLB_743544164 (766 m). Card skyline error (median |error| on the card frame, near/mid/far °): S1 —/—/0.136, S2 —/—/3.183, S4 —/—/6.498, S6 —/—/0.043, S7 —/—/0.094, S8 0.333/0.183/0.134. S2 and S4 are north-facing far-fail frames (far class not validated, D7).
+  - **Landmarks (D33):** from every station all 8 gazetteer landmarks are below the computed skyline, so each card has 0 labelled + 8 bearing-only ticks, and no overlay ticks.
+  - Manifest `pipeline__horizon__cards.json`: 120 keys, all at commit 364a92a (no `-dirty`). `navcam_frames.json` station tags rewritten for S1-S8.
+
 ### Doing
 
 - —
@@ -869,7 +886,9 @@ Branch: `ws3-horizon`
 
 - WS5: read `validation/v2.json far_note` and the `v2.far_note.*`, `v2.n_frames_*` keys (session 4).
 - WS8: rebuild `make fp3d` with `ctx_20m_v2.tif` (far mesh + `skyline_check` from the new horizons), then re-run `make fp3d-check` (expected from the geometry check: pad 0.38°, S2 0.29°, S4 ≤ 0.2°). The pad ring itself did not change in session 4.
-- Rerun `make horizons` (or `python -m pipeline.horizon.cards`) when WS2 changes stations.json. S3/S5 cards follow once S picks them.
+- C: `make web` to pick up the new cards (S1, S2, S4, S6, S7, S8) and ring. Re-run `python -m pipeline.horizon.cards` if WS2 rewrites stations.json/pad.json again, or if S picks S3/S5 by 19:00.
+- WS8: refresh `skyline_check` for the ring at the official pad.
+- WS5: compass ticks from `display: bearing_tick` (D33).
 - Hand to WS9 (optional add-on, D19): engine API, `sky.detect_skyline`, `navcam_frames.json` with station tags.
 
 ### Blocked
@@ -879,7 +898,7 @@ Branch: `ws3-horizon`
 3. ~~Band step at 2 km~~: resolved (C 12:35 dem_1m to its edge; C 14:13 ctx_20m_v2, −0.12 m vs dem_1m). One observation for WS1 above (v102_2164: v2 18–47 m below v1 beyond dem_1m's east edge).
 6. **F20 at S4 (WS8).** 0.504° vs 0.5° only because WS8's far mesh still uses `ctx_20m.tif` v1 (see Done, session 3). WS8 rebuilds with v2; I do not touch the export.
 4. **Navcam height (C).** Unchanged: 1.9 m above DEM ground at stops (C height 1.88–1.93 m above the rover origin; the origin's height above ground is unknown).
-5. **Landmarks rule yields < 3 (C/S, content).** Only Gediz Vallis qualifies. Options: keep it as is (honest), or show the hidden landmarks' bearings as "behind the skyline" on the panorama (needs a rule change in landmarks.yaml).
+5. ~~Landmarks rule yields < 3~~: decided by D33 (user 16:20): hidden landmarks as bearing-only ticks "below skyline". Done in session 5.
 
 ### Assumptions added
 
