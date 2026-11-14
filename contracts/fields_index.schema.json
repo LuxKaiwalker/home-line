@@ -1,0 +1,79 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "homeline/contracts/fields_index.schema.json",
+  "title": "fields/index.json",
+  "description": "Index of HUD field PNGs (F18, F21). Each PNG is 8-bit RGBA, value = (R*256 + G) * scale, B = 0, A = 255 valid / 0 unknown (contracts/README.md). Index file: requires \"dummy\".",
+  "x-contract-version": "1.0.0",
+  "x-source": "SPEC §6.1, §6.2",
+  "type": "object",
+  "properties": {
+    "dummy": {
+      "type": "boolean",
+      "description": "true only in web/public/data-dummy/; must be false in web/public/data/"
+    },
+    "bounds": {
+      "type": "array",
+      "items": {
+        "type": "number"
+      },
+      "minItems": 4,
+      "maxItems": 4,
+      "description": "[w, s, e, n] lon/lat deg"
+    },
+    "width": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "px"
+    },
+    "height": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "px"
+    },
+    "res_m": {
+      "type": "number",
+      "exclusiveMinimum": 0,
+      "description": "m per px (config/hud.yaml field_png.res_m)"
+    },
+    "fields": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "file": {
+            "type": "string"
+          },
+          "scale": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "description": "units per count (config/hud.yaml field_scales)"
+          },
+          "units": {
+            "type": "string"
+          },
+          "scenario": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "scenario id, or null for shared fields (e.g. slope)"
+          }
+        },
+        "required": [
+          "file",
+          "scale",
+          "units",
+          "scenario"
+        ]
+      }
+    }
+  },
+  "required": [
+    "dummy",
+    "bounds",
+    "width",
+    "height",
+    "res_m",
+    "fields"
+  ]
+}

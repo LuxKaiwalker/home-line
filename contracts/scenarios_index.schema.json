@@ -1,0 +1,114 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "homeline/contracts/scenarios_index.schema.json",
+  "title": "scenarios/index.json",
+  "description": "Scenario index (F6). Index file: requires \"dummy\".",
+  "x-contract-version": "1.0.0",
+  "x-source": "SPEC §6",
+  "type": "object",
+  "properties": {
+    "dummy": {
+      "type": "boolean",
+      "description": "true only in web/public/data-dummy/; must be false in web/public/data/"
+    },
+    "default": {
+      "type": "string",
+      "pattern": "^[a-z]+_[0-9]+$",
+      "description": "scenario id, e.g. nom_104"
+    },
+    "scenarios": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[a-z]+_[0-9]+$",
+            "description": "scenario id, e.g. nom_104"
+          },
+          "variant": {
+            "enum": [
+              "optimistic",
+              "nominal",
+              "conservative"
+            ],
+            "description": "config/variants.yaml"
+          },
+          "suit_kg": {
+            "type": "number",
+            "description": "suit mass, kg"
+          },
+          "files": {
+            "type": "object",
+            "properties": {
+              "isochrones": {
+                "type": "string"
+              },
+              "bands": {
+                "type": "string"
+              },
+              "edges": {
+                "type": "string"
+              },
+              "partner": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "isochrones",
+              "bands",
+              "edges",
+              "partner"
+            ]
+          },
+          "headline": {
+            "type": "object",
+            "properties": {
+              "budget_min": {
+                "type": "number",
+                "description": "walkback budget, min"
+              },
+              "reachable_pct": {
+                "type": [
+                  "number",
+                  "null"
+                ],
+                "description": "percent"
+              },
+              "range_pct": {
+                "type": "array",
+                "items": {
+                  "type": [
+                    "number",
+                    "null"
+                  ]
+                },
+                "minItems": 2,
+                "maxItems": 2,
+                "description": "[low, high] percent"
+              }
+            },
+            "required": [
+              "budget_min",
+              "reachable_pct",
+              "range_pct"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "variant",
+          "suit_kg",
+          "files",
+          "headline"
+        ]
+      },
+      "minItems": 1
+    }
+  },
+  "required": [
+    "dummy",
+    "default",
+    "scenarios"
+  ]
+}

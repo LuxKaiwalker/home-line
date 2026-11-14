@@ -1,0 +1,87 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "homeline/contracts/stations.schema.json",
+  "title": "stations.json",
+  "description": "Science stations (F7). Array of station records.",
+  "x-contract-version": "1.0.0",
+  "x-source": "SPEC §6",
+  "type": "array",
+  "items": {
+    "type": "object",
+    "properties": {
+      "id": {
+        "type": "string",
+        "pattern": "^S[0-9]+$"
+      },
+      "name": {
+        "type": "string"
+      },
+      "lon": {
+        "type": "number",
+        "minimum": -180,
+        "maximum": 360,
+        "description": "longitude, deg east (Mars 2000 planetocentric)"
+      },
+      "lat": {
+        "type": "number",
+        "minimum": -90,
+        "maximum": 90,
+        "description": "latitude, deg (Mars 2000 planetocentric)"
+      },
+      "value": {
+        "type": [
+          "number",
+          "null"
+        ],
+        "description": "F7 science value"
+      },
+      "objective": {
+        "type": "string"
+      },
+      "tasks": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      },
+      "dwell_min": {
+        "type": "number",
+        "minimum": 0,
+        "description": "min"
+      },
+      "t_home_min": {
+        "type": "object",
+        "additionalProperties": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "description": "scenario id -> min (null = unknown)"
+      },
+      "in_partner_line": {
+        "type": [
+          "boolean",
+          "null"
+        ]
+      },
+      "card": {
+        "type": "string",
+        "description": "path of cards/{id}.json"
+      }
+    },
+    "required": [
+      "id",
+      "name",
+      "lon",
+      "lat",
+      "value",
+      "objective",
+      "tasks",
+      "dwell_min",
+      "t_home_min",
+      "in_partner_line",
+      "card"
+    ]
+  }
+}

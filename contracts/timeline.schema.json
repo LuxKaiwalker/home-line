@@ -1,0 +1,57 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "homeline/contracts/timeline.schema.json",
+  "title": "timeline_{scenario}.json",
+  "description": "Traverse timeline (F9): [{t_min, event, station, o2_left_L, t_home_min, margin_min}].",
+  "x-contract-version": "1.0.0",
+  "x-source": "SPEC §6",
+  "type": "array",
+  "items": {
+    "type": "object",
+    "properties": {
+      "t_min": {
+        "type": "number",
+        "description": "EVA time, min"
+      },
+      "event": {
+        "type": "string"
+      },
+      "station": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "station id or null"
+      },
+      "o2_left_L": {
+        "type": [
+          "number",
+          "null"
+        ],
+        "description": "L"
+      },
+      "t_home_min": {
+        "type": [
+          "number",
+          "null"
+        ],
+        "description": "min"
+      },
+      "margin_min": {
+        "type": [
+          "number",
+          "null"
+        ],
+        "description": "min"
+      }
+    },
+    "required": [
+      "t_min",
+      "event",
+      "station",
+      "o2_left_L",
+      "t_home_min",
+      "margin_min"
+    ]
+  }
+}

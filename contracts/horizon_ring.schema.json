@@ -1,0 +1,12 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "homeline/contracts/horizon_ring.schema.json",
+  "title": "fp3d/horizon_ring.json",
+  "description": "Far skyline ring for the 3D view (F20, from WS3). SPEC names the file but not its structure; free until WS3/WS8 propose one to C.",
+  "x-contract-version": "1.0.0",
+  "x-source": "SPEC §6.1",
+  "type": [
+    "object",
+    "array"
+  ]
+}

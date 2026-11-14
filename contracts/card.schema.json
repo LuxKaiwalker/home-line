@@ -1,0 +1,151 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "homeline/contracts/card.schema.json",
+  "title": "cards/{station}.json",
+  "description": "Station card (F12, F15). Landmark names come from config/landmarks.yaml, coordinates verified at H0; never typed by hand.",
+  "x-contract-version": "1.0.0",
+  "x-source": "SPEC §6",
+  "type": "object",
+  "properties": {
+    "navcam": {
+      "type": "object",
+      "properties": {
+        "sol": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "image_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "url_local": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "overlay_png": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "sol",
+        "image_id",
+        "url_local",
+        "overlay_png"
+      ]
+    },
+    "skyline_error_deg": {
+      "type": "object",
+      "properties": {
+        "near": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "mid": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "far": {
+          "type": [
+            "number",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "near",
+        "mid",
+        "far"
+      ],
+      "description": "deg, by distance class"
+    },
+    "panorama_png": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "landmarks": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "bearing_deg": {
+            "type": "number"
+          },
+          "dist_km": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "name",
+          "bearing_deg",
+          "dist_km"
+        ]
+      }
+    },
+    "timeline": {
+      "type": "object",
+      "properties": {
+        "arrive": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "leave": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "turn_back": {
+          "type": [
+            "number",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "arrive",
+        "leave",
+        "turn_back"
+      ],
+      "description": "EVA time, min"
+    },
+    "margin_binding": {
+      "enum": [
+        "O2",
+        "daylight",
+        "dose"
+      ]
+    },
+    "contingency": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "navcam",
+    "skyline_error_deg",
+    "panorama_png",
+    "landmarks",
+    "timeline",
+    "margin_binding",
+    "contingency"
+  ]
+}
