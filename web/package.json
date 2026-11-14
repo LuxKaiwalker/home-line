@@ -9,12 +9,18 @@
     "build": "tsc && vite build",
     "build:dummy": "tsc && VITE_DATA=dummy vite build",
     "preview": "vite preview",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "devDependencies": {
+    "@types/geojson": "^7946.0.16",
+    "@types/node": "^24.19.2",
     "@types/three": "^0.187.0",
     "typescript": "~7.0.2",
-    "vite": "^8.3.6"
+    "vite": "^8.3.6",
+    "vitest": "^5.1.0",
+    "yaml": "^2.9.1"
   },
   "dependencies": {
     "maplibre-gl": "^6.18.0",
