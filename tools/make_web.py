@@ -93,12 +93,8 @@ CARD_PART_SRC = {"WS3": "data/interim/horizon/public/cards/{S}.json",
 CARD_DROP = {"WS3": ("station", "producer", "built_utc"), "WS2": ("station",)}
 # Web paths a producer writes but that must not be published yet (web path -> reason). Reported
 # as "withheld" (never copied, never "missing"); their manifest entries are left out.
-WITHHELD = {
-    "pad.json": "C decision 2026-11-14 14:58: pad.json must describe the pad in use "
-                "(pad_default, user 11:24); WS2's file carries the F8 siting proposal as the "
-                "pad. Withheld until WS2 writes pad_default (proposal in the optional "
-                "`proposal` block, contracts v1.1.2)",
-}
+# pad.json was withheld 14:58-15:30 and released after WS2 session 5 (pad = pad_default).
+WITHHELD: dict[str, str] = {}
 WS1_PENDING = "terrain/manifest_pending.json"
 WS1_FRAGMENT = "pipeline__terrain__build.json"
 

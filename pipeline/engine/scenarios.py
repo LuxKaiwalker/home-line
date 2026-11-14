@@ -315,6 +315,58 @@ def siting_scenario() -> str:
     return f"{pre}_{load('crew')['default_suit_kg']}"
 
 
+def run_siting(grid: Grid, sst, s_none, ssid: str, rmse, out: Path, pub: Path, pad_override,
+               ) -> dict:  # fmt: skip
+    """F8 siting + pad.json (siting.run) and the summary.json block. The pad in use is
+    pad_default, or --pad when given; the siting result is only the proposal."""
+    from . import siting
+
+    print(f"siting: forward runs from the {ssid} access cells of {[s['id'] for s in sst]}"
+          f"; no access cell: {s_none}")  # fmt: skip
+    if not sst:
+        raise MissingInput(f"no station has an access cell in {ssid}")
+    override = tuple(pad_override) if pad_override else None
+    src = "--pad override (scenarios CLI)" if override else None
+    doc = siting.run(grid, sst, rmse, out, pub, override, src, s_none)
+    return {"scenario": ssid, "stations": [s["id"] for s in sst], "no_access": s_none,
+            "pad": doc["pad"], "proposal": doc["proposal"]}  # fmt: skip
+
+
+def siting_only(grid: Grid, pad, a, rmse, settings: Settings, out: Path, pub: Path) -> int:
+    """--siting-only: the rule scenario's return field (not written), WS1 stations and their
+    access cells in that scenario, then F8 siting + pad.json. No other product is touched;
+    summary.json gets the new siting block."""
+    import json
+
+    ssid = siting_scenario()
+    sids, skipped = runnable([ssid], rmse)
+    if not sids:
+        print(f"siting skipped: {skipped.get(ssid)}")
+        return 2
+    p = physio.scenario_params(ssid, v1_rmse_deg=rmse)
+    f = dijkstra.return_field(grid.with_nogo(p.nogo_deg), physio.grade_table(p), pad)
+    st, missing = stations.load_ws1_stations(a.terrain / "stations.json")
+    stations.attach_cells(grid, st)
+    access.resolve(grid, {ssid: f}, st, access.radius_m())
+    if not st or any(s.get("value") is None for s in st):
+        print("siting skipped: no stations or a station without value")
+        return 2
+    sst, s_none = access.routing_stations(st, ssid)
+    try:
+        info = run_siting(grid, sst, s_none, ssid, rmse, out, pub, a.pad)
+    except MissingInput as e:
+        print(f"siting skipped: {e}")
+        return 2
+    summ = out / "summary.json"
+    doc = json.loads(summ.read_text(encoding="utf-8")) if summ.exists() else {}
+    doc["siting"] = info
+    summ.parent.mkdir(parents=True, exist_ok=True)
+    summ.write_text(json.dumps(doc, indent=1), encoding="utf-8")
+    print(f"siting only: pad in use {info['pad']['lon']}, {info['pad']['lat']}; proposal "
+          f"{info['proposal']['pad']['lon']}, {info['proposal']['pad']['lat']}; wrote {summ}")
+    return 0
+
+
 def diagnostics(grid: Grid, pad, fields: dict[str, dijkstra.Field], settings: Settings) -> dict:
     """Sanity numbers per scenario (internal, not shown in the app): reachable % of the
     assessed flat disc and envelope area / flat-circle area at every budget, edge cause shares
@@ -498,6 +550,9 @@ def main(argv=None) -> int:
     ap.add_argument("--no-partner", action="store_true")
     ap.add_argument("--siting", action="store_true",
                     help="also run F8 siting (needs stations with values); writes pad.json")
+    ap.add_argument("--siting-only", action="store_true",
+                    help="re-run only F8 siting + pad.json: the rule scenario's return field "
+                         "(in memory, no rasters), access cells, siting; patches summary.json")
     ap.add_argument("--pad", nargs=2, type=float, metavar=("LON", "LAT"), default=None,
                     help="pad override (e.g. the F8 pad once S accepts it); default site.yaml")
     a = ap.parse_args(argv)
@@ -530,6 +585,8 @@ def main(argv=None) -> int:
     grid = load_ws1_grid(a.terrain)
     pad = pad_rc(grid, tuple(a.pad) if a.pad else None)
     lap("load_grid")
+    if a.siting_only:
+        return siting_only(grid, pad, a, rmse, settings, out, pub)
     fields = return_fields(grid, pad, sids, settings, out_dir=out)
     lap("return_fields")
     web_products(grid, pad, fields, settings, public=pub)
@@ -597,8 +654,6 @@ def main(argv=None) -> int:
         lap("trade")
     siting_info = None
     if a.siting and st and all(s.get("value") is not None for s in st):
-        from . import siting
-
         try:
             ssid = siting_scenario()
             sst, s_none = access.routing_stations(st, ssid)
@@ -606,11 +661,7 @@ def main(argv=None) -> int:
                   f"; no access cell: {s_none}")
             if not sst:
                 raise MissingInput(f"no station has an access cell in {ssid}")
-            siting_doc = siting.run(grid, sst, rmse, out, pub)
-            siting_info = {"scenario": ssid, "stations": [s["id"] for s in sst],
-                           "no_access": s_none, "pad": siting_doc["pad"],
-                           "alternatives": siting_doc["alternatives"],
-                           "hop_options": siting_doc["hop_options"]}  # fmt: skip
+            siting_info = run_siting(grid, sst, s_none, ssid, rmse, out, pub, a.pad)
         except MissingInput as e:  # conservative rule variant needs V1
             print(f"siting skipped: {e}")
         lap("siting")

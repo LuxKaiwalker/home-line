@@ -390,6 +390,9 @@ def test_cli_writes_contract_valid_index(tmp_path):
     frag = json.loads((tmp_path / "manifest" / "pipeline__export__fields_png.json").read_text())
     for k in idx["fields"]:
         assert f"fields.{k}.sha256" in frag
+    # every key cites the published web path (make web drops entries citing interim sources)
+    assert frag and all(e["file"].startswith("fields/") and e["file"].endswith(".png")
+                        for e in frag.values())
     assert rep["total_bytes"] == sum(rep["sizes"].values()) > 0
     for sc in ("opt_80", "con_120"):
         assert "missing" in rep["skipped"][f"{sc}/t_home"] and not (out / "fields" / sc).exists()

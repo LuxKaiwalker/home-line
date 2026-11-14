@@ -267,6 +267,7 @@ def test_siting_run(plane_world, tmp_path):
     g, pad, p, tab, home, st = plane_world
     doc = siting.run(g, st, RMSE_STUB, tmp_path / "engine", tmp_path / "public")
     validate(doc, "pad.schema.json")
+    assert doc["proposal"]["adopted"] is False
     assert (tmp_path / "public/siting.png").exists() and (tmp_path / "engine/siting.tif").exists()
     meta = json.loads((tmp_path / "public/siting_png.json").read_text())
     assert len(meta["coordinates"]) == 4
@@ -333,6 +334,20 @@ def test_main_on_synthetic_terrain(tmp_path):
     assert all(r["t_home_min"]["nom_104"] is not None for r in recs)
     summ = json.loads((out / "summary.json").read_text())
     assert summ["routes"]["nom_104"]["order"]
+    # F8 (C 14:58): pad.json's pad is pad_default; the siting result is only a proposal
+    cfg = load("site")["pad_default"]
+    pj = json.loads((pub / "pad.json").read_text())
+    assert (pj["pad"]["lon"], pj["pad"]["lat"]) == (cfg["lon"], cfg["lat"])
+    assert pj["proposal"]["adopted"] is False
+    # --siting-only re-runs F8 + pad.json alone (one forward field set, no other product)
+    (pub / "pad.json").unlink()
+    before = (pub / "stations.json").stat().st_mtime_ns
+    rc = scenarios.main(["--terrain", str(terr), "--out", str(out), "--v1-json", str(v1),
+                         "--siting-only"])  # fmt: skip
+    assert rc == 0
+    assert json.loads((pub / "pad.json").read_text()) == pj
+    assert (pub / "stations.json").stat().st_mtime_ns == before
+    assert json.loads((out / "summary.json").read_text())["siting"]["pad"] == pj["pad"]
 
 
 def test_conditions_inputs(monkeypatch):

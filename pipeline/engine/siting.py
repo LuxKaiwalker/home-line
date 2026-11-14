@@ -8,7 +8,9 @@ named in ``score``. Ties go to the lower block (tired returns run downhill), com
 value-weighted station elevation (``tiebreak``). The top_k blocks are reported.
 
 Products: ``siting.tif`` (score per cell, interim), ``siting.png`` + ``siting_png.json`` (grey
-overlay with lon/lat corners) and ``pad.json`` (contract pad v1.0.0).
+overlay with lon/lat corners) and ``pad.json`` (contract pad v1.1.2, C decision 14:58): the
+top-level ``pad`` is the pad **in use** (config/site.yaml ``pad_default``, user 11:24) with the
+F8 rule evaluated there; the F8 result goes in ``proposal`` (``adopted: false``), never as the pad.
 """
 
 from __future__ import annotations
@@ -163,10 +165,62 @@ def best_hop(b: Blocks, cov: np.ndarray, values, first: int) -> tuple[int, float
     return (int(cand[k]), float(union[k])) if gain > 0 else None
 
 
-def pad_doc(grid: Grid, b: Blocks, s: np.ndarray, order: np.ndarray, rule: Rule,
-            disc_radius_m: float, min_assessed_pct: float, hop=None) -> dict:  # fmt: skip
-    """pad.json (contract pad v1.0.0). The chosen pad is the best-ranked block; alternatives
-    list ranks 1..top_k (rank 1 = the chosen pad)."""
+def _round(v, nd):
+    return None if v is None or not np.isfinite(v) else round(float(v), nd)
+
+
+def _disc_note(grid: Grid, rc, radius_m: float, what: str) -> str:
+    """Reason a disc check is null: the disc leaves the routing grid (distance to the edge)."""
+    r, c = rc
+    h, w = grid.shape
+    edge_m = min(r + 0.5, c + 0.5, h - r - 0.5, w - c - 0.5) * grid.res_m
+    return (f"assessed_pct_30min and rule_passed are null: the {radius_m:.0f} m flat disc around "
+            f"{what} leaves the {grid.res_m:g} m routing grid ({what} is {edge_m:.0f} m from the "
+            f"nearest grid edge), so the disc cannot be assessed")  # fmt: skip
+
+
+def pad_in_use(grid: Grid, station_t_min: list[np.ndarray], values, rule: Rule, lon: float,
+               lat: float, source: str, disc_radius_m: float, min_assessed_pct: float) -> dict:
+    """Contract ``pad`` for the pad in use (lon/lat kept exactly as given, e.g. pad_default):
+    the F8 rule evaluated at its cell. score = station values within the rule budget of a pad
+    there; max_slope_deg = steepest cell in the block_m square centred on it; rule_passed =
+    that square is all assessed and <= the slope limit and the disc check passes."""
+    from .geo import xy_of_lonlat
+    from .graph import ASSESSED
+
+    out = {"lon": lon, "lat": lat, "elev_m": None, "score": None,
+           "checks": {"assessed_pct_30min": None, "max_slope_deg": None, "rule_passed": None},
+           "source": source}  # fmt: skip
+    try:
+        r0, c0 = grid.rc_of_xy(*xy_of_lonlat(lon, lat, grid.crs))
+    except ValueError:
+        out["checks_note"] = "pad outside the routing grid: elevation, score and checks unknown"
+        return out
+    vals = np.asarray(values, float)
+    reach = [bool(np.isfinite(t[r0, c0]) and t[r0, c0] <= rule.budget_min) for t in station_t_min]
+    out["elev_m"] = _round(grid.elev[r0, c0], 1)
+    out["score"] = round(float(vals[np.asarray(reach, bool)].sum()) if len(vals) else 0.0, 4)
+    k = max(int(round(rule.block_m / grid.res_m / 2.0)), 0)
+    win = (slice(max(r0 - k, 0), r0 + k + 1), slice(max(c0 - k, 0), c0 + k + 1))
+    ms = grid.maxslope[win]
+    mslope = float(np.nanmax(ms)) if np.isfinite(ms).any() else None
+    block_ok = bool((grid.cellstate[win] == ASSESSED).all() and mslope is not None
+                    and np.isfinite(ms).all() and mslope <= rule.max_slope_deg)  # fmt: skip
+    apct = assessed_pct(grid, (r0, c0), disc_radius_m)
+    out["checks"] = {"assessed_pct_30min": _round(apct, 1), "max_slope_deg": _round(mslope, 2),
+                     "rule_passed": None if apct is None
+                     else bool(block_ok and apct >= min_assessed_pct)}  # fmt: skip
+    if apct is None:
+        out["checks_note"] = _disc_note(grid, (r0, c0), disc_radius_m, "the pad")
+    return out
+
+
+def proposal_block(grid: Grid, b: Blocks, s: np.ndarray, order: np.ndarray, rule: Rule,
+                   disc_radius_m: float, min_assessed_pct: float, hop=None,
+                   stations=None, no_access=None) -> dict:  # fmt: skip
+    """Contract ``proposal`` (F8 siting result for S; never the pad in use). The proposed pad
+    is the best-ranked block; alternatives list ranks 1..top_k (rank 1 = the proposal). Adds
+    the tie information and, for a null disc check, its reason."""
     from .geo import lonlat_of_xy
 
     def ll(i):
@@ -175,18 +229,22 @@ def pad_doc(grid: Grid, b: Blocks, s: np.ndarray, order: np.ndarray, rule: Rule,
         return round(float(lon), 6), round(float(lat), 6)
 
     def z(i):
-        v = float(b.elev[i])
-        return round(v, 1) if np.isfinite(v) else None
+        return _round(b.elev[i], 1)
 
     best = int(order[0])
     lon, lat = ll(best)
     apct = assessed_pct(grid, tuple(b.rep[best]), disc_radius_m)
     mslope = block_max_slope(grid, b, best)
     passed = None if apct is None else bool(b.candidate[best] and apct >= min_assessed_pct)
-    doc = {
-        "dummy": False,
-        "pad": {"lon": lon, "lat": lat, "elev_m": z(best), "score": round(float(s[best]), 4),
-                "checks": {"assessed_pct_30min": None if apct is None else round(apct, 1),
+    top = round(float(s[best]), 4)
+    sc = np.round(s[order].astype(float), 4)
+    n_top = int((sc == top).sum())
+    prop = {
+        "adopted": False,
+        "note": "F8 siting proposal for S (WS2 pipeline/engine/siting.py); pad_default is kept; "
+                "S decides. Not used by any route, band or number in the plan.",
+        "pad": {"lon": lon, "lat": lat, "elev_m": z(best), "score": top,
+                "checks": {"assessed_pct_30min": _round(apct, 1),
                            "max_slope_deg": round(mslope, 2), "rule_passed": passed}},
         "alternatives": [
             {"rank": k + 1, "lon": ll(int(i))[0], "lat": ll(int(i))[1], "elev_m": z(int(i)),
@@ -195,16 +253,74 @@ def pad_doc(grid: Grid, b: Blocks, s: np.ndarray, order: np.ndarray, rule: Rule,
         ],
         "hop_options": [],
         "site_rule_version": rule.version,
+        "tie": {"top_score": top, "n_blocks_at_top_score": n_top,
+                "n_candidate_blocks": int(len(order)),
+                "tiebreak": "lower elevation than the value-weighted station centroid "
+                            "(site.yaml siting.tiebreak)",
+                "note": (f"{n_top} candidate blocks share the top score {top:g}: the rule cannot "
+                         "tell them apart; the tiebreak alone picks rank 1") if n_top > 1
+                        else "the top score is unique"},
     }  # fmt: skip
+    if stations is not None:
+        prop["stations"] = list(stations)
+    if no_access:
+        prop["no_access"] = dict(no_access)
+    if apct is None:
+        prop["checks_note"] = _disc_note(grid, tuple(b.rep[best]), disc_radius_m,
+                                         "the proposed pad")  # fmt: skip
     if hop is not None:
         j, val = hop
-        doc["hop_options"].append({
+        prop["hop_options"].append({
             "pads": [list(ll(best)), list(ll(j))],
             "note": f"Rover hop: a second pad here raises the station value within "
                     f"{rule.budget_min:g} min ({rule.variant}) from {float(s[best]):.2f} to "
                     f"{val:.2f}.",
         })  # fmt: skip
+    return prop
+
+
+def pad_file(pad: dict, proposal: dict | None, rule: Rule) -> dict:
+    """pad.json (contract pad v1.1.2): ``pad`` = the pad in use; its own alternatives and hop
+    options are empty (those belong to the proposal); the F8 result sits in ``proposal``."""
+    doc = {"dummy": False, "pad": pad, "alternatives": [], "hop_options": [],
+           "site_rule_version": rule.version}  # fmt: skip
+    if proposal is not None:
+        if proposal.get("adopted") is not False:
+            raise ValueError("a siting proposal is never adopted in pad.json (C 14:58)")
+        doc["proposal"] = proposal
     return doc
+
+
+def record_pad(doc: dict, script: str) -> None:
+    """Manifest keys (file pad.json): pad.* = the pad in use, pad.proposal.* = the proposal.
+    Null values stay unrecorded (unknown stays unknown)."""
+    from . import provenance
+
+    units = {"lon": "deg", "lat": "deg", "elev_m": "m", "score": "score",
+             "assessed_pct_30min": "%", "max_slope_deg": "deg", "rule_passed": None,
+             "n_blocks_at_top_score": "blocks", "n_candidate_blocks": "blocks",
+             "top_score": "score"}  # fmt: skip
+
+    def rec(prefix, p):
+        for k in ("lon", "lat", "elev_m", "score"):
+            if p.get(k) is not None:
+                provenance.record(f"{prefix}.{k}", p[k], units[k], "pad.json", script)
+        for k, v in p["checks"].items():
+            if v is not None:
+                provenance.record(f"{prefix}.checks.{k}", v, units[k], "pad.json", script)
+
+    rec("pad", doc["pad"])
+    prop = doc.get("proposal")
+    if prop:
+        rec("pad.proposal", prop["pad"])
+        for a in prop.get("alternatives", []):
+            for k in ("lon", "lat", "elev_m", "score"):
+                if a.get(k) is not None:
+                    provenance.record(f"pad.proposal.alternatives.{a['rank']}.{k}", a[k],
+                                      units[k], "pad.json", script)  # fmt: skip
+        for k, v in prop.get("tie", {}).items():
+            if k in units:
+                provenance.record(f"pad.proposal.tie.{k}", v, units[k], "pad.json", script)
 
 
 # ---------------------------------------------------------------- run
@@ -221,10 +337,16 @@ def heatmap_png(hm: np.ndarray, path, max_score: float | None) -> None:
     Image.fromarray(rgba, "RGBA").save(path)
 
 
+PAD_DEFAULT_SOURCE = "config/site.yaml pad_default (kept by the user, 14 Nov 11:24)"
+
+
 def run(grid: Grid, stations: list[dict], v1_rmse_deg: float | None, out_dir, public,
-        script: str = "pipeline/engine/siting.py") -> dict:  # fmt: skip
+        pad_lonlat: tuple[float, float] | None = None, pad_source: str | None = None,
+        no_access: dict | None = None, script: str = "pipeline/engine/siting.py",
+        ) -> dict:  # fmt: skip
     """Forward runs from every station (rule variant, default suit), score, rank, write
-    siting.tif / siting.png / siting_png.json / pad.json. stations: id, rc, value."""
+    siting.tif / siting.png / siting_png.json / pad.json. stations: id, rc, value. The pad in
+    use is pad_lonlat (default: site.yaml pad_default); the F8 result is only a proposal."""
     from pathlib import Path
 
     from . import dijkstra, physio, provenance
@@ -246,8 +368,15 @@ def run(grid: Grid, stations: list[dict], v1_rmse_deg: float | None, out_dir, pu
     cov = coverage(b, t, rule.budget_min)
     hop = best_hop(b, cov, values, int(order[0]))
     radius = crew["anchor"]["speed_ms"] * rule.budget_min * 60.0
-    doc = pad_doc(grid, b, s, order, rule, radius,
-                  site["coverage"]["pad_disc_assessed_min_pct"], hop)  # fmt: skip
+    min_pct = site["coverage"]["pad_disc_assessed_min_pct"]
+    if pad_lonlat is None:
+        pad_lonlat = (site["pad_default"]["lon"], site["pad_default"]["lat"])
+        pad_source = pad_source or PAD_DEFAULT_SOURCE
+    pad = pad_in_use(grid, t, values, rule, pad_lonlat[0], pad_lonlat[1],
+                     pad_source or "pad override", radius, min_pct)  # fmt: skip
+    prop = proposal_block(grid, b, s, order, rule, radius, min_pct, hop,
+                          [st["id"] for st in stations], no_access)  # fmt: skip
+    doc = pad_file(pad, prop, rule)
     out_dir, public = Path(out_dir), Path(public)
     hm = heatmap(b, s)
     write_raster(out_dir / "siting.tif", hm, grid, np.float32(np.nan))
@@ -262,12 +391,6 @@ def run(grid: Grid, stations: list[dict], v1_rmse_deg: float | None, out_dir, pu
             "grey_max_score": round(float(np.nanmax(s)), 4), "rule": rule.version}  # fmt: skip
     write_json(public / "siting_png.json", meta, None)
     write_json(public / "pad.json", doc, "pad.schema.json")
-    provenance.record("pad.score", doc["pad"]["score"], "score", "pad.json", script)
-    provenance.record("pad.lon", doc["pad"]["lon"], "deg", "pad.json", script)
-    provenance.record("pad.lat", doc["pad"]["lat"], "deg", "pad.json", script)
-    for k, v in doc["pad"]["checks"].items():
-        if v is not None:
-            provenance.record(f"pad.checks.{k}", v, {"assessed_pct_30min": "%",
-                              "max_slope_deg": "deg"}.get(k), "pad.json", script)  # fmt: skip
+    record_pad(doc, script)
     provenance.record_file("pad.json", public / "pad.json", script)
     return doc
