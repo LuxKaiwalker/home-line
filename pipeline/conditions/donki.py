@@ -15,6 +15,7 @@ import re
 from pathlib import Path
 from typing import Any
 
+from pipeline.conditions import config
 from pipeline.conditions.config import INTERIM, RAW, REPO, fmt_utc, load_conditions, parse_utc
 
 WEB_PATH = "conditions/donki.json"
@@ -142,6 +143,7 @@ def write_donki(obj: dict[str, Any], out_path: Path | None = None, *,
     from pipeline.provenance import manifest  # noqa: PLC0415
 
     validate(obj)
+    config.reset_manifest_fragment(__file__, fragment_dir)
     path = out_path or DEFAULT_OUT
     path.parent.mkdir(parents=True, exist_ok=True)
     data = (json.dumps(obj, indent=1, allow_nan=False) + "\n").encode()

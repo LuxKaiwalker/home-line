@@ -761,6 +761,15 @@ Branch: `ws4-conditions`
 
 - 2026-11-14T10:25Z: REMS climatology (`rems.py`): PDS `mslrem_1001` MODRDR, MY 36-38, Ls 10-35 (sols 3045-3098, 3714-3767, 4382-4435), 200 rows/sol by byte range; 162 sols fetched, 159 used. Medians (p10-p90) of daily extremes: air min -74.5 degC (-77.3 to -72.5), air max -19.5 degC (-27.4 to -13.9); pressure 792-862 Pa (daily min/max medians); UV A+B+C max 9.49 W/m2. Feed latest sol 4995 (2026-08-25) shown with label "stale since 25 Aug 2026".
 - Downloads: WS4 cache 17.0 MB in 171 files (RAD 0.44 MB, REMS feed 1.7 MB, REMS PDS ~14.4 MB, DONKI 0.5 MB, Horizons 0.01 MB).
+- 2026-11-14T15:35Z (session 2, user decisions 16:20): **D39** storm-timing key + `storm_replay.py` helper (KATs `pipeline/conditions/test_storm_replay.py`); **D34** E column label/status; **D35** midpoints (unchanged: already used) + derived tripwire half-width; **D36** lower-bound excess + end-of-window rate; **D37** REMS ground temperature dropped; **D31** EVA start decided. Manifest fragments are now reset on each write (no stale keys). `make conditions` re-run from clean commit e900d5a (no `-dirty` key). Storm numbers before -> after: onset 05:15:52Z, peak 8.38 mGy/day at 06:19:52Z, excess 1.733 mGy all **unchanged**; tripwire 05:57:07Z -> **05:57:07Z ± 9 min** (half-width 8.55 min = half the 17.1-min median sample); excess 1.733 -> **≥ 1.73 mGy (lower bound)**; new end-of-window rate **154.7 uGy/day at 2024-05-22T23:50:54Z = 1.016 × baseline 152.3 (+2.4 uGy/day)**. Latest RAD 190.9 uGy/day at 2026-11-11T16:45:49Z (lag 2.95 d at build).
+
+### For WS5 / WS6 (labels and keys, session 2)
+
+- **D34:** show `TOTAL_DOSE_E` as **"dose in plastic (E)"**: `rad.json source.component_label`; status text `source.component_status` = "accepted because it reproduces the published storm peak and excess; dataset notes not yet read (G to check)" (unverified; show it). Manifest keys `rad.source.component_label`, `rad.source.component_status`.
+- **D35:** time tag = observation start, unverified (`source.time_tag_status`, key `rad.source.time_tag_status`); series/peak/onset times are sample midpoints (`source.series_time`). Tripwire time carries **± 9 min**: `storm_2024.tripwire_halfwidth_label` ("± 9 min"), `storm_2024.tripwire_halfwidth_min` (8.55, min; derived = half the median sample duration, `config rad.tripwire_time_halfwidth`), rule text `storm_2024.tripwire_halfwidth_rule`. Note: the user wrote "± 8 min"; the derivation gives 8.55 min, which rounds to 9.
+- **D36:** excess is a **lower bound**: `storm_2024.excess_is_lower_bound` (true), `storm_2024.excess_label` ("≥ 1.73 mGy (lower bound: the fixed storm window ends while the rate is still above baseline)"); end-of-window rate vs baseline: `storm_2024.end_of_window_utc`, `end_of_window_rate_uGy_day` (154.7), `end_of_window_rate_minus_baseline_uGy_day` (2.4), `end_of_window_rate_over_baseline_ratio` (1.016, units "1"). All under manifest prefix `rad.storm_2024.`.
+- **D37:** no ground temperature: `rems.json variables` is now [air temperature, pressure, UV A+B+C] (pressure moved from index 2 to **1**, UV from 3 to **2**; manifest keys `rems.variables.{i}.*` follow); `latest_feed.values` and `feed_crosscheck` have no `*_gts_*` fields. Schema `rems.schema.json` (loose) still validates.
+- **D39:** `config/conditions.yaml storm_replay.*` (see "For WS2"); WS7 replaces "onset at switch-on" with the t* placement (`pipeline/conditions/storm_replay.py` documents the mapping; TS port is WS7's).
 
 ### Doing
 
@@ -769,27 +778,25 @@ Branch: `ws4-conditions`
 ### Next
 
 - Sun API hand-off to WS7/WS8 (documented below); per-station daylight once WS3 horizons land in `data/interim/horizon/horizons/` (`make conditions` picks them up; `eva.t_dark_min_by_observer`).
-- G's answers to the questions below.
+- G: read the RAD dataset notes (D34 column, D35 time tag) and confirm or correct.
+- Re-run `make conditions` in the SPEC §11 single re-run (after WS1/WS3 re-placement, so `t_dark_min_by_observer` covers the new stations).
 
 ### For WS2 (margins; SPEC F4)
 
+- **D39 shared storm-timing key (WS2 + WS7): `config/conditions.yaml` → `storm_replay.tripwire_at` = `"route_max_t_home"`** (pushed 0338363; siblings `storm_replay.anchor_event` = `"tripwire"`, `storm_replay.eva_clock_units` = `"min"`, `storm_replay.tie_break` = `"first"`, assumed). Meaning: the 20 May 2024 storm series is shifted onto the EVA clock so that its tripwire (`rad.json storm_2024.tripwire_utc`) fires at t* = the EVA minute (since EVA start, 09:00 LMST, D31) where the route's T_home is largest (first sample on a tie). `storm_utc(eva_min) = tripwire_utc + (eva_min - t*) min`; storm onset sits at EVA minute `t* - (tripwire_utc - onset_utc)`. Helper: `pipeline/conditions/storm_replay.py` (8a6d960): `tripwire_target_min(eva_min, t_home_min)` -> t*, `storm_offset_utc(tripwire_utc, t*)` (storm UTC at EVA minute 0), `storm_utc_at`, `eva_min_of`, and `replay(rad_json, eva_min, t_home_min)` -> `{tripwire_eva_min, onset_eva_min, peak_eva_min, storm_utc_at_eva_start}`. Real numbers: onset 41.25 min before the tripwire, peak 22.75 min after it.
 - One command: `uv run --no-sync python -m pipeline.conditions.margins --flags` prints `--t-dark-min 578.63 --tau-dose-min 85.9` (now). Options: `--observer S1` (daylight against that station's F12 horizon, once WS3 files exist), `--dose latest` (quiet-sun tau at the latest RAD rate, ~3772 min) instead of the storm-peak default. JSON without `--flags`; Python: `pipeline.conditions.margins.margin_inputs(observer, dose)`.
 - Files: `data/interim/conditions/clock.json` `eva.t_dark_min` (minutes from the simulated EVA start, 09:00 LMST on sol 5074 = 2026-11-14T10:51:18Z, to sunset on a flat horizon at the pad) and `eva.t_dark_min_by_observer[id]`; `data/interim/conditions/rad.json` `leash.tau_min_at_peak` / `leash.tau_min_at_latest`, plus `leash.table` (one row per 0.05 mGy slider step).
 - Sun API: `from pipeline.conditions import sun`; `sun.sun_position(utc, lat, lon_e)`, `sun.sun_at_lmst(ref_utc, lmst_h, lat, lon_e)`, `sun.t_dark_min(eva_start, lat, lon_e, horizon_deg=0.0 | profile=<F12 horizon dict>)`, `sun.eva_start_utc()`.
 
 ### Blocked
 
-- Questions for G (RAD/REMS sign-off):
-  1. **RAD column: `TOTAL_DOSE_E` is used, pending G's confirmation.** It is the only column that reproduces the expected storm numbers (B: 7.35 mGy/day, 1.57 mGy). Not marked confirmed.
-  2. RAD time tag = observation start is D0's inference (START_TIME = first EPOCH), not stated in the metadata. A centre tag would shift every time by ~8 min (tripwire, onset, peak), not the peak/excess values.
-  3. Excess integral ends at the storm-window end (the rate is still 160 vs 152 uGy/day on 22 May 23:50). Accept, or extend the window?
-  4. REMS ground temperature: the sampled PDS daily **minimum** is a median 17.2 degC colder than the outreach feed's `min_gts_temp` on the same sols (air min agrees within 0.2 degC; maxima 2.6-2.9 degC lower, as expected from row sampling). Confidence-level columns are not applied. Should ground temperature be dropped from the panel, or filtered by `GTS_CONFIDENCE_LEVEL` (which code values are good)? Until answered, treat the ground minimum as unverified.
+- — (questions 1-4 answered by the user 16:20: D34 E column, D35 start tag + midpoints + ±, D36 fixed window + lower bound, D37 ground T dropped). Still unverified: G to read the RAD dataset notes for D34/D35.
 
 ### Assumptions added
 
 - **`config/conditions.yaml clock.gale_lon_east_deg` 137.39 -> 137.4085** (docs/discovery.md §4.5: MSL label LMST matches Mars24 at 137.4085 E, median |error| 0.23 s; 137.39 gave a systematic +4.4 s). G to review. `site.yaml analysis_proj lon_0=137.39` is untouched (projection origin, not the clock).
-- `rad.dose_variable` DOSIMETRY_TOTAL_f, `rad.dose_component` TOTAL_DOSE_E (pending G), `rad.time_tag` start (inferred), `rad.sample_duration`, `rad.tripwire.fires_at` ("end of the last qualifying sample"), `rad.event_bounds`; `leash.d_allow_range_mgy` [0.25, 1.0] (D9), `leash.d_allow_step_mgy` 0.05 (assumed).
-- `clock.eva_start_lmst_h` 9.0 and `clock.eva_sol_ref_utc` = H0 (assumed: nothing in SPEC fixes the simulated EVA start; C/S to confirm), `clock.sun_horizon_elevation_deg` 0, `clock.sun_series_step_min` 5, `clock.mars_year_epoch_utc` 1955-04-11, `clock.msl_landing_utc` 2012-08-06T05:17:57Z; sun latitude = `site.yaml pad_default`.
+- `rad.dose_variable` DOSIMETRY_TOTAL_f, `rad.dose_component` TOTAL_DOSE_E (decided D34, unverified), `rad.time_tag` start (decided D35, unverified; config `rad.unverified`), `rad.tripwire_time_halfwidth_display` "whole minutes, rounded half up" (assumed), `rad.sample_duration`, `rad.tripwire.fires_at` ("end of the last qualifying sample"), `rad.event_bounds`; `leash.d_allow_range_mgy` [0.25, 1.0] (D9), `leash.d_allow_step_mgy` 0.05 (assumed).
+- `clock.eva_start_lmst_h` 9.0 (**decided D31**, no longer assumed) and `clock.eva_sol_ref_utc` = H0 (assumed); `storm_replay.tie_break` "first" (assumed), `clock.sun_horizon_elevation_deg` 0, `clock.sun_series_step_min` 5, `clock.mars_year_epoch_utc` 1955-04-11, `clock.msl_landing_utc` 2012-08-06T05:17:57Z; sun latitude = `site.yaml pad_default`.
 - REMS: `pds_mars_years` [36, 37, 38], `pds_rows_per_sol` 200, `pds_min_lmst_coverage_h` 18; DONKI `window_utc` 12-23 May 2024 (+IPS endpoint); Horizons `step` 1 h.
 - KAT notes: GISS example 2 prints LTST 0.00025 h and declination -13.42065, but its own formulas on its own inputs give 0.00020 h and -13.42040; tested with 1e-4 h / 5e-4 deg tolerance (example 1 matches to 2e-5). Ls KAT evaluated at 12:00 UTC on 2026-08-25 (the brief gives a date only).
 

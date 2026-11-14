@@ -16,7 +16,14 @@ Method (config ``rad``; each rule string is checked against what is implemented 
   otherwise the end and the excess are unknown (``event_bounds``);
 * excess = integral of (rate - baseline) from onset to end, linear between sample midpoints
   (``interpolation``), in mGy; dose equivalent = excess x Q with Q = 1 (never 3 for the SEP);
+* the excess is a lower bound when the event is still above baseline at the window end
+  (``excess_bound``, D36); the end-of-window rate is the last valid sample in the window,
+  reported against the baseline (``end_of_window_rate``, D36);
+* tripwire time "± h": h = half the median sample duration, the shift if the time tag marked
+  the sample centre instead of its start (``tripwire_time_halfwidth``, D35); label in whole
+  minutes, rounded half up (``tripwire_time_halfwidth_display``);
 * tripwire and leash: tripwire.py.
+Labels (D34): the dose column is shown as ``dose_component_label`` with ``dose_component_status``.
 Unknown stays unknown: anything that cannot be computed is None.
 """
 
@@ -37,7 +44,15 @@ from typing import Any
 from jsonschema import Draft202012Validator
 
 from pipeline.conditions import tripwire
-from pipeline.conditions.config import INTERIM, REPO, fmt_utc, load_conditions, parse_utc, require
+from pipeline.conditions.config import (
+    INTERIM,
+    REPO,
+    fmt_utc,
+    load_conditions,
+    parse_utc,
+    require,
+    reset_manifest_fragment,
+)
 
 SCHEMA_PATH = REPO / "contracts" / "rad.schema.json"
 WEB_PATH = "conditions/rad.json"  # path under web/public/data/ (make web copies it)
@@ -47,6 +62,10 @@ SAMPLE_DURATION = ("gap to the next record, capped at the median spacing; the la
                    "repeats the one before")
 EVENT_BOUNDS = ("baseline crossings either side of the peak; the storm-window end if still "
                 "above baseline")
+EXCESS_BOUND = "lower bound if the event is still above baseline at the storm-window end"
+END_OF_WINDOW_RATE = "last valid sample in the storm window, vs baseline"
+HALFWIDTH = "half the median sample duration"
+HALFWIDTH_DISPLAY = "whole minutes, rounded half up"
 TIME_TAGS = {"start": 0.5, "center": 0.0, "end": -0.5}  # midpoint = tag + k * duration
 CDAS_FILL = -1.0e31  # docs/discovery.md §4.1
 
@@ -155,6 +174,19 @@ def baseline_days(cfg: dict[str, Any]) -> int:
 # --------------------------------------------------------------------------- storm numbers
 
 
+def tripwire_halfwidth(s: RadSeries, cfg: dict[str, Any]) -> timedelta:
+    """The "±" on tripwire times (config ``rad.tripwire_time_halfwidth``, D35)."""
+    _check_rule(cfg["rad"]["tripwire_time_halfwidth"], HALFWIDTH, "rad.tripwire_time_halfwidth")
+    return s.median_spacing / 2
+
+
+def pm_label(halfwidth: timedelta, cfg: dict[str, Any]) -> str:
+    """'± N min' (config ``rad.tripwire_time_halfwidth_display``)."""
+    _check_rule(cfg["rad"]["tripwire_time_halfwidth_display"], HALFWIDTH_DISPLAY,
+                "rad.tripwire_time_halfwidth_display")
+    return f"± {math.floor(halfwidth / timedelta(minutes=1) + 0.5)} min"
+
+
 def _cross(ta: datetime, va: float, tb: datetime, vb: float, level: float) -> datetime:
     return ta + (tb - ta) * ((level - va) / (vb - va))
 
@@ -165,6 +197,8 @@ def storm_numbers(s: RadSeries, cfg: dict[str, Any]) -> dict[str, Any]:
     _check_rule(r["interpolation"], INTERPOLATION, "rad.interpolation")
     _check_rule(r["event_bounds"], EVENT_BOUNDS, "rad.event_bounds")
     _check_rule(r["tripwire"]["fires_at"], tripwire.FIRES_AT, "rad.tripwire.fires_at")
+    _check_rule(r["excess_bound"], EXCESS_BOUND, "rad.excess_bound")
+    _check_rule(r["end_of_window_rate"], END_OF_WINDOW_RATE, "rad.end_of_window_rate")
     q = float(r["q_sep"])
     if q != 1.0:
         raise ValueError(f"config rad.q_sep = {q}: Q must be 1 for the SEP (never 3)")
@@ -179,7 +213,8 @@ def storm_numbers(s: RadSeries, cfg: dict[str, Any]) -> dict[str, Any]:
         "baseline_uGy_day": baseline, "baseline_n": len(base_vals), "series_mid": mid,
         "series_val": val, "peak_uGy_day": None, "peak_utc": None, "onset_utc": None,
         "end_utc": None, "end_bound": None, "excess_mGy": None, "dose_equivalent_mSv": None,
-        "q": q,
+        "q": q, "excess_is_lower_bound": None, "end_of_window_utc": None,
+        "end_of_window_rate_uGy_day": None, "tripwire_halfwidth": tripwire_halfwidth(s, cfg),
         "tripwire_utc": tripwire.tripwire_time(
             mid, val, [s.durations[i] for i in idx], baseline,
             float(r["tripwire"]["factor"]), int(r["tripwire"]["consecutive_samples"])),
@@ -188,6 +223,7 @@ def storm_numbers(s: RadSeries, cfg: dict[str, Any]) -> dict[str, Any]:
     if not valid:
         return out
     vm, vv = [t for t, _ in valid], [v for _, v in valid]
+    out["end_of_window_utc"], out["end_of_window_rate_uGy_day"] = vm[-1], vv[-1]
     p = max(range(len(vv)), key=vv.__getitem__)
     out["peak_uGy_day"], out["peak_utc"] = vv[p], vm[p]
     if baseline is None or vv[p] <= baseline:
@@ -213,6 +249,7 @@ def storm_numbers(s: RadSeries, cfg: dict[str, Any]) -> dict[str, Any]:
     ugy = sum(0.5 * (ya + yb) * ((tb - ta) / timedelta(days=1))
               for (ta, ya), (tb, yb) in zip(pts, pts[1:], strict=False))
     out["excess_mGy"] = ugy / 1000.0
+    out["excess_is_lower_bound"] = out["end_bound"] != "baseline crossing"
     out["dose_equivalent_mSv"] = out["excess_mGy"] * q
     return out
 
@@ -270,12 +307,27 @@ def build_rad(storm: RadSeries, latest: RadSeries | None, cfg: dict[str, Any],
 
     peak = n["peak_uGy_day"]
     tw = cfg["rad"]["tripwire"]
+    base = n["baseline_uGy_day"]
+    eow = n["end_of_window_rate_uGy_day"]
+    hw = n["tripwire_halfwidth"]
+    lb = n["excess_is_lower_bound"]
+    excess = _r(n["excess_mGy"], 3)
+    if excess is None:
+        excess_label = "unknown"
+    elif lb:
+        excess_label = (f"≥ {excess:.2f} mGy (lower bound: the fixed storm window ends while the "
+                        "rate is still above baseline)")
+    else:
+        excess_label = f"{excess:.2f} mGy"
     out = {
         "source": {
             "dataset": cfg["rad"]["dataset"], "variable": cfg["rad"]["dose_variable"],
             "component": storm.component, "units_in": storm.units_in,
-            "component_status": "assumed (TOTAL_DOSE_E, tissue-equivalent); pending G",
+            "component_label": cfg["rad"]["dose_component_label"],
+            "component_status": cfg["rad"]["dose_component_status"],
             "time_tag": cfg["rad"]["time_tag"],
+            "time_tag_status": cfg["rad"]["time_tag_status"],
+            "series_time": "sample midpoint (time tag + half the sample duration)",
             "sample_duration_rule": cfg["rad"]["sample_duration"],
             "median_spacing_min": _r(storm.median_spacing / timedelta(minutes=1), 2),
             "api": "CDAS REST (cdaweb.gsfc.nasa.gov/WS/cdasr), not HAPI",
@@ -291,13 +343,29 @@ def build_rad(storm: RadSeries, latest: RadSeries | None, cfg: dict[str, Any],
             "peak_uGy_day": _r(peak, 1),
             "peak_mGy_h": _r(None if peak is None else tripwire.ugy_day_to_mgy_h(peak), 4),
             "peak_utc": _t(n["peak_utc"]),
-            "excess_mGy": _r(n["excess_mGy"], 3),
+            "excess_mGy": excess,
+            "excess_is_lower_bound": lb,
+            "excess_label": excess_label,
+            "excess_bound_rule": cfg["rad"]["excess_bound"],
+            "end_of_window_utc": _t(n["end_of_window_utc"]),
+            "end_of_window_rate_uGy_day": _r(eow, 1),
+            "end_of_window_rate_minus_baseline_uGy_day": _r(
+                None if eow is None or base is None else eow - base, 1),
+            "end_of_window_rate_over_baseline_ratio": _r(
+                None if eow is None or not base else eow / base, 3),
+            "end_of_window_rule": cfg["rad"]["end_of_window_rate"],
             "dose_equivalent_mSv": _r(n["dose_equivalent_mSv"], 3),
             "q_note": "dose equivalent at <Q> = 1 for the SEP (never 3)",
             "onset_utc": _t(n["onset_utc"]),
             "end_utc": _t(n["end_utc"]),
             "end_bound": n["end_bound"],
             "tripwire_utc": _t(n["tripwire_utc"]),
+            "tripwire_halfwidth_min": _r(hw / timedelta(minutes=1), 2),
+            "tripwire_halfwidth_label": pm_label(hw, cfg),
+            "tripwire_halfwidth_rule": (
+                f"{cfg['rad']['tripwire_time_halfwidth']} "
+                f"({_r(storm.median_spacing / timedelta(minutes=1), 2)} min): the shift if the "
+                "time tag marked the sample centre, not its start (D35)"),
             "tripwire_threshold_uGy_day": _r(
                 None if n["baseline_uGy_day"] is None
                 else float(tw["factor"]) * n["baseline_uGy_day"], 1),
@@ -324,8 +392,8 @@ def validate_rad(obj: dict[str, Any]) -> None:
     Draft202012Validator(json.loads(SCHEMA_PATH.read_text())).validate(obj)
 
 
-_UNITS = {"uGy_day": "uGy/day", "mGy_h": "mGy/h", "mGy": "mGy", "mSv": "mSv", "min": "min",
-          "days": "days", "n": "1"}
+_UNITS = {"ratio": "1", "uGy_day": "uGy/day", "mGy_h": "mGy/h", "mGy": "mGy", "mSv": "mSv",
+          "min": "min", "days": "days", "n": "1"}
 
 
 def units_of(key: str) -> str | None:
@@ -357,6 +425,7 @@ def write_rad(obj: dict[str, Any], out_path: str | os.PathLike[str] | None = Non
     from pipeline.provenance import manifest
 
     validate_rad(obj)
+    reset_manifest_fragment(__file__, fragment_dir)
     path = Path(out_path) if out_path is not None else INTERIM / WEB_PATH
     path.parent.mkdir(parents=True, exist_ok=True)
     data = (json.dumps(obj, indent=1, allow_nan=False) + "\n").encode()
@@ -370,13 +439,18 @@ def write_rad(obj: dict[str, Any], out_path: str | os.PathLike[str] | None = Non
         manifest.record(f"rad.{p}", v, units_of(key), WEB_PATH, __file__,
                         fragment_dir=fragment_dir)
     for p in ("latest.utc", "storm_2024.peak_utc", "storm_2024.onset_utc", "storm_2024.end_utc",
-              "storm_2024.tripwire_utc"):
+              "storm_2024.tripwire_utc", "storm_2024.tripwire_halfwidth_label",
+              "storm_2024.excess_is_lower_bound", "storm_2024.excess_label",
+              "storm_2024.end_of_window_utc", "source.component_label",
+              "source.component_status", "source.time_tag_status"):
         a, b = p.split(".")
         manifest.record(f"rad.{p}", obj[a][b], None, WEB_PATH, __file__,
                         fragment_dir=fragment_dir)
     # nulls are numbers too (unknown): record those the loop skipped
     for p in ("latest.dose_rate_uGy_day", "latest.lag_days", "baseline_uGy_day",
-              "storm_2024.peak_uGy_day", "storm_2024.excess_mGy", "leash.tau_min_at_peak"):
+              "storm_2024.peak_uGy_day", "storm_2024.excess_mGy", "leash.tau_min_at_peak",
+              "storm_2024.end_of_window_rate_uGy_day",
+              "storm_2024.end_of_window_rate_over_baseline_ratio"):
         parts = p.split(".")
         v = obj
         for part in parts:

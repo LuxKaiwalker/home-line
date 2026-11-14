@@ -67,3 +67,12 @@ def fmt_utc(t: datetime) -> str:
     if t.microsecond >= 500_000:
         t = t + timedelta(microseconds=1_000_000 - t.microsecond)
     return t.replace(microsecond=0).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def reset_manifest_fragment(script_file: str, fragment_dir: Any = None) -> None:
+    """Delete ``script_file``'s manifest fragment before it re-records all of its keys, so keys
+    dropped from an output (e.g. the D37 REMS row) do not linger with an old commit."""
+    from pipeline.provenance import manifest  # noqa: PLC0415
+
+    d = manifest._fragment_dir(fragment_dir)
+    (d / manifest._fragment_name(manifest._rel(script_file))).unlink(missing_ok=True)
