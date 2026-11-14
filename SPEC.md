@@ -189,7 +189,7 @@ $$
 
 - **Haul force:** F = m_IC·g·(μ cos θ + sin θ). Cart case μ = 0.1–0.4; drag case μ ≈ 0.5–0.7 _(assumed)_. _(2026-11-14, D20: the drag case is computed only for the infeasibility finding, never drawn.)_
 - **Haul speed:** v_haul = min(v_safe/2 downhill, ε·P_avail / F), with ε = 0.20–0.25 and P_avail = rescuer power at 60–80% of VO₂max minus their own walking cost (via F3). Infeasible if v_haul < 0.1 m/s or F exceeds traction (μ_boot ≈ 0.5, assumed). Ridge cells (F2) are masked.
-- **Casualty masses:** 165–186 kg (suited crewmate, follows the suit slider) and NASA's 343 kg rescue specification as the bound.
+- **Casualty masses:** 155 / 179 / 195 kg (suited crewmate = body + suit, follows the suit slider; `haul.yaml` rule, C decision 2026-11-14 15:40, was 165–186 kg) and NASA's 343 kg rescue specification as the bound.
 - **Output:** the 60-min haul contour (Scoville's Artemis III 1 h benchmark), drawn dashed and off by default, captioned "Design question. Every haul parameter is an assumed band." _(2026-11-14, D20: layer label "Partner line (cart haul, 60 min)"; the partner layer and the station cards carry the note "One astronaut cannot drag a suited crewmate on Mars without a cart or sled: the pull needed exceeds boot grip even on flat ground." Its numbers (drag force, traction limit, max draggable mass) come from the manifest.)_
 
 ### F11 — Trade table
@@ -630,7 +630,7 @@ nasa-space-app/          # existing team repo
 | Body mass | 75 kg | Our assumption | — |
 | Slope limit; safety speeds | 20° (25° optimistic); 1.0/0.6/0.3 m/s | Scoville; our assumption | Low–medium |
 | Haul μ, ε, ceiling, traction | 0.1–0.4 (cart), 0.5–0.7 (drag, infeasibility finding only, D20); 0.20–0.25; 60–80%; 0.5 | Assumed bands | Low |
-| Casualty mass | 165–186 kg; 343 kg bound | ICES suit; NASA 2024 rescue challenge | Medium |
+| Casualty mass | 155 / 179 / 195 kg (body + suit, haul.yaml); 343 kg bound | ICES suit; NASA 2024 rescue challenge | Medium |
 | Dose allowance per EVA | 0.5 mGy | Our assumption, adjustable | Low |
 | Suit O₂ budget (metabolic) | Primary 504 L (8 h at 1,200 BTU/h), secondary 157 L (1 h at 3,000 BTU/h); margins plan against the primary only | Derived from NASA EVA-EXP-0075, ICES-2026-127, ICES 2026 Mars PLSS study | Medium; no leakage or venting modelled |
 | Dead-reckoning error | Low / medium / high sets (§2.4), medium default | Our assumption; Curiosity-calibrated set if X8 lands | Low |
