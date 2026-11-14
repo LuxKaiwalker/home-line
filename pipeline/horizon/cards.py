@@ -350,16 +350,21 @@ def _draw_hidden(draw, profile: HorizonProfile, meta: dict, rows: list[tuple], f
     draw.rectangle([(0, h), (meta["width"] - 1, hb - 1)], fill=tuple(ph["band_rgb"]))
     on, off = (int(v) for v in ph["dash_px"])
     tl = int(ph["tick_len_px"])
-    for m, x, tx, row in rows:
+    for m, x, _tx, row in rows:
         e = float(profile.elevation_at(m["bearing_deg"]))
         y0 = math.ceil(pano_xy(meta, m["bearing_deg"], e)[1]) + 1 if np.isfinite(e) else h // 2
         for y in range(int(y0), h, on + off):
             draw.line([(x, y), (x, min(y + on - 1, h - 1))], fill=rgb, width=1)
         draw.line([(x, h), (x, h + tl)], fill=rgb, width=2)
-        ty = h + tl + 2 + row * (fpx + 2)
         if row:
-            draw.line([(x, h + tl), (x, ty + fpx // 2)], fill=rgb, width=1)
-        draw.text((tx, ty), _hidden_label(m, c), fill=rgb, font=font)
+            draw.line([(x, h + tl), (x, h + tl + 2 + row * (fpx + 2) + fpx // 2)], fill=rgb,
+                      width=1)
+    for m, _x, tx, row in rows:     # labels last, on band-coloured boxes over other leaders
+        ty = h + tl + 2 + row * (fpx + 2)
+        label = _hidden_label(m, c)
+        draw.rectangle([(tx - 1, ty), (tx + draw.textlength(label, font=font) + 1, ty + fpx + 1)],
+                       fill=tuple(ph["band_rgb"]))
+        draw.text((tx, ty), label, fill=rgb, font=font)
 
 
 # --------------------------------------------------------------------------------------------
