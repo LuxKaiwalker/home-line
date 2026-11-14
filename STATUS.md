@@ -1121,21 +1121,30 @@ Branch: `ws5-web`
   - **Route-legs table fixed**: units moved into the headers, header cells wrap, tighter padding: 292 px in the 292 px content box (was 313 px). Also fixed: the partner legend's drag note overflowed the panel by ~95 px (legend `li` is flex).
   - **Smoke test** (scratch vite config serving a fixture tree, SCHEMA_MAP rows added in memory by a scratch plugin only; no repo file changed): picker shown, official default, option #2 switches headline (30 and 60 min), feasible EVAs, route, partner + drag note; slider note and locked scenario picker; back to official restores slider. **0 unbacked numbers** (fixture manifest with `pads.*` keys), no console errors, panel has no horizontal scroll.
 
+- 2026-11-14T18:22Z (session 6): **labels and scorecard rows for D21–D39 and set A of D40–D47**, against a scratch real tree (`make_web.run` of today's interim incl. WS2 session 9 names into the scratchpad: make web OK, 2,740 keys, validate/H0 OK; `web/public/data` untouched). Merged main 70b1136. vitest **526 pass, 14 skipped** on main's committed (pre-D21) tree; **539 pass, 1 skipped** on the scratch tree; `tsc` clean; build 2.6 MB without data.
+  - **D21/D42 pad**: pad text follows `pad.json source` (cites D21 → "the official pad", **frozen (D42)**; `pad.score` = 38 feasible EVAs, F8 score from `pad.f8_score`, rule passed, block slope 4.86°); marker legend/title say official pad. Picker on WS2's real files (ranks 2–3, rank4, pad_default) with a new **Excl. ≤** column = `pads.{id}.feasible.excluded_by_effort_cap_rule` (14/13/13/13/19), labelled an upper bound for what the conservative O₂ planning rule excludes (D45); option headline shows it too.
+  - **D43 60 min**: under the 30-min headline, "Within 60 min: 31.5 % (16.2 % to 43.8 %) of the part of the circle inside the terrain data. **75.8 % of the circle lies inside the terrain data**" (`reachable_pct.{sid}.60`, `reachable_pct_range.{sid}.60.*`, `headline.{sid}.disc_60.in_data_pct`); picker option at 60 min (`pads.{id}.headline.60.in_data_pct`); trade 60-min row (`trade.60.{kg}.in_data_pct`). 30 min stays the headline.
+  - **D45** planning-rule note (route section and picker; 1.35 L/min derived from crew.yaml, labelled). **D47/D39**: route section shows the tightest margin (41.21 min, radiation dose, leave S7) with "hypothetical storm timing (tripwire placed where time home is largest)"; same note on the card margin when dose binds.
+  - **D44/D26/D46**: names as written (S6/S7 "(south-west, nearer/farther)"), types for `name_base`/`name_suffix`; a null walk home shows "not reachable on foot" (config `stations.yaml placement.unreachable_label`) with WS2's reason on console, card, trade and cuff; trade always shows the conservative walk-home table ("shown as is, not adjusted", S7 not reachable, S2 143.46, S8 127.32 min).
+  - **D22/D23/V1**: cell-slope note (3 m plane fit + 30° step guard, assumed; max-slope grid only a "rough footing" overlay) on the slope legend and scorecard; conservative no-go 17° cited from `site.yaml` (legend, trade, scorecard); scorecard V1 shows `role` and `nogo_context.text`, con 30-min disc blocked 36.3 % (nominal 29.22 %) and the old max-slope rule 50.29 % from `terrain.cellstates.*`; "20 − V1 RMSE" and 14.55 gone.
+  - **D28**: "Turn back by … · bound by EVA duration" on cards (`turn_back_binding`), a turn-back table (station, t, bound by) in the route section, "Bound by" column in the card's route events, cuff card turn-back rows. **D33**: compass on each card (bearing ticks, dashed = below skyline); landmark suffix now "(below skyline)" from `display`.
+  - **D34–D37**: "dose in plastic (E)" + status (G to check, unverified) + time-tag status; tripwire "± 9 min" (`rad.storm_2024.tripwire_halfwidth_label`); excess "≥ 1.73 mGy (lower bound …)" + end-of-window rate 154.7 µGy/day = 1.016 × baseline (+2.4); "Dose equivalent ≈ 1.7 mSv at ⟨Q⟩ ≈ 1"; REMS caption "air temperature and pressure only" (table reads indices 0/1). **D29/D30**: scorecard IST-2 table from `physio.ist2.*` (conservative 20 % = miss) and 21.0 J/mL from crew.yaml; assumptions table adds O₂ energy, conservative slope limit, step guard; access radius "decided (D27)".
+  - **real.test.ts**: pre-D21 numbers removed (12.4 %, pad_default fails F8, 14.55°, S1 no access, science 0); new suite runs when `pad.json` cites D21 (12 KATs: official pad, picker + excluded counts, headline 30/60 + in-data keys, route + tightest margin, turn-back bindings, D44 ids/names, D46, D33 ticks, V1 role, IST-2, RAD/REMS, trade). It skips on main's committed tree until C publishes.
+  - **Smoke test** (vite dev on the scratch tree): **0 unbacked numbers on every view** (`/` 81 backed, S1 48, S2 38, S4 48, S6 51, S7 45, S8 37, `/trade` 36, `/conditions` 44, `/scorecard` 154, `/cuff` 114); picker option #2 at 60 min 0 unbacked; no data problems, no console errors, console panel without horizontal scroll.
+
 ### Doing
 
 - —
 
 ### Next
 
-- Re-run the smoke test on C's next `make web` with pad.json (the session-4 pad KATs in `web/src/data/real.test.ts` switch on when `pad.json` is in the tree).
-- D21: smoke-test the picker on WS2's real `scenarios/pads/` after C's contract rows; adjust `parsePadsIndex`/`parsePadSummary` if the final shape differs from the provisional one (see Assumptions).
-- D21: when WS2 rewrites pad.json for the official pad, the session-4 pad KATs in `real.test.ts` (pad = pad_default, fails the F8 rule; `proposal` block) must be updated.
-- Follow-ups from D22–D39 (16:16/16:20) for the web app, e.g. D27 access radius 50 m is now decided (drop the "assumed" tag), D33 hidden-landmark ticks, D35 "± 8 min" on tripwire times: not started this session.
+- Smoke-test again on C's next `make web` (the D21 real-tree suite switches on then).
 - HUD-on-card strip if WS7 is not green at G2; about page licences/SI text (needs the team).
 
 ### Blocked
 
-- (C) D21 SCHEMA_MAP rows (`tools/validate_contracts.py` + `web/src/data/contracts.ts`): `scenarios/pads/index.json` (new contract), `scenarios/pads/*/summary.json` (new contract), `scenarios/pads/*/bands_*.geojson` → bands, `scenarios/pads/*/edges.geojson` → edges, `scenarios/pads/*/partner.geojson` → partner, `scenarios/pads/*/route_*.geojson` → route, `scenarios/pads/*/timeline_*.json` → timeline (list in `web/src/data/pads.ts PAD_SCHEMA_PATTERNS`). Until then the picker stays hidden.
+- Resolved (C v1.1.4): D21 SCHEMA_MAP rows; the picker runs on WS2's real files.
+- (WS2 / user, wording) `config/variants.yaml route.access_radius_m` still says "still labelled assumed" after D27; the app now says "decided (D27)" per SPEC §11. Say if it should stay "assumed".
 
 - Resolved 16:28 (C): GitHub Pages live, deploys after green CI on main.
 - (C / WS6) `.github/workflows/ci.yml`: please add `npm test` (vitest) to the `web` job.
@@ -1147,6 +1156,7 @@ Branch: `ws5-web`
 
 ### Assumptions added
 
+- Session 6: the "tightest margin" in the route section is the lowest `margin_min` over the timeline rows except `turn_back` rows (0 by definition), keyed `timeline.{sid}.{i}.margin_min`; WS2's `route.{sid}.dose.*` keys cite the timeline file but their values are not in it, so they are not shown. IST-2 grades (20, 30 %) are read from the key names. The compass draws only the card's bearings (no number printed).
 - Session 5 (D21, provisional until C's contracts): index rows under `pads` (or `rows`), each `{id, lon, lat, elev_m, rank, score, official, tiebreak: {name: value}}`, exactly one `official: true` (or top-level `official: id`); summary `{id, pad: {lon, lat, elev_m}, rank, score, headline: {"30": {reachable_pct, range_pct}, "60": …}` (or `[{budget_min, …}]`), `route: {stops, total_min}}`. Ids must be plain file names. An elevation tiebreak equal to `elev_m` is not printed twice.
 
 - Contract gaps (for C): no web artefact for cell states / source mask, so hatched unknowns use the alpha of the shared `slope` field (A = 0 = no terrain value); this does not mark non-HiRISE (CTX) cells as unknown. Loose schemas (coverage, rems, clock, v2 summary, v1 confusion, donki records) are shown as generic key/value tables until producers fix their structure.

@@ -166,7 +166,7 @@ describe('parsePadSummary', () => {
   const s = parsePadSummary(SUMMARY_C112, 'c112')
   it('headline at 30 and 60 min, keyed by budget', () => {
     expect(s.headlines.map((h) => h.budget)).toEqual([30, 60])
-    expect(headlineFor(s, 60)).toEqual({ budget: 60, reachablePct: 44.0, range: [30.2, 51.9] })
+    expect(headlineFor(s, 60)).toEqual({ budget: 60, reachablePct: 44.0, range: [30.2, 51.9], inDataPct: null, inData: false })
     expect(headlineFor(s, 30)?.reachablePct).toBe(20.1)
   })
   it('a budget without a headline falls back to the first one', () => {
@@ -175,7 +175,7 @@ describe('parsePadSummary', () => {
   it('an array headline form reads the same', () => {
     const a = parsePadSummary({ ...SUMMARY_C112, headline: [{ budget_min: 60, reachable_pct: 44.0, range_pct: [30.2, 51.9] }, { budget_min: 30, reachable_pct: 20.1 }] }, 'c112')
     expect(a.headlines.map((h) => h.budget)).toEqual([30, 60])
-    expect(headlineFor(a, 30)).toEqual({ budget: 30, reachablePct: 20.1, range: null })
+    expect(headlineFor(a, 30)).toEqual({ budget: 30, reachablePct: 20.1, range: null, inDataPct: null, inData: false })
   })
   it('score, rank, pad position and route summary as written', () => {
     expect(s.score).toBe(9)
@@ -185,6 +185,54 @@ describe('parsePadSummary', () => {
   })
   it('a summary for another pad is refused', () => {
     expect(() => parsePadSummary(SUMMARY_C112, 'c201')).toThrow(/c201/)
+  })
+})
+
+// WS2 session 8 shapes (real files, numbers as WS2 reported them): D43 in-data share at 60 min, D45
+// excluded-combination count on every index row and summary.
+describe('WS2 session 8: feasible counts (D45) and the 60-min in-data share (D43)', () => {
+  const feasible = (screen: number, full: number) => ({ screen_count: screen, full_run_count: full, excluded_by_effort_cap_rule: screen - full, note: 'upper bound' })
+  const idx = {
+    dummy: false,
+    official: 'rank1',
+    pads: [
+      { id: 'rank1', kind: 'block', lon: 137.401783, lat: -4.77748, elev_m: -3742.4, rank: 1, score: 38, official: true, picker: false, tiebreak: { reachable_pct_30: 22.98, elev_m: -3742.4 }, feasible: feasible(52, 38), summary: null },
+      { id: 'rank2', kind: 'block', lon: 137.393301, lat: -4.776468, elev_m: -3779.5, rank: 2, score: 38, official: false, picker: true, tiebreak: { reachable_pct_30: 21.46, elev_m: -3779.5 }, feasible: feasible(51, 38), summary: 'scenarios/pads/rank2/summary.json' },
+      { id: 'pad_default', kind: 'pad_default', lon: 137.382, lat: -4.806, elev_m: -3627.8, rank: 5, score: 31, official: false, picker: true, tiebreak: { reachable_pct_30: 16.7, elev_m: -3627.8 }, feasible: feasible(50, 31), summary: 'scenarios/pads/pad_default/summary.json' },
+    ],
+  }
+  it('every row carries its excluded-combination count and screening count', () => {
+    const v = parsePadsIndex(idx)
+    expect(v.options.map((o) => [o.id, o.excluded, o.screenCount])).toEqual([
+      ['rank1', 14, 52],
+      ['rank2', 13, 51],
+      ['pad_default', 19, 50],
+    ])
+    expect(v.official.id).toBe('rank1')
+  })
+  it('rows without `feasible` (older index): null, not 0', () => {
+    expect(parsePadsIndex(INDEX).options.every((o) => o.excluded === null && o.screenCount === null)).toBe(true)
+  })
+  it('summary: 60 min over the part inside the data, with its share; 30 min full disc', () => {
+    const s = parsePadSummary(
+      {
+        dummy: false,
+        id: 'rank2',
+        pad: { lon: 137.393301, lat: -4.776468, elev_m: -3779.5 },
+        rank: 2,
+        score: 38,
+        feasible: feasible(51, 38),
+        headline: {
+          '30': { budget_min: 30, reachable_pct: 21.5, range_pct: [16.4, 30.3], basis: 'full_disc', in_data_pct: 100.0, label: null },
+          '60': { budget_min: 60, reachable_pct: 22.7, range_pct: [12.0, 38.8], basis: 'in_data', in_data_pct: 80.3, label: '80.3 % of the circle lies inside the terrain data' },
+        },
+        route: null,
+      },
+      'rank2',
+    )
+    expect(headlineFor(s, 60)).toEqual({ budget: 60, reachablePct: 22.7, range: [12.0, 38.8], inDataPct: 80.3, inData: true })
+    expect(headlineFor(s, 30)?.inData).toBe(false)
+    expect(s.excluded).toBe(13)
   })
 })
 

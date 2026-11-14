@@ -9,6 +9,7 @@ import { href } from '../router'
 import { AssumedTag, DummyNote } from '../components/labels'
 import { CfgNum, Num } from '../components/Num'
 import { Page, preactView, Show, useLoad } from './page'
+import { homeFor } from './decisions'
 
 /** Every science value is 0 (WS2 con_*: no station has a conservative walk home within the budget). */
 export function allScienceZero(t: TradeTable): boolean {
@@ -42,18 +43,27 @@ async function loadTrade(): Promise<TradeData> {
 }
 
 /**
- * Why the science value is 0 everywhere: it counts stations whose *conservative* walk home fits the
- * budget, and no station has one (WS2 session 4). Each station's conservative walk home is shown
- * from stations.json for every suit in the table.
+ * The science value counts stations whose *conservative* walk home fits the budget. Each station's
+ * conservative walk home is shown from stations.json for every suit in the table; a null walk home
+ * is "not reachable on foot" (D26), shown as is (D46).
  */
-function ScienceZero({ d }: { d: TradeData }) {
+function ConservativeHome({ d, zero }: { d: TradeData; zero: boolean }) {
   const con = (kg: number) => d.idx?.scenarios.find((s) => s.variant === 'conservative' && s.suit_kg === kg)?.id ?? null
   const maxBudget = Math.max(...d.t.rows)
   return (
-    <div class="finding">
+    <div class={zero ? 'finding' : ''}>
       <p>
-        <b>Science value is 0 in every cell.</b> It counts the stations whose walk home under the <i>conservative</i> variant (slope limit lowered by the V1
-        tilt error) fits the budget, and no station is reachable within {maxBudget} min that way:
+        {zero ? (
+          <>
+            <b>Science value is 0 in every cell.</b> It counts the stations whose walk home under the <i>conservative</i> variant fits the budget, and no station is
+            reachable within {maxBudget} min that way:
+          </>
+        ) : (
+          <>
+            <b>Conservative walk home per station</b> (the science value counts the stations whose conservative walk home fits the budget; conservative no-go{' '}
+            <CfgNum v={CITED.nogoConservativeDeg.value} units="deg" source={CITED.nogoConservativeDeg.source} />, D23). Shown as is, not adjusted (D46):
+          </>
+        )}
       </p>
       {d.stations && (
         <table class="mini">
@@ -74,15 +84,18 @@ function ScienceZero({ d }: { d: TradeData }) {
                 {d.t.cols.map((kg) => {
                   const sid = con(kg)
                   if (!sid) return <td class="r muted">no scenario</td>
+                  const h = homeFor(s, sid)
                   const a = accessFor(s, sid)
                   return (
                     <td class="r">
-                      {a.state === 'none' ? (
-                        <span class="num-unknown" title={a.reason ?? ''}>
-                          no access cell
+                      {h.kind === 'time' ? (
+                        <Num v={h.v} units="min" file="stations.json" k={`t_home_min.${s.id}.${sid}`} />
+                      ) : h.kind === 'unreachable' ? (
+                        <span class="num-unknown" title={h.reason ?? a.reason ?? ''}>
+                          {h.label}
                         </span>
                       ) : (
-                        <Num v={s.t_home_min[sid] ?? null} units="min" file="stations.json" k={`t_home_min.${s.id}.${sid}`} />
+                        <span class="num-unknown">unknown</span>
                       )}
                     </td>
                   )
@@ -93,7 +106,7 @@ function ScienceZero({ d }: { d: TradeData }) {
         </table>
       )}
       <p class="caption">
-        "No access cell": no walkable cell with a walk home within <CfgNum v={CITED.accessRadiusM.value} units="m" source={CITED.accessRadiusM.source} /> of the
+        "{CITED.unreachableLabel.value}": no walkable cell with a walk home within <CfgNum v={CITED.accessRadiusM.value} units="m" source={CITED.accessRadiusM.source} /> of the
         science point (hover for WS2's reason). This is the honest result of the conservative variant, not a missing value.
       </p>
     </div>
@@ -146,11 +159,19 @@ function TradeView() {
                               const max = maxOf(t, m.key)
                               return (
                                 <div class="trade-metric">
-                                  <span class="trade-label">{m.label}</span>
+                                  <span class="trade-label">
+                                    {m.label}
+                                    {m.key === 'reachable_pct' && typeof c.in_data_pct === 'number' && c.in_data_pct < 100 ? ' (part inside the terrain data)' : ''}
+                                  </span>
                                   <Num v={v} units={m.units} file="trade_table.json" k={`trade.${budget}.${kg}.${m.key}`} />
                                   <span class="bar">
                                     <span style={{ width: typeof v === 'number' && max > 0 ? `${(100 * v) / max}%` : '0' }} />
                                   </span>
+                                  {m.key === 'reachable_pct' && typeof c.in_data_pct === 'number' && c.in_data_pct < 100 && (
+                                    <span class="caption">
+                                      <Num v={c.in_data_pct} units="%" file="trade_table.json" k={`trade.${budget}.${kg}.in_data_pct`} /> of the circle lies inside the terrain data
+                                    </span>
+                                  )}
                                 </div>
                               )
                             })
@@ -165,7 +186,7 @@ function TradeView() {
               </tbody>
             </table>
           </div>
-          {allScienceZero(t) && <ScienceZero d={d} />}
+          {d.stations && d.idx && <ConservativeHome d={d} zero={allScienceZero(t)} />}
           </>
           )
         }}

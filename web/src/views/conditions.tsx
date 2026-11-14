@@ -163,7 +163,8 @@ function Context() {
           </h3>
           {rems ? <RemsTable r={rems} /> : <p class="muted">conditions/rems.json not available yet (WS4).</p>}
           <p class="caption">
-            The REMS feed is stale since <CfgNum v={CITED.remsStaleSince.value} source={CITED.remsStaleSince.source} />.
+            Air temperature and pressure only (D37: ground temperature and UV dropped). The REMS feed is stale since{' '}
+            <CfgNum v={CITED.remsStaleSince.value} source={CITED.remsStaleSince.source} />.
           </p>
 
           <h3>Space weather (DONKI): context only, not a trigger</h3>
@@ -195,23 +196,19 @@ function ConditionsView() {
                 Radiation now <StatusTag kind="real" />
               </h2>
               <p>
-                Latest Curiosity RAD dose rate: <Num v={r.latest.dose_rate_uGy_day} units="uGy/day" file={F} k="rad.latest.dose_rate_uGy_day" /> at{' '}
+                Latest Curiosity RAD dose rate{r.source?.component_label ? <> ({r.source.component_label})</> : null}:{' '}
+                <Num v={r.latest.dose_rate_uGy_day} units="uGy/day" file={F} k="rad.latest.dose_rate_uGy_day" /> at{' '}
                 <Num v={r.latest.utc} file={F} k="rad.latest.utc" fmt={utcLabel} />, <Num v={r.latest.lag_days} units="days" file={F} k="rad.latest.lag_days" /> behind
                 real time. Baseline <Num v={r.baseline_uGy_day} units="uGy/day" file={F} k="rad.baseline_uGy_day" />.
               </p>
+              <RadSourceNote r={r} />
             </section>
             <section>
               <h2>
                 20 May 2024 solar storm, replayed <StatusTag kind="real" /> <StatusTag kind="modelled" />
               </h2>
               <RadChart rad={r} />
-              <p>
-                Peak <Num v={r.storm_2024.peak_uGy_day} units="uGy/day" file={F} k="rad.storm_2024.peak_uGy_day" />, event excess{' '}
-                <Num v={r.storm_2024.excess_mGy} units="mGy" file={F} k="rad.storm_2024.excess_mGy" /> (quality factor{' '}
-                <CfgNum v={CITED.qSep.value} source={CITED.qSep.source} /> for the SEP). Onset{' '}
-                <Num v={r.storm_2024.onset_utc} file={F} k="rad.storm_2024.onset_utc" fmt={utcLabel} />; the tripwire fired at{' '}
-                <Num v={r.storm_2024.tripwire_utc} file={F} k="rad.storm_2024.tripwire_utc" fmt={utcLabel} />.
-              </p>
+              <StormNumbers r={r} />
               <p class="caption">
                 Tripwire (the alarm): more than <CfgNum v={CITED.tripwireFactor.value} source={CITED.tripwireFactor.source} />× baseline in{' '}
                 <CfgNum v={CITED.tripwireSamples.value} source={CITED.tripwireSamples.source} /> consecutive samples. The storm dose for a hypothetical crew is
@@ -337,6 +334,67 @@ function RemsTable({ r }: { r: Record<string, unknown> }) {
         ) : null}
         {typeof r.source === 'string' ? ` · ${r.source}` : ''}.
       </p>
+    </>
+  )
+}
+
+/** D34 / D35: the RAD dose column and its time tag, both unverified (G to check). */
+function RadSourceNote({ r }: { r: Rad }) {
+  const src = r.source
+  if (!src?.component_label && !src?.time_tag_status) return null
+  return (
+    <p class="caption">
+      {src.component_label && (
+        <>
+          Dose column {src.component ? <code>{src.component}</code> : null} = "{src.component_label}" (D34): {src.component_status ?? 'status not given'}
+          {' '}
+          <span class="pending">unverified</span>.{' '}
+        </>
+      )}
+      {src.time_tag_status && <>RAD time tag: {src.time_tag_status}{src.series_time ? `; series times are the ${src.series_time}` : ''}.</>}
+    </p>
+  )
+}
+
+/**
+ * Storm numbers (D35, D36): tripwire time with its half-width, excess as a lower bound with the
+ * end-of-window rate vs baseline, dose equivalent at ⟨Q⟩ ≈ 1.
+ */
+export function StormNumbers({ r }: { r: Rad }) {
+  const s = r.storm_2024
+  const lower = s.excess_is_lower_bound === true
+  return (
+    <>
+      <p>
+        Peak <Num v={s.peak_uGy_day} units="uGy/day" file={F} k="rad.storm_2024.peak_uGy_day" />; event excess {lower ? '≥ ' : ''}
+        <Num v={s.excess_mGy} units="mGy" file={F} k="rad.storm_2024.excess_mGy" dp={lower ? 2 : undefined} />
+        {lower ? ' (lower bound: the fixed storm window ends while the rate is still above baseline)' : ''}. Onset{' '}
+        <Num v={s.onset_utc} file={F} k="rad.storm_2024.onset_utc" fmt={utcLabel} />; the tripwire fired at{' '}
+        <Num v={s.tripwire_utc} file={F} k="rad.storm_2024.tripwire_utc" fmt={utcLabel} />
+        {s.tripwire_halfwidth_label ? (
+          <>
+            {' '}
+            <Num v={s.tripwire_halfwidth_label} file={F} k="rad.storm_2024.tripwire_halfwidth_label" />
+          </>
+        ) : null}
+        .
+      </p>
+      {s.dose_equivalent_mSv !== undefined && (
+        <p>
+          Dose equivalent ≈ <Num v={s.dose_equivalent_mSv ?? null} units="mSv" file={F} k="rad.storm_2024.dose_equivalent_mSv" dp={1} /> at ⟨Q⟩ ≈{' '}
+          <CfgNum v={CITED.qSep.value} source={CITED.qSep.source} /> for the SEP.
+        </p>
+      )}
+      {s.end_of_window_rate_uGy_day !== undefined && (
+        <p class="caption">
+          End of the storm window (<Num v={s.end_of_window_utc ?? null} file={F} k="rad.storm_2024.end_of_window_utc" fmt={utcLabel} />): rate{' '}
+          <Num v={s.end_of_window_rate_uGy_day ?? null} units="uGy/day" file={F} k="rad.storm_2024.end_of_window_rate_uGy_day" />,{' '}
+          <Num v={s.end_of_window_rate_over_baseline_ratio ?? null} file={F} k="rad.storm_2024.end_of_window_rate_over_baseline_ratio" /> × baseline (+
+          <Num v={s.end_of_window_rate_minus_baseline_uGy_day ?? null} units="uGy/day" file={F} k="rad.storm_2024.end_of_window_rate_minus_baseline_uGy_day" />
+          ).
+        </p>
+      )}
+      {s.tripwire_halfwidth_rule && <p class="caption">Tripwire time uncertainty: {s.tripwire_halfwidth_rule}.</p>}
     </>
   )
 }

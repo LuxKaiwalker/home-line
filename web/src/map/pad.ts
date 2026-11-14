@@ -16,12 +16,13 @@ export interface PadMarkerInfo {
 
 export function padMarker(p: PadFile | null, cfg: { lon: number; lat: number }): PadMarkerInfo {
   if (p) {
+    const official = citesD21(p.pad.source)
     return {
       lon: p.pad.lon,
       lat: p.pad.lat,
       file: 'pad.json',
-      sourceLabel: 'pad.json, the pad in use',
-      title: `Rover pad in use (pad.json: ${p.pad.source ?? 'pad_default'})`,
+      sourceLabel: official ? 'pad.json: the official pad, most feasible EVAs (D21), frozen (D42)' : 'pad.json, the pad in use',
+      title: official ? 'Official rover pad (pad.json; D21: most feasible EVAs; frozen, D42)' : `Rover pad in use (pad.json: ${p.pad.source ?? 'pad_default'})`,
     }
   }
   return {
@@ -60,11 +61,31 @@ function ruleCheck(score: unknown, c: Partial<PadChecks> | undefined): PadRuleCh
 /** The F8 rule evaluated at the pad in use (pad.json `pad`). */
 export interface PadInUse extends PadRuleCheck {
   source: string | null
+  /** D21 / D42: pad.json names the official pad (source cites D21). */
+  official: boolean
+  /** D21 score (`score_kind` d21_feasible_eva_count): feasible EVAs from this pad; null on pre-D21 files. */
+  feasibleEvas: number | null
+  /** Manifest key of the F8 score shown in `score`: pad.f8_score on D21 files, else pad.score. */
+  f8Key: 'pad.score' | 'pad.f8_score'
+}
+
+/** pad.json `source` cites D21 (word match, as WS3's pad_observer: not "D210"). */
+export function citesD21(source: string | null | undefined): boolean {
+  return !!source && /\bD21\b/.test(source)
 }
 
 export function padInUse(p: PadFile | null): PadInUse | null {
   if (!p) return null
-  return { ...ruleCheck(p.pad.score, p.pad.checks), source: s(p.pad.source) }
+  const q = p.pad as PadFile['pad'] & { score_kind?: string; f8_score?: number | null }
+  const d21 = q.score_kind === 'd21_feasible_eva_count'
+  const src = s(q.source)
+  return {
+    ...ruleCheck(d21 ? q.f8_score : q.score, q.checks),
+    source: src,
+    official: citesD21(src) && !/^config\/site\.yaml pad_default/.test(src ?? ''),
+    feasibleEvas: d21 ? n(q.score) : null,
+    f8Key: d21 ? 'pad.f8_score' : 'pad.score',
+  }
 }
 
 export interface PadProposal extends PadRuleCheck {

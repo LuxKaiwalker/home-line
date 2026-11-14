@@ -140,4 +140,14 @@ export const CITED = {
   haulBootMu: cite<number>('haul.yaml', haulRaw, 'boot_mu'),
   casualtyBoundKg: cite<number>('haul.yaml', haulRaw, 'casualty_kg.bound'),
   haulContourMin: cite<number>('haul.yaml', haulRaw, 'contour_min'),
+  /** D26: label of a station nobody can reach on foot. */
+  unreachableLabel: cite<string>('stations.yaml', stationsRaw, 'placement.unreachable_label'),
+  /** D29: the one O₂ energy equivalent (uphill term, heat, haul, O₂ budget). */
+  o2EnergyJPerMl: cite<number>('crew.yaml', crewRaw, 'o2_energy_j_per_ml'),
+  /** D22: 30° step guard (assumed) on top of the 3 m plane-fit cell slope. */
+  stepGuardDeg: cite<number>('site.yaml', siteRaw, 'slope.step_guard_deg'),
+  stepGuardAssumed: cite<boolean>('site.yaml', siteRaw, 'slope.step_guard_assumed'),
+  cellSlopeMethod: cite<string>('site.yaml', siteRaw, 'slope.cell_slope'),
+  /** D23: conservative no-go (replaces "20 − V1 RMSE"). */
+  nogoConservativeDeg: cite<number>('site.yaml', siteRaw, 'slope.nogo_deg.conservative'),
 } as const

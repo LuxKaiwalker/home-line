@@ -18,10 +18,12 @@ export interface NumProps {
   dp?: number
   /** Show + on positive values. */
   signed?: boolean
+  /** Display text for a boolean value [true, false] (the manifest keeps the boolean). */
+  boolText?: [string, string]
 }
 
-export function Num({ v, file, k, units, className, fmt, dp, signed }: NumProps) {
-  const text = typeof v === 'string' && fmt ? fmt(v) : formatValue(v, units, { dp, signed })
+export function Num({ v, file, k, units, className, fmt, dp, signed, boolText }: NumProps) {
+  const text = typeof v === 'string' && fmt ? fmt(v) : typeof v === 'boolean' && boolText ? boolText[v ? 0 : 1] : formatValue(v, units, { dp, signed })
   const stored = dp !== undefined && typeof v === 'number' ? `\nstored value: ${v}` : ''
   if (v === null || v === undefined) {
     return (

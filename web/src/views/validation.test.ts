@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { confusionThresholds, katAreas, v1Sensitivities } from './validation'
+import { cellStateDisc, confusionThresholds, katAreas, v1Context, v1Sensitivities } from './validation'
 import { allScienceZero } from './trade'
 import type { TradeTable } from '../data/types'
 
@@ -85,5 +85,38 @@ describe('D7 (user 15:01): automatic detection only; far class not validated', (
     expect(scopeText(s)).toBe("median |detected - predicted| skyline elevation per distance class on this card's Navcam frame (automatic sky detector)")
     expect(scopeText('plain scope')).toBe('plain scope')
     expect(scopeText(undefined)).toBeNull()
+  })
+})
+
+// D23 (WS6 session 3): V1 is a validation, not a margin; the conservative no-go is cited from config.
+describe('V1 role and no-go context (D23)', () => {
+  const v = {
+    ...V1,
+    role: 'V1 = validation of the slope model, not a safety margin',
+    nogo_context: { conservative_nogo_deg: 17.0, source: 'config/site.yaml slope.nogo_deg.conservative', decision: 'D23', derived_from_v1: false, text: 'conservative no-go = 17° (D23, config)', note: 'x' },
+  }
+  it('role and context text as written; the 17 deg agrees with config', () => {
+    expect(v1Context(v)).toEqual({ role: 'V1 = validation of the slope model, not a safety margin', nogoText: 'conservative no-go = 17° (D23, config)', nogoDeg: 17, derivedFromV1: false, agreesWithConfig: true })
+  })
+  it('older v1.json (conservative_nogo, no role): nothing to show, no 14.55', () => {
+    expect(v1Context({ ...V1, conservative_nogo: { nogo_deg: 14.553 } })).toEqual({ role: null, nogoText: null, nogoDeg: null, derivedFromV1: null, agreesWithConfig: null })
+  })
+})
+
+// coverage.json terrain_checks.cell_states (WS1 session 4, D22/D23), trimmed.
+describe('cell states per variant and disc (D22)', () => {
+  const tc = {
+    cell_states: {
+      step_guard_deg: 30.0,
+      variants: {
+        nominal: { nogo_deg: 20.0, discs: [{ budget_min: 30, blocked_pct: 29.22, blocked_stepguard_only_pct: 1.03, maxslope_rule_blocked_pct: 41.23 }] },
+        conservative: { nogo_deg: 17.0, discs: [{ budget_min: 30, blocked_pct: 36.3, blocked_stepguard_only_pct: 0.9, maxslope_rule_blocked_pct: 52.0 }, { budget_min: 60, blocked_pct: 30.0 }] },
+      },
+    },
+  }
+  it('reads one variant at one budget with its key prefix', () => {
+    expect(cellStateDisc(tc, 'conservative', 30)).toEqual({ variant: 'conservative', budget: 30, nogoDeg: 17, blockedPct: 36.3, stepGuardOnlyPct: 0.9, maxSlopeRulePct: 52.0, keyPrefix: 'terrain.cellstates.conservative.disc_30' })
+    expect(cellStateDisc(tc, 'nominal', 60)).toBeNull()
+    expect(cellStateDisc(undefined, 'nominal', 30)).toBeNull()
   })
 })
