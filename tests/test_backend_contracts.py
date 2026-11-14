@@ -325,6 +325,9 @@ def test_share_code_matches_backend_config():
     cfg_path = REPO / "config" / "backend.yaml"
     if not cfg_path.is_file():
         pytest.skip("config/backend.yaml not on this branch yet (S2)")
-    cfg = yaml.safe_load(cfg_path.read_text(encoding="utf-8"))["plans"]["share_code"]
-    assert cfg["alphabet"] == CROCKFORD
-    assert cfg["prefix"] == "HL-" and cfg["chars"] == 6
+    pytest.importorskip("pydantic")  # server dependency group: the loader resolves alphabet names
+    from server import settings as st
+
+    sc = st.load().plans.share_code  # backend.yaml names the alphabet; the loader resolves it
+    assert sc.alphabet == CROCKFORD
+    assert sc.prefix == "HL-" and sc.chars == 6
