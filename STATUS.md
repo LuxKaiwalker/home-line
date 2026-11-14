@@ -493,24 +493,61 @@ Branch: `ws9-nav`
   reset position to N(0, sigma) and heading to a new psi0) and Monte Carlo summaries
   (`pipeline/navigation/montecarlo.py`: 95% ellipses per minute, r95, r95(D) = a*D + b*D^2 NNLS fit,
   contract writers for `nav/montecarlo_{set}.json`, `nav/tracks_{set}.geojson`, `nav/fixes.json`,
-  manifest keys `nav.r95_fit.*`, `nav.montecarlo.*`). Ported from the pre-H0 reference code and
-  checked against contracts v1.0.0. KATs `tests/test_nav.py` 23/23 pass on a synthetic straight route,
-  full Monte Carlo from config (500 runs, seed 20261114): zero-error = truth; heading-bias-only lateral
-  error = analytic within 1%; 95% ellipse covers 95.6 / 94.8 / 95.0% of runs at 10 / 30 / 60 min;
-  error resets at fixes; slip only above 10 deg; contracts validate.
+  manifest keys `nav.r95_fit.*`, `nav.montecarlo.*`, `nav.fixes.*`). Ported from the pre-H0 reference
+  code and checked against contracts v1.0.0. KATs on a synthetic straight route, full Monte Carlo from
+  config (500 runs, seed 20261114): zero-error = truth; heading-bias-only lateral error = analytic within
+  1%; 95% ellipse covers 95.6 / 94.8 / 95.0% of runs at 10 / 30 / 60 min; error resets at fixes; slip
+  only above 10 deg; contracts validate.
+- 2026-11-14T10:40Z: fix-interval map (`fixinterval.py`): margin radius, D_max = inverse r95 fit, 0
+  outside the homeline, NaN where T_home is unknown; classes from `fix_interval.classes_m`;
+  `nav/fix_interval_summary.json` (one file, `set` = nav.yaml `default_set`; other sets in the run
+  report); `fields/fix_interval_{set}.png` (1 m per count) on the HUD field grid. KATs: D_max smaller near
+  the edge and 0 outside; EDT radius = worst-field interpolation where both exist; PNG round trip.
+- Real-route driver (`real.py`, `run.py`), `make nav` (= `run real`; `NAV_ARGS=--no-skyline` for the G2
+  fallback). `run real --dry-run` lists inputs with owners. Writes to `data/interim/navigation/` (mirrors
+  the web paths), refuses `web/public/`. End-to-end KAT on a tmp WS2/WS1-shaped tree.
+- 2026-11-14T10:55Z: `/nav` view (`web/src/nav/`) on data-dummy: fix-interval classes, estimated track
+  (truth behind "show truth"), 95% ellipses every 5 min, fix events, playback with the ellipse in force
+  and the SPEC position line ("Odometry ±N m · next fix due in M m · last fix …"), headline from the
+  summary, ellipse-size chart, method and parameter table from config. Exports for WS7's HUD:
+  `navReading`, `navLine`, nav loader, D_max decoder, ellipse geometry. vitest 5 files / 33 nav tests;
+  tsc + vite build clean.
+- 2026-11-14T11:05Z: F22 skyline fix (`skylinefix.py`: coarse 50 m grid / 1 deg rays / far field >=
+  500 m, refine 10 m around the best 3, far-weighted RMS, sigma from the 1.5 x min-RMS region) and
+  `run skyline` (every WS3 frame tried, standalone 300 m prior, `skyline_report.json` +
+  `localisation/{image_id}.json`); `run real` turns frames paired with a route station into skyline fixes
+  (lowest RMS, never lowest error). KATs: synthetic DEM with a known observer recovered within one
+  10 m grid step, every frame reported, contracts. Verified against `origin/ws3-horizon` (92d2f61) in a
+  temp worktree: all 47 nav KATs pass there; on main the 4 engine KATs skip until WS3 merges.
+- `tests/test_nav.py`: 43 pass + 4 skipped (WS3) on this branch; full suite and ruff green.
 
 ### Doing
 
-- Fix-interval map + `nav/fix_interval_summary.json` (F21), tracks, `/nav` view on data-dummy.
+- Waiting for WS2's real `route_nom_104` / `timeline_nom_104` / `engine/nom_104/t_home.tif`.
 
 ### Next
 
-- F22 skyline fix wiring against WS3's `HorizonEngine` (branch `ws3-horizon`).
-- `make nav` on the real `route_nom_104` once WS2 has produced it.
+- `make nav` on the real route as soon as WS2's files exist; then the real fix-interval headline.
+- F22 on the real frames once WS3's V2 works (see Blocked).
 
 ### Blocked
 
-- —
+- (WS2) Real run: `data/interim/engine/public/route_nom_104.geojson`, `timeline_nom_104.json` and
+  `data/interim/engine/nom_104/t_home.tif` not there yet (`run real --dry-run` lists them).
+- (WS3) F22 imports `pipeline.horizon.rays` / `cahvor` / `navcam` / `sky` from `ws3-horizon`; engine
+  KATs skip on main until it merges. Real frames: all 49 frames in `navcam_frames.json` have
+  `station: null`, so no frame is paired with a route station and every station keeps its surveyed
+  fix (sigma 5 m). Who pairs frames with stations (WS3 per its brief, or nearest-frame rule here)?
+  Also WS3's current V2 has a far-field residual median of -4.3 deg (v2.json), so skyline matches on
+  real frames are poor until the detector/V2 improves (SPEC: F22 runs only after V2 works).
+- (C) `nav/fix_interval_summary.json` holds one set (contracts v1.0.0); `/nav` shows the headline only
+  for that set. An array or per-set files would need a contract bump.
+- (C / WS7) The fix-interval PNG grid is pad +/- `planning_radius_m` at 5 m = 1,480 x 1,480 px (edges at
+  pad +/- 3,700 m); the dummy grid is 1,481 px centred on the pad. WS7 owns `fields/index.json`: please
+  confirm the real grid (WS9 writes `fields_index_nav.json` with its grid and entries for the merge).
+- (D / C) Playback values on `/nav` (per-minute ellipse, r95, distance since fix) are rows of
+  `nav/montecarlo_{set}.json`; they are shown as "row" numbers citing the file, not one manifest key per
+  row (static numbers all have keys). OK, or record per-minute keys?
 
 ### Assumptions added
 
@@ -521,9 +558,12 @@ Branch: `ws9-nav`
 - `config/nav.yaml fix_interval_ws9` (assumed): budget = crew.yaml walkback_budgets_min[0]; reserve 0
   (SPEC says "budget minus reserve" but no reserve is defined for it; crew.yaml reserve_min = 30 is
   the EVA reserve and would zero the 30-min homeline): question to N; margin radius by exact
-  distance transform (= the circular max filter criterion, not capped at 100 m) with SPEC's
+  distance transform (= the circular max-filter criterion, not capped at 100 m) with SPEC's
   worst-field interpolation kept as an option; unknown T_home counts as over the limit; edge figure
   = 10th percentile of D_max inside the homeline.
+- `config/nav.yaml real_run_ws9` (assumed): timeline event -> fix type; a skyline fix replaces the
+  station fix; frame pick = lowest RMS; standalone prior; unknown slope = no slip; field grid; DEM band
+  paths for the horizon engine (WS1 dem_1m, WS3 `data/interim/horizon/bands/`).
 - Synthetic walking speed = crew.yaml anchor 0.98 m/s.
 
 ## WS10 Visual odometry

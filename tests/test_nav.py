@@ -483,6 +483,130 @@ def test_fix_interval_manifest_to_tmp(tmp_path):
 
 
 # --------------------------------------------------------------------------------------------
+# F22 skyline-matching fix (skylinefix.py) on a synthetic DEM with a known observer
+# --------------------------------------------------------------------------------------------
+
+import importlib.util  # noqa: E402
+
+from pipeline.navigation import skylinefix as sf  # noqa: E402
+
+# WS3's horizon engine (branch ws3-horizon) is not on main yet: the engine KATs run once merged.
+HAS_WS3 = importlib.util.find_spec("pipeline.horizon.rays") is not None
+
+SKY = NAV["skyline_fix"]
+TRUE_XY = (37.0, -23.0)  # deliberately off every candidate grid
+
+
+def _terrain(X, Y):
+    """Smooth synthetic terrain: gentle tilt plus Gaussian hills 1.2-3.5 km from the observer,
+    so the near field (< far_field_min_m) is plain and the skyline is far-field."""
+    rng = np.random.default_rng(SEED)
+    z = 0.004 * X - 0.002 * Y
+    for _ in range(14):
+        r = rng.uniform(1200.0, 3500.0)
+        a = rng.uniform(0.0, 2 * math.pi)
+        cx, cy = TRUE_XY[0] + r * math.sin(a), TRUE_XY[1] + r * math.cos(a)
+        h = rng.uniform(40.0, 160.0)
+        s = rng.uniform(150.0, 400.0)
+        z = z + h * np.exp(-((X - cx) ** 2 + (Y - cy) ** 2) / (2 * s * s))
+    return z
+
+
+def _band(source, res, half):
+    from pipeline.horizon.rays import DemBand
+    n = int(round(2 * half / res)) + 1
+    c = (np.arange(n) - (n - 1) / 2) * res
+    X, Y = np.meshgrid(c, -c)
+    return DemBand.from_transform(source, _terrain(X, Y).astype(np.float32),
+                                  (-half - res / 2, res, 0.0, half + res / 2, 0.0, -res))
+
+
+@pytest.fixture(scope="module")
+def sky_world():
+    if not HAS_WS3:
+        pytest.skip("WS3 horizon engine (pipeline.horizon.rays) not merged yet")
+    from pipeline.horizon.rays import HorizonEngine
+
+    from pipeline.horizon import config as hcfg
+    engine = HorizonEngine([_band("dem_1m", 10.0, 4500.0), _band("ctx_20m", 20.0, 4500.0)])
+    h = hcfg.load()["navcam_height_m"]
+    # the "detected" skyline: the true horizon sampled at column azimuths off the ray grid
+    el, _, _ = engine.horizons([TRUE_XY[0]], [TRUE_XY[1]], eye_height_m=h, az_step_deg=0.125)
+    az_grid = np.arange(el.shape[1]) * 0.125
+    obs_az = (0.13 + 0.5 * np.arange(720)) % 360.0
+    obs_el = np.interp(obs_az, np.append(az_grid, 360.0), np.append(el[0], el[0, 0]))
+    return engine, obs_az, obs_el
+
+
+def test_candidate_grid_from_config():
+    xs, ys = sf.grid_around((100.0, 200.0), SKY["search_extent_m"], SKY["coarse_grid_m"])
+    n = int(SKY["search_extent_m"] / SKY["coarse_grid_m"]) + 1
+    assert xs.size == n * n
+    assert xs.min() == pytest.approx(100.0 - SKY["search_extent_m"] / 2)
+    assert ys.max() == pytest.approx(200.0 + SKY["search_extent_m"] / 2)
+
+
+def test_standalone_prior_offset():
+    rng = np.random.default_rng(SEED)
+    px, py = sf.standalone_prior(TRUE_XY, rng)
+    assert math.hypot(px - TRUE_XY[0], py - TRUE_XY[1]) == pytest.approx(
+        SKY["standalone_prior_offset_m"])
+
+
+def test_score_is_zero_at_truth_and_positive_elsewhere(sky_world):
+    from pipeline.horizon import config as hcfg
+    engine, az, el = sky_world
+    h = hcfg.load()["navcam_height_m"]
+    rms = sf.score(engine, [TRUE_XY[0], TRUE_XY[0] + 200.0], [TRUE_XY[1], TRUE_XY[1]], az, el,
+                   az_step_deg=hcfg.load()["az_step_deg"], min_dist_m=0.0, eye_height_m=h)
+    assert rms[0] < 0.01
+    assert rms[1] > 10 * rms[0] + 0.05
+
+
+def test_skyline_fix_recovers_known_observer_within_one_grid_step(sky_world):
+    engine, az, el = sky_world
+    rng = np.random.default_rng(SEED)
+    prior = sf.standalone_prior(TRUE_XY, rng)
+    res = sf.locate(engine, az, el, prior)
+    err = math.hypot(res.x - TRUE_XY[0], res.y - TRUE_XY[1])
+    assert err <= SKY["refine_grid_m"], err
+    n_coarse = (int(SKY["search_extent_m"] / SKY["coarse_grid_m"]) + 1) ** 2
+    assert res.candidates_evaluated > n_coarse
+    assert res.sigma_m > 0
+    rec = sf.localisation_record(res, TRUE_XY)
+    _validate(rec, "localisation.schema.json")
+    assert rec["error_m"] == pytest.approx(err, abs=0.01)
+    assert rec["candidates_evaluated"] == res.candidates_evaluated
+    fix = sf.fix_event(rec, t_eva_min=95.0, station="S2", image_id="SYNTH_0001")
+    assert fix.type == "skyline" and fix.sigma_m == rec["error_m"]
+    _validate(mc.fixes_json([fix]), "fixes.schema.json")
+
+
+def test_every_frame_tried_is_reported(sky_world):
+    engine, az, el = sky_world
+    frames = [
+        {"image_id": "SYNTH_ok", "true_xy": TRUE_XY, "obs_az": az, "obs_el": el},
+        {"image_id": "SYNTH_nosky", "true_xy": TRUE_XY, "obs_az": az,
+         "obs_el": np.full_like(el, np.nan)},
+    ]
+    out = sf.try_frames(engine, frames, rng=np.random.default_rng(SEED))
+    assert [r["image_id"] for r in out] == ["SYNTH_ok", "SYNTH_nosky"]
+    assert out[0]["status"] == "ok" and out[0]["error_m"] <= SKY["refine_grid_m"]
+    assert out[1]["status"] == "failed" and out[1]["reason"]
+
+
+def test_localisation_manifest_to_tmp(tmp_path, sky_world):
+    engine, az, el = sky_world
+    res = sf.locate(engine, az, el, (TRUE_XY[0] + 120.0, TRUE_XY[1] - 90.0))
+    rec = sf.localisation_record(res, TRUE_XY)
+    keys = sf.record_manifest(rec, "SYNTH_0001", "data/interim/localisation/SYNTH_0001.json",
+                              fragment_dir=tmp_path)
+    frag = json.loads(next(tmp_path.rglob("*.json")).read_text())
+    assert set(keys) <= set(frag)
+    assert frag["nav.skyline.SYNTH_0001.error_m"]["units"] == "m"
+
+
+# --------------------------------------------------------------------------------------------
 # Synthetic end-to-end export (run.py) -> tmp only
 # --------------------------------------------------------------------------------------------
 
@@ -720,3 +844,27 @@ def test_real_run_end_to_end_contracts_and_manifest(real_tree, tmp_path):
     assert entries["nav.fix_interval.medium.median_m"]["file"] == fi.SUMMARY_PATH
     assert "nav.fix_interval.low.median_m" not in entries  # not shown: not in a web file
     assert entries["nav.fixes.1.sigma_m"]["value"] == NAV["fix_sigma_m"]["station"]
+
+
+def test_real_run_uses_skyline_report_for_paired_stations(real_tree, tmp_path):
+    """F22 results feed F21: a recovered frame paired with a route station becomes a skyline fix
+    (sigma = measured error) at that station; unpaired and failed frames stay in the report."""
+    out = real_tree / "navigation"
+    out.mkdir(parents=True)
+    rows = [
+        {"image_id": "NLB_A", "station": "S1", "status": "ok", "error_m": 42.0, "rms_deg": 0.4},
+        {"image_id": "NLB_B", "station": "S1", "status": "ok", "error_m": 9.0, "rms_deg": 0.9},
+        {"image_id": "NLB_C", "station": None, "status": "ok", "error_m": 30.0, "rms_deg": 0.2},
+        {"image_id": "NLB_D", "station": "S1", "status": "failed", "error_m": None,
+         "reason": "no sky"},
+    ]
+    (out / nav_real.SKYLINE_REPORT).write_text(json.dumps(
+        {"n_frames": 4, "n_ok": 3, "rows": rows}))
+    rep = nav_real.run("nom_104", out=out, interim=real_tree, sets=["medium"], runs=20,
+                       skyline=True, record=False, log=lambda *a: None, engine=object())
+    fx = json.loads((out / "nav" / "fixes.json").read_text())
+    _validate(fx, "fixes.schema.json")
+    sky = [f for f in fx if f["type"] == "skyline"]
+    assert len(sky) == 1 and sky[0]["image_id"] == "NLB_A"  # lowest RMS, never lowest error
+    assert sky[0]["sigma_m"] == 42.0 and sky[0]["station"] == "S1"
+    assert rep["skyline"]["used"] == {"S1": "NLB_A"} and rep["skyline"]["n_frames"] == 4

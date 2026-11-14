@@ -54,7 +54,7 @@ real_run_ws9:                      # run.py real (WS2 route + timeline + T_home,
   scenario_from: "variants.yaml scenarios.default"   # the route the Monte Carlo walks (override: --scenario)
   fix_events: {rover: [depart, return, arrive_home], station: [arrive]}   # timeline event -> fix type (SPEC F21 fix events)
   skyline_station_fix: replace     # a station with an F22 result: the skyline fix (sigma = measured error) replaces the surveyed-station fix; "add" keeps both
-  skyline_frames: paired           # F22 frames = navcam_frames.json frames whose "station" is a route station
+  skyline_frames: "all navcam_frames.json frames tried and reported; frames whose station is a route station become fix events"
   skyline_frame_pick: min_rms      # frame used for the fix among a station's frames: lowest skyline RMS (never the error, which needs the truth)
   skyline_prior: standalone        # SPEC F22 standalone prior (true + standalone_prior_offset_m, random direction, monte_carlo.seed)
   unknown_slope: no_slip           # route samples on unknown slope get no slip term (fraction reported)

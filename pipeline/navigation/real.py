@@ -41,8 +41,10 @@ from pipeline.navigation import montecarlo as mc
 
 INTERIM = dr.REPO / "data" / "interim"
 REAL_OUT = INTERIM / "navigation"
-SUBDIRS = ("nav", "localisation", "fields")  # cleared before a full run (no stale files)
-NAV_FRAGMENTS = ("montecarlo", "fixinterval", "skylinefix")  # pipeline__navigation__*.json
+SUBDIRS = ("nav", "fields")  # cleared before an F21 run (no stale files)
+SKYLINE_REPORT = "skyline_report.json"  # F22 run report: every frame tried (not copied to web)
+F21_FRAGMENTS = ("montecarlo", "fixinterval")  # pipeline__navigation__*.json
+F22_FRAGMENTS = ("skylinefix",)
 
 
 def _rcfg() -> dict:
@@ -118,11 +120,13 @@ def dry_run(scenario: str | None = None, *, interim: Path = INTERIM, skyline: bo
             problems.append(f"timeline {by['timeline'].path.name}: {e}")
             stations = []
         if skyline and by["navcam_frames"].exists:
-            frames = paired_frames(json.loads(by["navcam_frames"].path.read_text()), stations)
-            cached = [f for f in frames if (dr.REPO / f["local_path"]).exists()]
-            notes.append(f"F22: {len(frames)} Navcam frames paired with route stations "
-                         f"{sorted({f['station'] for f in frames})}, {len(cached)} cached; "
-                         f"stations without a paired frame: "
+            allf = json.loads(by["navcam_frames"].path.read_text()).get("frames", [])
+            frames = paired_frames(allf, stations)
+            cached = [f for f in allf if (dr.REPO / f.get("local_path", "")).is_file()]
+            notes.append(f"F22: {len(allf)} Navcam frames ({len(cached)} cached) tried; "
+                         f"{len(frames)} paired with route stations "
+                         f"{sorted({f['station'] for f in frames})}; stations without a paired "
+                         f"frame (station fix kept): "
                          f"{sorted(set(stations) - {f['station'] for f in frames})}")
     rep = {"scenario": sc, "skyline": skyline,
            "inputs": [{"name": i.name, "path": str(i.path), "owner": i.owner,
@@ -291,13 +295,11 @@ def fixes_from_timeline(timeline: list, *, skyline: dict | None = None) -> list[
 # F22 on real Navcam frames
 # --------------------------------------------------------------------------------------------
 
-def paired_frames(frames_doc: dict, stations) -> list[dict]:
-    """Frames at a route station's drive end (WS3's ``station`` pairing, nav.yaml
-    ``real_run_ws9.skyline_frames: paired``)."""
-    if _rcfg()["skyline_frames"] != "paired":
-        raise ValueError("only skyline_frames: paired is implemented")
+def paired_frames(frames: list[dict], stations) -> list[dict]:
+    """Frames at a route station's drive end (WS3's ``station`` field; nav.yaml
+    ``real_run_ws9.skyline_frames``): only these become F21 fix events."""
     want = set(stations)
-    return [f for f in frames_doc.get("frames", []) if f.get("station") in want]
+    return [f for f in frames if f.get("station") in want]
 
 
 def observe_frame(frame: dict, img) -> tuple[np.ndarray, np.ndarray]:
@@ -449,18 +451,60 @@ def field_entry(set_name: str, scenario: str) -> dict:
 # Provenance
 # --------------------------------------------------------------------------------------------
 
-def clear_fragments(fragment_dir=None) -> list[Path]:
+def clear_fragments(fragment_dir=None, names=F21_FRAGMENTS) -> list[Path]:
     """Remove WS9's own manifest fragments so a re-run leaves no stale keys."""
     from pipeline.provenance.manifest import _fragment_dir  # noqa: PLC0415
 
     d = _fragment_dir(fragment_dir)
     gone = []
-    for name in NAV_FRAGMENTS:
+    for name in names:
         p = d / f"pipeline__navigation__{name}.json"
         if p.exists():
             p.unlink()
             gone.append(p)
     return gone
+
+
+# --------------------------------------------------------------------------------------------
+# F22 run (all frames, standalone prior): python -m pipeline.navigation.run skyline
+# --------------------------------------------------------------------------------------------
+
+def skyline_run(*, out=REAL_OUT, interim: Path = INTERIM, record: bool | None = None,
+                fragment_dir=None, engine=None, limit: int | None = None, log=print) -> dict:
+    """F22 on every frame of WS3's navcam_frames.json (SPEC F22: report every frame tried,
+    failures included). Writes ``localisation/{image_id}.json`` for each recovered frame and
+    ``skyline_report.json`` with every row; the F21 run reads the report for fix events."""
+    from pipeline.navigation import skylinefix as sf  # noqa: PLC0415
+
+    out = Path(out).resolve()
+    record = (out == REAL_OUT.resolve()) if record is None else record
+    fj = interim / "horizon" / "navcam_frames.json"
+    if not fj.exists():
+        raise SystemExit(f"F22 refused: {fj} missing (owner WS3)")
+    frames = json.loads(fj.read_text()).get("frames", [])[:limit]
+    shutil.rmtree(out / "localisation", ignore_errors=True)
+    if record:
+        clear_fragments(fragment_dir, F22_FRAGMENTS)
+    rows = skyline_real(frames, engine=engine, log=log)
+    for r in rows:
+        if r["status"] != "ok":
+            continue
+        rec = {k: r[k] for k in ("true", "recovered", "error_m", "rms_deg",
+                                 "candidates_evaluated", "sigma_m", "prior", "prior_offset_m")}
+        dp = f"localisation/{r['image_id']}.json"
+        sf.write_json(rec, out / dp)
+        if record:
+            sf.record_manifest(rec, r["image_id"], dp, fragment_dir=fragment_dir)
+    ok = [r["error_m"] for r in rows if r["status"] == "ok"]
+    rep = {"frames_json": str(fj), "n_frames": len(rows), "n_ok": len(ok),
+           "n_failed": len(rows) - len(ok),
+           "error_m_median": float(np.median(ok)) if ok else None,
+           "prior": _rcfg()["skyline_prior"], "rows": rows, "manifest_recorded": bool(record)}
+    (out).mkdir(parents=True, exist_ok=True)
+    (out / SKYLINE_REPORT).write_text(json.dumps(rep, indent=1, default=str))
+    log(f"F22: {len(ok)}/{len(rows)} frames recovered; median error "
+        f"{rep['error_m_median']} m")
+    return rep
 
 
 # --------------------------------------------------------------------------------------------
@@ -477,14 +521,16 @@ def run(scenario: str | None = None, *, out=REAL_OUT, interim: Path = INTERIM, s
     public = (dr.REPO / "web" / "public").resolve()
     if out == public or public in out.parents:
         raise ValueError("WS9 writes to data/interim/; make web copies to web/public/data/")
-    rep = dry_run(sc, interim=interim, skyline=skyline, log=log)
+    # F22 inputs are needed only when the skyline report has to be computed first
+    need_f22 = skyline and not (out / SKYLINE_REPORT).exists()
+    rep = dry_run(sc, interim=interim, skyline=need_f22, log=log)
     if rep["problems"]:
         raise SystemExit("WS9 real run refused: missing or invalid inputs (see above)")
     record = (out == REAL_OUT.resolve()) if record is None else record
     cfg = dr.load_config()
     sets = list(cfg["sets"]) if sets is None else list(sets)
     default_set = str(cfg["default_set"])
-    by = {i.name: i.path for i in inputs(sc, interim=interim, skyline=skyline)}
+    by = {i.name: i.path for i in inputs(sc, interim=interim, skyline=need_f22)}
 
     for sub in SUBDIRS:
         shutil.rmtree(out / sub, ignore_errors=True)
@@ -503,29 +549,22 @@ def run(scenario: str | None = None, *, out=REAL_OUT, interim: Path = INTERIM, s
         "skyline": None, "fix_interval": {}, "written": []}
     written: list[Path] = []
 
-    # F22 first: its results become fix events
+    # F22 results (skyline_run) become fix events at paired stations
     sky_best: dict = {}
     if skyline:
-        from pipeline.navigation import skylinefix as sf  # noqa: PLC0415
-
+        rp = out / SKYLINE_REPORT
+        if not rp.exists():
+            skyline_run(out=out, interim=interim, record=record, fragment_dir=fragment_dir,
+                        engine=engine, log=log)
+        sky = json.loads(rp.read_text())
         stations = [f.station for f in fixes_from_timeline(timeline) if f.station]
-        frames = paired_frames(json.loads(by["navcam_frames"].read_text()), stations)
-        rows = skyline_real(frames, engine=engine, log=log)
-        sky_best = pick_station_fixes(rows)
-        for r in rows:
-            if r["status"] != "ok":
-                continue
-            rec = {k: r[k] for k in ("true", "recovered", "error_m", "rms_deg",
-                                     "candidates_evaluated", "sigma_m", "prior",
-                                     "prior_offset_m")}
-            dp = f"localisation/{r['image_id']}.json"
-            written.append(sf.write_json(rec, out / dp))
-            if record:
-                sf.record_manifest(rec, r["image_id"], dp, fragment_dir=fragment_dir)
-        report["skyline"] = {"frames": rows,
+        paired = paired_frames(sky["rows"], stations)
+        sky_best = pick_station_fixes(paired)
+        report["skyline"] = {"report": SKYLINE_REPORT, "n_frames": sky["n_frames"],
+                             "n_ok": sky["n_ok"],
                              "used": {st: r["image_id"] for st, r in sky_best.items()},
                              "stations_without_frame": sorted(
-                                 set(stations) - {f["station"] for f in frames})}
+                                 set(stations) - {r["station"] for r in paired})}
 
     fixes = fixes_from_timeline(timeline, skyline=sky_best)
     written.append(mc.write_json(mc.fixes_json(fixes), out / "nav" / "fixes.json"))

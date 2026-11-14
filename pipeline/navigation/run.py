@@ -1,8 +1,12 @@
 """WS9 navigation driver (F21, F22 exports).
 
+``python -m pipeline.navigation.run skyline [--limit N]`` runs F22 on every WS3 Navcam frame
+(standalone prior; every frame reported in ``skyline_report.json``).
+
 ``python -m pipeline.navigation.run real [--dry-run] [--scenario SC] [--no-skyline]`` runs the
-real route (WS2 route + timeline + T_home, WS1 slope, WS3 Navcam) into data/interim/navigation/,
-the tree ``make web`` copies; see ``pipeline/navigation/real.py``.
+real route (WS2 route + timeline + T_home, WS1 slope; skyline fixes from ``skyline_report.json``,
+computed first if absent) into data/interim/navigation/, the tree ``make web`` copies; see
+``pipeline/navigation/real.py``.
 
 ``python -m pipeline.navigation.run synthetic --out data/interim/nav_synthetic [--runs N]``
 writes ``nav/montecarlo_{set}.json``, ``nav/tracks_{set}.geojson`` and ``nav/fixes.json`` for a
@@ -78,6 +82,11 @@ def main(argv=None) -> int:
     s.add_argument("--out", default=str(dr.REPO / "data" / "interim" / "nav_synthetic"))
     s.add_argument("--runs", type=int, default=None, help="default: nav.yaml monte_carlo.runs")
     s.add_argument("--sets", nargs="*", default=None)
+    k = sub.add_parser("skyline", help="F22 on every WS3 Navcam frame -> data/interim/navigation/"
+                                       "localisation/ + skyline_report.json")
+    k.add_argument("--limit", type=int, default=None, help="first N frames only (testing)")
+    k.add_argument("--out", default=None, help="default data/interim/navigation (manifest "
+                                               "recorded only there)")
     r = sub.add_parser("real", help="real route -> data/interim/navigation/ (make web copies it)")
     r.add_argument("--dry-run", action="store_true",
                    help="list inputs and problems, compute nothing")
@@ -89,6 +98,11 @@ def main(argv=None) -> int:
     r.add_argument("--runs", type=int, default=None, help="default: nav.yaml monte_carlo.runs")
     r.add_argument("--sets", nargs="*", default=None)
     a = ap.parse_args(argv)
+    if a.cmd == "skyline":
+        from pipeline.navigation import real  # noqa: PLC0415
+
+        rep = real.skyline_run(out=a.out or real.REAL_OUT, limit=a.limit)
+        return 0 if rep["n_frames"] else 1
     if a.cmd == "real":
         from pipeline.navigation import real  # noqa: PLC0415
 
