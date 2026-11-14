@@ -374,6 +374,52 @@ All numbers from today's fresh downloads (`data/raw/terrain/`, cache index `cach
   `farfield_v2.json`; **replaced** `coverage.json` (pad_check + D3 text only); **deleted**
   `manifest_pending.json`. No raster that WS2/WS3/WS8/WS9 read was rewritten.
 
+#### Session 3 (started 13:20Z)
+
+- 2026-11-14T13:36Z: **`cellstate_3m_conservative.tif` (brief task 8, F1/F2)**, new file in
+  `data/interim/terrain/` (+ summary `cellstate_3m_conservative.json`); `cellstate_3m.tif` and
+  every other raster untouched. No-go = `site.yaml slope.nogo_deg.conservative` "20 - v1_rmse_deg"
+  with WS6 `v1.json rmse_deg` 5.447021 -> **14.553 deg**. Rule (`routing.restate`): unknown stays
+  unknown; a known 3 m cell is blocked iff its max 1 m slope (`maxslope_3m.tif`) > 14.553 deg.
+  Same grid/CRS as `cellstate_3m.tif`, uint8, nodata 255, codes 0/1/2.
+  | Disc | Nominal blocked (> 20 deg) | Conservative blocked (> 14.55 deg) | Newly blocked | Unknown |
+  | --- | --- | --- | --- | --- |
+  | 30 min (1,764 m) | 41.23 % | **58.75 %** | 17.52 % | 0 % |
+  | 60 min (3,528 m) | 31.36 % | **46.31 %** | 14.95 % | 0 % |
+  | Whole 3 m grid | 31.22 % | 45.86 % | | 0 % |
+  Checked on the real rasters: conservative blocked is a superset of nominal blocked, and
+  conservative assessed equals WS2's `passable_mask(cellstate_3m, maxslope_3m, 14.553...)` cell
+  by cell.
+  - **WS2: the path does not matter to you.** `pipeline/engine` never opens a conservative
+    cellstate: `Grid.with_nogo` re-derives passability from `maxslope_3m.tif` with the variant's
+    limit (`physio.resolve_nogo` + `v1.json`), using `cellstate_3m.tif` only for unknown cells.
+    The new raster is the same rule, for display and checks; your con_* runs need nothing new.
+  - C: `make web` publishes only `cellstate_3m.tif` (`terrain/cellstate.json variant: nominal`).
+    If the app should hatch the conservative states, a second rule from
+    `terrain/cellstate_3m_conservative.tif` works as is (`write_cellstate` already sets
+    `variant: conservative` from the file name) but needs its own web path; your call.
+  - `make terrain` now ends with `build conservative validation` (conservative is skipped with a
+    message while `v1.json` is missing, so in `make clean all` V1 must run before it for con_*).
+- 2026-11-14T13:36Z: **WS6 audit 1 fixed: every WS1 manifest key now cites a web path** (53 keys,
+  all at clean commit bc1af57, 13:35:52Z; `data/interim/manifest/pipeline__terrain__build.json`).
+  - `stations.{S1,S2,S4}.value` -> `stations.json` (WS2's `engine/public/stations.json`, which
+    `make web` publishes; same values 0.8683 / 0.7443 / 0.475).
+  - `terrain.xcheck.{009149,019698}.{median,p90_abs}` (4), `terrain.slope_compare.median_abs_diff`,
+    `terrain.blocked_pct.{30,60}min` -> `validation/coverage.json`, which now carries these numbers
+    in a new block **`terrain_checks`** (`hirise_xcheck`, `slope_compare`,
+    `blocked_pct_of_known`, `conservative`). Nothing else in `coverage.json` changed (staged and
+    compared; `coverage.png` and `coreg.json` byte-identical, not rewritten).
+  - New keys (same file): `terrain.nogo_conservative_deg` 14.553, `terrain.conservative.v1_rmse_deg`
+    5.447, `terrain.conservative.disc_{30,60}.{assessed,blocked,unknown,nominal_blocked,
+    newly_blocked}_pct`.
+  - KAT: every WS1 key's `file` is a web path and its value appears in that file. Trial merge of
+    all fragments: 941 keys, no duplicates; `check_h0 --fragments` OK. Reaches the public tree
+    at C's next `make web`. WS5: the scorecard can cite `terrain.conservative.*` by name.
+- D19 (navigation): nothing in WS1 depends on navigation; no change.
+- KATs first: 8 new (conservative formula, restate, superset/identity, WS2 agreement, disc
+  summary, web-path keys). WS1 KATs 41 pass (test_coverage + test_coreg); full suite 730
+  pass; ruff clean.
+
 ### Answers (WS1)
 
 - WS6 Blocked 2 (coreg sign): confirmed. `coreg.json (dx_m, dy_m)` is **added** to the MMGIS
@@ -382,19 +428,16 @@ All numbers from today's fresh downloads (`data/raw/terrain/`, cache index `cach
 
 ### Doing
 
-- Waiting for G0 sign-off (S) and the decisions below.
+- Waiting for G0 sign-off (S).
 
 ### Next
 
-- After V1 (WS6): `cellstate_3m_conservative.tif`.
+- If V1's RMSE changes: `python -m pipeline.terrain.build conservative validation manifest`
+  (validation refuses a conservative summary made from another RMSE).
 
 ### Blocked
 
-- CTX band switch (C): `ctx_20m_v2.tif` recommended (above); WS3 changes its band path.
 - S3, S5 hand picks (S): positions not yet in `stations.yaml`.
-- `cellstate_3m_conservative.tif`: waits for the real V1 RMSE (WS6; footprint 3 m decided 12:37,
-  `data/interim/validation/v1.json` not there yet). Then `python -m pipeline.terrain.build
-  conservative`.
 
 ### Assumptions added
 
@@ -458,20 +501,34 @@ Branch: `ws2-engine`
   - **G1 route `route_nom_104`: pad -> S4 -> S2 -> pad, 209.7 min** (walk 149.7 + 2 x 30 dwell), legs 2,357 / 1,741 / 2,122 m, 48.4 / 30.3 / 71.0 min. Only 2 stations: S1 has no access cell, S3/S5 unpositioned, so no 3-station route yet. Timeline: arrive S4 48.4, leave 78.4, arrive S2 108.7, leave 138.7, return 209.7; O2 left at return 267.7 L. **Binding margin: dose** everywhere (storm tau 85.9 - T_home): 25.97 min at S4, **14.89 min at S2 (lowest)**. With `--dose latest` (tau 3,771.6 min, scratch run, not published) the same route is chosen and **O2 binds**: 224.1 min at S4, 168.3 at S2. Turn-back (latest leave, O2 term): S4 438.6 min, S2 409.2 min, i.e. after the 6.5 h EVA budget (see question 13). Both stations are outside the 60-min partner line (cart haul from the access cell 99 / 108 min).
   - **Sizes** (public tree, 6 scenarios): **79.5 MB raw, 12.1 MB gz** (was 159.5 / 22.0). Isochrones 7.7-9.9 MB raw (1.15-1.49 gz); bands 4.2-4.6 raw (0.58-0.65 gz); edges 1.4-2.0 raw (0.26-0.36 gz); partner 1.1-1.4 raw; rest < 0.05. Largest file 9.95 MB (opt_80 isochrones). With con_* expect about 107 MB raw / 16 MB gz. Git stores blobs zlib-compressed, so repo growth is about the gz column (under 25 MB); the **raw** tree is over 25 MB and cannot get there losslessly (see question 10).
 
+- 2026-11-14T13:45Z (session 4): **D20 cart-only partner line** (user 14:22), KATs first (`tests/test_haul.py`: drag 179 kg on flat ground -> infeasible, reason traction; flat-ground numbers; `partner_cases` cart only). `haul.yaml partner_cases: [cart]` (drag stays in `cases`), `partner_label`, `partner_caption`, `drag_note` (SPEC F10 Output text). Haul fields: cart x (suited, 343 kg), nominal, ridge-masked; **no drag fields** (old drag rasters deleted). `partner.geojson` features: `label` "Partner line (cart haul, 60 min)", `caption` (design question), `drag_note`; top-level member `drag_finding` (flat ground, from config via `haul.drag_flat`). Card fragments carry `drag_note`.
+  - **For WS5, manifest keys of the drag finding** (file `scenarios/nom_104/partner.geojson`, default suit 104): `haul.drag.flat.force_N` **398.454 N**, `haul.drag.flat.traction_limit_N` **350.595 N**, `haul.drag.flat.max_mass_kg` **157.5 kg**, plus `.casualty_kg` 179, `.rescuer_system_kg` 189, `.mu` 0.6, `.boot_mu` 0.5, `.feasible` false. Per suit: `haul.drag.flat.nom_{80,104,120}.*` in each `nom_{suit}/partner.geojson` (80: 345.03 vs 306.075 N, max 137.5 kg; 120: 434.07 vs 380.275 N, max 170.833 kg). Infeasible at every suit.
+- 2026-11-14T13:45Z: **manifest keys (WS6 audit)**: `route.{sid}.leg.{i}.{t_min,o2_L,length_m,t_start_min,t_end_min,to_access_dist_m}` (i = the leg's 1-based `leg` property, file `route_{sid}.geojson`; 17 keys for nom_104) and `timeline.{sid}.{S}.access_dist_m` (S4 2.1, S2 27.6 m). KAT `test_traverse_manifest_keys`.
+- 2026-11-14T13:45Z: **F8 siting** starts its forward runs at the access cells of the rule's scenario (`site.yaml siting.score` variant at the default suit = **con_104**), not nom_104's (KAT). `make engine` now passes `--siting`.
+- 2026-11-14T13:52Z: **real run** `make engine`, all 9 scenarios, from clean commit 054ced5 (7 min 13 s). V1 `rmse_deg` 5.447 -> conservative no-go 14.553 deg. WS4 margins unchanged (t_dark 578.63, storm tau 85.9 min). All public files validate (0 errors); every engine manifest key is at 054ced5 (no `-dirty`); old engine fragments archived in `data/interim/engine/manifest_archive/`.
+  - **Headline nom_104: 12.4 % of the assessed 30-min disc, range [4.6, 17.5] %** (con_104 / opt_104). 60 min: 11.2 % [1.7, 20.0].
+  - **con_***: 30 min con_80 / con_104 / con_120 = **4.8 / 4.6 / 4.5 %**; 60 min 1.9 / 1.7 / 1.7 %. Blocked share of the 30-min disc at 14.55 deg: 58.7 % (nominal 41.2 %). Edges 99.5 % slope.
+  - Stations under con_*: S4 access cell 2.1 m, T_home 71.2 / 76.5 / 80.1 min (80/104/120); **S2 has no access cell** in con_* (191 assessed cells within 50 m, none with a walk home); S1 none (as before).
+  - **Trade table science_value: 0.0 in all 6 cells** (no station has a conservative T_home <= 60 min: S4 >= 71 min, S1/S2 unreachable). reachable_pct and partner_area_km2 as before (partner 1.31 / 1.23 / 1.19 km2).
+  - **F8 / pad.json**: only S4 has a con_104 access cell, so the score is S4's value (0.475) or 0. 742 candidate blocks (20 m, all cells assessed, max slope <= 5 deg); **5 score 0.475, all tied**; the tiebreak (lowest elevation) picks **137.402443, -4.769028, elev -3811.3 m, block max slope 3.95 deg**; alternatives rank 2 (137.405846, -4.764625, -3810.1 m) and 3 (137.393301, -4.776468, -3779.5 m), same score. `assessed_pct_30min` and `rule_passed` are **null**: the 1,764 m disc around the proposed pad leaves the 3 m grid (pad 1.5 km from the north edge). No rover-hop option (no second station to add). The default pad's block is not a candidate (fails the 5 deg / assessed rule). Reading: with one station the rule cannot discriminate; this is a proposal for S, **pad_default unchanged** (user 11:24). `siting.png` 30 KB, `siting_png.json`, `siting.tif` (interim).
+  - Route nom_104 unchanged: pad -> S4 -> S2 -> pad, 209.7 min; binding dose, lowest 14.89 min at S2.
+  - **Sizes** (public tree, 9 scenarios, excl. card fragments): **108.4 MB raw, 16.7 MB gz**; largest file 9.95 MB (opt_80 isochrones); con_* isochrones 8.0-8.6 MB raw (1.19-1.27 gz), con_* edges 0.6 MB; bands 4.9-5.4 MB raw (0.70-0.78 gz, now with con bands). opt_80 isochrones are 1.53 MB gz on the 2-min fallback (0.03 over the 1.5 budget; other 8 within). Every file < 50 MB.
+- D19 (14:19): no engine change. Q13 (turn-back cap) stays open for S.
+
 ### Doing
 
-- Waiting for V1 (con_*), S (S3/S5 positions, S1 access, questions) and C (card merge, sizes).
+- Waiting for S (S3/S5 positions, S1 access, pad proposal, questions) and C (make web with con_*, pad.json, siting).
 
 ### Next
 
-- On V1 (WS6 `validation/v1.json`): `make engine` again for con_* (range low end, trade science_value, siting rule).
-- Once S3/S5 have positions (or S1 gets an access cell): re-run for a 3-station nom_104 route. F8 siting + `pad.json` on V1 (the brief has no nom-only interim, so not produced).
+- C: `make web` publishes con_* (isochrones, edges), new bands, `pad.json`, `siting.png`, `siting_png.json`, cart-only partner files and the new keys.
+- Once S3/S5 have positions (or S1 gets an access cell): re-run for a 3-station nom_104 route and F8 with more than one station.
 - WS7/WS9: real rasters are ready in `data/interim/engine/{sid}/`.
 
 ### Blocked
 
 - **3-station G1 route (S/WS1):** with the access-cell rule only S2 and S4 are routable; S1's 38 assessed cells within 50 m are all sealed off (no walk home in any scenario). S to pick S3/S5 positions, or move S1, or widen the radius (assumed 50 m; not changed by WS2).
-- con_* scenarios, the headline range low end, trade `science_value` and F8 siting wait on WS6's V1 RMSE (S's footprint decision).
+- **F8 pad (S):** with only S4 reachable under con_104 the rule ties 5 blocks at 0.475; proposed pad 137.402443, -4.769028 (not adopted; pad_default unchanged). The pad check is null because the 30-min disc leaves the grid there. Accept, keep the default, or wait for S3/S5?
 - Questions for S (science):
   1. **alpha encoding (C note, model unchanged).** IST-2's weight span is a gravity change (0.12 -> 0.32 g on 201.7 kg = 395.6 N). At Mars g that weight equals 106.6 kg of carried mass, not `delta_mass_kg` 60.
      | | alpha (mL/kg/min per kg per m/s) | a(M) nom 80 / 104 / 120 kg suit | level VO2 at 0.98 m/s, nom 80 / 104 / 120 | level v* nom 80 / 104 / 120 (m/s) | headline 30 min nom_80 / nom_120 |
