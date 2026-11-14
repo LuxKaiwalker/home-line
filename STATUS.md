@@ -657,20 +657,34 @@ Branch: `ws3-horizon`
 - 13:35Z **D7 import hardened.** `--import-manual` was tested end to end on a synthetic filled sheet: `manual_checks.json` is written, and frames judged other than ok leave the V2 summary on the next build (reported, with `manual_ok: false`). It now also accepts spreadsheet re-saves (UTF-8 BOM, `;` or tab delimiter, `OK`/padded verdicts). An unknown verdict, two different verdicts for one frame, or a missing `verdict` column stops it with exit 2 and writes nothing. **Re-running V2 no longer wipes a filled sheet:** verdicts and notes carry over by image_id, and a filled sheet is first copied to `validation/manual_check_backups/manual_check_{UTC}.csv`. I did not fill the real sheet.
 - KATs: 9 new (5 handover, canonical CTX v2 path, 4 D7 import/carry-over). Full suite 726 pass, 1 fail (`test_fields_png::test_real_index_valid_and_pad_zero`: WS7's `fix_interval_high.png` is not in this worktree's data; it fails without my changes too). ruff clean; `make validate` OK.
 
+#### Session 4 (2026-11-14, D7 decided 15:01; C 14:58 pad correction)
+
+- 14:25Z **D7 numbers in `validation/v2.json` (WS5 request), commit 16ed62f.** New optional block `far_note` (open v2 schema; validates; `make validate` OK), rule in `horizon.yaml d7_far_note`. Every number has a manifest key `v2.far_note.*` (file `validation/v2.json`):
+  - `status` not_validated, `decision`, `reason` (no numbers in the text).
+  - `n_far_fail` **21** (V2-ok frames with |far median| > `far_fail_abs_deg` 2°), `n_far_fail_north` **21** (frame centre az within `north_half_width_deg` 45° of north, assumed; all 21 are at 335–30°), `n_far_fail_az_unknown` 0.
+  - `rim_dist_km_min`/`max` **41.4 / 53.6 km** (per far-fail frame, median predicted-skyline distance over its far columns; min/max over the 21). SPEC's "41–57 km" is not reproduced: 57 is not what today's data give.
+  - `n_match_near_terrain` **17** of 21 (sheet best cut range ≤ `match_range_km` 2), `n_match_near_terrain_within_tol` **8** (also |detected − cut-predicted| ≤ `match_tol_deg` 0.3°, assumed), `best_cut_range_km_counts` {2: 17, 5: 2, 20: 2}, `n_best_cut_unknown` 0. **Correction:** the decision log's "19 of 21 within ~2 km" was the session-2 count; since session 3 (dem_1m to its edge) it is 17 within 2 km and 19 within 5 km. WS5: use the keys, not the log text.
+  - New keys `v2.n_frames_tried` **50** and `v2.n_frames_ok` **35** (plus `v2.n_stops` 27). `write_v2` now validates before writing.
+  - Near/mid/far summary unchanged (0.094° / 0.197° / 4.308°).
+- **Card fragments:** `skyline_error_scope` no longer says "far class pending the D7 manual check"; it now reads "automatic sky detector, no manual review, D7; far class not validated: the far rim is hidden by haze in north-facing frames". Card frames, errors and landmarks unchanged (S1 NLB_826633404, S2 NLB_789347468, S4 NLB_767161116).
+- The manual-check sheet stays as is (not required; it is still written because it computes the best-cut evidence the far note uses).
+- **Pad correction (C 14:58), commits 2bb16cc and d5407d2.** WS2's pad.json (14:45 CET) carried the F8 siting proposal (137.402443, −4.769028) as its top-level pad, and the 15:18 CET cards run built the pad horizon and `horizon_ring.json` there. Fixed: the pad observer is `site.yaml pad_default`. WS2's top-level pad is used only if it equals pad_default (6 decimals) and is not marked as a proposal; its `proposal` block is never read. KAT added. Re-run at 15:24 CET: **pad observer lon/lat = 137.382, −4.806 = pad_default** (from WS2's fixed pad.json). `horizon_ring.json` is **identical** to the session-3 pad_default ring on main (elev, dist, z: max |diff| 0), so WS8's `skyline_check` needs no refresh. Pad users checked: only WS8's export (restored by WS8); `conditions/clock.json` (11:09) predates the wrong window.
+- Tests: 4 new KATs (far note, far-note manifest keys, card scope per D7, pad observer vs proposal). Full suite **762 pass**; ruff clean; `make validate` OK.
+
 ### Doing
 
 - —
 
 ### Next
 
-- C/user: fill the manual-check sheet (D7; now 40 frames). Then run `python -m pipeline.validation.v2_skyline --import-manual data/interim/horizon/validation/manual_check/manual_check.csv` and `make horizons`. The V2 summary and the card frames update from it.
-- WS8: rebuild `make fp3d` with `ctx_20m_v2.tif` (far mesh + `skyline_check` from the new horizons), then re-run `make fp3d-check` (expected from the geometry check: pad 0.38°, S2 0.29°, S4 ≤ 0.2°).
-- Rerun `make horizons` (or `python -m pipeline.horizon.cards`) when WS2 changes stations.json/pad.json. S3/S5 cards follow once S picks them.
-- Hand to WS9: engine API (`bands.load_engine()`, `HorizonEngine.horizons(xs, ys, az_step_deg=1, min_dist_m=500)`), `sky.detect_skyline`, and `navcam_frames.json` with station tags.
+- WS5: read `validation/v2.json far_note` and the `v2.far_note.*`, `v2.n_frames_*` keys (session 4).
+- WS8: rebuild `make fp3d` with `ctx_20m_v2.tif` (far mesh + `skyline_check` from the new horizons), then re-run `make fp3d-check` (expected from the geometry check: pad 0.38°, S2 0.29°, S4 ≤ 0.2°). The pad ring itself did not change in session 4.
+- Rerun `make horizons` (or `python -m pipeline.horizon.cards`) when WS2 changes stations.json. S3/S5 cards follow once S picks them.
+- Hand to WS9 (optional add-on, D19): engine API, `sky.detect_skyline`, `navcam_frames.json` with station tags.
 
 ### Blocked
 
-1. **D7 / V2 far class (C/user decides).** Evidence is now on the sheet (above). Options are unchanged: (a) manual verdicts drop the frames where the rim is not visible; (b) fully manual; (c) report as is. Until then the automatic far median stays 4.31°, and the card far errors (3.2–6.5°) come from the same far-fail frames.
+1. ~~D7 / V2 far class~~: decided by the user 15:01 (automatic only; far class not validated, haze). Done in session 4 (`far_note`).
 2. ~~Card fragment vs card contract~~: resolved by C's card merge in `make web` (C session 2).
 3. ~~Band step at 2 km~~: resolved (C 12:35 dem_1m to its edge; C 14:13 ctx_20m_v2, −0.12 m vs dem_1m). One observation for WS1 above (v102_2164: v2 18–47 m below v1 beyond dem_1m's east edge).
 6. **F20 at S4 (WS8).** 0.504° vs 0.5° only because WS8's far mesh still uses `ctx_20m.tif` v1 (see Done, session 3). WS8 rebuilds with v2; I do not touch the export.

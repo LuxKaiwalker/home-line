@@ -623,6 +623,96 @@ def test_manual_check_rows_cover_sample_and_far_failures():
     assert all(r["verdict"] == "" for r in rows)
 
 
+def _far_note_doc():
+    """F1, F2, F4, F5 far-fail (F4 faces east), F0 fine, F3 failed, F6 far-fail but rejected."""
+    lim = CFG["manual_check_sheet"]["far_fail_abs_deg"]
+    frames = [_v2_frame(0, far=0.1), _v2_frame(1, far=-(lim + 1.0)),
+              _v2_frame(2, far=-(lim + 3.0)), _v2_frame(3, status="failed"),
+              _v2_frame(4, far=-(lim + 0.5)), _v2_frame(5, far=lim + 0.2),
+              _v2_frame(6, far=-(lim + 4.0))]
+    frames[2]["columns"]["distance_m"] = [52000.0, 56000.0, 60000.0]   # median 56 km
+    frames[2]["columns"]["distance_class"] = ["far", "far", "far"]
+    frames[4]["columns"]["distance_m"] = [30000.0, 900.0]              # mid column ignored
+    frames[4]["columns"]["distance_class"] = ["far", "mid"]
+    frames[6]["manual_ok"] = False
+    az = {"F0": 0.0, "F1": 355.0, "F2": 10.0, "F3": 0.0, "F4": 90.0, "F5": None, "F6": 0.0}
+    by_id = {k: {"pointing_site": {"az_centre_deg": v}} for k, v in az.items()}
+    return {"frames": frames}, by_id
+
+
+def test_d7_far_note_known_answer():
+    """D7 (user 15:01): far-fail count, north-facing count (wrap-around at 0 deg, unknown
+    azimuth not counted as north), rim range from per-frame far-column medians, and the
+    best-cut evidence counts (<= match_range_km; within match_tol_deg)."""
+    from pipeline.validation.v2_skyline import far_note
+
+    nc = CFG["d7_far_note"]
+    assert nc["match_range_km"] == 2 and nc["north_half_width_deg"] == 45
+    doc, by_id = _far_note_doc()
+    cuts = {"F1": (2.0, -0.1), "F2": (2.0, -1.5), "F4": (20.0, 0.05), "F0": (2.0, 0.0)}
+    n = far_note(doc, by_id, cuts)
+    assert n["status"] == "not_validated" and n["decision"] == nc["decision"]
+    assert n["frames"] == ["F1", "F2", "F4", "F5"]       # F0 fine, F3 failed, F6 rejected
+    assert n["n_far_fail"] == 4
+    assert n["n_far_fail_north"] == 2                    # F1 (355), F2 (10); F4 east; F5 unknown
+    assert n["n_far_fail_az_unknown"] == 1
+    assert n["rim_dist_km_min"] == pytest.approx(30.0)   # F4's far column only
+    assert n["rim_dist_km_max"] == pytest.approx(56.0)   # F2's median
+    assert n["n_match_near_terrain"] == 2                # F1, F2 best cut 2 km
+    assert n["n_match_near_terrain_within_tol"] == 1     # F1 |-0.1| <= 0.3
+    assert n["n_best_cut_unknown"] == 1                  # F5 has no cut result
+    assert n["best_cut_range_km_counts"] == {"2": 2, "20": 1}
+    for k in ("far_fail_abs_deg", "north_half_width_deg", "match_range_km", "match_tol_deg"):
+        assert n[k] == pytest.approx(CFG["manual_check_sheet" if k == "far_fail_abs_deg"
+                                         else "d7_far_note"][k])
+    empty = far_note({"frames": [_v2_frame(0, far=0.1)]}, by_id, {})
+    assert empty["n_far_fail"] == 0 and empty["rim_dist_km_min"] is None
+
+
+def test_v2_far_note_and_frame_count_keys(tmp_path, monkeypatch):
+    """WS5: v2.json carries far_note (validates, open schema) and every number in it, plus
+    n_frames_tried / n_frames_ok, has a manifest key."""
+    import json
+
+    from pipeline.horizon.contracts import validate
+    from pipeline.validation.v2_skyline import far_note, write_v2
+
+    monkeypatch.setenv("HOMELINE_MANIFEST_DIR", str(tmp_path / "manifest"))
+    doc, by_id = _far_note_doc()
+    doc.update({"summary": {c: {"n": 0, "median_deg": None, "median_abs_deg": None,
+                                "p90_abs_deg": None} for c in ("near", "mid", "far")},
+                "n_stops": 5, "n_frames_tried": 7, "n_frames_ok": 5})
+    doc["far_note"] = far_note(doc, by_id, {"F1": (2.0, -0.1)})
+    validate(doc, "v2.schema.json")
+    write_v2(doc, tmp_path / "v2.json")
+    frag = {}
+    for p in (tmp_path / "manifest").rglob("*.json"):
+        frag.update(json.loads(p.read_text()))
+    assert frag["v2.n_frames_tried"]["value"] == 7 and frag["v2.n_frames_ok"]["value"] == 5
+    fn = doc["far_note"]
+    for k, units in (("n_far_fail", "1"), ("n_far_fail_north", "1"), ("rim_dist_km_min", "km"),
+                     ("rim_dist_km_max", "km"), ("n_match_near_terrain", "1"),
+                     ("n_match_near_terrain_within_tol", "1"), ("match_range_km", "km"),
+                     ("match_tol_deg", "deg"), ("north_half_width_deg", "deg"),
+                     ("far_fail_abs_deg", "deg")):
+        e = frag[f"v2.far_note.{k}"]
+        assert e["value"] == fn[k] and e["units"] == units and e["file"] == "validation/v2.json"
+    assert frag["v2.far_note.best_cut_range_km_counts.2"]["value"] == 1
+    assert json.loads((tmp_path / "v2.json").read_text())["far_note"] == fn
+
+
+def test_card_scope_says_far_not_validated_per_d7():
+    from pipeline.horizon.cards import card_fragment
+
+    frag = card_fragment("S4", observer={"id": "S4", "provisional": False},
+                         frame={"image_id": "NLB_X", "sol": 4164, "stop_id": "v1_0"},
+                         frame_dist_m=128.0, frame_errors={"near": None, "mid": None, "far": 6.5},
+                         landmarks=[], landmarks_note=None)
+    s = frag["skyline_error_scope"]
+    assert "pending" not in s and "manual check" not in s
+    assert "far class not validated" in s and "haze" in s
+
+
 def test_manual_verdicts_import(tmp_path):
     import csv
 

@@ -4,8 +4,9 @@ fragments (F12).
     python -m pipeline.horizon.cards
 
 Observers (eye height ``horizon.yaml eye_height_m``):
-  * pad: WS2 ``engine/public/pad.json`` if present, else WS1 ``terrain/grid.json`` pad, else
-    ``site.yaml pad_default`` (kept unchanged, user decision 11:24).
+  * pad: ``site.yaml pad_default`` (the pad in use, user 11:24; C 14:58). WS2
+    ``engine/public/pad.json`` is used only when its top-level pad is pad_default and not marked
+    as a proposal; its ``proposal`` block (F8 siting) is never read.
   * stations: WS2 ``engine/public/stations.json``. Access-cell rule (user decision 11:40): the
     observer stands at the station's access cell once WS2 publishes it; until then at the science
     coordinate, and the card is marked ``provisional``.
@@ -95,19 +96,33 @@ def observer_from_station(rec: dict) -> dict:
 
 
 def pad_observer(engine_public: Path = ENGINE_PUBLIC, terrain: Path = TERRAIN) -> dict:
-    """Pad position: WS2 pad.json, else WS1 grid.json pad, else site.yaml pad_default."""
+    """Pad observer = the pad in use, ``site.yaml pad_default`` (user 11:24; C 14:58).
+
+    WS2 ``pad.json``'s top-level ``pad`` is used only when it is not marked as a proposal and
+    equals pad_default at the file's 6-decimal precision (SPEC §6); its ``proposal`` block (the
+    F8 siting result) is never read. Otherwise the pad is ``pad_default`` from config, with a
+    ``source_note`` saying why pad.json was ignored. ``terrain`` is kept for call compatibility
+    (WS1 grid.json's pad is pad_default too)."""
+    default = hcfg.site()["pad_default"]
+    out = {"id": "pad", "lon": default["lon"], "lat": default["lat"],
+           "source": "config/site.yaml pad_default"}
     p = Path(engine_public) / "pad.json"
-    if p.exists():
-        d = json.loads(p.read_text())["pad"]
+    if not p.exists():
+        return out
+    d = json.loads(p.read_text()).get("pad") or {}
+    marked = any(bool(d.get(k)) for k in ("proposal", "is_proposal")) or \
+        str(d.get("role", d.get("kind", ""))).lower() == "proposal"
+    try:
+        same = (round(float(d["lon"]), 6), round(float(d["lat"]), 6)) == \
+            (round(float(default["lon"]), 6), round(float(default["lat"]), 6))
+    except (KeyError, TypeError, ValueError):
+        same = False
+    if same and not marked:
         return {"id": "pad", "lon": d["lon"], "lat": d["lat"], "source": f"WS2 {_rel(p)}"}
-    g = Path(terrain) / "grid.json"
-    if g.exists():
-        d = json.loads(g.read_text()).get("pad")
-        if d and d.get("lon") is not None:
-            return {"id": "pad", "lon": d["lon"], "lat": d["lat"],
-                    "source": f"WS1 {_rel(g)} pad"}
-    d = hcfg.site()["pad_default"]
-    return {"id": "pad", "lon": d["lon"], "lat": d["lat"], "source": "config/site.yaml pad_default"}
+    why = "marked as a proposal" if marked else "not pad_default"
+    out["source_note"] = (f"WS2 {_rel(p)} pad ({d.get('lon')}, {d.get('lat')}) ignored: {why} "
+                          f"(C 14:58: the pad in use is pad_default; F8 siting is a proposal)")
+    return out
 
 
 # --------------------------------------------------------------------------------------------
@@ -370,8 +385,9 @@ def card_fragment(station_id: str, *, observer: dict, frame: dict | None,
         "navcam": navcam,
         "skyline_error_deg": errs,
         "skyline_error_scope": ("median |detected - predicted| skyline elevation per distance "
-                                "class on this card's Navcam frame (automatic sky detector; "
-                                "far class pending the D7 manual check)") if frame else None,
+                                "class on this card's Navcam frame (automatic sky detector, no "
+                                "manual review, D7; far class not validated: the far rim is "
+                                "hidden by haze in north-facing frames)") if frame else None,
         "panorama_png": f"{base}/panorama.png" if panorama else None,
         "landmarks": [{k: lm[k] for k in ("name", "bearing_deg", "dist_km", "kind",
                                           "above_skyline") if k in lm} for lm in landmarks],
@@ -449,7 +465,10 @@ def run(*, engine=None, stations_json: Path | None = None, public: Path = PUBLIC
                  "position": pad["source"]}
     prof.write_json(horizons_dir / "pad.json", observer_id="pad")
     validate(json.loads((horizons_dir / "pad.json").read_text()), "horizon.schema.json")
-    report["observers"]["pad"] = {k: pad[k] for k in ("lon", "lat", "source")}
+    report["observers"]["pad"] = {k: pad[k] for k in ("lon", "lat", "source", "source_note")
+                                  if k in pad}
+    if pad.get("source_note"):
+        log(f"pad: {pad['source_note']}")
     ring = ring_doc(engine, pad)
     validate(ring, "horizon_ring.schema.json")
     rp = public / "fp3d" / "horizon_ring.json"
