@@ -5,6 +5,7 @@ import fp3dRaw from '../../../config/fp3d.yaml'
 import variantsRaw from '../../../config/variants.yaml'
 import horizonRaw from '../../../config/horizon.yaml'
 import siteRaw from '../../../config/site.yaml'
+import crewRaw from '../../../config/crew.yaml'
 
 type Obj = Record<string, unknown>
 
@@ -50,6 +51,8 @@ export interface Fp3dConfig {
   fpsFallbackBelow: number
   budget3dMb: number
   defaultScenario: string
+  /** crew.yaml eva_h * 60: playback clock length (same as WS7's HudConfig.evaMin) */
+  evaMin: number
   skyRgb: [number, number, number]
   groundRgb: [number, number, number]
   fovDeg: number
@@ -87,6 +90,7 @@ export function buildConfig(
   variants: unknown,
   horizon: unknown,
   site: unknown,
+  crew: unknown,
 ): Fp3dConfig {
   const H = 'hud.yaml'
   const F = 'fp3d.yaml'
@@ -102,6 +106,7 @@ export function buildConfig(
     fpsFallbackBelow: num(hud, 'performance.fps_3d_fallback_below', H),
     budget3dMb: num(hud, 'performance.budget_3d_mb', H),
     defaultScenario: str(variants, 'scenarios.default', 'variants.yaml'),
+    evaMin: num(crew, 'eva_h', 'crew.yaml') * 60,
     skyRgb: [sky[0], sky[1], sky[2]],
     groundRgb: [ground[0], ground[1], ground[2]],
     fovDeg: num(fp3d, 'view.fov_deg', F),
@@ -144,4 +149,4 @@ export function buildConfig(
   }
 }
 
-export const FP3D_CONFIG: Fp3dConfig = buildConfig(hudRaw, fp3dRaw, variantsRaw, horizonRaw, siteRaw)
+export const FP3D_CONFIG: Fp3dConfig = buildConfig(hudRaw, fp3dRaw, variantsRaw, horizonRaw, siteRaw, crewRaw)

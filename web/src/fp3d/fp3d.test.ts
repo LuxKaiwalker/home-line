@@ -5,9 +5,9 @@ import { gunzipSync, gzipSync } from 'node:zlib'
 import { resolve } from 'node:path'
 import { parse } from 'yaml'
 import { describe, expect, it } from 'vitest'
-import { PlaybackClock } from './clock'
 import { FP3D_CONFIG, buildConfig } from './config'
 import { hasWebGL2 } from './fallback'
+import { Plan } from '../hud/plan'
 import { codecOf, decodeHeights, gunzipIfNeeded, parseIndex, type Fp3dIndex } from './format'
 import { FpsWatchdog } from './fps'
 import { lonLatToXY, parseEqc, xyToLonLat } from './geo'
@@ -42,7 +42,7 @@ describe('config', () => {
   it('throws on a missing value instead of inventing one', () => {
     const hud = { ...yamlOf('hud.yaml') }
     delete hud.eye_height_m
-    expect(() => buildConfig(hud, yamlOf('fp3d.yaml'), yamlOf('variants.yaml'), yamlOf('horizon.yaml'), yamlOf('site.yaml'))).toThrow(
+    expect(() => buildConfig(hud, yamlOf('fp3d.yaml'), yamlOf('variants.yaml'), yamlOf('horizon.yaml'), yamlOf('site.yaml'), yamlOf('crew.yaml'))).toThrow(
       /eye_height_m/,
     )
   })
@@ -376,6 +376,42 @@ describe('camera on the route: 1.7 +- 0.1 m above the drawn mesh', () => {
   })
 })
 
+// -------------------- same position object as the 2D HUD (SPEC F20: same clock and position)
+function cameraVsHudPosition(dir: string) {
+  const eqc = parseEqc(yamlOf('site.yaml').crs.analysis_proj)
+  const route = JSON.parse(readFileSync(resolve(dir, 'route_nom_104.geojson')).toString())
+  const timeline = JSON.parse(readFileSync(resolve(dir, 'timeline_nom_104.json')).toString())
+  const mine = buildRoute(route, timeline, eqc, FP3D_CONFIG.lookAheadM)
+  const mLat = (eqc.R * Math.PI) / 180
+  const plan = new Plan(route, timeline, { mPerDegLat: mLat, mPerDegLon: mLat * Math.cos((eqc.latTsDeg * Math.PI) / 180) })
+  let worst = 0
+  let n = 0
+  for (let t = 0; t <= plan.tEnd; t += 0.25) {
+    const p = mine.poseAt(t)
+    const st = plan.stateAt(t)
+    const [x, y] = lonLatToXY(eqc, st.lon, st.lat)
+    worst = Math.max(worst, Math.hypot(p.x - x, p.y - y))
+    n++
+  }
+  return { worst, n }
+}
+
+describe('camera position = WS7 HUD playback position at every clock time', () => {
+  it('dummy route', () => {
+    const r = cameraVsHudPosition(DUMMY)
+    expect(r.n).toBeGreaterThan(500)
+    expect(r.worst).toBeLessThan(0.01)
+  })
+  const realDir = [resolve(REPO, 'web/public/data'), resolve(REPO, 'data/interim/engine/public')].find((d) =>
+    existsSync(resolve(d, 'route_nom_104.geojson')),
+  )
+  it.skipIf(!realDir)('real route (nom_104)', () => {
+    const r = cameraVsHudPosition(realDir!)
+    console.log(`[F20 camera vs HUD position, real] ${r.n} times, max ${r.worst.toExponential(2)} m`)
+    expect(r.worst).toBeLessThan(0.01)
+  })
+})
+
 // ---------------------------------------------------------------------------------- fps, clock
 describe('fps watchdog', () => {
   const run = (fps: number, seconds: number, wd: FpsWatchdog, t0 = 0) => {
@@ -415,17 +451,10 @@ describe('fps watchdog', () => {
   })
 })
 
-describe('playback clock', () => {
-  it('runs at the configured speed and stops at the end', () => {
-    const c = new PlaybackClock(0, 10, FP3D_CONFIG.defaultSpeed)
-    c.advance(1000) // 1 s wall clock at 60x = 1 min
-    expect(c.tEvaMin()).toBeCloseTo(FP3D_CONFIG.defaultSpeed / 60, 9)
-    c.advance(3600_000)
-    expect(c.tEvaMin()).toBe(10)
-    expect(c.playing).toBe(false)
-    c.toggle()
-    expect(c.tEvaMin()).toBe(0)
-    expect(c.playing).toBe(true)
+describe('playback clock (shared with WS7, F18)', () => {
+  it('uses the HUD clock length and speeds', () => {
+    expect(FP3D_CONFIG.evaMin).toBe(yamlOf('crew.yaml').eva_h * 60)
+    expect(FP3D_CONFIG.playbackSpeeds).toEqual(yamlOf('hud.yaml').playback_speeds)
   })
 })
 

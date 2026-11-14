@@ -1,12 +1,12 @@
 // WS8 entry for the /hud3d route (F20). The shell (web/src/views/slot.ts) lazy-loads this module
 // and calls mount(el, ctx). Three.js is only imported (dynamically) once WebGL2 is confirmed, so
 // the fallback path and the 2D pages never download it.
-import type { Fp3dClock } from './clock'
+import type { PlaybackClock } from '../hud/clock'
 import { FP3D_CONFIG, type Fp3dConfig } from './config'
 import { hasWebGL2, renderFallback, type FallbackReason } from './fallback'
+import type { HudOverlay } from './hudOverlay'
 import type { Fp3dPosition, ViewHandle } from './view'
 
-export type { Fp3dClock } from './clock'
 export type { Fp3dPosition } from './view'
 export type { FallbackReason } from './fallback'
 
@@ -15,8 +15,8 @@ export interface Fp3dOptions {
   dataUrl: (path: string) => string
   /** Scenario id of route_/timeline_ files; default config/variants.yaml scenarios.default. */
   scenario?: string
-  /** External playback clock (e.g. WS7's); default: an internal clock with its own controls. */
-  clock?: Fp3dClock
+  /** WS7's playback clock (F18) when shared; default: a new one, playing. */
+  clock?: PlaybackClock
   /** Called each frame with the F19 position object (for the HUD). */
   onPosition?: (p: Fp3dPosition) => void
   /** Called on fallback; default: render the fallback panel with a link to the 2D HUD. */
@@ -78,8 +78,8 @@ export function mountFp3d(container: HTMLElement, opts: Fp3dOptions): Fp3dHandle
   }
 }
 
-/** WS5 slot contract (web/src/views/slot.ts): mount(el, ctx) -> cleanup. The WS7 HUD panel is
- *  mounted over the view once web/src/hud/ is on main (STATUS WS8 "Next"). */
+/** WS5 slot contract (web/src/views/slot.ts): mount(el, ctx) -> cleanup. Mounts the 3D view with
+ *  WS7's HUD panel over it, driven by the view's clock time each frame. */
 export function mount(el: HTMLElement, ctx: { dataUrl: (path: string) => string }): () => void {
   const wrap = document.createElement('div')
   wrap.className = 'fp3d-wrap'
@@ -91,9 +91,38 @@ export function mount(el: HTMLElement, ctx: { dataUrl: (path: string) => string 
   }
   fit()
   window.addEventListener('resize', fit)
-  const h = mountFp3d(wrap, { dataUrl: ctx.dataUrl })
+  let overlay: HudOverlay | null = null
+  let disposed = false
+  let fellBack = false
+  const cfg = FP3D_CONFIG
+  const h = mountFp3d(wrap, {
+    dataUrl: ctx.dataUrl,
+    onPosition: (p) => overlay?.update(p.t_eva_min),
+    onFallback: (reason, detail) => {
+      fellBack = true
+      overlay?.destroy()
+      overlay = null
+      renderFallback(wrap, reason, { hud2dHref: cfg.hud2dRoute, simulatedLabel: cfg.simulatedLabel, detail })
+    },
+  })
+  void h.ready.then(async () => {
+    if (disposed || fellBack) return
+    try {
+      const { mountHudOverlay } = await import('./hudOverlay')
+      const host = wrap.querySelector<HTMLElement>('.fp3d') ?? wrap
+      const o = await mountHudOverlay(host, ctx.dataUrl, cfg.defaultScenario)
+      if (disposed || fellBack) o.destroy()
+      else overlay = o
+    } catch (e) {
+      // the 3D view keeps running without the panel; say so instead of failing silently
+      console.warn('[fp3d] HUD panel unavailable:', e)
+      wrap.dataset.hud = 'unavailable'
+    }
+  })
   return () => {
+    disposed = true
     window.removeEventListener('resize', fit)
+    overlay?.destroy()
     h.dispose()
     wrap.remove()
   }

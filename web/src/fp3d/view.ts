@@ -1,7 +1,7 @@
 // The Three.js scene of the 3D first-person replay (F20). Loaded lazily from index.ts so the 2D
 // pages never pay for Three.js. Terrain/path/clock logic lives in the pure modules next to it.
 import * as THREE from 'three'
-import { PlaybackClock, type Fp3dClock } from './clock'
+import { PlaybackClock } from '../hud/clock'
 import type { Fp3dConfig } from './config'
 import type { FallbackReason } from './fallback'
 import { codecOf, decodeHeights, farOrigin, gunzipIfNeeded, parseIndex, type Fp3dChunk, type Fp3dIndex } from './format'
@@ -26,7 +26,8 @@ export interface ViewOptions {
   dataUrl: (path: string) => string
   cfg: Fp3dConfig
   scenario: string
-  clock?: Fp3dClock
+  /** WS7's playback clock (F18) when shared with another view; default: a new one, playing. */
+  clock?: PlaybackClock
   onPosition?: (p: Fp3dPosition) => void
   onFallback: (reason: FallbackReason, detail?: string) => void
 }
@@ -365,46 +366,42 @@ export async function startView(container: HTMLElement, opts: ViewOptions): Prom
   caption.replaceChildren(resCaption, document.createTextNode(' · '), sunCaption)
   root.append(top, caption)
 
-  const clock = opts.clock ?? new PlaybackClock(route.startMin, route.endMin, cfg.defaultSpeed)
-  const own = clock instanceof PlaybackClock ? clock : null
+  // the F18 playback clock (WS7 web/src/hud/clock.ts): EVA minutes 0 .. crew.yaml eva_h * 60
+  const clock = opts.clock ?? new PlaybackClock(cfg.evaMin, cfg.playbackSpeeds, cfg.defaultSpeed)
+  if (!opts.clock) clock.play()
   const tText = div('fp3d-t', 'font-variant-numeric:tabular-nums;min-width:6.5em')
-  let syncUi: (() => void) | null = null
-  if (own) {
-    const bar2 = div(
-      'fp3d-controls',
-      'position:absolute;left:0;right:0;bottom:0;display:flex;gap:.6em;align-items:center;padding:.5em .8em;background:#000a',
-    )
-    const play = document.createElement('button')
-    const syncPlay = () => (play.textContent = own.playing ? 'Pause' : 'Play')
-    play.onclick = () => {
-      own.toggle()
-      syncPlay()
-    }
+  const bar2 = div(
+    'fp3d-controls',
+    'position:absolute;left:0;right:0;bottom:0;display:flex;gap:.6em;align-items:center;padding:.5em .8em;background:#000a;z-index:3',
+  )
+  const play = document.createElement('button')
+  const syncPlay = () => (play.textContent = clock.playing ? 'Pause' : 'Play')
+  play.onclick = () => {
+    clock.toggle()
     syncPlay()
-    const speed = document.createElement('select')
-    for (const s of cfg.playbackSpeeds) {
-      const o = document.createElement('option')
-      o.value = String(s)
-      o.textContent = `${s}×`
-      o.selected = s === cfg.defaultSpeed
-      speed.append(o)
-    }
-    speed.onchange = () => (own.speed = Number(speed.value))
-    const scrub = document.createElement('input')
-    scrub.type = 'range'
-    scrub.min = String(route.startMin)
-    scrub.max = String(route.endMin)
-    scrub.step = 'any'
-    scrub.style.flex = '1'
-    scrub.oninput = () => own.seek(Number(scrub.value))
-    bar2.append(play, speed, scrub, tText)
-    root.append(bar2)
-    syncUi = () => {
-      scrub.value = String(own.t)
-      syncPlay()
-    }
-  } else {
-    root.append(tText)
+  }
+  syncPlay()
+  const speed = document.createElement('select')
+  for (const s of cfg.playbackSpeeds) {
+    const o = document.createElement('option')
+    o.value = String(s)
+    o.textContent = `${s}×`
+    o.selected = s === clock.speed
+    speed.append(o)
+  }
+  speed.onchange = () => clock.setSpeed(Number(speed.value))
+  const scrub = document.createElement('input')
+  scrub.type = 'range'
+  scrub.min = '0'
+  scrub.max = String(clock.tMax)
+  scrub.step = 'any'
+  scrub.style.flex = '1'
+  scrub.oninput = () => clock.seek(Number(scrub.value))
+  bar2.append(play, speed, scrub, tText)
+  root.append(bar2)
+  const syncUi = () => {
+    if (document.activeElement !== scrub) scrub.value = String(clock.t)
+    syncPlay()
   }
 
   const resize = () => {
@@ -443,9 +440,9 @@ export async function startView(container: HTMLElement, opts: ViewOptions): Prom
   const frame = (now: number) => {
     if (disposed) return
     raf = requestAnimationFrame(frame)
-    own?.advance(now - last)
+    clock.tick(now - last)
     last = now
-    const t = clock.tEvaMin()
+    const t = clock.t
     const pose = route.poseAt(t)
     camera.position.set(...cameraPosition(terrain, anchor, pose.x, pose.y, cfg.eyeHeightM))
     const hd = (pose.headingDeg * Math.PI) / 180
@@ -464,7 +461,7 @@ export async function startView(container: HTMLElement, opts: ViewOptions): Prom
     eyeAgl = camera.position.y + anchor.h - terrain.heightAt(pose.x, pose.y)
     root.dataset.eyeAgl = eyeAgl.toFixed(3)
     tText.textContent = `T+${t.toFixed(1)} min${pose.dwellAt ? ` · at ${pose.dwellAt}` : ''}`
-    syncUi?.()
+    syncUi()
     if (opts.onPosition && t !== lastPosT) {
       lastPosT = t
       const [lon, lat] = xyToLonLat(eqc, pose.x, pose.y)
