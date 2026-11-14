@@ -374,6 +374,52 @@ All numbers from today's fresh downloads (`data/raw/terrain/`, cache index `cach
   `farfield_v2.json`; **replaced** `coverage.json` (pad_check + D3 text only); **deleted**
   `manifest_pending.json`. No raster that WS2/WS3/WS8/WS9 read was rewritten.
 
+#### Session 3 (started 13:20Z)
+
+- 2026-11-14T13:36Z: **`cellstate_3m_conservative.tif` (brief task 8, F1/F2)**, new file in
+  `data/interim/terrain/` (+ summary `cellstate_3m_conservative.json`); `cellstate_3m.tif` and
+  every other raster untouched. No-go = `site.yaml slope.nogo_deg.conservative` "20 - v1_rmse_deg"
+  with WS6 `v1.json rmse_deg` 5.447021 -> **14.553 deg**. Rule (`routing.restate`): unknown stays
+  unknown; a known 3 m cell is blocked iff its max 1 m slope (`maxslope_3m.tif`) > 14.553 deg.
+  Same grid/CRS as `cellstate_3m.tif`, uint8, nodata 255, codes 0/1/2.
+  | Disc | Nominal blocked (> 20 deg) | Conservative blocked (> 14.55 deg) | Newly blocked | Unknown |
+  | --- | --- | --- | --- | --- |
+  | 30 min (1,764 m) | 41.23 % | **58.75 %** | 17.52 % | 0 % |
+  | 60 min (3,528 m) | 31.36 % | **46.31 %** | 14.95 % | 0 % |
+  | Whole 3 m grid | 31.22 % | 45.86 % | | 0 % |
+  Checked on the real rasters: conservative blocked is a superset of nominal blocked, and
+  conservative assessed equals WS2's `passable_mask(cellstate_3m, maxslope_3m, 14.553...)` cell
+  by cell.
+  - **WS2: the path does not matter to you.** `pipeline/engine` never opens a conservative
+    cellstate: `Grid.with_nogo` re-derives passability from `maxslope_3m.tif` with the variant's
+    limit (`physio.resolve_nogo` + `v1.json`), using `cellstate_3m.tif` only for unknown cells.
+    The new raster is the same rule, for display and checks; your con_* runs need nothing new.
+  - C: `make web` publishes only `cellstate_3m.tif` (`terrain/cellstate.json variant: nominal`).
+    If the app should hatch the conservative states, a second rule from
+    `terrain/cellstate_3m_conservative.tif` works as is (`write_cellstate` already sets
+    `variant: conservative` from the file name) but needs its own web path; your call.
+  - `make terrain` now ends with `build conservative validation` (conservative is skipped with a
+    message while `v1.json` is missing, so in `make clean all` V1 must run before it for con_*).
+- 2026-11-14T13:36Z: **WS6 audit 1 fixed: every WS1 manifest key now cites a web path** (53 keys,
+  all at clean commit bc1af57, 13:35:52Z; `data/interim/manifest/pipeline__terrain__build.json`).
+  - `stations.{S1,S2,S4}.value` -> `stations.json` (WS2's `engine/public/stations.json`, which
+    `make web` publishes; same values 0.8683 / 0.7443 / 0.475).
+  - `terrain.xcheck.{009149,019698}.{median,p90_abs}` (4), `terrain.slope_compare.median_abs_diff`,
+    `terrain.blocked_pct.{30,60}min` -> `validation/coverage.json`, which now carries these numbers
+    in a new block **`terrain_checks`** (`hirise_xcheck`, `slope_compare`,
+    `blocked_pct_of_known`, `conservative`). Nothing else in `coverage.json` changed (staged and
+    compared; `coverage.png` and `coreg.json` byte-identical, not rewritten).
+  - New keys (same file): `terrain.nogo_conservative_deg` 14.553, `terrain.conservative.v1_rmse_deg`
+    5.447, `terrain.conservative.disc_{30,60}.{assessed,blocked,unknown,nominal_blocked,
+    newly_blocked}_pct`.
+  - KAT: every WS1 key's `file` is a web path and its value appears in that file. Trial merge of
+    all fragments: 941 keys, no duplicates; `check_h0 --fragments` OK. Reaches the public tree
+    at C's next `make web`. WS5: the scorecard can cite `terrain.conservative.*` by name.
+- D19 (navigation): nothing in WS1 depends on navigation; no change.
+- KATs first: 8 new (conservative formula, restate, superset/identity, WS2 agreement, disc
+  summary, web-path keys). WS1 KATs 41 pass (test_coverage + test_coreg); full suite 730
+  pass; ruff clean.
+
 ### Answers (WS1)
 
 - WS6 Blocked 2 (coreg sign): confirmed. `coreg.json (dx_m, dy_m)` is **added** to the MMGIS
@@ -382,19 +428,16 @@ All numbers from today's fresh downloads (`data/raw/terrain/`, cache index `cach
 
 ### Doing
 
-- Waiting for G0 sign-off (S) and the decisions below.
+- Waiting for G0 sign-off (S).
 
 ### Next
 
-- After V1 (WS6): `cellstate_3m_conservative.tif`.
+- If V1's RMSE changes: `python -m pipeline.terrain.build conservative validation manifest`
+  (validation refuses a conservative summary made from another RMSE).
 
 ### Blocked
 
-- CTX band switch (C): `ctx_20m_v2.tif` recommended (above); WS3 changes its band path.
 - S3, S5 hand picks (S): positions not yet in `stations.yaml`.
-- `cellstate_3m_conservative.tif`: waits for the real V1 RMSE (WS6; footprint 3 m decided 12:37,
-  `data/interim/validation/v1.json` not there yet). Then `python -m pipeline.terrain.build
-  conservative`.
 
 ### Assumptions added
 
@@ -538,21 +581,51 @@ Branch: `ws3-horizon`
   - Visibility-range diagnostic: the cut range (2/5/10/20/30 km) whose predicted skyline best matches the detector, drawn in green. **On 19 of the 21 far-fail frames the best match is terrain ≤ 2 km, and 12 of those match within ±0.3°.** The chain is right in the near field, and terrain beyond about 2 km (incl. the rim at 41–57 km) is not seen. Clear-sol frames facing the same way match the rim (e.g. NLB_803472163, az 5°, far error −0.08°). This is evidence for option (a); D7 is not decided.
 - KATs: 14 new (canonical bands, access-cell rule incl. no-access, pad source order, landmark table vs discovery 3.5, landmark visibility, pick rule, panorama geometry, ring geometry, frame choice, fragment contract, station tags, manual-check rows/verdicts, cut-range engine). The full suite has 523 pass; ruff is clean.
 
+#### Session 3 (2026-11-14, C decisions 12:35 and 14:13)
+
+- 13:05Z **dem_1m to the edge of its coverage (C 12:35).** `horizon.yaml sampling[0].handover: band_edge`: on each ray dem_1m (1 m step) runs to max(2 km, the distance where the ray leaves dem_1m's valid extent), capped at 30 km; CTX samples start 20 m after that. Valid extent = bounding box of the band's valid pixel centres (dem_1m is 100 % valid, so pad ± 3.9 km: the handover is 3.9–5.5 km from the pad). No-data samples inside still fall back to the next coarser band. KATs first (5): config key, a 100 m wall at 3.5 km seen from dem_1m, CTX after the edge on its 20 m lattice, dem_1m wins over a 50 m higher CTX inside its coverage, observer outside dem_1m.
+- 13:05Z **CTX v2 (C 14:13).** `bands.ctx_20m.path` = `data/interim/terrain/ctx_20m_v2.tif` (note in horizon.yaml). Band check on the canonical bands: CTX − dem_1m **−0.12 m** (p5/p95 −12.4/+8.4; was +19.75 m), MOLA − CTX +8.0 m.
+- 13:20Z **Re-run** (bands → `navcam fetch` → V2 → cards). Previous outputs in `data/interim/horizon/runs/before_dem_edge/` (horizons, navcam_frames, v2, sheet, overlays, cards, ring, manifest fragments).
+  - Frames: **50 frames at 36 stops** (was 49). The new horizons let a second frame at stop 117_492 pass the predicted-skyline test (NLB_804266963, 0.6 MB downloaded; `navcam rebuild` offline cannot fetch it). It fails V2 (no clear sky), so it is reported, not dropped. No other frame changed status.
+  - **V2 median |error| before → after: near 0.095° → 0.094° (n 2,016 → 2,018), mid 0.196° → 0.197° (n 951 → 952), far 4.308° → 4.308° (P90 7.894° → 7.892°, n 26,861 → 26,858).** 27 stops, 35 ok frames, as before. The far class is the 41–57 km rim on the hazy far-fail frames (Blocked 1), which neither change touches.
+  - Only 139 joined columns (one frame, NLB_743544164 at v102_2164, facing SE) have their skyline at 2–6 km. There it gets worse: median |error| 0.061° → 0.318° (signed −0.03° → +0.29°). The skyline points are 4.8–5.5 km out, **beyond dem_1m's east edge**, so this is CTX v2 alone: v2 is 18–47 m lower than v1 on that Mount Sharp flank (MOLA-HRSC is lower still). One frame, so not a verdict on v2. For WS1: worth a look at the v2 shift outside the dem_1m overlap.
+  - **Horizon changes (1,440 az, after − before):**
+    | Observer | az changed | > 0.1° | > 0.5° | mean | largest change |
+    | --- | --- | --- | --- | --- | --- |
+    | pad | 90 | 78 | 1 | −0.013° | −0.53° at az 166.5 (CTX 2.06 km → dem_1m 1.82 km) |
+    | S2 | 191 | 121 | 22 | −0.028° | −0.86° at az 159.25 (CTX 2.02 km → dem_1m 2.45 km): the F20 ridge |
+    | S4 | 71 | 69 | 1 | −0.020° | −0.50° at az 134 (CTX 3.94 → 4.08 km, v1 → v2) |
+    | S1 | 256 | 98 | 0 | −0.019° | −0.50° at az 71.75 (CTX 13.8 → 10.0 km) |
+    | ring (beyond 3.7 km) | | | | −0.075° | max 0.80°; 242 az now dem_1m |
+  - Cards: the same card frames, skyline errors and landmarks; only the panoramas changed. The manual-check sheet has **40 frames** (+ the failed 117_492 frame); no verdicts were filled in yet.
+- 13:33Z **F20 re-check (C 12:35; WS8's export not rebuilt).** `make fp3d-check` still compares against the horizons baked into WS8's `fp3d/index.json skyline_check` (12:13, before this run): pad 0.439°, S1 0.543°, **S2 0.866° FAIL**, S4 0.200°. Same geometry check (WS8's `renderedSkyline`/`compareSkylines` on WS8's export and my new ring), with the reference rebuilt from the new horizons by WS8's `skyline_reference` in a scratch root (it reproduces WS8's numbers exactly on WS8's own index):
+  | Station | Before (WS8 index) | After (new horizons) | Pass (≤ 0.5°) |
+  | --- | --- | --- | --- |
+  | pad | 0.439° | **0.375°** | yes |
+  | S2 | 0.866° | **0.288°** | yes |
+  | S4 | 0.200° | **0.504°** at az 134 | no (by 0.004°) |
+  | S1 (excluded, C 12:35) | 0.543° | 0.543° | (no) |
+  - S4: WS8's far mesh is still built from `ctx_20m.tif` (v1; its `--far-source` default). With the reference recomputed on v1 + the dem_1m edge, S4 is 0.200°, pad 0.212° and S2 0.288°. So the S4 residual is the CTX version, not geometry: **WS8 needs to rebuild `make fp3d` with `ctx_20m_v2.tif` as the far source** (this also refreshes `skyline_check`). The GPU probe was not run (no rebuild).
+- 13:35Z **D7 import hardened.** `--import-manual` was tested end to end on a synthetic filled sheet: `manual_checks.json` is written, and frames judged other than ok leave the V2 summary on the next build (reported, with `manual_ok: false`). It now also accepts spreadsheet re-saves (UTF-8 BOM, `;` or tab delimiter, `OK`/padded verdicts). An unknown verdict, two different verdicts for one frame, or a missing `verdict` column stops it with exit 2 and writes nothing. **Re-running V2 no longer wipes a filled sheet:** verdicts and notes carry over by image_id, and a filled sheet is first copied to `validation/manual_check_backups/manual_check_{UTC}.csv`. I did not fill the real sheet.
+- KATs: 9 new (5 handover, canonical CTX v2 path, 4 D7 import/carry-over). Full suite 726 pass, 1 fail (`test_fields_png::test_real_index_valid_and_pad_zero`: WS7's `fix_interval_high.png` is not in this worktree's data; it fails without my changes too). ruff clean; `make validate` OK.
+
 ### Doing
 
 - —
 
 ### Next
 
-- C/user: fill the manual-check sheet (D7). Then run `--import-manual` and `make horizons`. The V2 summary and the card frames update from it.
+- C/user: fill the manual-check sheet (D7; now 40 frames). Then run `python -m pipeline.validation.v2_skyline --import-manual data/interim/horizon/validation/manual_check/manual_check.csv` and `make horizons`. The V2 summary and the card frames update from it.
+- WS8: rebuild `make fp3d` with `ctx_20m_v2.tif` (far mesh + `skyline_check` from the new horizons), then re-run `make fp3d-check` (expected from the geometry check: pad 0.38°, S2 0.29°, S4 ≤ 0.2°).
 - Rerun `make horizons` (or `python -m pipeline.horizon.cards`) when WS2 changes stations.json/pad.json. S3/S5 cards follow once S picks them.
 - Hand to WS9: engine API (`bands.load_engine()`, `HorizonEngine.horizons(xs, ys, az_step_deg=1, min_dist_m=500)`), `sky.detect_skyline`, and `navcam_frames.json` with station tags.
 
 ### Blocked
 
 1. **D7 / V2 far class (C/user decides).** Evidence is now on the sheet (above). Options are unchanged: (a) manual verdicts drop the frames where the rim is not visible; (b) fully manual; (c) report as is. Until then the automatic far median stays 4.31°, and the card far errors (3.2–6.5°) come from the same far-fail frames.
-2. **Card fragment vs card contract (C).** `make web` copies `horizon/public/cards/{S}.json` straight to `cards/{S}.json`. Until C's merge with WS2's `engine/public/cards/{S}.timeline.json` exists, these files lack `timeline`, `margin_binding` and `contingency`, so they fail `card.schema.json` in make web's validation.
-3. **Band step at 2 km (WS1/C, reported only).** The canonical CTX is +19.75 m above dem_1m where they overlap (median; p95 +47 m). At 2–5 km that can lift predicted skylines by ~0.3–0.6°. It does not explain the 3–7° far failures (see the sheet), but it is a datum question for WS1: dem_1m vs CTX levelled to MOLA.
+2. ~~Card fragment vs card contract~~: resolved by C's card merge in `make web` (C session 2).
+3. ~~Band step at 2 km~~: resolved (C 12:35 dem_1m to its edge; C 14:13 ctx_20m_v2, −0.12 m vs dem_1m). One observation for WS1 above (v102_2164: v2 18–47 m below v1 beyond dem_1m's east edge).
+6. **F20 at S4 (WS8).** 0.504° vs 0.5° only because WS8's far mesh still uses `ctx_20m.tif` v1 (see Done, session 3). WS8 rebuilds with v2; I do not touch the export.
 4. **Navcam height (C).** Unchanged: 1.9 m above DEM ground at stops (C height 1.88–1.93 m above the rover origin; the origin's height above ground is unknown).
 5. **Landmarks rule yields < 3 (C/S, content).** Only Gediz Vallis qualifies. Options: keep it as is (honest), or show the hidden landmarks' bearings as "behind the skyline" on the panorama (needs a rule change in landmarks.yaml).
 
@@ -563,6 +636,7 @@ All in `config/horizon.yaml`, each with `assumed: true`:
 - `navcam_selection`: NAV_LEFT_B full frames only; 30 m stop spacing; up to 4 frames per stop (widest azimuth spread); `stops_wanted` 36 (30 + 20 %); `max_stops_tried` 120 (all 116 stops); drive-end sol + 1; cache budget 150 MB. Geometric pre-test: top-centre pixel ≥ 0° and bottom-centre ≤ −5° in the site frame. It was 10° first, but that kept only 15 of 116 stops and most of those frames had no sky. Then `min_predicted_skyline_col_frac` 0.5 (DEM-predicted skyline testable in ≥ 50 % of columns).
 - `sky_detector_params` (structured copy of the prose rule, 3× / top 10 %): `zero_median_guard` one DN; `border_px` 2 and `presmooth_sigma_px` 2.0. Evidence from fresh frames: row 0 is 235–254 DN, row 1 is ~20 DN above row 2, column 0 is ~25 DN darker and the last row is bright (12 frames). On 6 frames with visible sky, the rule as written (σ 0) fires on sky noise in 94–98 % of columns at about row 30. σ 2 traces the skyline on 4 of 6; on the other 2 the true skyline lies inside the reference band. Known failure: σ 2 can prefer a sharp near ridge over a faint hazy far rim (seen on 2 frames); σ 1 follows the rim but adds noise speckles.
 - `v2_frame_fail.max_in_ref_band_frac` 0.5: a frame whose boundary sits in the reference band in > 50 % of columns is failed and reported.
+- Session 3 (decisions, not assumptions): `sampling[0].handover: band_edge` (C 12:35) and `bands.ctx_20m.path: ctx_20m_v2.tif` (C 14:13). Implementation choice (not a constant): "edge of valid coverage" = bounding box of dem_1m's valid pixel centres along each ray.
 - `bands`: CTX listing = D0's 500 STAC items at the pad; greedy footprint gain, max 3 items, ≥ 1 % gain; reject an item whose median offset to MOLA-HRSC is > 20 m; radii 34 km (CTX) and 84 km (MOLA-HRSC); 20 m and 200 m grids.
 - `overlay`, `panorama`: colours and sizes (presentation only).
 - Landmarks: the 8 IAU names verified by D0 (discovery 3.5). The informal names are dropped (no verified coordinate). Not used yet.

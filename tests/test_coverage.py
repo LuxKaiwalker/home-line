@@ -347,3 +347,148 @@ def test_basemap_zoom_range_for_025_to_10_m():
     assert build._zoom_for(0.25) == 18
     assert build._zoom_for(10.0) == 13
     assert build._zoom_for(1.0) == 16
+
+
+# ---------------------------------------------------------------- conservative cell states (task 8)
+
+V1_RMSE = 5.447021418084812  # WS6 real V1 (STATUS WS6 13:14Z); the KATs use it as a known input
+
+
+def test_conservative_nogo_is_config_formula_minus_v1_rmse():
+    """site.yaml slope.nogo_deg.conservative = "20 - v1_rmse_deg" -> 20 - 5.447 = 14.553 deg."""
+    from pipeline.terrain import grid as G
+
+    spec = G.site()["slope"]["nogo_deg"]["conservative"]
+    assert routing.conservative_nogo(spec, V1_RMSE) == pytest.approx(14.552978581915188)
+    assert routing.conservative_nogo("25 - v1_rmse_deg", 1.0) == pytest.approx(24.0)
+    with pytest.raises(ValueError):
+        routing.conservative_nogo(spec, None)            # no V1: never guessed
+    with pytest.raises(ValueError):
+        routing.conservative_nogo(spec, float("nan"))
+    with pytest.raises(ValueError):
+        routing.conservative_nogo("20 * v1_rmse_deg", 1.0)
+
+
+def test_restate_blocks_above_the_limit_and_keeps_unknown():
+    st = np.array([[0, 0, 0, 0, 1, 2, 2, 0]], np.uint8)
+    mx = np.array([[10.0, 14.5, 14.55, 14.56, 25.0, 3.0, np.nan, np.nan]], np.float32)
+    out = routing.restate(st, mx, 14.552978581915188)
+    A, B, U = routing.ASSESSED, routing.BLOCKED, routing.UNKNOWN
+    # blocked = max slope strictly above the limit; a known cell without a slope is unknown
+    assert out.tolist() == [[A, A, A, B, B, U, U, U]]
+    assert out.dtype == np.uint8 and st.tolist() == [[0, 0, 0, 0, 1, 2, 2, 0]]  # input untouched
+
+
+def _synthetic_states(seed=0, n=60):
+    rng = np.random.default_rng(seed)
+    dem = rng.normal(0, 1, (n, n)).astype(np.float32)
+    slope1 = rng.uniform(0, 30, (n, n)).astype(np.float32)
+    mask = np.full(dem.shape, coverage.HIRISE, np.uint8)
+    mask[:9, :9] = 2                                   # non-HiRISE island -> unknown
+    return routing.routing_grids(dem, slope1, mask, nogo_deg=20.0)
+
+
+def test_conservative_is_a_superset_of_nominal_and_restate_at_20_is_identity():
+    _, mx, nom = _synthetic_states()
+    con = routing.restate(nom, mx, 14.552978581915188)
+    assert ((nom == routing.BLOCKED) <= (con == routing.BLOCKED)).all()
+    assert ((nom == routing.UNKNOWN) == (con == routing.UNKNOWN)).all()
+    assert (con[:3, :3] == routing.UNKNOWN).all()
+    assert (routing.restate(nom, mx, 20.0) == nom).all()
+
+
+def test_conservative_assessed_equals_ws2_passable_mask():
+    """WS2 re-derives passability from maxslope (pipeline/engine/graph.py passable_mask); the
+    conservative raster must agree cell by cell."""
+    from pipeline.engine.graph import passable_mask
+
+    elev, mx, nom = _synthetic_states(seed=1)
+    nogo = routing.conservative_nogo("20 - v1_rmse_deg", V1_RMSE)
+    con = routing.restate(nom, mx, nogo)
+    assert ((con == routing.ASSESSED) == passable_mask(nom, mx, nogo, elev)).all()
+
+
+def test_conservative_summary_discs_and_newly_blocked():
+    from pipeline.terrain import webout
+
+    g = Grid(x0=0.0, y0=30.0, res=3.0, width=10, height=10)
+    nom = np.zeros((10, 10), np.uint8)
+    nom[0, :] = routing.BLOCKED
+    nom[9, :] = routing.UNKNOWN
+    con = nom.copy()
+    con[1, :] = routing.BLOCKED            # 10 more cells blocked at the lower limit
+    doc = webout.conservative_summary(nom, con, g, (15.0, 15.0), {30: 100.0},
+                                      nogo_deg=14.552978581915188, v1_rmse_deg=V1_RMSE,
+                                      v1_source="validation/v1.json")
+    assert doc["nogo_deg"] == pytest.approx(14.553) and doc["v1_rmse_deg"] == pytest.approx(5.447)
+    row = doc["discs"][0]                  # radius 100 m covers the whole 30 x 30 m grid
+    assert row["budget_min"] == 30
+    assert row["blocked_pct"] == pytest.approx(20.0) and row["unknown_pct"] == pytest.approx(10.0)
+    assert row["assessed_pct"] == pytest.approx(70.0)
+    assert row["nominal_blocked_pct"] == pytest.approx(10.0)
+    assert row["newly_blocked_pct"] == pytest.approx(10.0)
+    assert doc["grid_pct"] == {"assessed": 70.0, "blocked": 20.0, "unknown": 10.0}
+
+
+# ---------------------------------------------------------------- manifest file paths (WS6 audit 1)
+
+
+def _leaves(obj):
+    if isinstance(obj, dict):
+        for v in obj.values():
+            yield from _leaves(v)
+    elif isinstance(obj, list):
+        for v in obj:
+            yield from _leaves(v)
+    else:
+        yield obj
+
+
+def test_every_ws1_manifest_key_cites_a_web_path_that_holds_its_value(tmp_path, monkeypatch):
+    """WS6 audit 1: WS5's <Num> matches a key by its web file. Every WS1 key cites the path
+    `make web` publishes (contracts/README.md sources: validation/... from WS1, stations.json
+    from WS2's mirror), never data/interim/..., and its value appears in that file."""
+    import json
+
+    from pipeline.terrain import build, webout
+
+    monkeypatch.setenv("HOMELINE_MANIFEST_DIR", str(tmp_path / "manifest"))
+    monkeypatch.setattr(build, "OUT", tmp_path)
+    xcheck = {"items": {"DTEEC_X": {"median_m": -9.426, "p90_abs_m": 15.34}}}
+    slope_summary = {"slope_compare": {"median_abs_diff_deg": 0.341},
+                     "discs": {"30": {"blocked_pct_of_known": 41.23},
+                               "60": {"blocked_pct_of_known": 31.357}}}
+    con = {"nogo_deg": 14.553, "v1_rmse_deg": 5.447, "discs": [
+        {"budget_min": 30, "assessed_pct": 40.0, "blocked_pct": 60.0, "unknown_pct": 0.0,
+         "nominal_blocked_pct": 41.23, "newly_blocked_pct": 18.77}]}
+    discs = [{"budget_min": 30, "radius_m": 1764.0, "assessed_pct": 58.77, "blocked_pct": 41.23,
+              "unknown_pct": 0.0}]
+    doc = {"discs": discs, "source_fractions_pct": {"hirise": 100.0},
+           "pad_check": webout.pad_check(discs, 30, 90, reading="data_coverage"),
+           "terrain_checks": webout.terrain_checks(xcheck, slope_summary, con)}
+    cg = {"dx_m": 0.0, "dy_m": 0.0, "residual_median_m": 0.0, "residual_mad_m": 0.037, "n": 537}
+    (tmp_path / "coverage.json").write_text(json.dumps(doc))
+    (tmp_path / "coverage.png").write_bytes(b"png")
+    (tmp_path / "coreg.json").write_text(json.dumps(cg))
+    build._record_validation(doc, cg)
+    stations = [{"id": "S1", "value": 0.8683}, {"id": "S3", "value": None}]
+    build._record_stations({"stations": stations})
+
+    frag = json.loads((tmp_path / "manifest" / "pipeline__terrain__build.json").read_text())
+    shown = {"validation/coverage.json": doc, "validation/coreg.json": cg,
+             "stations.json": stations}
+    for key, e in frag.items():
+        assert not e["file"].startswith("data/"), (key, e["file"])
+        if key.startswith("file."):
+            assert e["file"] == key[len("file."):]
+            continue
+        assert e["file"] in shown, (key, e["file"])
+        assert e["value"] in list(_leaves(shown[e["file"]])), (key, e["value"])
+    for key in ("stations.S1.value", "terrain.xcheck.DTEEC_X.median",
+                "terrain.xcheck.DTEEC_X.p90_abs", "terrain.slope_compare.median_abs_diff",
+                "terrain.blocked_pct.30min", "terrain.blocked_pct.60min",
+                "terrain.nogo_conservative_deg", "terrain.conservative.disc_30.blocked_pct",
+                "terrain.conservative.disc_30.newly_blocked_pct"):
+        assert key in frag, key
+    assert frag["stations.S1.value"]["file"] == "stations.json"
+    assert "stations.S3.value" not in frag                    # unknown stays unrecorded

@@ -5,10 +5,13 @@ Elevation angle of a terrain sample at horizontal distance d:
 The horizon is the running maximum along the ray; the engine also records the distance to the
 horizon point and the DEM source it came from.
 
-Sampling follows horizon.yaml ``sampling`` (1 m to 2 km on dem_1m, 20 m to 30 km on ctx_20m,
-200 m to 80 km on mola_hrsc_200m). A sample with no data in its configured source falls back to
-the next coarser source supplied (horizon.yaml ``band_fallback``, assumed). Rays with no valid
-sample stay NaN ("unknown stays unknown").
+Sampling follows horizon.yaml ``sampling`` (1 m on dem_1m, 20 m to 30 km on ctx_20m, 200 m to
+80 km on mola_hrsc_200m). A segment with ``handover: band_edge`` (dem_1m; C decision 2026-11-14
+12:35) runs on each ray to max(to_m, the distance where the ray leaves its band's valid extent),
+capped at the next segment's to_m; the next segment's samples start one of its steps after that
+handover. The valid extent is the bounding box of the band's valid pixel centres. A sample with no
+data in its configured source falls back to the next coarser source supplied (horizon.yaml
+``band_fallback``, assumed). Rays with no valid sample stay NaN ("unknown stays unknown").
 
 Conventions: bands are north-up rasters in the analysis CRS (metres); azimuth is clockwise from
 grid north (= true north in the equirectangular analysis CRS); bilinear interpolation between
@@ -48,6 +51,7 @@ class DemBand:
     y0: float  # top edge of row 0
     dx: float  # > 0
     dy: float  # < 0 (north-up)
+    _vbox: np.ndarray | None = field(default=None, repr=False, compare=False)  # valid_box cache
 
     @classmethod
     def from_transform(cls, source: str, z: np.ndarray, gt, nodata=None) -> DemBand:
@@ -142,6 +146,25 @@ def classify_distance(distance_m) -> np.ndarray:
     return out
 
 
+def valid_box(band: DemBand) -> np.ndarray:
+    """(xmin, xmax, ymin, ymax) of the band's valid pixel centres; NaN if it has no data.
+    Cached on the band (its ``z`` is not modified after the engine is built)."""
+    if band._vbox is None:
+        band._vbox = _valid_box(band)
+    return band._vbox
+
+
+def _valid_box(band: DemBand) -> np.ndarray:
+    ok = np.isfinite(band.z)
+    rows = np.flatnonzero(ok.any(axis=1))
+    cols = np.flatnonzero(ok.any(axis=0))
+    if rows.size == 0:
+        return np.full(4, np.nan)
+    xs = band.x0 + (np.array([cols[0], cols[-1]]) + 0.5) * band.dx
+    ys = band.y0 + (np.array([rows[-1], rows[0]]) + 0.5) * band.dy  # dy < 0: last row = ymin
+    return np.array([xs[0], xs[1], ys[0], ys[1]], dtype=float)
+
+
 def _interp_wrap(x, xp, fp):
     x = np.asarray(x, dtype=float) % 360.0
     xp2 = np.concatenate([xp, [xp[0] + 360.0]])
@@ -210,9 +233,57 @@ def _ground(data, off, nrow, ncol, x0, y0, dx, dy, x, y):
     return np.nan
 
 
+@numba.njit(cache=True, inline="always")
+def _ray_exit(ox, oy, sa, ca, xmin, xmax, ymin, ymax):
+    """Distance along the ray (direction (sa, ca)) at which it leaves the box for the last time;
+    0 if the ray never meets the box ahead of the observer (or the box is empty / NaN)."""
+    if not (xmin <= xmax and ymin <= ymax):
+        return 0.0
+    t_in = -np.inf
+    t_out = np.inf
+    if sa != 0.0:
+        t1 = (xmin - ox) / sa
+        t2 = (xmax - ox) / sa
+        t_in = max(t_in, min(t1, t2))
+        t_out = min(t_out, max(t1, t2))
+    elif ox < xmin or ox > xmax:
+        return 0.0
+    if ca != 0.0:
+        t1 = (ymin - oy) / ca
+        t2 = (ymax - oy) / ca
+        t_in = max(t_in, min(t1, t2))
+        t_out = min(t_out, max(t1, t2))
+    elif oy < ymin or oy > ymax:
+        return 0.0
+    if t_out < 0.0 or t_out < t_in:
+        return 0.0
+    return t_out
+
+
+@numba.njit(cache=True, inline="always")
+def _seg_end(s, ox, oy, sa, ca, seg_d1, seg_hband, vbox):
+    """End distance of segment ``s`` on this ray (handover rule for ``band_edge`` segments)."""
+    end = seg_d1[s]
+    hb = seg_hband[s]
+    if hb >= 0:
+        ex = _ray_exit(ox, oy, sa, ca, vbox[hb, 0], vbox[hb, 1], vbox[hb, 2], vbox[hb, 3])
+        if ex > end:
+            end = ex
+        if s + 1 < seg_d1.size and end > seg_d1[s + 1]:
+            end = seg_d1[s + 1]
+    return end
+
+
+@numba.njit(cache=True)
+def _handover_kernel(ox, oy, az_rad, s, seg_d1, seg_hband, vbox, out):
+    for j in range(az_rad.size):
+        out[j] = _seg_end(s, ox, oy, math.sin(az_rad[j]), math.cos(az_rad[j]),
+                          seg_d1, seg_hband, vbox)
+
+
 @numba.njit(parallel=True, cache=True)
 def _horizon_kernel(obs_x, obs_y, obs_z, az_rad, seg_d0, seg_d1, seg_step, seg_band,
-                    data, off, nrow, ncol, x0, y0, dx, dy, radius, min_dist,
+                    seg_hband, vbox, data, off, nrow, ncol, x0, y0, dx, dy, radius, min_dist,
                     out_el, out_dist, out_src):
     n_obs = obs_x.size
     n_az = az_rad.size
@@ -225,11 +296,16 @@ def _horizon_kernel(obs_x, obs_y, obs_z, az_rad, seg_d0, seg_d1, seg_step, seg_b
         best = -np.inf
         best_d = np.nan
         best_b = -1
+        prev_end = 0.0
         for s in range(seg_d0.size):
             step = seg_step[s]
-            n = int(math.floor((seg_d1[s] - seg_d0[s]) / step + 1e-9)) + 1
+            end = _seg_end(s, obs_x[i], obs_y[i], sa, ca, seg_d1, seg_hband, vbox)
+            start = prev_end + step
+            n = int(math.floor((end - start) / step + 1e-9)) + 1
+            if end > prev_end:
+                prev_end = end
             for m in range(n):
-                d = seg_d0[s] + m * step
+                d = start + m * step
                 if d < min_dist or d <= 0.0:
                     continue
                 x = obs_x[i] + d * sa
@@ -285,8 +361,10 @@ class HorizonEngine:
             raise ValueError("no DEM bands")
         self.source_names = [b.source for b in self.bands]
         self._pack()
-        # segments: (d_start, d_end, step, first band index allowed)
-        d0s, d1s, steps, sb = [], [], [], []
+        # segments: (nominal d_start, nominal d_end, step, first band index allowed,
+        # handover band index (-1 = end at to_m)); valid boxes per band for the handover rule
+        d0s, d1s, steps, sb, hb = [], [], [], [], []
+        self._vbox = np.full((len(self.bands), 4), np.nan)
         prev = 0.0
         for s in self.cfg["sampling"]:
             step = float(s["step_m"])
@@ -296,8 +374,37 @@ class HorizonEngine:
             later = [i for i, name in enumerate(self.source_names)
                      if order.index(name) >= order.index(s["source"])]
             sb.append(later[0] if later else len(self.bands))
+            hb.append(self._handover_band(s))
             prev = float(s["to_m"])
-        self._seg = (np.array(d0s), np.array(d1s), np.array(steps), np.array(sb, dtype=np.int64))
+        self._seg = (np.array(d0s), np.array(d1s), np.array(steps), np.array(sb, dtype=np.int64),
+                     np.array(hb, dtype=np.int64))
+
+    def _handover_band(self, seg: dict) -> int:
+        """Band whose valid extent sets this segment's end (``handover: band_edge``), or -1."""
+        rule = seg.get("handover")
+        if rule is None:
+            return -1
+        if rule != "band_edge":
+            raise ValueError(f"sampling handover {rule!r} not supported (only 'band_edge')")
+        if seg["source"] not in self.source_names:
+            return -1  # band missing: the segment ends at to_m and falls back to coarser bands
+        i = self.source_names.index(seg["source"])
+        self._vbox[i] = valid_box(self.bands[i])
+        return i
+
+    def handover_m(self, x: float, y: float, az_deg, source: str | None = None) -> np.ndarray:
+        """Per-azimuth end distance of the ``handover: band_edge`` segment (default: the first
+        one) for an observer at (x, y): max(to_m, where the ray leaves the band's valid extent),
+        capped at the next segment's to_m."""
+        hbs = self._seg[4]
+        segs = [k for k, s in enumerate(self.cfg["sampling"])
+                if s.get("handover") and (source is None or s["source"] == source)]
+        if not segs:
+            raise ValueError("no handover segment in sampling")
+        az = np.radians(np.atleast_1d(np.asarray(az_deg, dtype=float)))
+        out = np.empty(az.size)
+        _handover_kernel(float(x), float(y), az, segs[0], self._seg[1], hbs, self._vbox, out)
+        return out
 
     def _pack(self):
         sizes = [b.z.size for b in self.bands]
@@ -335,7 +442,7 @@ class HorizonEngine:
         el = np.empty((xs.size, n_az))
         dist = np.empty((xs.size, n_az))
         src = np.empty((xs.size, n_az), dtype=np.int64)
-        _horizon_kernel(xs, ys, zs, az, *self._seg, *self._geo(), self.radius_m,
+        _horizon_kernel(xs, ys, zs, az, *self._seg, self._vbox, *self._geo(), self.radius_m,
                         float(min_dist_m), el, dist, src)
         el[~np.isfinite(zs)] = np.nan  # observer off the DEM: unknown
         return el, dist, src

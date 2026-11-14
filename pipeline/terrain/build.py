@@ -6,13 +6,16 @@
     python -m pipeline.terrain.build slope     # slope_1m, slope5_1m, roughness_5m, ridge_index,
                                                # elev_3m, maxslope_3m, cellstate_3m, dataedge_3m
     python -m pipeline.terrain.build xcheck    # hirise_xcheck.json (+ HiRISE-vs-merged shift)
-    python -m pipeline.terrain.build validation  # coverage.json/.png, coreg.json (contracts v1.0.0)
+    python -m pipeline.terrain.build validation  # coverage.json/.png, coreg.json (contracts),
+                                                 # coverage.json terrain_checks = xcheck, slope
+                                                 # compare, conservative summary (web-path keys)
     python -m pipeline.terrain.build grid      # grid.json (grids, lon/lat bounds, height datum)
     python -m pipeline.terrain.build all
     python -m pipeline.terrain.build farfield_v2  # ctx_20m_v2.tif + farfield_v2.json
     python -m pipeline.terrain.build manifest     # re-record every WS1 manifest key from outputs
     python -m pipeline.terrain.build validation_staged  # validation files to terrain/staged/
-    python -m pipeline.terrain.build conservative # after V1 (WS6)
+    python -m pipeline.terrain.build conservative # after V1 (WS6): cellstate_3m_conservative.tif
+                                                  # + .json (skipped while v1.json is missing)
 
 Every displayed number goes to the provenance manifest (``record``).
 """
@@ -406,16 +409,7 @@ def step_xcheck() -> dict:
                                            "merged DEM; median = merged - HiRISE after shift"}
         out["items"][pid] = item
     _w(OUT / "hirise_xcheck.json", out)
-    _record_xcheck(out)
-    return out
-
-
-def _record_xcheck(out: dict) -> None:
-    for pid, item in out["items"].items():
-        record(f"terrain.xcheck.{pid}.median", item["median_m"], "m", OUT / "hirise_xcheck.json",
-               SCRIPT)
-        record(f"terrain.xcheck.{pid}.p90_abs", item["p90_abs_m"], "m",
-               OUT / "hirise_xcheck.json", SCRIPT)
+    return out  # manifest keys: _record_validation (validation/coverage.json terrain_checks)
 
 
 # --------------------------------------------------------------------------- slope, ridge, routing
@@ -509,16 +503,7 @@ def step_slope() -> dict:
                  & (max3[known] <= nogo)).mean()), 3),
             "data_edge_cells": int((edge3 & dsk).sum())}
     _w(OUT / "slope_summary.json", out)
-    _record_slope(out)
-    return out
-
-
-def _record_slope(out: dict) -> None:
-    for b, row in out["discs"].items():
-        record(f"terrain.blocked_pct.{b}min", row["blocked_pct_of_known"], "%",
-               OUT / "cellstate_3m.tif", SCRIPT)
-    record("terrain.slope_compare.median_abs_diff", out["slope_compare"]["median_abs_diff_deg"],
-           "deg", OUT / "slope_5m.tif", SCRIPT)
+    return out  # manifest keys: _record_validation (validation/coverage.json terrain_checks)
 
 
 # --------------------------------------------------------------------------- far field (WS3)
@@ -870,8 +855,9 @@ def step_stations() -> dict:
 def _record_stations(doc: dict) -> None:
     for rec in doc["stations"]:
         if rec.get("value") is not None:
-            record(f"stations.{rec['id']}.value", rec["value"], "1", OUT / "stations.json",
-                   SCRIPT)
+            # web path: WS2 merges these values into engine/public/stations.json, which
+            # `make web` publishes as stations.json (contracts/README.md sources table)
+            record(f"stations.{rec['id']}.value", rec["value"], "1", "stations.json", SCRIPT)
 
 
 # --------------------------------------------------------------------------- ortho + basemap
@@ -1032,6 +1018,7 @@ def step_validation(out_dir: Path | None = None) -> dict:
                                     "mosaic footprints), 'hrsc_mola' (code 3) is never assigned")
     doc["discs_note"] = ("cell states of cellstate_3m.tif inside each flat disc (radius = "
                          "crew.yaml anchor.speed_ms x budget); assessed + blocked + unknown = 100")
+    doc["terrain_checks"] = _terrain_checks()
     _w(dst / "coverage.json", doc)
     c = site["coreg"]
     cg = webout.coreg_web(json.loads((OUT / "coreg.json").read_text()), search_m=c["search_m"],
@@ -1066,6 +1053,7 @@ def _record_validation(doc: dict, cg: dict) -> None:
     for k, u in (("dx_m", "m"), ("dy_m", "m"), ("residual_median_m", "m"),
                  ("residual_mad_m", "m"), ("n", "1")):
         record(f"coreg.{k}", cg[k], u, "validation/coreg.json", SCRIPT)
+    _record_terrain_checks(doc.get("terrain_checks") or {}, F)
     _record_file("validation/coverage.json", OUT / "coverage.json")
     _record_file("validation/coverage.png", OUT / "coverage.png")
     _record_file("validation/coreg.json", OUT / "coreg.json")
@@ -1073,12 +1061,10 @@ def _record_validation(doc: dict, cg: dict) -> None:
 
 def step_manifest() -> dict:
     """Re-record every WS1 manifest key from the outputs on disk (no raster is read or written):
-    hirise_xcheck.json, slope_summary.json, stations.json, coverage.json, coreg.json."""
+    stations.json, coverage.json (incl. terrain_checks), coreg.json."""
     def j(name):
         return json.loads((OUT / name).read_text())
 
-    _record_xcheck(j("hirise_xcheck.json"))
-    _record_slope(j("slope_summary.json"))
     _record_stations(j("stations.json"))
     _record_validation(j("coverage.json"), j("coreg.json"))
     return {"replayed": True}
@@ -1102,27 +1088,79 @@ HEIGHT_DATUM = (
 # --------------------------------------------------------------------------- conservative limit
 
 
+V1_JSON = G.REPO / "data" / "interim" / "validation" / "v1.json"
+CONS_TIF = "cellstate_3m_conservative.tif"
+CONS_JSON = "cellstate_3m_conservative.json"
+
+
+def _v1_rmse() -> float | None:
+    """WS6's V1 slope RMSE (top-level ``rmse_deg`` of validation/v1.json); None before V1."""
+    if not V1_JSON.exists():
+        return None
+    return json.loads(V1_JSON.read_text())["rmse_deg"]
+
+
 def step_conservative() -> dict:
-    """cellstate_3m_conservative.tif with no-go = 20 deg - V1 RMSE (site.yaml slope.nogo_deg,
-    WS6 data/interim/validation/v1.json rmse_deg). Raises until V1 exists."""
-    v1p = G.REPO / "data" / "interim" / "validation" / "v1.json"
-    if not v1p.exists():
-        raise FileNotFoundError(f"{v1p} missing: V1 (WS6) must run first")
-    rmse = json.loads(v1p.read_text())["rmse_deg"]
-    if rmse is None:
-        raise ValueError("V1 rmse_deg is null")
-    nogo = float(G.site()["slope"]["nogo_deg"]["nominal"]) - float(rmse)
+    """cellstate_3m_conservative.tif (+ .json summary): the nominal cell states re-drawn at the
+    conservative no-go = 20 deg - V1 RMSE (site.yaml slope.nogo_deg.conservative, WS6
+    data/interim/validation/v1.json rmse_deg). New files only; cellstate_3m.tif is untouched.
+    Skipped (nothing written) while V1 has not run. Run ``validation`` afterwards to publish the
+    summary in validation/coverage.json ``terrain_checks.conservative``."""
+    if not V1_JSON.exists():
+        print(f"conservative: skipped, {V1_JSON} missing (V1, WS6, must run first)")
+        return {"skipped": "no V1"}
+    rmse = _v1_rmse()
+    nogo = routing.conservative_nogo(G.site()["slope"]["nogo_deg"]["conservative"], rmse)
     st, g3 = rio.read(OUT / "cellstate_3m.tif")
     mx, _ = rio.read(OUT / "maxslope_3m.tif")
-    out = st.copy()
-    known = st != routing.UNKNOWN
-    out[known] = np.where(mx[known] > nogo, routing.BLOCKED, routing.ASSESSED)
-    rio.write_cog(OUT / "cellstate_3m_conservative.tif", out, g3, nodata=255,
-                  tags={"codes": f"0 assessed, 1 blocked (max slope > {nogo:.2f} deg = 20 - "
-                                 f"V1 RMSE {rmse}), 2 unknown"})
-    record("terrain.nogo_conservative_deg", round(nogo, 2), "deg",
-           OUT / "cellstate_3m_conservative.tif", SCRIPT)
-    return {"nogo_deg": nogo, "v1_rmse_deg": rmse}
+    out = routing.restate(st, mx, nogo)
+    tmp = OUT / ("tmp_" + CONS_TIF)
+    rio.write_cog(tmp, out, g3, nodata=255,
+                  tags={"codes": f"0 assessed, 1 blocked (max 1 m slope > {nogo:.3f} deg = 20 - "
+                                 f"V1 RMSE {rmse:.3f}), 2 unknown"})
+    tmp.replace(OUT / CONS_TIF)
+    doc = webout.conservative_summary(st, out, g3, G.pad_xy(), disc_radii_m(), nogo_deg=nogo,
+                                      v1_rmse_deg=rmse, v1_source="validation/v1.json rmse_deg")
+    _w(OUT / CONS_JSON, doc)
+    return doc
+
+
+def _terrain_checks() -> dict:
+    """validation/coverage.json ``terrain_checks`` from WS1's interim summaries (absent -> null).
+    A conservative summary made from another V1 RMSE than v1.json's current one is refused."""
+    def j(name):
+        p = OUT / name
+        return json.loads(p.read_text()) if p.exists() else None
+
+    cons = j(CONS_JSON)
+    if cons is not None:
+        rmse = _v1_rmse()
+        if rmse is None or round(float(rmse), 3) != cons["v1_rmse_deg"]:
+            raise ValueError(f"{CONS_JSON} was made with V1 RMSE {cons['v1_rmse_deg']}, v1.json "
+                             f"now has {rmse}: run `build conservative` first")
+    return webout.terrain_checks(j("hirise_xcheck.json"), j("slope_summary.json"), cons)
+
+
+def _record_terrain_checks(tc: dict, F: str) -> None:
+    """Manifest keys of ``terrain_checks`` (all cite the web file ``F``)."""
+    for pid, it in ((tc.get("hirise_xcheck") or {}).get("items") or {}).items():
+        record(f"terrain.xcheck.{pid}.median", it["median_m"], "m", F, SCRIPT)
+        record(f"terrain.xcheck.{pid}.p90_abs", it["p90_abs_m"], "m", F, SCRIPT)
+    if tc.get("slope_compare"):
+        record("terrain.slope_compare.median_abs_diff",
+               tc["slope_compare"]["median_abs_diff_deg"], "deg", F, SCRIPT)
+    for b, v in (tc.get("blocked_pct_of_known") or {}).items():
+        record(f"terrain.blocked_pct.{b}min", v, "%", F, SCRIPT)
+    con = tc.get("conservative")
+    if con:
+        record("terrain.nogo_conservative_deg", con["nogo_deg"], "deg", F, SCRIPT)
+        record("terrain.conservative.v1_rmse_deg", con["v1_rmse_deg"], "deg", F, SCRIPT)
+        for row in con["discs"]:
+            for k in ("assessed_pct", "blocked_pct", "unknown_pct", "nominal_blocked_pct",
+                      "newly_blocked_pct"):
+                if k in row:
+                    record(f"terrain.conservative.disc_{row['budget_min']}.{k}", row[k], "%", F,
+                           SCRIPT)
 
 
 # --------------------------------------------------------------------------- CLI
