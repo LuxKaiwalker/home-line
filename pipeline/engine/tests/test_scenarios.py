@@ -26,7 +26,7 @@ RMSE_STUB = 1.0  # V1 RMSE stand-in until WS6 publishes v1.json
 
 @pytest.fixture(autouse=True)
 def manifest_dir(tmp_path, monkeypatch):
-    monkeypatch.setenv(provenance.FALLBACK_DIR_ENV, str(tmp_path / "manifest"))
+    monkeypatch.setenv(provenance.FRAGMENT_DIR_ENV, str(tmp_path / "manifest"))
     return tmp_path / "manifest"
 
 
@@ -80,10 +80,10 @@ def test_batch_on_dummy_world(tmp_path, settings, manifest_dir):
     # A 600 m world cannot hold the 30-min flat disc: headline stays null, nothing recorded.
     h = {s["id"]: s["headline"] for s in index["scenarios"]}["nom_104"]
     assert h == {"budget_min": 30, "reachable_pct": None, "range_pct": [None, None]}
-    keys = set(provenance.load_fragment())
+    keys = set(provenance.load_all())
     assert not any(k.startswith("reachable_pct") for k in keys)
     assert "file.scenarios/index.json" in keys and "isochrone_step_min.nom_104" in keys
-    validate(provenance.load_fragment(), "manifest.schema.json")
+    validate(provenance.load_all(), "manifest.schema.json")
 
 
 def test_isochrone_fallback_step(settings):
