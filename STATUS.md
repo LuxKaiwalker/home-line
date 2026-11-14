@@ -323,21 +323,34 @@ Branch: `ws2-engine`
   - **Route nom_104: empty** (no reachable station), so the timeline is depart/return at t = 0 (margin 85.9 min, binding: dose). No route or binding margin to report for nom_104.
   - Partner line (nominal, 60 min, ridge-masked): nom_104 cart 179 kg 1.23 km2, drag 179 kg 0.0002 km2, cart 343 kg 0.93 km2, drag 343 kg infeasible. Trade table: reachable % filled, partner area filled, science_value null (needs con_* T_home).
   - Sizes: public tree 153 MB; isochrones fall back to 2-min steps and are still **2.6-3.4 MB gz** (19-24 MB raw) per scenario, over the 1.5 MB budget; bands 4.2-4.6 MB; edges 2.2-3.1 MB; partner 1.1-1.4 MB; `data/interim/engine/` 351 MB total. Cause: thousands of small blocked holes (nom_104 60-min contour has 6,355 holes).
+- 2026-11-14T11:05Z (session 3): **access-cell rule** (user 11:40), KATs first (`pipeline/engine/tests/test_access.py`, 8 pass: wall station -> walkable cell at exactly 30 m; none within radius -> null + reason; assessed-but-sealed pocket -> null + reason; station on walkable cell -> access = science point, dist 0; nearest wins; card fragments match the timeline). `pipeline/engine/access.py`: access cell = nearest cell with WS1 state assessed (0) **and** finite T_home in the scenario, within `variants.yaml route.access_radius_m` 50 (assumed, flagged). Science lon/lat never moved. Walk-in leg **not modelled**; reported straight-line: dist, rise, mean slope, max along-track slope (3 m samples, bilinear on elev_3m), max WS1 max-slope of cells crossed. Per scenario, since the reachable set differs by variant.
+- 2026-11-14T11:05Z: **isochrone display filter** (C 11:42): `variants.yaml outputs.display_min_hole_m2` 100 (assumed, note in config); holes are filled before simplification; routing, T_home, bands and edges unchanged. 1-min isochrones with the filter are 2.25-2.92 MB gz (> 1.5), so the **2-min fallback** is used: 1.15-1.49 MB gz (nom_104 1.18). The fallback now reuses the even-minute 1-min features (no second contouring; run 6 min instead of 13). **Edges**: one MultiLineString per (budget, cause), lossless (nom_104 2.31 -> 1.48 MB raw; KAT: same pieces).
+- 2026-11-14T11:05Z: **card timeline part** (C 11:42): `data/interim/engine/public/cards/{S}.timeline.json` (`pipeline/engine/cards.py`): `timeline` {arrive, leave, turn_back}, `margin_binding`, `contingency` (cart haul time from the access cell, F10); extras `station`, `scenario`, `on_route`, `margin_min`, `t_home_min`, `o2_home_L`, `science` {lon, lat}, `access` {lon, lat, dist_m, reason, walk_in, radius_m, rule}. The card-owned keys are checked against the card schema's sub-schemas; manifest keys `card.{S}.*` (file `cards/{S}.json`).
+- 2026-11-14T11:05Z: **real run** `make engine` (commit 3bad2dd, 6 min 7 s), opt/nom x 80/104/120; con_* skipped (no V1). WS4 margins: t_dark 578.63 min; **tau_dose 85.9 min (storm peak, default)**. All public files validate (0 errors; the card fragments are not web files). Engine manifest fragments were cleared before the run (old keys archived), so no stale keys.
+  - Headline unchanged: nom_104 **12.4 %** of the assessed 30-min disc (range [con pending V1, opt 17.5 %]); 60-min 11.2 %. Edge causes nom_104 30 min: slope 99.4 %, physiology 0.6 %, data 0 %.
+  - **Access cells (nom_104)**:
+    | Station | Science lon, lat | Access lon, lat | access_dist_m | Walk-in rise / mean / max along / max terrain slope | T_home nom_104 | O2_home |
+    | --- | --- | --- | --- | --- | --- | --- |
+    | S1 | 137.391523, -4.810007 | null | null | - | null: "38 assessed cells within 50 m, none with a walk home in this scenario" (same in all 6 scenarios) | null |
+    | S2 | 137.383058, -4.776687 | 137.382736, -4.777025 | 27.6 | +7.79 m / 15.8 / 22.0 / 43.4 deg | 71.01 min | 95.56 L |
+    | S4 | 137.408864, -4.785707 | 137.408842, -4.785679 | 2.1 | +0.59 m / 15.9 / 15.9 / 23.7 deg | 59.93 min | 77.72 L |
+    Optimistic: S2 access 24.1 m (T_home 55.6 / 60.7 / 64.2 min at 80 / 104 / 120 kg), S4 2.1 m. S3, S5: no position (S).
+  - **G1 route `route_nom_104`: pad -> S4 -> S2 -> pad, 209.7 min** (walk 149.7 + 2 x 30 dwell), legs 2,357 / 1,741 / 2,122 m, 48.4 / 30.3 / 71.0 min. Only 2 stations: S1 has no access cell, S3/S5 unpositioned, so no 3-station route yet. Timeline: arrive S4 48.4, leave 78.4, arrive S2 108.7, leave 138.7, return 209.7; O2 left at return 267.7 L. **Binding margin: dose** everywhere (storm tau 85.9 - T_home): 25.97 min at S4, **14.89 min at S2 (lowest)**. With `--dose latest` (tau 3,771.6 min, scratch run, not published) the same route is chosen and **O2 binds**: 224.1 min at S4, 168.3 at S2. Turn-back (latest leave, O2 term): S4 438.6 min, S2 409.2 min, i.e. after the 6.5 h EVA budget (see question 13). Both stations are outside the 60-min partner line (cart haul from the access cell 99 / 108 min).
+  - **Sizes** (public tree, 6 scenarios): **79.5 MB raw, 12.1 MB gz** (was 159.5 / 22.0). Isochrones 7.7-9.9 MB raw (1.15-1.49 gz); bands 4.2-4.6 raw (0.58-0.65 gz); edges 1.4-2.0 raw (0.26-0.36 gz); partner 1.1-1.4 raw; rest < 0.05. Largest file 9.95 MB (opt_80 isochrones). With con_* expect about 107 MB raw / 16 MB gz. Git stores blobs zlib-compressed, so repo growth is about the gz column (under 25 MB); the **raw** tree is over 25 MB and cannot get there losslessly (see question 10).
 
 ### Doing
 
-- Waiting for S (stations on blocked cells, margins) and C (isochrone size).
+- Waiting for V1 (con_*), S (S3/S5 positions, S1 access, questions) and C (card merge, sizes).
 
 ### Next
 
 - On V1 (WS6 `validation/v1.json`): `make engine` again for con_* (range low end, trade science_value, siting rule).
-- Once stations have reachable positions: route + timeline for nom_104 (G1 3-station route), F8 siting.
+- Once S3/S5 have positions (or S1 gets an access cell): re-run for a 3-station nom_104 route. F8 siting + `pad.json` on V1 (the brief has no nom-only interim, so not produced).
 - WS7/WS9: real rasters are ready in `data/interim/engine/{sid}/`.
 
 ### Blocked
 
-- **G1 route (S/WS1):** every positioned station (S1, S2, S4) is on a blocked cell (> 20 deg at 3 m), so nom_104 has no route. Brief rule: no snapping. S/WS1 to choose either station positions on passable cells, or an "access cell" rule (for example nearest passable cell within N m, recorded per station). Not decided by WS2.
-- **Isochrone size (C/S):** with 2-min steps the isochrones are still 2.6-3.4 MB gz. Measured on nom_104 (2-min, 30 contours): drop holes and parts < 100 m2 -> 1.19 MB gz; < 500 m2 -> 0.82 MB; 5 m simplification alone -> 1.89 MB; 5 m + < 500 m2 -> 0.40 MB. Dropping holes hides small blocked islands in the display (routing is unchanged). Needs a config value (`variants.yaml outputs`), so C/S decide; not applied.
+- **3-station G1 route (S/WS1):** with the access-cell rule only S2 and S4 are routable; S1's 38 assessed cells within 50 m are all sealed off (no walk home in any scenario). S to pick S3/S5 positions, or move S1, or widen the radius (assumed 50 m; not changed by WS2).
 - con_* scenarios, the headline range low end, trade `science_value` and F8 siting wait on WS6's V1 RMSE (S's footprint decision).
 - Questions for S (science):
   1. **alpha encoding (C note, model unchanged).** IST-2's weight span is a gravity change (0.12 -> 0.32 g on 201.7 kg = 395.6 N). At Mars g that weight equals 106.6 kg of carried mass, not `delta_mass_kg` 60.
@@ -355,6 +368,11 @@ Branch: `ws2-engine`
   7. Proposed for contracts v1.1 (loose schemas accept them now): `partner.geojson` properties `{case, casualty_kg, contour_min, style, default_visible, caption, feasible, area_km2}`; route leg properties `{leg, from, to, t_min, o2_L, length_m, t_start_min, t_end_min, times_min[]}`; timeline rows `margin_binding`, `o2_tasks_left_L`, `o2_margin_min_planning_rate`, optional `in_partner_line`, plus `turn_back` events. `siting_png.json` has no schema.
   8. F11 partner_area_km2 uses the 60-min cart line (suited casualty) in both rows; reachable_pct uses the nominal variant. OK?
   9. WS5 scorecard shows `crew.o2_reserve_frac` as "O2 reserve in the route margin". It is no longer used; the reserve is `crew.o2_margin.reserve_min_at_effort_cap` (30 min at 1.35 L/min = 40.5 L). Please ask WS5 to switch the row.
+  10. **Sizes / coordinate precision.** Losslessly I merged edge pieces (MultiLineString). Two more cuts need a C decision: (a) 5 decimals (0.59 m on Mars, below the 2 m simplification) saves 9 % raw / 16 % gz (79.5 -> 72.5 MB raw, 12.0 -> 10.1 gz), but SPEC §6 and contracts/README say 6 decimals, so not applied; (b) the same < 100 m2 hole filter on `bands_*` cuts them 13.1 -> 5.8 MB raw (1.84 -> 0.9 gz), but bands are the main F4 layer and edges would still trace the dropped islands, so not applied.
+  11. **Card merge.** WS2 writes `engine/public/cards/{S}.timeline.json`; `tools/make_web.py RULES` has no rule for it yet and no merge into `cards/{S}.json`. Note `SCHEMA_MAP` pattern `cards/*.json` also matches `*.timeline.json` if the fragments ever land in the web tree. The card contract's `margin_binding` enum has no null: S1 (no access cell) has null times and a null binding; please allow null (as the timeline schema does) or say what a card without a route should carry.
+  12. **stations.json extras (stations schema is open):** `access_radius_m`, `access_lon`, `access_lat`, `access_dist_m`, `access_reason` (default scenario), `access` {scenario: {lon, lat, dist_m, t_home_min, o2_home_L, reason, walk_in {dist_m, rise_m, mean_slope_deg, max_slope_deg, max_terrain_slope_deg, modelled: false}}}. `lon`/`lat` stay the science point; `t_home_min` is at the access cell. Timeline station rows: `access_dist_m`; route legs: `to_access_dist_m`. Optional in a v1.2 note?
+- Question for S: 13. **Turn-back beyond the EVA budget.** The SPEC F4 margin has no EVA-duration term, so the latest turn-back (O2 term) is 409-439 min, after the 6.5 h (390 min) budget. Cap turn_back at `crew.eva_h` - T_home, or keep it as the physical limit?
+- **For WS5 (answer to Q9, not editing web/):** `web/src/config.ts` line 94 still cites `crew.yaml o2_reserve_frac` (0.2) for the scorecard. The engine does not use it. The route margin's reserve is `crew.yaml o2_margin.reserve_min_at_effort_cap` = 30 min at the effort rate 1.35 L/min = **40.5 L** (S review). Please show that row instead.
 
 ### Assumptions added
 
@@ -365,6 +383,9 @@ Branch: `ws2-engine`
 - `haul.yaml g_moon` 1.62 m/s^2 (assumed; standard lunar g, only for the Mars/Moon KAT).
 - The DP bounds O2 used before a departure by the effort-capped rate (station work at 0.84 is below 1.35 L/min, so the bound holds). The DP stays exact; the timeline reports the actual margins.
 - Pre-H0 station snapping is not used: a station with no walk home gets null.
+- `variants.yaml route.access_radius_m` 50 (assumed: user chose the access-cell rule 2026-11-14 11:40; radius assumed). Walkable = WS1 state assessed and reachable in the scenario. Walk-in leg not modelled.
+- `variants.yaml outputs.display_min_hole_m2` 100 (C decision 11:42, display only).
+- Card contingency uses the cart case with the suited casualty (the partner-line case), from the access cell.
 - Engine CLI: `--dose storm|latest` (default storm, the SPEC storm replay) and `--no-conditions`. CLI `--t-dark-min` and `--tau-dose-min` override WS4.
 
 ## WS3 Horizon
@@ -381,21 +402,39 @@ Branch: `ws3-horizon`
 - 2026-11-14T10:11Z: first **automatic V2** (`pipeline/validation/v2_skyline.py`, `validation/v2.json` validates, manifest keys `v2.*`): 49 frames tried, 35 ok at 27 stops, 14 failed (no clear sky at the top of the frame; reported, not dropped). Median |error| near 0.095° (n 2,016 columns), mid 0.196° (n 951), **far 4.30° (n 26,861, P90 7.89°)**. 49 check composites in `data/interim/horizon/validation/overlays/`. The far figure is not quotable yet: see Blocked 1.
 - `make horizons` wired (bands → navcam fetch with stop horizons → V2). 58 WS3 KATs pass; full suite 197 pass; ruff clean. Downloads: Navcam cache 51.1 MB (API JSON + JPG, from `index.json`); MOLA window ≈ 2.2 MB (discovery's measurement for this window; not re-measured); CTX windows 25 MB on disk (network bytes not measured, other agents share the machine counter).
 
+- 2026-11-14T10:50Z: **Canonical bands (C decision 11:15).** `horizon.yaml bands.{ctx_20m,mola_hrsc_200m}.path` now point at WS1's `data/interim/terrain/` bands; `python -m pipeline.horizon.bands` only reports their offsets (`--build` keeps my reference build, unused). Offsets on the canonical bands: CTX − dem_1m **+19.75 m** (p5/p95 −0.41/+47.2; mine was +15.6), CTX − MOLA −0.37 m (levelled). Stop horizons and frame selection rerun offline: the same 49 frames at 36 stops, 35 ok at 27 stops. **V2 median |error| before → after: near 0.095° → 0.095° (n 2,016), mid 0.196° → 0.196° (n 951), far 4.304° → 4.308° (P90 7.890° → 7.894°, n 26,861).** Near and mid use only dem_1m, so they cannot move; the far change is negligible. Pre-switch outputs are kept in `data/interim/horizon/runs/before_bandswitch/`.
+- 2026-11-14T11:00Z: **Pad, stations, ring, cards** (`pipeline/horizon/cards.py`, in `make horizons` after V2):
+  - Pad horizon `horizons/pad.json`, from WS1 `terrain/grid.json` pad (= `pad_default`, kept). The order is WS2 `pad.json` (none yet), then WS1 grid.json, then site.yaml.
+  - Station horizons `horizons/{S}.json` at eye height 1.7 m under the **access-cell rule**, read from WS2's `engine/public/stations.json` (`access_lon/lat`, written 12:01 CET): **S2 and S4 final at their access cells** (27.6 m and 2.1 m from the science point). **S1 has no access cell** (WS2: "38 assessed cells within 50 m, none with a walk home"), so its horizon is at the science coordinate, labelled `science_coordinate_no_access` (not provisional). The cards follow WS2 automatically on rerun.
+  - `public/fp3d/horizon_ring.json` for WS8: pad horizon counting terrain beyond `planning_radius_m` (3.7 km) only, 1,440 azimuths, with `elev_deg`, `dist_m`, `z_m`, `east_m`/`north_m`, `source`. A superset of the dummy ring's keys. I propose this structure for the (free) ring contract to C/WS8.
+  - Landmarks: the 8 IAU features within 80 km, read from D0's gazetteer CSV (a KAT reproduces the discovery 3.5 table to 0.05 km / 0.05°). The landmarks.yaml rule applies (above the skyline, or ≤ 5 km). **From every station only Gediz Vallis (≤ 5 km) qualifies; the other 7 centres are below the computed skyline** (e.g. Aeolis Mons centre +6.1° vs skyline 9.7–13.6°: lower Mount Sharp's own flanks hide it). So S1 and S4 show 1 landmark and S2 shows 0, each with a `landmarks_note`. I did not pad the list.
+  - Panoramas `public/cards/{S}/panorama.png`: 1,440 px wide, true scale, north at the left edge, landmark ticks.
+  - Navcam per station: the nearest V2 frame with status ok and manual_ok not false, with no choice by error. The frame is copied as `navcam.png`, and `overlay.png` is the transparent skyline from that frame's stop horizon. **S1: NLB_826633404 (sol 4834, 523 m), S2: NLB_789347468 (sol 4414, 925 m), S4: NLB_767161116 (sol 4164, 128 m).** All three are north-facing far-fail frames, so the cards show far errors of 4.24° / 3.18° / 6.50°, with near/mid null (no near/mid columns). The fragment says the far class is pending D7. The frames change automatically if the manual check rejects them.
+  - **Card fragments** `public/cards/{S}.json`: navcam, skyline_error_deg (median |error| per class on the card's frame), panorama_png, landmarks, plus observer, provisional, skyline_error_scope and landmarks_note. They validate against the card contract's fields. Manifest (`pipeline__horizon__cards.json`): `navcam_sol.{S}`, `skyline_error_deg.{S}.{class}`, `landmark.{S}.{name}.{bearing_deg,dist_km}`, file `cards/{S}.json`. The V2 fragment no longer writes `skyline_error_deg.*`.
+  - **C request (WS9 F22): `navcam_frames.json` now tags each card frame**: `station` S1/S2/S4, plus `stations[]`, `station_dist_m`, `station_observer` (`station_source: card_frame`). The tags are rewritten on every cards run.
+- 2026-11-14T11:05Z: **D7 manual-check sheet** in `data/interim/horizon/validation/manual_check/`: `manual_check.csv` (one row per frame with predicted vs detected per class and an empty `verdict`/`note`), a captioned composite per frame (`{image_id}.jpg`), `contact_01-04.jpg` and `HOW_TO.txt`.
+  - **39 frames: 10 sampled (20 %), 21 far-fail (|far median| > 2°), 14 V2-failed** (sets overlap). Verdicts: ok / rim_not_visible / detector_wrong / model_wrong / unsure.
+  - Run `python -m pipeline.validation.v2_skyline --import-manual <csv>` to write `manual_checks.json`. The next V2 run then leaves the rejected frames out of the summary.
+  - Visibility-range diagnostic: the cut range (2/5/10/20/30 km) whose predicted skyline best matches the detector, drawn in green. **On 19 of the 21 far-fail frames the best match is terrain ≤ 2 km, and 12 of those match within ±0.3°.** The chain is right in the near field, and terrain beyond about 2 km (incl. the rim at 41–57 km) is not seen. Clear-sol frames facing the same way match the rim (e.g. NLB_803472163, az 5°, far error −0.08°). This is evidence for option (a); D7 is not decided.
+- KATs: 14 new (canonical bands, access-cell rule incl. no-access, pad source order, landmark table vs discovery 3.5, landmark visibility, pick rule, panorama geometry, ring geometry, frame choice, fragment contract, station tags, manual-check rows/verdicts, cut-range engine). The full suite has 523 pass; ruff is clean.
+
 ### Doing
 
 - —
 
 ### Next
 
-- Station and pad horizons, panoramas with the 8 IAU landmarks, `horizon_ring.json` for WS8 and card fragments: waiting for `stations.json` and `pad.json` (WS1/WS2; not on disk yet).
-- Manual check of the 10 sampled frames (`manual_check: true` in v2.json) once C decides Blocked 1.
-- Hand the engine API (`bands.load_engine()`, `HorizonEngine.horizons(xs, ys, az_step_deg=1, min_dist_m=500)`), `sky.detect_skyline` and `navcam_frames.json` to WS9.
+- C/user: fill the manual-check sheet (D7). Then run `--import-manual` and `make horizons`. The V2 summary and the card frames update from it.
+- Rerun `make horizons` (or `python -m pipeline.horizon.cards`) when WS2 changes stations.json/pad.json. S3/S5 cards follow once S picks them.
+- Hand to WS9: engine API (`bands.load_engine()`, `HorizonEngine.horizons(xs, ys, az_step_deg=1, min_dist_m=500)`), `sky.detect_skyline`, and `navcam_frames.json` with station tags.
 
 ### Blocked
 
-1. **V2 far class and D7 (C decides).** The chain itself checks out: 13 of 35 ok frames (12 stops) have median error within ±0.5° (e.g. NLB_824771281 at v120_1264: near 0.46°, mid 0.21°). But 21 frames have median error ≤ −2° (−3.2 to −7.6°), and all face north (az 335–30°). There the predicted skyline is the crater rim at 37–54 km (+1 to +1.5°), which is hidden by haze in the image, so the detector finds the lower visible terrain. Options: (a) the 20 % manual check marks such frames `manual_ok: false` ("far rim not visible"), and the far figure is computed over the rest; (b) switch to fully manual (D7); (c) report the far class as is. I have not decided; v2.json is automatic only.
-2. **Duplicate far-field bands (C).** WS1 also built `data/interim/terrain/{ctx_20m,mola_hrsc_200m}.tif` (`farfield.json`) from the same 3 CTX items with the same rejection, and levels CTX to MOLA. I use my own (`data/interim/horizon/bands/`, not levelled), as the session prompt said. Which source is canonical? Switching is a path change in `horizon.yaml bands`.
-3. **Navcam height (C).** Horizons at stops use `navcam_height_m` 1.9 above DEM ground. The per-frame C height above the rover-frame origin is 1.88–1.93 m on the fresh frames; the origin's height above the ground is unknown (discovery 3.4). This is left unchanged.
+1. **D7 / V2 far class (C/user decides).** Evidence is now on the sheet (above). Options are unchanged: (a) manual verdicts drop the frames where the rim is not visible; (b) fully manual; (c) report as is. Until then the automatic far median stays 4.31°, and the card far errors (3.2–6.5°) come from the same far-fail frames.
+2. **Card fragment vs card contract (C).** `make web` copies `horizon/public/cards/{S}.json` straight to `cards/{S}.json`. Until C's merge with WS2's `engine/public/cards/{S}.timeline.json` exists, these files lack `timeline`, `margin_binding` and `contingency`, so they fail `card.schema.json` in make web's validation.
+3. **Band step at 2 km (WS1/C, reported only).** The canonical CTX is +19.75 m above dem_1m where they overlap (median; p95 +47 m). At 2–5 km that can lift predicted skylines by ~0.3–0.6°. It does not explain the 3–7° far failures (see the sheet), but it is a datum question for WS1: dem_1m vs CTX levelled to MOLA.
+4. **Navcam height (C).** Unchanged: 1.9 m above DEM ground at stops (C height 1.88–1.93 m above the rover origin; the origin's height above ground is unknown).
+5. **Landmarks rule yields < 3 (C/S, content).** Only Gediz Vallis qualifies. Options: keep it as is (honest), or show the hidden landmarks' bearings as "behind the skyline" on the panorama (needs a rule change in landmarks.yaml).
 
 ### Assumptions added
 
@@ -407,6 +446,14 @@ All in `config/horizon.yaml`, each with `assumed: true`:
 - `bands`: CTX listing = D0's 500 STAC items at the pad; greedy footprint gain, max 3 items, ≥ 1 % gain; reject an item whose median offset to MOLA-HRSC is > 20 m; radii 34 km (CTX) and 84 km (MOLA-HRSC); 20 m and 200 m grids.
 - `overlay`, `panorama`: colours and sizes (presentation only).
 - Landmarks: the 8 IAU names verified by D0 (discovery 3.5). The informal names are dropped (no verified coordinate). Not used yet.
+- Session 2 (`config/horizon.yaml`, `assumed: true`):
+  - `landmark_rule` (structured copy of landmarks.yaml: 3–6, ≤ 5 km, nearest first; + `above_skyline_tol_deg` 0.05 for ray sampling; label point = gazetteer centre). `landmarks_source` cites discovery 3.5.
+  - `horizon_ring` (pad, beyond `planning_radius_m`).
+  - `card_frame` (nearest ok frame, manual_ok not false).
+  - `manual_check_sheet` (far-fail > 2°, failed frames included, verdict list, cut ranges 2/5/10/20/30 km).
+  - `panorama` `min_el_span_deg` 10, `label_band_px`, `font_px`.
+- The card skyline error is the card frame's own median |error| per class (not the all-stops V2 median).
+- Navcam frame published as PNG (`cards/{S}/navcam.png`, 0.6–0.8 MB each), because the make web rule copies only `cards/*/*.png`.
 
 ## WS4 Conditions
 
@@ -583,7 +630,49 @@ Branch: `ws7-hud`
 
 ### Done
 
-- —
+- 2026-11-14T11:00Z: **Field PNG codec** `pipeline/export/fields_png.py` + TS decoder
+  `web/src/hud/fields.ts` (contracts v1.1.0: counts = R·256 + G, A = 0 unknown, refuses values
+  outside 0..65535 counts). Round trip exact for every count and every `hud.yaml field_scales`
+  scale; the committed M0 dummy PNGs decode to the same values in Python and TS (mirrored KAT).
+- 2026-11-14T11:00Z: **HUD on dummy data** (`/hud` slot, `web/src/hud/index.ts` `mount(el, ctx)`):
+  two-level helmet panel (D14 minimal default), alarm rules 1–5 in order, playback clock
+  1/30/60/300× (default 60×, D13), scrubber, route-following marker with dwell ring, band
+  colouring by margin while playing, minimap, drag-anywhere ("From here: home in N min
+  (conservative M), O₂ needed X L", σ slider 0–100 m), storm switch, fallback drift (2 %, D12)
+  with fix resets, worst-case lookup (smallest radius ≥ σ), uncertainty circle and alarm 3.
+  "Simulated EVA · real terrain and data" label always shown. Reusable for WS8:
+  `loadHudData`, `computeReadout`, `createHudPanel`, `PlaybackClock` (exported from index.ts).
+- 2026-11-14T11:05Z: **Real fields grid (C request) = WS1 `grid.json fields_5m`**: 1,480 × 1,480
+  px at 5 m, north-up in the analysis CRS, pixel edges at pad ± 3,700 m (the pad is a pixel
+  corner, NW corner xy (−4172.5345, −281174.1963)), bounds [137.319359, −4.868421, 137.444641,
+  −4.743579]; values are for pixel centres. **WS9's `field_grid()` is identical** (KAT
+  `test_ws1_and_ws9_field_grids_agree`), so WS9 changes nothing. `make fields` merges
+  `data/interim/navigation/fields_index_nav.json` (`fix_interval_{set}` entries) into
+  `fields/index.json` when its grid is exactly this one, and refuses (reports, adds nothing)
+  otherwise. The dummy grid (1,481 px centred on the pad) stays as it is.
+- 2026-11-14T11:08Z: **`make fields` on WS2's real rasters** (WS2 files of 10:55Z; opt/nom ×
+  80/104/120; con_* wait on V1): 20 PNGs, **28.4 MB** in `data/interim/export/fields/` (largest
+  `shared/slope.png` 4.1 MB; t_home 0.9 MB, o2_home 1.8–2.1 MB each). `fields/index.json` validates;
+  manifest fragment `pipeline__export__fields_png.json` (60 keys: `fields.<key>.sha256`, `.max`,
+  `.known_pct`; commit edbcd3c). nom_104: T_home max 296.7 min, known 58.95 % of the grid.
+  Worst-case fields (nom_104, 10/50/100 m) computed on the native 3 m grid (radius 4/17/34 cells).
+- 2026-11-14T11:10Z: **Real route KAT** (`web/src/hud/real.test.ts`, skipped without data/): on
+  WS2's new `route_nom_104` (pad → S4 → S2 → pad, 209.7 min) the HUD's T_home = 0 at the pad and
+  matches every timeline row (depart, arrive, leave, O₂ checkpoints, return) within ±0.5 min (max
+  0.27 min); margins likewise; the tightest HUD margin along the walk equals the tightest row
+  (14.9 min at S2, dose-bound), so alarms 1/4 do not fire on this plan.
+- KATs: `tests/test_fields_png.py` 48 pass; `web/src/hud/*.test.ts` 65 pass (5 on real data).
+- 2026-11-14T11:20Z: browser check of `/hud` on data-dummy: playback 300×, band shading,
+  dwell ring, expanded panel + minimap, drag-anywhere readout; layout fixed to fit the outlet.
+
+- 2026-11-14T11:35Z: **WS9 F21 in the HUD** (`web/src/hud/navhud.ts`, WS9's `navReading` /
+  `navLine` / ellipse geometry): when `nav/montecarlo_{default_set}.json` exists the "Odometry"
+  toggle replaces the 2 % fallback: σ = ellipse semi-major axis (worst case by the smallest radius
+  ≥ it), the 95 % ellipse replaces the circle on map and minimap, alarm 3 fires when the ellipse
+  reaches the homeline ("POSITION UNCERTAIN: TAKE A FIX OR HEAD TOWARD ROVER"), the position line
+  reads "Odometry ±N m · next fix due in M m · last fix: type, K min ago" (D_max from
+  `fields/fix_interval_{set}.png`), and "Take fix" jumps to the next fix event. KATs
+  `navhud.test.ts` (6; exact ellipse/band crossing). Checked in the browser on data-dummy.
 
 ### Doing
 
@@ -591,15 +680,45 @@ Branch: `ws7-hud`
 
 ### Next
 
-- —
+- Bind the HUD to WS2's `route_nom_104` once `make web` publishes it (already works on data/interim).
+- con_* fields when V1 lands (`make fields` again; worst-case + bearing unchanged).
+- 60 fps check at 60× on a real laptop (the automated browser here is throttled to ~15 fps even
+  when the HUD is idle, so it measures nothing).
 
 ### Blocked
 
-- —
+- **Way-home path (F18 drag-anywhere), C:** the pointer field is **not in contracts v1.1.0**. A
+  pointer cannot be resampled to 5 m (moves are grid-relative), so it needs its own grid.
+  Proposal (implemented behind `--with-pointer`, off by default; TS follower `wayhome.ts` ready):
+  `fields/{scenario}/pointer.png`, `scale` 1, `units` "move", plus entry keys `bounds`, `width`,
+  `height`, `res_m` (WS2 route_3m grid) and `stencil` (WS2 `pointer_offsets.json`). nom_104 only,
+  ≈ 0.3–0.6 MB. Until then drag-anywhere shows the numbers but no path.
+- **Fields size, C:** all opt/nom suits = 28.4 MB (con_* will add ≈ 8 MB → ≈ 37 MB), over the
+  20 MB target, under 50 MB per file. PNG optimisation gains < 2 %; the scales are fixed by the
+  contract. The HUD reads only the active scenario (nom_104 + worst/bearing), its conservative
+  twin and slope (≈ 17 MB with opt_104/con_104). C to choose: all 9 scenarios (contract table) or
+  only the 104 kg suits in the web tree (`make fields --scenarios …`).
+- **WS2 question:** `turn_back` rows (t 409 / 439 min, after the return, margin 0, binding O₂)
+  are read as annotations "latest time to leave each station" and kept out of the walk; their
+  O₂ binding differs from the dose-bound margins of the same stations (storm τ 85.9 min). Confirm
+  the meaning.
 
 ### Assumptions added
 
-- —
+- A-WS7-1: within a leg the marker follows the route's `times_min`; without them, uniform speed.
+- A-WS7-2: worst-case fields and the alarm-3 circle skip cells with no T_home (blocked > no-go,
+  unreached): the crew cannot be there on the plan. Unknown only if no reachable cell is in the
+  disc. (The M0 dummy used "any unknown → unknown".) Disc radius rounded up to whole 3 m cells
+  (12 / 51 / 102 m).
+- A-WS7-3: HUD margin = (timeline `margin_min` + `t_home_min`, interpolated in t) − T_home at the
+  position (worst case within σ); turn-back countdown = that margin.
+- A-WS7-4: storm switch puts the 2024 onset at the EVA minute the switch is turned on; the
+  tripwire fires after the real onset→tripwire delay (rad.json); the dose budget then counts down
+  from `leash.tau_min_at_peak`; alarm 2 when T_home ≥ budget left.
+- A-WS7-5: drift σ = fix σ at the fix, else max(fix σ, floor 5 m, 2 % of distance since the fix).
+- 5 m sampling: each 5 m pixel takes the 3 m cell under its centre (no ties on these grids);
+  slope = the 1 m `slope_5m` cell at the 5 m pixel centre; `home_bearing` = geometric bearing to
+  the pad (grid.json), known everywhere.
 
 ## WS8 3D
 
@@ -666,42 +785,78 @@ Branch: `ws9-nav`
 - 2026-11-14T10:31Z: merged `origin/main` (WS3 now on main): all 48 nav KATs pass, none skipped
   (F22 synthetic-DEM KAT included); full pytest, ruff, tsc, vitest (212), validate_contracts green.
 
+- 2026-11-14T11:20Z (session 2): **real run `make nav`** on WS2's `route_nom_104` (pad -> S4 -> S2 ->
+  pad, 209.74 min, 6,215 m, slope known on 100 % of steps), 500 runs per set, seed 20261114, 2 min 14 s
+  (F22 over 49 frames included). Fix events: rover at the pad (0, 209.74 min, sigma 2 m), station
+  fixes at S4 (48.44 min) and S2 (108.73 min, sigma 5 m); no skyline fix passed the gate (below).
+  Outputs in `data/interim/navigation/` at the contracts/README web paths; `validate_contracts --data
+  data/interim/navigation` OK (0 errors); manifest fragments `pipeline__navigation__{montecarlo,
+  fixinterval,skylinefix}.json`.
+  - **r95(D) fit (NNLS, no intercept), b = 0 in all sets** (pure linear on this route): low a =
+    0.0376, medium **a = 0.1323 (132 m per km since the last fix)**, high a = 0.3697; fit RMSE 5.0 /
+    29.9 / 169.6 m.
+  - **r95 along the route (medium)**: EVA t = 30 min (1,681 m since the pad fix) **187 m**; 60 min of
+    walking after the S2 fix (t = 199 min, 1,718 m since it) **268 m**; largest just before the
+    return fix (2,099 m since S2) 358 m. Low: 60 / 66 m; high: 392 / 889 m at the same points.
+    At t = 60 min the crew is dwelling at S4 just after its fix (12.3 m in every set).
+  - **Fix-interval headline (medium, nom_104, 30-min homeline; `nav/fix_interval_summary.json`)**:
+    D_max median **50.7 m**, edge p10 **22.7 m**; area inside the homeline by class: < 100 m 76.9 %,
+    100-300 m 20.1 %, 300-1,000 m 3.0 %, > 1,000 m 0 % (134,557 cells). Low: median 178.5 m, high:
+    18.1 m (run report only). Reading: D_max = margin radius / a, so the median margin radius is
+    ~6.7 m: the reachable set (12.4 % of the disc, slope-limited, thousands of blocked holes) leaves
+    little room to the nearest over-limit cell. For N: "fix every ~50 m" is a property of the
+    fragmented reachable set as much as of the drift model.
+- 2026-11-14T11:20Z: **F22 on the real frames, station frames included** (C 11:58 gate, KAT
+  tolerance = `skyline_fix.refine_grid_m` 10 m). All 49 frames tried: 35 ran, 14 failed WS3's
+  clear-sky check ("no clear sky at the top of the frame"); error median **657 m** (p25-p75 452-815
+  m), min 257 m, **0 within 10 m, 0 within 100 m**, 4 within 300 m. Station frames (WS3 tags):
+
+  | Station | Frame | Frame to station | Error | RMS | sigma (score) | Gate |
+  | --- | --- | --- | --- | --- | --- | --- |
+  | S1 (not on route) | NLB_826633404 | 523 m | 788 m | 4.02 deg | 48.9 m | fail |
+  | S2 | NLB_789347468 | 925 m | 280 m | 2.84 deg | 48.9 m | fail |
+  | S4 | NLB_767161116 | 128 m | 966 m | 6.04 deg | 48.5 m | fail |
+
+  **No skyline fix becomes a position fix**; S4 and S2 keep their surveyed station fixes (sigma 5 m);
+  `run_report.json skyline.rejected` gives the reason per station. The score-surface sigma (~49 m)
+  understates the real error by 6-20x, so sigma alone must not gate a fix. The far-field skyline
+  barely constrains position here (lowest-RMS frames: 0.04 deg RMS at 401 m error). Even a passing
+  frame would localise the rover's drive end, 128-925 m from the station, not the station.
+  `localisation/{image_id}.json` for the 35 frames that ran (validation finding, not position fixes).
+- 2026-11-14T11:20Z: F22 now reads the horizon engine's bands from horizon.yaml `bands.*.path` (WS1
+  canonical `terrain/ctx_20m.tif`, `mola_hrsc_200m.tif`, C 11:15); nav.yaml `skyline_bands:
+  horizon.yaml`.
+- 2026-11-14T11:20Z: **nav.yaml `vo:` block** (WS10 request): `PENDING_VO_CONFIG` verbatim, `assumed:
+  true`; `vo.load_vo_config()` now returns "config/nav.yaml vo" (KAT: every key equals the pending
+  value). **`optional_sets.curiosity_vo_256`** (label "rover analogue: a rover is not an astronaut",
+  status pending N): sigma_s 0.00638, sigma_b 1.248 deg/h of rover driving (WS10 `vo_report.json`),
+  psi0 / psi_rw / slip null (not measured; `missing_terms_from: medium`). Not in `sets`, not the
+  default, not run by `make nav`.
+- Fields grid: WS7's canonical grid = WS1 `grid.json fields_5m` (1,480 x 1,480 at 5 m, pad +/- 3,700
+  m) is identical to WS9's `field_grid()` (WS7 KAT); `fields_index_nav.json` written on it. Nothing to
+  change.
+- KATs: `tests/test_nav.py` 54 pass (6 new: gate tolerance, gate pass/reject, rejected frame keeps the
+  station fix, canonical bands, vo keys, optional set); full pytest, ruff, tsc, vitest nav (33) green.
+
 ### Doing
 
-- Waiting for a non-empty WS2 `route_nom_104` (see Blocked).
+- — (session 2 done; ws9-nav pushed for C)
 
 ### Next
 
-- `make nav` on the real route as soon as WS2's files exist; then the real fix-interval headline.
-- F22 on the real frames once WS3's V2 works (see Blocked).
+- Hand WS7 the nav outputs for the HUD (ellipse, "next fix due in M m"); `/nav` on the real files once
+  `make web` copies `data/interim/navigation/`.
+- If N approves the Curiosity set: wire `optional_sets` into a run (needs a rule for the unmeasured
+  terms). An all-sets fix-interval summary only after G1 (C 11:58).
 
 ### Blocked
 
-- (WS2 / S) Real run: WS2's files exist since 10:29Z, but `route_nom_104.geojson` has no features and
-  `timeline_nom_104.json` is depart + return at t = 0 (stations.json: S1, S2 `t_home_min.nom_104` null,
-  S4 not in the route). With no walked route there is no Monte Carlo, so no r95 fit and no fix-interval
-  map; `run real --dry-run` refuses ("route has no legs"). WS9 will not substitute a synthetic route.
-  `engine/nom_104/t_home.tif` (2,468 x 2,468 at 3 m) reads fine; the fix-interval code runs on it in 3 s.
-- (WS3) F22 imports `pipeline.horizon.rays` / `cahvor` / `navcam` / `sky` from `ws3-horizon`; engine
-  KATs skip on main until it merges. Real frames: all 49 frames in `navcam_frames.json` have
-  `station: null`, so no frame is paired with a route station and every station keeps its surveyed
-  fix (sigma 5 m). Who pairs frames with stations (WS3 per its brief, or nearest-frame rule here)?
-  Also WS3's current V2 has a far-field residual median of -4.3 deg (v2.json), so skyline matches on
-  real frames are poor until the detector/V2 improves (SPEC: F22 runs only after V2 works).
-  Trial at 10:27Z (WS3 code 92d2f61 in a temp worktree, scratch output, no manifest, nothing
-  published): 35/49 frames ran, 14 failed WS3's clear-sky frame check; median error 617 m (p25-p75
-  448-815 m), none within 100 m. On the 6 frames with RMS < 1 deg the RMS at the true position is
-  close to the best candidate's (e.g. 0.137 vs 0.095 deg): the far-field skyline barely constrains
-  position over a few hundred metres here, and best candidates sit near the 1 km search-box edge. For C
-  to judge: present F22 as "does not localise better than ~0.5 km on these frames" unless V2 improves.
-- (C) `nav/fix_interval_summary.json` holds one set (contracts v1.0.0); `/nav` shows the headline only
-  for that set. An array or per-set files would need a contract bump.
-- (C / WS7) The fix-interval PNG grid is pad +/- `planning_radius_m` at 5 m = 1,480 x 1,480 px (edges at
-  pad +/- 3,700 m); the dummy grid is 1,481 px centred on the pad. WS7 owns `fields/index.json`: please
-  confirm the real grid (WS9 writes `fields_index_nav.json` with its grid and entries for the merge).
-- (D / C) Playback values on `/nav` (per-minute ellipse, r95, distance since fix) are rows of
-  `nav/montecarlo_{set}.json`; they are shown as "row" numbers citing the file, not one manifest key per
-  row (static numbers all have keys). OK, or record per-minute keys?
+- (N) Model review: `model_conventions`, `fix_interval_ws9.reserve_min` 0 (SPEC "budget minus
+  reserve" has no reserve defined), and whether sigma_b per hour of rover driving transfers to a
+  walker (WS10 Curiosity set).
+- (C) F22 presentation: all three station frames fail the gate (280-966 m), so F22 is a validation
+  finding only; the HUD/nav plan uses station fixes (per C 11:58). Nothing more for WS9 to do unless
+  WS3's detector / V2 changes.
 
 ### Assumptions added
 
@@ -719,6 +874,8 @@ Branch: `ws9-nav`
   station fix; frame pick = lowest RMS; standalone prior; unknown slope = no slip; field grid; DEM band
   paths for the horizon engine (WS1 dem_1m, WS3 `data/interim/horizon/bands/`).
 - Synthetic walking speed = crew.yaml anchor 0.98 m/s.
+- `config/nav.yaml real_run_ws9.skyline_fix_gate` (decided by C 11:58, tolerance from
+  `skyline_fix.refine_grid_m`); `vo:` (WS10's constants, assumed); `optional_sets` (pending N).
 
 ## WS10 Visual odometry
 
@@ -787,3 +944,7 @@ Branch: `ws10-vo`
 | 2026-11-14 11:42 | Isochrone display size (nom_104 2.7 MB gz vs 1.5 MB budget) | Display filter: drop holes < 100 m² (measured 1.19 MB gz); keep 1-min steps if within budget, else the 2-min fallback | C |
 | 2026-11-14 11:42 | Station card producer | WS3 writes `horizon/public/cards/{S}.json` fragments (navcam, skyline error, panorama, landmarks); WS2 writes the timeline/margin part; `make web` (C) merges into `cards/{S}.json` | C |
 | 2026-11-14 11:42 | Basemap | WebP q80, z13–18, 33.1 MB (`config/web.yaml`) | C |
+| 2026-11-14 11:58 | F22 skyline fix presentation | Per SPEC §12 risk 15: report the result honestly (scratch trial: median 617 m, none within 100 m; the far-field skyline barely constrains position here) as a validation finding; the HUD/nav plan falls back to **station fixes**; no skyline fix is shown as a position fix unless a real frame passes the F22 KAT tolerance | C |
+| 2026-11-14 11:58 | Frame↔station pairing for F22 | WS3 sets `station` in `navcam_frames.json` for each station's overlay frame | C |
+| 2026-11-14 11:58 | Nav playback values provenance | Per-minute ellipse/r95/distance rows are covered by the Monte Carlo file's manifest entry (row-level keys not required); every static number keeps its own key | C |
+| 2026-11-14 11:58 | Fix-interval summary sets | Keep contract v1.1 (one file, default set) for G1; an all-sets bump only if time after G1 | C |

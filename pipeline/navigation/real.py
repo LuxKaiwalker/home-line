@@ -11,9 +11,12 @@ Inputs (all under data/interim/, never web/public/data/):
   ``real_run_ws9.fix_events``); ``engine/{sc}/t_home.tif`` (fix-interval map). ``sc`` defaults to
   variants.yaml ``scenarios.default``.
 * WS1 ``terrain/slope_1m.tif`` (slip on slopes above ``slip_min_slope_deg``).
-* WS3 ``horizon/navcam_frames.json`` + the cached frames, and the DEM bands in nav.yaml
-  ``real_run_ws9.skyline_bands`` (WS1 dem_1m, WS3 far-field bands) for WS3's horizon engine
-  (F22). ``--no-skyline`` skips F22 (G2 fallback: station fixes only).
+* WS3 ``horizon/navcam_frames.json`` + the cached frames, and the DEM bands WS3's horizon engine
+  reads (horizon.yaml ``bands.{source}.path``: WS1's canonical dem_1m, ctx_20m, mola_hrsc_200m;
+  C 11:15) (F22). ``--no-skyline`` skips F22 (G2 fallback: station fixes only).
+* F22 gate (C, 2026-11-14 11:58): a station's skyline result becomes a position fix only if its
+  error is within the F22 KAT tolerance (``skyline_fix.refine_grid_m``); else the surveyed
+  station fix is kept and the run report says why.
 
 Outputs (``data/interim/navigation/``, mirroring the web data paths for ``make web``):
 ``nav/montecarlo_{set}.json``, ``nav/tracks_{set}.geojson``, ``nav/fixes.json``,
@@ -84,13 +87,23 @@ def inputs(scenario: str | None = None, *, interim: Path = INTERIM,
         Input("navcam_frames", interim / "horizon" / "navcam_frames.json", "WS3",
               "skyline fixes (F22)", required=skyline),
     ]
-    for src, rel in _rcfg()["skyline_bands"].items():
-        p = Path(rel)  # repo-relative "data/interim/..." in nav.yaml
-        p = p if p.is_absolute() else interim.parent.parent / p
-        owner = "WS1" if src == "dem_1m" else "WS3"
-        out.append(Input(src, p, owner, "horizon engine for skyline fixes (F22)",
+    for src, p in skyline_band_paths(interim.parent.parent).items():
+        out.append(Input(src, p, "WS1", "horizon engine for skyline fixes (F22)",
                          required=skyline))
     return out
+
+
+BAND_SOURCES = ("dem_1m", "ctx_20m", "mola_hrsc_200m")
+
+
+def skyline_band_paths(root: Path) -> dict[str, Path]:
+    """DEM bands for F22 (nav.yaml ``real_run_ws9.skyline_bands`` = "horizon.yaml"): the paths
+    WS3's horizon engine reads, horizon.yaml ``bands.{source}.path`` (repo-relative), under
+    ``root`` (the repo, or a tmp tree's root in tests)."""
+    if _rcfg()["skyline_bands"] != "horizon.yaml":
+        raise ValueError("nav.yaml real_run_ws9.skyline_bands: only 'horizon.yaml' is supported")
+    hb = dr._yaml("horizon")["bands"]
+    return {src: Path(root) / hb[src]["path"] for src in BAND_SOURCES}
 
 
 def dry_run(scenario: str | None = None, *, interim: Path = INTERIM, skyline: bool = True,
@@ -334,12 +347,12 @@ def frame_true_xy(frame: dict) -> tuple[float, float]:
 
 
 def load_engine(log=print):
-    """WS3 horizon engine over the nav.yaml ``real_run_ws9.skyline_bands`` rasters."""
+    """WS3 horizon engine over the canonical bands (``skyline_band_paths``)."""
     from pipeline.horizon.rays import DemBand, HorizonEngine  # noqa: PLC0415
 
     log("F22: loading DEM bands for the horizon engine")
-    return HorizonEngine([DemBand.from_geotiff(dr.REPO / rel, src)
-                          for src, rel in _rcfg()["skyline_bands"].items()])
+    return HorizonEngine([DemBand.from_geotiff(p, src)
+                          for src, p in skyline_band_paths(dr.REPO).items()])
 
 
 def skyline_real(frames: list[dict], *, engine=None, log=print) -> list[dict]:
@@ -388,6 +401,48 @@ def pick_station_fixes(rows: list[dict]) -> dict:
         if cur is None or r["rms_deg"] < cur["rms_deg"]:
             best[r["station"]] = r
     return best
+
+
+def skyline_gate_tolerance_m() -> float:
+    """F22 KAT tolerance (nav.yaml ``real_run_ws9.skyline_fix_gate.tolerance_from``)."""
+    src = _rcfg()["skyline_fix_gate"]["tolerance_from"]
+    if src != "skyline_fix.refine_grid_m":
+        raise ValueError(f"nav.yaml skyline_fix_gate.tolerance_from {src!r} not supported")
+    return float(dr.load_config()["skyline_fix"]["refine_grid_m"])
+
+
+def gate_skyline_fixes(best: dict) -> tuple[dict, dict]:
+    """C 11:58: a station's (lowest-RMS) skyline result becomes a position fix only if its error
+    is within the F22 KAT tolerance. Returns (passed, rejected); rejected rows carry the reason
+    (the surveyed station fix is kept for them)."""
+    tol = skyline_gate_tolerance_m()
+    passed, rejected = {}, {}
+    for st, r in best.items():
+        if r.get("error_m") is not None and float(r["error_m"]) <= tol:
+            passed[st] = r
+        else:
+            rejected[st] = {"image_id": r["image_id"], "error_m": r.get("error_m"),
+                            "rms_deg": r.get("rms_deg"), "tolerance_m": tol,
+                            "reason": f"error {r.get('error_m')} m > F22 KAT tolerance {tol:g} m; "
+                                      f"station fix kept"}
+    return passed, rejected
+
+
+def station_frame_summary(rows: list[dict]) -> list[dict]:
+    """Every station-tagged frame tried, with its result and the gate verdict (failures too)."""
+    tol = skyline_gate_tolerance_m()
+    out = []
+    for r in rows:
+        if not r.get("station"):
+            continue
+        ok = r["status"] == "ok"
+        out.append({"station": r["station"], "image_id": r["image_id"], "status": r["status"],
+                    "error_m": r.get("error_m"), "rms_deg": r.get("rms_deg") if ok else None,
+                    "sigma_m": r.get("sigma_m") if ok else None,
+                    "reason": r.get("reason"), "tolerance_m": tol,
+                    "passes_gate": bool(ok and r.get("error_m") is not None
+                                        and float(r["error_m"]) <= tol)})
+    return out
 
 
 # --------------------------------------------------------------------------------------------
@@ -499,6 +554,10 @@ def skyline_run(*, out=REAL_OUT, interim: Path = INTERIM, record: bool | None = 
     rep = {"frames_json": str(fj), "n_frames": len(rows), "n_ok": len(ok),
            "n_failed": len(rows) - len(ok),
            "error_m_median": float(np.median(ok)) if ok else None,
+           "error_m_p25_p75": ([float(v) for v in np.percentile(ok, [25, 75])] if ok else None),
+           "n_within_tolerance": sum(e <= skyline_gate_tolerance_m() for e in ok),
+           "tolerance_m": skyline_gate_tolerance_m(),
+           "station_frames": station_frame_summary(rows),
            "prior": _rcfg()["skyline_prior"], "rows": rows, "manifest_recorded": bool(record)}
     (out).mkdir(parents=True, exist_ok=True)
     (out / SKYLINE_REPORT).write_text(json.dumps(rep, indent=1, default=str))
@@ -559,10 +618,12 @@ def run(scenario: str | None = None, *, out=REAL_OUT, interim: Path = INTERIM, s
         sky = json.loads(rp.read_text())
         stations = [f.station for f in fixes_from_timeline(timeline) if f.station]
         paired = paired_frames(sky["rows"], stations)
-        sky_best = pick_station_fixes(paired)
+        sky_best, rejected = gate_skyline_fixes(pick_station_fixes(paired))
         report["skyline"] = {"report": SKYLINE_REPORT, "n_frames": sky["n_frames"],
                              "n_ok": sky["n_ok"],
                              "used": {st: r["image_id"] for st, r in sky_best.items()},
+                             "rejected": rejected,
+                             "station_frames": station_frame_summary(paired),
                              "stations_without_frame": sorted(
                                  set(stations) - {r["station"] for r in paired})}
 
