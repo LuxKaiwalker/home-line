@@ -334,6 +334,27 @@ def export_near(dem: np.ndarray, transform: Affine, grid: ChunkGrid,
     return entries
 
 
+def prune_stale_chunks(out_dir: Path, idx: dict) -> list[str]:
+    """Delete near/near_tex files under ``<out_dir>/fp3d`` that ``idx`` does not list (make web
+    copies those directories by glob). Returns the removed paths, relative to ``out_dir``."""
+    out_dir = Path(out_dir)
+    keep = set()
+    for ch in idx["chunk_grid"]["chunks"]:
+        keep.add(ch["file"])
+        if ch.get("tex"):
+            keep.add(ch["tex"])
+    removed = []
+    for d in (NEAR_DIR, TEX_DIR):
+        if not (out_dir / d).is_dir():
+            continue
+        for f in sorted((out_dir / d).iterdir()):
+            rel = f"{d}/{f.name}"
+            if f.is_file() and rel not in keep:
+                f.unlink()
+                removed.append(rel)
+    return removed
+
+
 # ---------------------------------------------------------------------------------- index ----
 @cache
 def _index_validator() -> Draft202012Validator:
@@ -611,6 +632,9 @@ def main(argv: list[str] | None = None) -> int:
         pad=pad)
     out_index = args.out / "fp3d" / "index.json"
     out_index.write_text(json.dumps(idx, indent=1) + "\n", encoding="utf-8")
+    stale = prune_stale_chunks(args.out, idx)
+    if stale:
+        print(f"fp3d: removed {len(stale)} chunk files of an earlier grid")
 
     mb = record_manifest(download_bytes=idx["download_bytes"], near_chunks=len(near),
                          near_res_m=grid.res_m, far_res_m=f3["far"]["res_m"],

@@ -760,3 +760,19 @@ def test_index_records_the_pad_it_is_centred_on(dummy_grid, geo):
     idx = terrain_chunks.build_index(dummy_grid, geo, [], [], far, quantum_m=Q, datum="t",
                                      eye_height_m=1.7, sources={}, pad=pad)
     assert idx["pad"] == pad
+
+
+def test_prune_removes_chunk_files_the_index_does_not_list(tmp_path):
+    """make web copies fp3d/near/*.f32.gz and near_tex/*.jpg by glob: chunks of an earlier grid
+    (e.g. before the D21 pad move) must not stay in the export directory."""
+    for d, names in (("near", ["1_1.f32.gz", "2_2.f32.gz"]), ("near_tex", ["1_1.jpg", "2_2.jpg"])):
+        (tmp_path / "fp3d" / d).mkdir(parents=True)
+        for n in names:
+            (tmp_path / "fp3d" / d / n).write_bytes(b"x")
+    (tmp_path / "fp3d" / "far.f32.gz").write_bytes(b"x")
+    idx = {"chunk_grid": {"chunks": [{"i": 1, "j": 1, "file": "fp3d/near/1_1.f32.gz",
+                                      "tex": "fp3d/near_tex/1_1.jpg"}]}}
+    removed = terrain_chunks.prune_stale_chunks(tmp_path, idx)
+    assert sorted(removed) == ["fp3d/near/2_2.f32.gz", "fp3d/near_tex/2_2.jpg"]
+    assert sorted(p.name for p in (tmp_path / "fp3d").rglob("*") if p.is_file()) == \
+        ["1_1.f32.gz", "1_1.jpg", "far.f32.gz"]
