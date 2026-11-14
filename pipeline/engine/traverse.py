@@ -27,7 +27,7 @@ import numpy as np
 from . import dijkstra, orienteering, provenance
 from .geo import feature_collection, write_json
 from .graph import Grid
-from .margin import MarginInputs, latest_departure, margin
+from .margin import MarginInputs, latest_departure, margin, o2_margin_min
 from .physio import GradeTable
 
 SCRIPT = "pipeline/engine/traverse.py"
@@ -146,11 +146,24 @@ def plan(grid: Grid, table: GradeTable, home: dijkstra.Field, pad, stations: lis
     track_t, track_u, track_th, track_oh = [0.0], [0.0], [], []
     items, legs, events = [], [], []
 
-    def ev(tm, event, st, u, th, oh):
-        m, b = margin(mi, tm, u, th, oh)
+    dwell_iv = []  # (t_arrive, t_leave) per visited station, for O2_station_tasks
+
+    def tasks_left(tm):
+        for a, b in dwell_iv:
+            if a - 1e-9 <= tm < b:
+                return (b - tm) * mi.dwell_rate_l_min
+        return 0.0
+
+    def ev(tm, event, st, u, th, oh, tasks=None):
+        tasks = tasks_left(tm) if tasks is None else tasks
+        m, b = margin(mi, tm, u, th, oh, tasks)
         row = {"t_min": round(tm, 2), "event": event, "station": st,
                "o2_left_L": round(mi.o2_capacity_l - u, 2), "t_home_min": round(float(th), 2),
-               "margin_min": round(m, 2), "margin_binding": b}  # fmt: skip
+               "margin_min": round(m, 2), "margin_binding": b,
+               "o2_tasks_left_L": round(float(tasks), 2)}  # fmt: skip
+        if mi.planning_rate_l_min is not None:
+            row["o2_margin_min_planning_rate"] = round(
+                o2_margin_min(mi, u, oh, tasks, rate_l_min=mi.planning_rate_l_min), 2)
         if st is not None and st in in_partner:
             row["in_partner_line"] = in_partner[st]
         events.append(row)
@@ -166,7 +179,7 @@ def plan(grid: Grid, table: GradeTable, home: dijkstra.Field, pad, stations: lis
             track_u.append(used)
             track_th.append(float(lp.t_home[0]))
             track_oh.append(float(lp.o2_home[0]))
-            ev(t, "leave", frm, used, lp.t_home[0], lp.o2_home[0])
+            ev(t, "leave", frm, used, lp.t_home[0], lp.o2_home[0], tasks=0.0)
         times = t + lp.tau
         track_t.extend(times[1:].tolist())
         track_u.extend((used + lp.o2[1:]).tolist())
@@ -191,14 +204,15 @@ def plan(grid: Grid, table: GradeTable, home: dijkstra.Field, pad, stations: lis
         if to == "pad":
             ev(t, "return", None, used, 0.0, 0.0)
         else:
-            ev(t, "arrive", to, used, lp.t_home[-1], lp.o2_home[-1])
             k = names.index(to)
+            dwell_iv.append((t, t + dwell[k]))
+            ev(t, "arrive", to, used, lp.t_home[-1], lp.o2_home[-1])
             back = back_legs[k]
             tb = latest_departure(mi, t, used, mi.dwell_rate_l_min, back.tau, back.o2,
                                   back.t_home, back.o2_home)  # fmt: skip
             if math.isfinite(tb):
                 u_tb = used + (tb - t) * mi.dwell_rate_l_min
-                ev(tb, "turn_back", to, u_tb, back.t_home[0], back.o2_home[0])
+                ev(tb, "turn_back", to, u_tb, back.t_home[0], back.o2_home[0], tasks=0.0)
     if not p.order:
         ev(0.0, "return", None, 0.0, 0.0, 0.0)
 
@@ -219,7 +233,8 @@ def write(res: Result, sid: str, public: Path) -> None:
     rp = write_json(public / f"route_{sid}.geojson", res.route, "route.schema.json")
     tp = write_json(public / f"timeline_{sid}.json", res.timeline, "timeline.schema.json")
     tfile = f"timeline_{sid}.json"
-    units = {"t_min": "min", "o2_left_L": "L", "t_home_min": "min", "margin_min": "min"}
+    units = {"t_min": "min", "o2_left_L": "L", "t_home_min": "min", "margin_min": "min",
+             "o2_margin_min_planning_rate": "min", "o2_tasks_left_L": "L"}
     for i, row in enumerate(res.timeline):
         for k, u in units.items():
             if row.get(k) is not None:

@@ -168,6 +168,22 @@ def test_traverse_plan_and_timeline(plane_world, tmp_path):
     tbs = [e for e in tl if e["event"] == "turn_back"]
     assert len(tbs) == 3 and all(abs(e["margin_min"]) < 0.02 for e in tbs)
     assert all(e["margin_min"] >= 0 for e in walk)
+    # S review O2 term: station work at 0.84 L/min; on arrival the station's remaining tasks
+    # (30 min x 0.84 = 25.2 L) are subtracted, so the O2 margin on arrival equals the one on
+    # leaving (same cell, same O2_home); fixed 40.5 L reserve, no (1 + r).
+    for e in tl:
+        if e["event"] == "arrive":
+            lv = next(x for x in tl if x["event"] == "leave" and x["station"] == e["station"])
+            assert e["o2_tasks_left_L"] == pytest.approx(30 * 0.84)
+            assert lv["o2_left_L"] == pytest.approx(e["o2_left_L"] - 30 * 0.84, abs=0.02)
+            s = next(x for x in st if x["id"] == e["station"])
+            oh = float(home.o2_l[s["rc"]])
+            exp = (lv["o2_left_L"] - oh - 40.5) / 1.35
+            assert margin.o2_margin_min(mi, mi.o2_capacity_l - lv["o2_left_L"], oh) == (
+                pytest.approx(exp, abs=0.02))
+            assert e["o2_margin_min_planning_rate"] == pytest.approx(
+                (e["o2_left_L"] - e["o2_tasks_left_L"] - oh - 40.5) / mi.planning_rate_l_min,
+                abs=0.05)
     traverse.write(res, "nom_104", tmp_path)
     assert json.loads((tmp_path / "timeline_nom_104.json").read_text()) == tl
 
@@ -252,7 +268,8 @@ def test_main_on_synthetic_terrain(tmp_path):
                               "thresholds_deg": [10, 20], "confusion": {}}))  # fmt: skip
     out = tmp_path / "engine"
     rc = scenarios.main(["--terrain", str(terr), "--out", str(out), "--v1-json", str(v1),
-                         "--scenarios", "nom_104", "con_104", "opt_104", "--siting"])  # fmt: skip
+                         "--scenarios", "nom_104", "con_104", "opt_104", "--siting",
+                         "--no-conditions"])  # fmt: skip
     assert rc == 0
     pub = out / "public"
     for rel in ("scenarios/index.json", "scenarios/nom_104/isochrones.geojson",
@@ -265,3 +282,25 @@ def test_main_on_synthetic_terrain(tmp_path):
     assert all(r["t_home_min"]["nom_104"] is not None for r in recs)
     summ = json.loads((out / "summary.json").read_text())
     assert summ["routes"]["nom_104"]["order"]
+
+
+def test_conditions_inputs(monkeypatch):
+    """CLI values win; otherwise WS4's margin_inputs (storm or latest tau); off -> None."""
+    import pipeline.conditions.margins as ws4
+
+    calls = []
+
+    def fake(observer=None, dose="storm"):
+        calls.append(dose)
+        return {"t_dark_min": 500.0, "t_dark_source": "clock", "tau_dose_min": 80.0,
+                "tau_dose_source": "rad", "eva_start_utc": "2026-11-14T10:51:18Z"}  # fmt: skip
+
+    monkeypatch.setattr(ws4, "margin_inputs", fake)
+    c = scenarios.conditions_inputs(None, None, "storm", True)
+    assert (c["t_dark_min"], c["tau_dose_min"]) == (500.0, 80.0) and calls == ["storm"]
+    assert c["tau_dose_source"] == "WS4: rad"
+    c = scenarios.conditions_inputs(300.0, None, "latest", True)
+    assert (c["t_dark_min"], c["t_dark_source"], c["tau_dose_min"]) == (300.0, "CLI", 80.0)
+    assert calls[-1] == "latest"
+    c = scenarios.conditions_inputs(None, None, "storm", False)
+    assert c["t_dark_min"] is None and c["tau_dose_min"] is None

@@ -274,12 +274,62 @@ def test_o2_budget_formula_recomputes():
     assert sec == pytest.approx(b["secondary_L"], abs=1.0)
 
 
-def test_ist2_uphill_check_reported():
-    """Uphill increments at 20/30 % grade are computed for S to compare with IST-2 (8.7 / 17.0).
-
-    Not an equality KAT: SPEC F3 says eta 0.20-0.25 is *checked* against IST-2; the numbers go
-    to S. Here only sign and ordering are asserted.
-    """
+def test_level_to_grade_increment_not_validated():
+    """The level -> 20/30 % increment k*v is reported, never compared with IST-2's 8.7 / 17.0
+    (those are weight-span differences, S review 2026-11-14). No measured level -> grade
+    reference is in hand, so it is labelled "not validated". Only sign and ordering here."""
+    assert VAR["ist2"]["level_to_grade_validated"] is False
     p = physio.params("nominal", suit_kg=104)
-    chk = physio.ist2_uphill_check(p, CREW["anchor"]["speed_ms"])
+    chk = physio.level_to_grade_increment(p, CREW["anchor"]["speed_ms"])
+    assert chk["validated"] is False
     assert 0 < chk["grade_20pct"] < chk["grade_30pct"]
+
+
+# ---------------------------------------------------------------- IST-2 weight span (S review)
+
+W = VAR["ist2"]["weight_span"]
+G0 = VAR["ist2"]["g_earth_ms2"]
+
+
+def _span_by_hand(eta, grade_pct, v):
+    """(VO2 at 0.32 g - VO2 at 0.12 g) per kg subject mass, same grade and speed: only k
+    depends on g, so the difference is (m_b + M) dg sin(theta) / (eta m_b) * 60 / 20.1 * v."""
+    th = math.atan(grade_pct / 100)
+    dg = (W["g_frac"][1] - W["g_frac"][0]) * G0
+    m_b, m = W["subject_kg"], W["system_kg"]
+    return (m_b + m) * dg * math.sin(th) / (eta * m_b) * 60 / 20.1 * v
+
+
+def test_ist2_weight_span_config():
+    assert W["g_frac"] == [0.12, 0.32] and W["system_kg"] == 121 and W["subject_kg"] == 80.7
+    assert W["speed_ms"] == [0.56, 0.97]
+    # 0.20 g on the full 201.7 kg system ~ the 88 lb (391 N) TGAW span, within 1.5 %
+    dw = 0.20 * G0 * (121 + 80.7)
+    assert dw == pytest.approx(88 * 0.45359237 * G0, rel=0.015)
+
+
+@pytest.mark.parametrize("variant", VARIANTS)
+def test_ist2_weight_span_hand_calculation(variant):
+    eta = VAR["variants"][variant]["eta"]
+    span = physio.ist2_weight_span(variant)
+    for g in (20, 30):
+        lo, hi = span[f"grade_{g}pct"]["band"]
+        assert lo == pytest.approx(_span_by_hand(eta, g, 0.56), rel=1e-9)
+        assert hi == pytest.approx(_span_by_hand(eta, g, 0.97), rel=1e-9)
+
+
+def test_ist2_weight_span_nominal_contains_reported():
+    """S review pass rule: IST-2's 8.7 (20 %) and 17.0 (30 %) inside the band from the speed
+    sweep 0.56-0.97 m/s. Nominal (eta 0.225): 7.14-12.37 and 10.47-18.13 -> both inside."""
+    span = physio.ist2_weight_span("nominal")
+    assert span["grade_20pct"]["inside"] and span["grade_30pct"]["inside"]
+    assert span["grade_20pct"]["reported"] == 8.7 and span["grade_30pct"]["reported"] == 17.0
+
+
+def test_ist2_weight_span_by_variant_reported_honestly():
+    """Optimistic (eta 0.25) tops out at 16.31 at 30 %: 17.0 is outside (reported, not tuned).
+    Conservative (eta 0.20) contains both."""
+    assert physio.ist2_weight_span("optimistic")["grade_20pct"]["inside"]
+    assert not physio.ist2_weight_span("optimistic")["grade_30pct"]["inside"]
+    con = physio.ist2_weight_span("conservative")
+    assert con["grade_20pct"]["inside"] and con["grade_30pct"]["inside"]

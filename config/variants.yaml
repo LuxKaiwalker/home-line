@@ -12,7 +12,15 @@ ist2:
   level_increment_ml_kg_min: 1.9  # lightest -> heaviest weight condition, 0% grade
   delta_mass_kg: 60               # mass span of those conditions
   verify_at_h0: true              # S reads the IST-2 table; correct delta_mass_kg
-  uphill_check_ml_kg_min: {grade_20pct: 8.7, grade_30pct: 17.0}
+  uphill_check_ml_kg_min: {grade_20pct: 8.7, grade_30pct: 17.0}   # heaviest - lightest WEIGHT condition at a fixed grade (S review 2026-11-14), not level -> grade
+  weight_span:                     # added by WS2 2026-11-14 per docs/review/2026-11-14-ist2-and-o2-margin.md (S, binding); source: Norcross et al. 2010, IST-2 (NTRS 20110003409)
+    g_frac: [0.12, 0.32]           # lightest / heaviest suited-weight condition, fraction of Earth g (series 0.12-0.32 g)
+    system_kg: 121                 # POGO configuration, 265 lb
+    subject_kg: 80.7               # mean subject body mass; IST-2 normalises per kg of subject mass
+    speed_ms: [0.56, 0.97]         # per-subject speeds (lowest ambulation speed from each subject's PTS)
+    speed_sweep_n: 42              # sweep resolution, 0.01 m/s steps (numerical, not a model parameter)
+  g_earth_ms2: 9.80665             # standard gravity (CGPM 1901); converts IST-2 g fractions
+  level_to_grade_validated: false  # level -> 20/30 % increment: no measured reference in hand (S review), report "not validated"
 variants:
   optimistic:   {eta: 0.25,  V0: 5, a_mult: 1.0, nogo_deg: 25}
   nominal:      {eta: 0.225, V0: 6, a_mult: 1.0, nogo_deg: 20}
@@ -27,12 +35,11 @@ outputs:                           # added 13 Nov (gap found by WS2)
   isochrone_size_budget_mb_gz: 1.5
   simplify_tolerance_m: 2
   band_budgets_min: [30, 60]
-route:                             # added by WS2 2026-11-14 (values from SPEC F9; flagged in STATUS)
+route:                             # added by WS2 2026-11-14 (values from SPEC F9)
   o2_checkpoint_min: 30            # SPEC F9: "O2 checkpoints every 30 min"
   budget: "crew.eva_h"             # SPEC F9: sum(walk + dwell) <= 6.5 h
-  o2_margin_rate: "effort_cap * VO2max * m_b / 1000"   # L/min that turns the O2 term of m(t) (L) into minutes (SPEC F4 mixes L and min); S to confirm
-  dwell_vo2: "V0"                  # VO2 while dwelling at a station = model VO2 at v = 0; S to confirm
-  assumed: true
+  o2_margin: "crew.o2_margin"      # S review 2026-11-14: margin formula, effort rate, task rate and reserve (sourced there)
+  assumed: true                    # o2_checkpoint_min and budget read from SPEC text
 numerics:                          # added by WS2 2026-11-14; numerical resolution, not a model parameter
   grade_table_step_deg: 0.01       # router pace/O2 lookup table step (linear interpolation; KAT rel err < 1e-4)
   assumed: true

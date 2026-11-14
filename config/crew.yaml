@@ -1,7 +1,7 @@
 crew_size: 2
 eva_h: 6.5
 reserve_min: 30
-o2_reserve_frac: 0.2              # r in the route margin, assumed
+o2_reserve_frac: 0.2              # r in SPEC F4 m(t), assumed; NOT used by the engine since 2026-11-14 (replaced by o2_margin.reserve_min_at_effort_cap, S review); kept for the web scorecard row until WS5/C drop it
 vo2max_ml_kg_min: 36
 effort_cap_frac: 0.5
 body_mass_kg: 75                  # assumed (D10)
@@ -31,3 +31,16 @@ o2_budget:                        # added 13 Nov (gap found by WS2); derived, se
   secondary_L: 157                 # = 1 h x 157 L/h at 3000 BTU/h (derived)
   margin_uses: primary_L           # O2_left = primary_L - consumed; secondary is shown, never planned against
   assumed: true
+o2_margin:                         # added by WS2 2026-11-14 per docs/review/2026-11-14-ist2-and-o2-margin.md (S review, binding)
+  formula: "margin_min = (O2_left - O2_return_route - O2_station_tasks - O2_reserve) / effort_rate_L_min"   # all terms in litres
+  label: "minutes at maximum effort"
+  effort_rate_L_min: "effort_cap_frac * vo2max_ml_kg_min * body_mass_kg / 1000"   # 1.35 L/min ~ 1,600 BTU/hr; S review: conversion at the effort cap confirmed
+  station_task_rate_L_min: 0.84    # 1,000 BTU/hr (ISS/EMU average metabolic rate) at RER 0.85; S review; replaces the resting rate V0 while at a station
+  station_task_rate_btu_h: 1000    # same rate as energy, for the conversion KAT
+  reserve_min_at_effort_cap: 30    # fixed reserve: 30 min at the effort cap (Shuttle/EMU EVA 30-min reserve; NASA EVA systems overview, NTRS 20140009556) = 40.5 L
+  planning_rate_btu_h: 1200        # optional second display: O2 margin at the 1,200 BTU/hr planning rate (ICES-2026-127)
+  conversion:                      # ICES-2026-127 (NTRS 20260005410): MetRate kcal/min = 4.039 VO2 + 1.157 VCO2 (L/min)
+    kcal_per_L_vo2: 4.039
+    kcal_per_L_vco2: 1.157
+    rer: 0.85                      # S review
+    btu_per_kcal: 3.96567          # unit conversion (International Table calorie and BTU)
