@@ -27,7 +27,10 @@ pixel corner). Inputs on other grids are *sampled*, never interpolated:
 CLI (``make fields``): ``python -m pipeline.export.fields_png [--scenarios ...] [--dry-run]``
 reads ``data/interim/{terrain,engine}/`` and writes ``data/interim/export/fields/`` (the
 ``make web`` source, contracts/README.md "make web sources"). Missing inputs are skipped and
-reported by owner, never faked. ``--with-pointer`` also writes WS2's way-home pointer on its
+reported by owner, never faked. WS9's ``data/interim/navigation/fields_index_nav.json``
+(``fix_interval_{set}`` entries; the PNGs reach the web tree through WS9's own ``make web`` rule)
+is merged into ``fields/index.json`` when its grid is exactly this one (``merge_nav_index``).
+``--with-pointer`` also writes WS2's way-home pointer on its
 native grid with extra index keys: **not in contracts v1.1.0** (proposal to C, STATUS.md WS7), so
 it is off by default.
 
@@ -338,6 +341,36 @@ def _read_tif(path: Path) -> tuple[np.ndarray, tuple[float, float], float]:
     return a, (t.c, t.f), float(t.a)
 
 
+NAV_INDEX = Path("navigation") / "fields_index_nav.json"  # WS9, pipeline/navigation/real.py
+
+
+def merge_nav_index(entries: dict[str, dict[str, Any]], grid: Mapping[str, Any],
+                    nav_idx: Mapping[str, Any], nav_root: Path) -> tuple[list[str], str | None]:
+    """Add WS9's ``fix_interval_{set}`` entries to ``entries`` if WS9's grid is this grid.
+
+    ``grid`` = ``{bounds, width, height, res_m}`` of the index. Returns ``(keys added, refusal)``;
+    a refusal (grid mismatch, unexpected key or file, PNG absent) adds nothing.
+    """
+    for k in ("width", "height"):
+        if int(nav_idx.get(k, -1)) != int(grid[k]):
+            return [], f"WS9 grid {k} {nav_idx.get(k)} != {grid[k]}"
+    if not math.isclose(float(nav_idx.get("res_m", -1)), float(grid["res_m"])):
+        return [], f"WS9 grid res_m {nav_idx.get('res_m')} != {grid['res_m']}"
+    nb = nav_idx.get("bounds") or []
+    if len(nb) != 4 or any(abs(float(a) - float(b)) > 1e-6
+                           for a, b in zip(nb, grid["bounds"], strict=True)):
+        return [], f"WS9 grid bounds {nb} != {list(grid['bounds'])}"
+    add: dict[str, dict[str, Any]] = {}
+    for k, e in (nav_idx.get("fields") or {}).items():
+        if not re.fullmatch(r"fix_interval_\w+", k) or e.get("file") != f"fields/{k}.png":
+            return [], f"WS9 entry {k!r} is not fix_interval_{{set}} -> fields/{k}.png"
+        if not (nav_root / e["file"]).exists():
+            return [], f"WS9 entry {k}: {e['file']} missing under {nav_root}"
+        add[k] = {kk: e[kk] for kk in ("file", "scale", "units", "scenario")}
+    entries.update(add)
+    return sorted(add), None
+
+
 def _lonlat_bounds(grid5: Mapping[str, Any]) -> list[float]:
     return [round(float(b), 6) for b in grid5["bounds_lonlat"]]
 
@@ -361,6 +394,7 @@ def run(*, interim: str | Path = INTERIM, out_root: str | Path | None = None,
     inputs: list[dict[str, Any]] = [
         {"path": str(Path("terrain/grid.json")), "owner": "WS1", "present": grid_json.exists()},
         {"path": str(Path("terrain/slope_5m.tif")), "owner": "WS1", "present": slope_tif.exists()},
+        {"path": str(NAV_INDEX), "owner": "WS9", "present": (interim / NAV_INDEX).exists()},
     ]
     for sc in ids:
         for name in ("t_home", "o2_home") + (("pointer",) if with_pointer else ()):
@@ -436,7 +470,20 @@ def run(*, interim: str | Path = INTERIM, out_root: str | Path | None = None,
             else:
                 rep["skipped"][f"{sc}/pointer"] = f"missing engine/{sc}/pointer.tif (WS2)"
 
-    idx = build_index(_lonlat_bounds(g5), shape[1], shape[0], res, entries, dummy=False)
+    bounds = _lonlat_bounds(g5)
+    nav_path = interim / NAV_INDEX
+    if nav_path.exists():
+        added, why = merge_nav_index(
+            entries, {"bounds": bounds, "width": shape[1], "height": shape[0], "res_m": res},
+            json.loads(nav_path.read_text()), nav_path.parent)
+        if why:
+            rep["skipped"]["fix_interval"] = why
+        else:
+            rep["merged_nav"] = added
+            log(f"merged WS9 entries: {', '.join(added) or 'none'}")
+    else:
+        rep["skipped"]["fix_interval"] = f"missing {NAV_INDEX} (WS9)"
+    idx = build_index(bounds, shape[1], shape[0], res, entries, dummy=False)
     idx_path.parent.mkdir(parents=True, exist_ok=True)
     idx_path.write_text(json.dumps(idx, indent=1) + "\n")
     for k, e in idx["fields"].items():

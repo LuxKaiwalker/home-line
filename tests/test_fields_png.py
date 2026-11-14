@@ -462,3 +462,56 @@ def test_real_worst_case_ge_point_on_crop():
         a = fp.decode_png(fp.encode_png(t, s), s)
         b = fp.decode_png(fp.encode_png(f, s), s)
         assert np.all(b[both] >= a[both])
+
+
+# --------------------------------------------------------- WS9 fix-interval index merge ----
+def _nav_index(root, grid_bounds, *, width=22, res=5.0, key="fix_interval_medium"):
+    nav = root / "navigation"
+    (nav / "fields").mkdir(parents=True, exist_ok=True)
+    (nav / "fields" / f"{key}.png").write_bytes(fp.encode_png(np.full((22, 22), 300.0), 1))
+    idx = {"bounds": grid_bounds, "width": width, "height": 22, "res_m": res,
+           "fields": {key: {"file": f"fields/{key}.png", "scale": 1, "units": "m",
+                            "scenario": "nom_104"}}, "note": "WS9"}
+    (nav / "fields_index_nav.json").write_text(json.dumps(idx))
+
+
+def test_cli_merges_ws9_fix_interval_on_the_same_grid(tmp_path):
+    _synthetic_tree(tmp_path / "interim")
+    _nav_index(tmp_path / "interim", [137.381, -0.0009, 137.399, 0.0009])
+    out = tmp_path / "out"
+    rep = fp.run(interim=tmp_path / "interim", out_root=out, scenarios=["nom_104"],
+                 manifest_fragment_dir=tmp_path / "manifest", log=lambda *a: None)
+    idx = json.loads((out / "fields" / "index.json").read_text())
+    Draft202012Validator(SCHEMA).validate(idx)
+    assert rep["merged_nav"] == ["fix_interval_medium"]
+    assert idx["fields"]["fix_interval_medium"] == {
+        "file": "fields/fix_interval_medium.png", "scale": 1, "units": "m", "scenario": "nom_104"}
+
+
+@pytest.mark.parametrize("bad", [dict(width=21), dict(res=10.0), dict(key="slope"),
+                                 dict(bounds=[137.38, -0.0009, 137.399, 0.0009])])
+def test_cli_refuses_ws9_index_on_another_grid(tmp_path, bad):
+    _synthetic_tree(tmp_path / "interim")
+    b = bad.pop("bounds", [137.381, -0.0009, 137.399, 0.0009])
+    _nav_index(tmp_path / "interim", b, **bad)
+    out = tmp_path / "out"
+    rep = fp.run(interim=tmp_path / "interim", out_root=out, scenarios=["nom_104"],
+                 manifest_fragment_dir=tmp_path / "manifest", log=lambda *a: None)
+    idx = json.loads((out / "fields" / "index.json").read_text())
+    assert not any(k.startswith("fix_interval") for k in idx["fields"])
+    assert idx["fields"]["slope"]["file"] == "fields/shared/slope.png"  # WS9 never overrides
+    assert rep["skipped"]["fix_interval"]
+
+
+def test_ws1_and_ws9_field_grids_agree():
+    """WS1 grid.json fields_5m (used here) == WS9 real.field_grid() (pad +- planning radius)."""
+    gj = INTERIM / "terrain" / "grid.json"
+    if not gj.exists():
+        pytest.skip("no WS1 grid.json")
+    nav = pytest.importorskip("pipeline.navigation.real")
+    g5 = json.loads(gj.read_text())["grids"]["fields_5m"]
+    g9 = nav.field_grid()
+    assert (g9["width"], g9["height"], g9["res_m"]) == (g5["width"], g5["height"], g5["res_m"])
+    assert g9["x0"] == pytest.approx(g5["nw_xy"][0], abs=1e-6)
+    assert g9["y1"] == pytest.approx(g5["nw_xy"][1], abs=1e-6)
+    assert g9["bounds"] == [round(b, 6) for b in g5["bounds_lonlat"]]
