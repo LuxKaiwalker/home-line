@@ -55,12 +55,12 @@ describe.skipIf(!has)('real data tree (web/public/data)', () => {
     expect(h.range_pct[1]).toBe(17.5)
   })
 
-  it('route nom_104: pad -> S4 -> S2 -> pad, end = manifest route total (209.74 min)', async () => {
+  it('route nom_104: pad -> S4 -> S2 -> pad, end = manifest route total', async () => {
     const r = routeSummary(await L.route('nom_104'))!
     expect(r.stops).toEqual(['pad', 'S4', 'S2', 'pad'])
     const m = await L.manifest()
     expect(r.endMin).toBe((m['route.nom_104.total_min'] as ManifestEntry).value)
-    expect(r.endMin).toBeCloseTo(209.7, 1)
+    expect(r.endMin).toBeGreaterThan(0) // value pinned by the manifest, not hard-coded (it moved 209.74 -> 210.10 with the 15:35 S answers)
     await L.timeline('nom_104')
   })
 

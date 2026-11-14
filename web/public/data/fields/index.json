@@ -10,6 +10,285 @@
  "height": 1480,
  "res_m": 5.0,
  "fields": {
+  "con_104/o2_home": {
+   "file": "fields/con_104/o2_home.png",
+   "scale": 0.01,
+   "units": "L",
+   "scenario": "con_104"
+  },
+  "con_104/pointer": {
+   "file": "fields/con_104/pointer.png",
+   "scale": 1,
+   "units": "move",
+   "scenario": "con_104",
+   "bounds": [
+    137.319325,
+    -4.868455,
+    137.444675,
+    -4.743545
+   ],
+   "width": 2468,
+   "height": 2468,
+   "res_m": 3.0,
+   "stencil": [
+    [
+     -1,
+     0
+    ],
+    [
+     1,
+     0
+    ],
+    [
+     0,
+     -1
+    ],
+    [
+     0,
+     1
+    ],
+    [
+     -1,
+     -1
+    ],
+    [
+     -1,
+     1
+    ],
+    [
+     1,
+     -1
+    ],
+    [
+     1,
+     1
+    ],
+    [
+     -2,
+     -1
+    ],
+    [
+     -2,
+     1
+    ],
+    [
+     2,
+     -1
+    ],
+    [
+     2,
+     1
+    ],
+    [
+     -1,
+     -2
+    ],
+    [
+     -1,
+     2
+    ],
+    [
+     1,
+     -2
+    ],
+    [
+     1,
+     2
+    ]
+   ]
+  },
+  "con_104/t_home": {
+   "file": "fields/con_104/t_home.png",
+   "scale": 0.1,
+   "units": "min",
+   "scenario": "con_104"
+  },
+  "con_120/o2_home": {
+   "file": "fields/con_120/o2_home.png",
+   "scale": 0.01,
+   "units": "L",
+   "scenario": "con_120"
+  },
+  "con_120/pointer": {
+   "file": "fields/con_120/pointer.png",
+   "scale": 1,
+   "units": "move",
+   "scenario": "con_120",
+   "bounds": [
+    137.319325,
+    -4.868455,
+    137.444675,
+    -4.743545
+   ],
+   "width": 2468,
+   "height": 2468,
+   "res_m": 3.0,
+   "stencil": [
+    [
+     -1,
+     0
+    ],
+    [
+     1,
+     0
+    ],
+    [
+     0,
+     -1
+    ],
+    [
+     0,
+     1
+    ],
+    [
+     -1,
+     -1
+    ],
+    [
+     -1,
+     1
+    ],
+    [
+     1,
+     -1
+    ],
+    [
+     1,
+     1
+    ],
+    [
+     -2,
+     -1
+    ],
+    [
+     -2,
+     1
+    ],
+    [
+     2,
+     -1
+    ],
+    [
+     2,
+     1
+    ],
+    [
+     -1,
+     -2
+    ],
+    [
+     -1,
+     2
+    ],
+    [
+     1,
+     -2
+    ],
+    [
+     1,
+     2
+    ]
+   ]
+  },
+  "con_120/t_home": {
+   "file": "fields/con_120/t_home.png",
+   "scale": 0.1,
+   "units": "min",
+   "scenario": "con_120"
+  },
+  "con_80/o2_home": {
+   "file": "fields/con_80/o2_home.png",
+   "scale": 0.01,
+   "units": "L",
+   "scenario": "con_80"
+  },
+  "con_80/pointer": {
+   "file": "fields/con_80/pointer.png",
+   "scale": 1,
+   "units": "move",
+   "scenario": "con_80",
+   "bounds": [
+    137.319325,
+    -4.868455,
+    137.444675,
+    -4.743545
+   ],
+   "width": 2468,
+   "height": 2468,
+   "res_m": 3.0,
+   "stencil": [
+    [
+     -1,
+     0
+    ],
+    [
+     1,
+     0
+    ],
+    [
+     0,
+     -1
+    ],
+    [
+     0,
+     1
+    ],
+    [
+     -1,
+     -1
+    ],
+    [
+     -1,
+     1
+    ],
+    [
+     1,
+     -1
+    ],
+    [
+     1,
+     1
+    ],
+    [
+     -2,
+     -1
+    ],
+    [
+     -2,
+     1
+    ],
+    [
+     2,
+     -1
+    ],
+    [
+     2,
+     1
+    ],
+    [
+     -1,
+     -2
+    ],
+    [
+     -1,
+     2
+    ],
+    [
+     1,
+     -2
+    ],
+    [
+     1,
+     2
+    ]
+   ]
+  },
+  "con_80/t_home": {
+   "file": "fields/con_80/t_home.png",
+   "scale": 0.1,
+   "units": "min",
+   "scenario": "con_80"
+  },
   "fix_interval_high": {
    "file": "fields/fix_interval_high.png",
    "scale": 1,

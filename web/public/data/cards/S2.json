@@ -3,16 +3,16 @@
  "scenario": "nom_104",
  "on_route": true,
  "timeline": {
-  "arrive": 108.73,
-  "leave": 138.73,
-  "turn_back": 409.15
+  "arrive": 108.86,
+  "leave": 138.86,
+  "turn_back": 382.17
  },
  "margin_binding": "dose",
- "margin_min": 14.89,
+ "margin_min": 14.65,
  "contingency": "Partner down: haul home by cart from the access cell, 108 min (casualty 179 kg; haul parameters assumed); outside the 60-min partner line.",
  "drag_note": "One astronaut cannot drag a suited crewmate on Mars without a cart or sled: the pull needed exceeds boot grip even on flat ground.",
- "t_home_min": 71.01,
- "o2_home_L": 95.56,
+ "t_home_min": 71.25,
+ "o2_home_L": 95.89,
  "science": {
   "lon": 137.383058,
   "lat": -4.776687
@@ -21,8 +21,8 @@
   "lon": 137.382736,
   "lat": -4.777025,
   "dist_m": 27.6,
-  "t_home_min": 71.01,
-  "o2_home_L": 95.56,
+  "t_home_min": 71.25,
+  "o2_home_L": 95.89,
   "reason": null,
   "walk_in": {
    "dist_m": 27.6,
@@ -65,7 +65,7 @@
   "mid": null,
   "far": 3.183
  },
- "skyline_error_scope": "median |detected - predicted| skyline elevation per distance class on this card's Navcam frame (automatic sky detector; far class pending the D7 manual check)",
+ "skyline_error_scope": "median |detected - predicted| skyline elevation per distance class on this card's Navcam frame (automatic sky detector, no manual review, D7; far class not validated: the far rim is hidden by haze in north-facing frames)",
  "panorama_png": "cards/S2/panorama.png",
  "landmarks": [],
  "landmarks_note": "only 0 landmark(s) qualify (fewer than 3): the others are below the computed skyline and farther than 5 km",
@@ -74,7 +74,7 @@
   "WS3": {
    "source": "data/interim/horizon/public/cards/S2.json",
    "producer": "WS3 pipeline/horizon/cards.py",
-   "built_utc": "2026-11-14T13:31:04Z"
+   "built_utc": "2026-11-14T14:24:29Z"
   },
   "WS2": {
    "source": "data/interim/engine/public/cards/S2.timeline.json",

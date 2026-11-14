@@ -54,7 +54,7 @@
   "mid": null,
   "far": 4.236
  },
- "skyline_error_scope": "median |detected - predicted| skyline elevation per distance class on this card's Navcam frame (automatic sky detector; far class pending the D7 manual check)",
+ "skyline_error_scope": "median |detected - predicted| skyline elevation per distance class on this card's Navcam frame (automatic sky detector, no manual review, D7; far class not validated: the far rim is hidden by haze in north-facing frames)",
  "panorama_png": "cards/S1/panorama.png",
  "landmarks": [
   {
@@ -71,7 +71,7 @@
   "WS3": {
    "source": "data/interim/horizon/public/cards/S1.json",
    "producer": "WS3 pipeline/horizon/cards.py",
-   "built_utc": "2026-11-14T13:31:04Z"
+   "built_utc": "2026-11-14T14:24:28Z"
   },
   "WS2": {
    "source": "data/interim/engine/public/cards/S1.timeline.json",

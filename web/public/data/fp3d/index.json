@@ -163,6 +163,22 @@
     "filled_px": 0
    },
    {
+    "i": 20,
+    "j": 8,
+    "file": "fp3d/near/20_8.f32.gz",
+    "tex": "fp3d/near_tex/20_8.jpg",
+    "bounds": [
+     137.405837,
+     -4.782246,
+     137.410171,
+     -4.777927
+    ],
+    "bytes": 95143,
+    "tex_bytes": 17908,
+    "tex_nodata_px": 0,
+    "filled_px": 0
+   },
+   {
     "i": 15,
     "j": 9,
     "file": "fp3d/near/15_9.f32.gz",
@@ -729,7 +745,7 @@
   "ortho": "data/interim/terrain/ortho_lrgb_1m.tif",
   "route": "data/interim/engine/public/route_nom_104.geojson"
  },
- "download_bytes": 10847716,
+ "download_bytes": 10960767,
  "horizon_ring": "fp3d/horizon_ring.json",
  "skyline_check": {
   "source": "WS3 horizon engine, data/interim/horizon/horizons",
