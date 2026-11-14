@@ -41,6 +41,9 @@ if (IS_DEV) {
   })
 }
 
+// Live layer (D48, WS13): lazy, only in builds with VITE_LIVE=1; static builds contain no live code.
+if (import.meta.env.VITE_LIVE === '1') void import('./live').then((m) => m.mountLive(app.querySelector<HTMLElement>('.topbar')!))
+
 const outlet = app.querySelector<HTMLElement>('.outlet')!
 let cleanup: (() => void) | undefined
 let renderSeq = 0
