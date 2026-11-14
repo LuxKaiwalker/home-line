@@ -39,7 +39,8 @@ export interface Fp3dIndex {
   height_scale: number
   height: Fp3dHeight
   /** origin_xy_m: NW corner of the far grid (absent: the chunk grid's; the M0 dummy) */
-  far: { file: string; res_m: number; width: number; height: number; origin_xy_m?: [number, number]; bytes?: number }
+  /** tex: optional fp3d/far_tex.jpg over the whole far square (row 0 = north, column 0 = west) */
+  far: { file: string; res_m: number; width: number; height: number; origin_xy_m?: [number, number]; bytes?: number; tex?: string; tex_bytes?: number }
   horizon_ring?: string
   eye_height_m?: number
   download_bytes?: number
@@ -68,7 +69,8 @@ export function parseIndex(raw: unknown): Fp3dIndex {
   if (h.row_order !== 'north_to_south' && h.row_order !== 'south_to_north') fail('height.row_order')
   if (typeof h.offset_m !== 'number') fail('height.offset_m')
   const f = o.far
-  if (!f || typeof f.file !== 'string' || !(f.width > 0) || !(f.height > 0) || !(f.res_m > 0)) fail('far grid')
+  if (!f || typeof f.file !== 'string' || !(f.width > 0) || !(f.height > 0) || !(f.res_m > 0)) return fail('far grid')
+  if (f.tex !== undefined && typeof f.tex !== 'string') fail('far.tex')
   return o as Fp3dIndex
 }
 

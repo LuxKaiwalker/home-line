@@ -10,6 +10,7 @@ import { hasWebGL2 } from './fallback'
 import { Plan } from '../hud/plan'
 import { codecOf, decodeHeights, gunzipIfNeeded, parseIndex, type Fp3dIndex } from './format'
 import { FpsWatchdog } from './fps'
+import { WS7_PARTNER_KEY, partnerRowLabel, relabelPartnerRow } from './hudOverlay'
 import { lonLatToXY, parseEqc, xyToLonLat } from './geo'
 import { buildRoute, type TimelineEvent } from './path'
 import { HeightGrid, Terrain, cameraPosition, farMesh, gridIndex, nearChunkMesh, triInterp } from './terrain'
@@ -200,6 +201,32 @@ describe('terrain', () => {
       expect(uz * vx - ux * vz).toBeGreaterThan(0) // (u x v).y > 0
     }
     expect(gridIndex(4)).toBe(gridIndex(4)) // cached
+  })
+  it('maps far_tex.jpg over the whole far square (u east, v north, texel = position)', () => {
+    const { t } = planeTerrain(8, 3, 2)
+    const g = t.far
+    const m = farMesh(t, { x: 0, y: 100, h: 0 }, 1, true)
+    const n = m.vertsPerSide
+    expect(m.uvs).not.toBeNull()
+    expect(m.uvs!.length).toBe(n * n * 2)
+    // vertex (r, c) sits at the cell centre (west + (c + .5) res, north - (r + .5) res); u, v are
+    // the fractions of the far square (flipY image: v = 1 at the north edge = image row 0)
+    for (const [r, c] of [[0, 0], [0, n - 1], [n - 1, 0], [2, 3]]) {
+      const k = r * n + c
+      const x = m.positions[3 * k] + 0 // anchor x = 0
+      const y = 100 - m.positions[3 * k + 2]
+      expect(m.uvs![2 * k]).toBeCloseTo((x - g.west) / (g.cols * g.res), 6)
+      expect(m.uvs![2 * k + 1]).toBeCloseTo(1 - (g.north - y) / (g.rows * g.res), 6)
+    }
+    expect(m.uvs![0]).toBeCloseTo(0.5 / g.cols, 6)
+    expect(m.uvs![1]).toBeCloseTo(1 - 0.5 / g.rows, 6)
+  })
+  it('reads the optional far texture keys of the index', () => {
+    const idx = JSON.parse(readDummy('fp3d/index.json').toString()) as Fp3dIndex
+    expect(parseIndex(idx).far.tex ?? null).toBeNull() // the dummy has none: untextured far mesh
+    const withTex = parseIndex({ ...idx, far: { ...idx.far, tex: 'fp3d/far_tex.jpg', tex_bytes: 123 } })
+    expect(withTex.far.tex).toBe('fp3d/far_tex.jpg')
+    expect(() => parseIndex({ ...idx, far: { ...idx.far, tex: 5 as unknown as string } })).toThrow()
   })
   it('leaves far cells under loaded near chunks out of the far mesh', () => {
     const { t } = planeTerrain(8, 3, 2)
@@ -468,5 +495,34 @@ describe('fallback', () => {
         throw new Error('no canvas')
       }),
     ).toBe(false)
+  })
+})
+
+// ------------------------------------------------------------------- HUD over the 3D view
+describe('3D HUD labels (D19, D20)', () => {
+  const feat = (props: Record<string, unknown>) => ({ type: 'Feature' as const, properties: props, geometry: { type: 'Polygon' as const, coordinates: [] } })
+  const fc = (...p: Record<string, unknown>[]) => ({ type: 'FeatureCollection' as const, features: p.map(feat) })
+  it('labels the partner row "Partner line (cart haul, 60 min)" from the partner file (D20)', () => {
+    const cartDrag = fc({ case: 'cart', contour_min: 60 }, { case: 'drag', contour_min: 60 }, { case: 'cart', contour_min: 60 })
+    expect(partnerRowLabel(cartDrag)).toBe('Partner line (cart haul, 60 min)')
+    expect(partnerRowLabel(fc({ case: 'cart', contour_min: 45 }))).toBe('Partner line (cart haul, 45 min)')
+    // no cart line, two cart contours or no file: nothing invented, WS7's label stays
+    expect(partnerRowLabel(fc({ case: 'drag', contour_min: 60 }))).toBeNull()
+    expect(partnerRowLabel(fc({ case: 'cart', contour_min: 60 }, { case: 'cart', contour_min: 90 }))).toBeNull()
+    expect(partnerRowLabel(fc({ case: 'cart' }))).toBeNull()
+    expect(partnerRowLabel(null)).toBeNull()
+  })
+  it('relabels only WS7\'s partner key in the mounted panel', () => {
+    const keys = [{ textContent: 'NEXT STATION' }, { textContent: WS7_PARTNER_KEY }, { textContent: 'DOSE RATE' }]
+    const root = { querySelectorAll: (sel: string) => (sel === '.hl-hud-k' ? keys : []) }
+    expect(relabelPartnerRow(root, 'Partner line (cart haul, 60 min)')).toBe(true)
+    expect(keys.map((k) => k.textContent)).toEqual(['NEXT STATION', 'Partner line (cart haul, 60 min)', 'DOSE RATE'])
+    expect(relabelPartnerRow(root, 'x')).toBe(false) // WS7 key gone (already relabelled / renamed upstream)
+    expect(relabelPartnerRow(root, null)).toBe(false)
+  })
+  it('runs the HUD frame without WS9 navigation: F19 circle, no F21 ellipse or Odometry line (D19)', () => {
+    const src = readFileSync(resolve(__dirname, 'hudOverlay.ts'), 'utf8')
+    expect(src).toMatch(/hud\.hudFrame\([^)]*\), data\.ctx, null\)/)
+    expect(src).toMatch(/minimap: null/)
   })
 })
