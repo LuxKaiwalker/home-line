@@ -1,0 +1,2870 @@
+{
+  "clock.eva.end_utc": {
+    "commit": "1a98e90f274acdbc021c057bcc5f3b2b47a7de34",
+    "file": "conditions/clock.json",
+    "script": "pipeline/conditions/clockfile.py",
+    "units": null,
+    "utc": "2026-11-14T10:09:10Z",
+    "value": "2026-11-14T17:21:18Z"
+  },
+  "clock.eva.eva_min": {
+    "commit": "1a98e90f274acdbc021c057bcc5f3b2b47a7de34",
+    "file": "conditions/clock.json",
+    "script": "pipeline/conditions/clockfile.py",
+    "units": "min",
+    "utc": "2026-11-14T10:09:10Z",
+    "value": 390.0
+  },
+  "clock.eva.start_lmst": {
+    "commit": "1a98e90f274acdbc021c057bcc5f3b2b47a7de34",
+    "file": "conditions/clock.json",
+    "script": "pipeline/conditions/clockfile.py",
+    "units": null,
+    "utc": "2026-11-14T10:09:10Z",
+    "value": "09:00:00"
+  },
+  "clock.eva.start_utc": {
+    "commit": "1a98e90f274acdbc021c057bcc5f3b2b47a7de34",
+    "file": "conditions/clock.json",
+    "script": "pipeline/conditions/clockfile.py",
+    "units": null,
+    "utc": "2026-11-14T10:09:10Z",
+    "value": "2026-11-14T10:51:18Z"
+  },
+  "clock.eva.sun_series": {
+    "commit": "1a98e90f274acdbc021c057bcc5f3b2b47a7de34",
+    "file": "conditions/clock.json",
+    "script": "pipeline/conditions/clockfile.py",
+    "units": "min, h, deg, deg (sun_series_columns)",
+    "utc": "2026-11-14T10:09:10Z",
+    "value": [
+      [
+        0.0,
+        9.0,
+        74.789,
+        36.696
+      ],
+      [
+        5.0,
+        9.0811,
+        74.441,
+        37.865
+      ],
+      [
+        10.0,
+        9.16221,
+        74.077,
+        39.031
+      ],
+      [
+        15.0,
+        9.24331,
+        73.696,
+        40.196
+      ],
+      [
+        20.0,
+        9.32441,
+        73.296,
+        41.359
+      ],
+      [
+        25.0,
+        9.40552,
+        72.876,
+        42.519
+      ],
+      [
+        30.0,
+        9.48662,
+        72.435,
+        43.676
+      ],
+      [
+        35.0,
+        9.56773,
+        71.971,
+        44.83
+      ],
+      [
+        40.0,
+        9.64883,
+        71.482,
+        45.982
+      ],
+      [
+        45.0,
+        9.72993,
+        70.968,
+        47.13
+      ],
+      [
+        50.0,
+        9.81104,
+        70.424,
+        48.274
+      ],
+      [
+        55.0,
+        9.89214,
+        69.85,
+        49.414
+      ],
+      [
+        60.0,
+        9.97324,
+        69.242,
+        50.55
+      ],
+      [
+        65.0,
+        10.05435,
+        68.598,
+        51.681
+      ],
+      [
+        70.0,
+        10.13545,
+        67.915,
+        52.807
+      ],
+      [
+        75.0,
+        10.21656,
+        67.19,
+        53.928
+      ],
+      [
+        80.0,
+        10.29766,
+        66.417,
+        55.042
+      ],
+      [
+        85.0,
+        10.37876,
+        65.594,
+        56.15
+      ],
+      [
+        90.0,
+        10.45987,
+        64.716,
+        57.25
+      ],
+      [
+        95.0,
+        10.54097,
+        63.776,
+        58.342
+      ],
+      [
+        100.0,
+        10.62207,
+        62.769,
+        59.425
+      ],
+      [
+        105.0,
+        10.70318,
+        61.689,
+        60.497
+      ],
+      [
+        110.0,
+        10.78428,
+        60.528,
+        61.559
+      ],
+      [
+        115.0,
+        10.86538,
+        59.277,
+        62.607
+      ],
+      [
+        120.0,
+        10.94649,
+        57.927,
+        63.642
+      ],
+      [
+        125.0,
+        11.02759,
+        56.468,
+        64.661
+      ],
+      [
+        130.0,
+        11.1087,
+        54.887,
+        65.662
+      ],
+      [
+        135.0,
+        11.1898,
+        53.173,
+        66.643
+      ],
+      [
+        140.0,
+        11.2709,
+        51.309,
+        67.602
+      ],
+      [
+        145.0,
+        11.35201,
+        49.282,
+        68.535
+      ],
+      [
+        150.0,
+        11.43311,
+        47.074,
+        69.438
+      ],
+      [
+        155.0,
+        11.51421,
+        44.666,
+        70.308
+      ],
+      [
+        160.0,
+        11.59532,
+        42.041,
+        71.14
+      ],
+      [
+        165.0,
+        11.67642,
+        39.181,
+        71.929
+      ],
+      [
+        170.0,
+        11.75753,
+        36.068,
+        72.669
+      ],
+      [
+        175.0,
+        11.83863,
+        32.689,
+        73.354
+      ],
+      [
+        180.0,
+        11.91973,
+        29.033,
+        73.975
+      ],
+      [
+        185.0,
+        12.00084,
+        25.1,
+        74.527
+      ],
+      [
+        190.0,
+        12.08194,
+        20.898,
+        75.0
+      ],
+      [
+        195.0,
+        12.16304,
+        16.448,
+        75.388
+      ],
+      [
+        200.0,
+        12.24415,
+        11.785,
+        75.684
+      ],
+      [
+        205.0,
+        12.32525,
+        6.959,
+        75.881
+      ],
+      [
+        210.0,
+        12.40636,
+        2.033,
+        75.975
+      ],
+      [
+        215.0,
+        12.48746,
+        357.077,
+        75.965
+      ],
+      [
+        220.0,
+        12.56856,
+        352.165,
+        75.851
+      ],
+      [
+        225.0,
+        12.64967,
+        347.366,
+        75.634
+      ],
+      [
+        230.0,
+        12.73077,
+        342.74,
+        75.321
+      ],
+      [
+        235.0,
+        12.81187,
+        338.336,
+        74.916
+      ],
+      [
+        240.0,
+        12.89298,
+        334.184,
+        74.427
+      ],
+      [
+        245.0,
+        12.97408,
+        330.305,
+        73.861
+      ],
+      [
+        250.0,
+        13.05518,
+        326.703,
+        73.227
+      ],
+      [
+        255.0,
+        13.13629,
+        323.376,
+        72.531
+      ],
+      [
+        260.0,
+        13.21739,
+        320.312,
+        71.781
+      ],
+      [
+        265.0,
+        13.2985,
+        317.499,
+        70.983
+      ],
+      [
+        270.0,
+        13.3796,
+        314.917,
+        70.144
+      ],
+      [
+        275.0,
+        13.4607,
+        312.55,
+        69.267
+      ],
+      [
+        280.0,
+        13.54181,
+        310.378,
+        68.357
+      ],
+      [
+        285.0,
+        13.62291,
+        308.383,
+        67.42
+      ],
+      [
+        290.0,
+        13.70401,
+        306.55,
+        66.457
+      ],
+      [
+        295.0,
+        13.78512,
+        304.863,
+        65.472
+      ],
+      [
+        300.0,
+        13.86622,
+        303.307,
+        64.467
+      ],
+      [
+        305.0,
+        13.94733,
+        301.869,
+        63.445
+      ],
+      [
+        310.0,
+        14.02843,
+        300.54,
+        62.407
+      ],
+      [
+        315.0,
+        14.10953,
+        299.307,
+        61.356
+      ],
+      [
+        320.0,
+        14.19064,
+        298.162,
+        60.292
+      ],
+      [
+        325.0,
+        14.27174,
+        297.097,
+        59.218
+      ],
+      [
+        330.0,
+        14.35284,
+        296.104,
+        58.133
+      ],
+      [
+        335.0,
+        14.43395,
+        295.176,
+        57.04
+      ],
+      [
+        340.0,
+        14.51505,
+        294.309,
+        55.938
+      ],
+      [
+        345.0,
+        14.59615,
+        293.496,
+        54.829
+      ],
+      [
+        350.0,
+        14.67726,
+        292.734,
+        53.714
+      ],
+      [
+        355.0,
+        14.75836,
+        292.017,
+        52.592
+      ],
+      [
+        360.0,
+        14.83947,
+        291.342,
+        51.465
+      ],
+      [
+        365.0,
+        14.92057,
+        290.706,
+        50.333
+      ],
+      [
+        370.0,
+        15.00167,
+        290.105,
+        49.196
+      ],
+      [
+        375.0,
+        15.08278,
+        289.537,
+        48.055
+      ],
+      [
+        380.0,
+        15.16388,
+        289.0,
+        46.91
+      ],
+      [
+        385.0,
+        15.24498,
+        288.49,
+        45.762
+      ],
+      [
+        390.0,
+        15.32609,
+        288.007,
+        44.61
+      ]
+    ]
+  },
+  "clock.eva.sunset_flat_utc": {
+    "commit": "1a98e90f274acdbc021c057bcc5f3b2b47a7de34",
+    "file": "conditions/clock.json",
+    "script": "pipeline/conditions/clockfile.py",
+    "units": null,
+    "utc": "2026-11-14T10:09:10Z",
+    "value": "2026-11-14T20:29:56Z"
+  },
+  "clock.eva.t_dark_min": {
+    "commit": "1a98e90f274acdbc021c057bcc5f3b2b47a7de34",
+    "file": "conditions/clock.json",
+    "script": "pipeline/conditions/clockfile.py",
+    "units": "min",
+    "utc": "2026-11-14T10:09:10Z",
+    "value": 578.63
+  },
+  "clock.eva.t_dark_min_by_observer.v102_2164": {
+    "commit": "1a98e90f274acdbc021c057bcc5f3b2b47a7de34",
+    "file": "conditions/clock.json",
+    "script": "pipeline/conditions/clockfile.py",
+    "units": "min",
+    "utc": "2026-11-14T10:09:10Z",
+    "value": 547.49
+  },
+  "clock.eva.t_dark_min_by_observer.v102_2866": {
+    "commit": "1a98e90f274acdbc021c057bcc5f3b2b47a7de34",
+    "file": "conditions/clock.json",
+    "script": "pipeline/conditions/clockfile.py",
+    "units": "min",
+    "utc": "2026-11-14T10:09:10Z",
+    "value": 549.27
+  },
+  "clock.eva.t_dark_min_by_observer.v103_112": {
+    "commit": "1a98e90f274acdbc021c057bcc5f3b2b47a7de34",
+    "file": "conditions/clock.json",
+    "script": "pipeline/conditions/clockfile.py",
+    "units": "min",
+    "utc": "2026-11-14T10:09:10Z",
+    "value": 551.54
+  },
+  "clock.eva.t_dark_min_by_observer.v103_2442": {
+    "commit": "1a98e90f274acdbc021c057bcc5f3b2b47a7de34",
+    "file": "conditions/clock.json",
+    "script": "pipeline/conditions/clockfile.py",
+    "units": "min",
+    "utc": "2026-11-14T10:09:10Z",
+    "value": 542.93
+  },
+  "clock.eva.t_dark_min_by_observer.v103_400": {
+    "commit": "1a98e90f274acdbc021c057bcc5f3b2b47a7de34",
+    "file": "conditions/clock.json",
+    "script": "pipeline/conditions/clockfile.py",
+    "units": "min",
+    "utc": "2026-11-14T10:09:10Z",
+    "value": 551.38
+  },
+  "clock.eva.t_dark_min_by_observer.v103_994": {
+    "commit": "1a98e90f274acdbc021c057bcc5f3b2b47a7de34",
+    "file": "conditions/clock.json",
+    "script": "pipeline/conditions/clockfile.py",
+    "units": "min",
+    "utc": "2026-11-14T10:09:10Z",
+    "value": 549.01
+  },
+  "clock.eva.t_dark_min_by_observer.v104_652": {
+    "commit": "1a98e90f274acdbc021c057bcc5f3b2b47a7de34",
+    "file": "conditions/clock.json",
+    "script": "pipeline/conditions/clockfile.py",
+    "units": "min",
+    "utc": "2026-11-14T10:09:10Z",
+    "value": 551.88
+  },
+  "clock.eva.t_dark_min_by_observer.v105_1030": {
+    "commit": "1a98e90f274acdbc021c057bcc5f3b2b47a7de34",
+    "file": "conditions/clock.json",
+    "script": "pipeline/conditions/clockfile.py",
+    "units": "min",
+    "utc": "2026-11-14T10:09:10Z",
+    "value": 559.88
+  },
+  "clock.eva.t_dark_min_by_observer.v105_2222": {
+    "commit": "1a98e90f274acdbc021c057bcc5f3b2b47a7de34",
+    "file": "conditions/clock.json",
+    "script": "pipeline/conditions/clockfile.py",
+    "units": "min",
+    "utc": "2026-11-14T10:09:10Z",
+    "value": 564.02
+  },
+  "clock.eva.t_dark_min_by_observer.v105_2924": {
+    "commit": "1a98e90f274acdbc021c057bcc5f3b2b47a7de34",
+    "file": "conditions/clock.json",
+    "script": "pipeline/conditions/clockfile.py",
+    "units": "min",
+    "utc": "2026-11-14T10:09:10Z",
+    "value": 568.44
+  },
+  "clock.eva.t_dark_min_by_observer.v106_1374": {
+    "commit": "1a98e90f274acdbc021c057bcc5f3b2b47a7de34",
+    "file": "conditions/clock.json",
+    "script": "pipeline/conditions/clockfile.py",
+    "units": "min",
+    "utc": "2026-11-14T10:09:10Z",
+    "value": 569.9
+  },
+  "clock.eva.t_dark_min_by_observer.v106_2950": {
+    "commit": "1a98e90f274acdbc021c057bcc5f3b2b47a7de34",
+    "file": "conditions/clock.json",
+    "script": "pipeline/conditions/clockfile.py",
+    "units": "min",
+    "utc": "2026-11-14T10:09:10Z",
+    "value": 569.98
+  },
+  "clock.eva.t_dark_min_by_observer.v107_2484": {
+    "commit": "1a98e90f274acdbc021c057bcc5f3b2b47a7de34",
+    "file": "conditions/clock.json",
+    "script": "pipeline/conditions/clockfile.py",
+    "units": "min",
+    "utc": "2026-11-14T10:09:10Z",
+    "value": 570.1
+  },
+  "clock.eva.t_dark_min_by_observer.v107_384": {
+    "commit": "1a98e90f274acdbc021c057bcc5f3b2b47a7de34",
+    "file": "conditions/clock.json",
+    "script": "pipeline/conditions/clockfile.py",
+    "units": "min",
+    "utc": "2026-11-14T10:09:10Z",
+    "value": 570.03
+  },
+  "clock.eva.t_dark_min_by_observer.v108_2162": {
+    "commit": "1a98e90f274acdbc021c057bcc5f3b2b47a7de34",
+    "file": "conditions/clock.json",
+    "script": "pipeline/conditions/clockfile.py",
+    "units": "min",
+    "utc": "2026-11-14T10:09:10Z",
+    "value": 570.2
+  },
+  "clock.eva.t_dark_min_by_observer.v109_120": {
+    "commit": "1a98e90f274acdbc021c057bcc5f3b2b47a7de34",
+    "file": "conditions/clock.json",
+    "script": "pipeline/conditions/clockfile.py",
+    "units": "min",
+    "utc": "2026-11-14T10:09:10Z",
+    "value": 570.11
+  },
+  "clock.eva.t_dark_min_by_observer.v109_1290": {
+    "commit": "1a98e90f274acdbc021c057bcc5f3b2b47a7de34",
+    "file": "conditions/clock.json",
+    "script": "pipeline/conditions/clockfile.py",
+    "units": "min",
+    "utc": "2026-11-14T10:09:10Z",
+    "value": 570.09
+  },
+  "clock.eva.t_dark_min_by_observer.v109_1998": {
+    "commit": "1a98e90f274acdbc021c057bcc5f3b2b47a7de34",
+    "file": "conditions/clock.json",
+    "script": "pipeline/conditions/clockfile.py",
+    "units": "min",
+    "utc": "2026-11-14T10:09:10Z",
+    "value": 570.01
+  },
+  "clock.eva.t_dark_min_by_observer.v110_0": {
+    "commit": "1a98e90f274acdbc021c057bcc5f3b2b47a7de34",
+    "file": "conditions/clock.json",
+    "script": "pipeline/conditions/clockfile.py",
+    "units": "min",
+    "utc": "2026-11-14T10:09:10Z",
+    "value": 569.91
+  },
+  "clock.eva.t_dark_min_by_observer.v111_1548": {
+    "commit": "1a98e90f274acdbc021c057bcc5f3b2b47a7de34",
+    "file": "conditions/clock.json",
+    "script": "pipeline/conditions/clockfile.py",
+    "units": "min",
+    "utc": "2026-11-14T10:09:10Z",
+    "value": 567.86
+  },
+  "clock.eva.t_dark_min_by_observer.v111_2124": {
+    "commit": "1a98e90f274acdbc021c057bcc5f3b2b47a7de34",
+    "file": "conditions/clock.json",
+    "script": "pipeline/conditions/clockfile.py",
+    "units": "min",
+    "utc": "2026-11-14T10:09:10Z",
+    "value": 569.21
+  },
+  "clock.eva.t_dark_min_by_observer.v111_348": {
+    "commit": "1a98e90f274acdbc021c057bcc5f3b2b47a7de34",
+    "file": "conditions/clock.json",
+    "script": "pipeline/conditions/clockfile.py",
+    "units": "min",
+    "utc": "2026-11-14T10:09:10Z",
+    "value": 558.86
+  },
+  "clock.eva.t_dark_min_by_observer.v112_1326": {
+    "commit": "1a98e90f274acdbc021c057bcc5f3b2b47a7de34",
+    "file": "conditions/clock.json",
+    "script": "pipeline/conditions/clockfile.py",
+    "units": "min",
+    "utc": "2026-11-14T10:09:10Z",
+    "value": 569.7
+  },
+  "clock.eva.t_dark_min_by_observer.v112_228": {
+    "commit": "1a98e90f274acdbc021c057bcc5f3b2b47a7de34",
+    "file": "conditions/clock.json",
+    "script": "pipeline/conditions/clockfile.py",
+    "units": "min",
+    "utc": "2026-11-14T10:09:10Z",
+    "value": 569.69
+  },
+  "clock.eva.t_dark_min_by_observer.v112_2394": {
+    "commit": "1a98e90f274acdbc021c057bcc5f3b2b47a7de34",
+    "file": "conditions/clock.json",
+    "script": "pipeline/conditions/clockfile.py",
+    "units": "min",
+    "utc": "2026-11-14T10:09:10Z",
+    "value": 569.7
+  },
+  "clock.eva.t_dark_min_by_observer.v113_1440": {
+    "commit": "1a98e90f274acdbc021c057bcc5f3b2b47a7de34",
+    "file": "conditions/clock.json",
+    "script": "pipeline/conditions/clockfile.py",
+    "units": "min",
+    "utc": "2026-11-14T10:09:10Z",
+    "value": 544.94
+  },
+  "clock.eva.t_dark_min_by_observer.v113_2226": {
+    "commit": "1a98e90f274acdbc021c057bcc5f3b2b47a7de34",
+    "file": "conditions/clock.json",
+    "script": "pipeline/conditions/clockfile.py",
+    "units": "min",
+    "utc": "2026-11-14T10:09:10Z",
+    "value": 534.27
+  },
+  "clock.eva.t_dark_min_by_observer.v113_558": {
+    "commit": "1a98e90f274acdbc021c057bcc5f3b2b47a7de34",
+    "file": "conditions/clock.json",
+    "script": "pipeline/conditions/clockfile.py",
+    "units": "min",
+    "utc": "2026-11-14T10:09:10Z",
+    "value": 569.76
+  },
+  "clock.eva.t_dark_min_by_observer.v114_1560": {
+    "commit": "1a98e90f274acdbc021c057bcc5f3b2b47a7de34",
+    "file": "conditions/clock.json",
+    "script": "pipeline/conditions/clockfile.py",
+    "units": "min",
+    "utc": "2026-11-14T10:09:10Z",
+    "value": 563.15
+  },
+  "clock.eva.t_dark_min_by_observer.v114_366": {
+    "commit": "1a98e90f274acdbc021c057bcc5f3b2b47a7de34",
+    "file": "conditions/clock.json",
+    "script": "pipeline/conditions/clockfile.py",
+    "units": "min",
+    "utc": "2026-11-14T10:09:10Z",
+    "value": 530.93
+  },
+  "clock.eva.t_dark_min_by_observer.v115_0": {
+    "commit": "1a98e90f274acdbc021c057bcc5f3b2b47a7de34",
+    "file": "conditions/clock.json",
+    "script": "pipeline/conditions/clockfile.py",
+    "units": "min",
+    "utc": "2026-11-14T10:09:10Z",
+    "value": 548.15
+  },
+  "clock.eva.t_dark_min_by_observer.v115_1770": {
+    "commit": "1a98e90f274acdbc021c057bcc5f3b2b47a7de34",
+    "file": "conditions/clock.json",
+    "script": "pipeline/conditions/clockfile.py",
+    "units": "min",
+    "utc": "2026-11-14T10:09:10Z",
+    "value": 559.57
+  },
+  "clock.eva.t_dark_min_by_observer.v115_390": {
+    "commit": "1a98e90f274acdbc021c057bcc5f3b2b47a7de34",
+    "file": "conditions/clock.json",
+    "script": "pipeline/conditions/clockfile.py",
+    "units": "min",
+    "utc": "2026-11-14T10:09:10Z",
+    "value": 543.91
+  },
+  "clock.eva.t_dark_min_by_observer.v115_816": {
+    "commit": "1a98e90f274acdbc021c057bcc5f3b2b47a7de34",
+    "file": "conditions/clock.json",
+    "script": "pipeline/conditions/clockfile.py",
+    "units": "min",
+    "utc": "2026-11-14T10:09:10Z",
+    "value": 549.66
+  },
+  "clock.eva.t_dark_min_by_observer.v116_0": {
+    "commit": "1a98e90f274acdbc021c057bcc5f3b2b47a7de34",
+    "file": "conditions/clock.json",
+    "script": "pipeline/conditions/clockfile.py",
+    "units": "min",
+    "utc": "2026-11-14T10:09:10Z",
+    "value": 568.03
+  },
+  "clock.eva.t_dark_min_by_observer.v116_1596": {
+    "commit": "1a98e90f274acdbc021c057bcc5f3b2b47a7de34",
+    "file": "conditions/clock.json",
+    "script": "pipeline/conditions/clockfile.py",
+    "units": "min",
+    "utc": "2026-11-14T10:09:10Z",
+    "value": 565.98
+  },
+  "clock.eva.t_dark_min_by_observer.v116_2562": {
+    "commit": "1a98e90f274acdbc021c057bcc5f3b2b47a7de34",
+    "file": "conditions/clock.json",
+    "script": "pipeline/conditions/clockfile.py",
+    "units": "min",
+    "utc": "2026-11-14T10:09:10Z",
+    "value": 570.58
+  },
+  "clock.eva.t_dark_min_by_observer.v116_870": {
+    "commit": "1a98e90f274acdbc021c057bcc5f3b2b47a7de34",
+    "file": "conditions/clock.json",
+    "script": "pipeline/conditions/clockfile.py",
+    "units": "min",
+    "utc": "2026-11-14T10:09:10Z",
+    "value": 564.75
+  },
+  "clock.eva.t_dark_min_by_observer.v117_1890": {
+    "commit": "1a98e90f274acdbc021c057bcc5f3b2b47a7de34",
+    "file": "conditions/clock.json",
+    "script": "pipeline/conditions/clockfile.py",
+    "units": "min",
+    "utc": "2026-11-14T10:09:10Z",
+    "value": 566.71
+  },
+  "clock.eva.t_dark_min_by_observer.v117_492": {
+    "commit": "1a98e90f274acdbc021c057bcc5f3b2b47a7de34",
+    "file": "conditions/clock.json",
+    "script": "pipeline/conditions/clockfile.py",
+    "units": "min",
+    "utc": "2026-11-14T10:09:10Z",
+    "value": 570.62
+  },
+  "clock.eva.t_dark_min_by_observer.v118_0": {
+    "commit": "1a98e90f274acdbc021c057bcc5f3b2b47a7de34",
+    "file": "conditions/clock.json",
+    "script": "pipeline/conditions/clockfile.py",
+    "units": "min",
+    "utc": "2026-11-14T10:09:10Z",
+    "value": 548.57
+  },
+  "clock.eva.t_dark_min_by_observer.v118_2028": {
+    "commit": "1a98e90f274acdbc021c057bcc5f3b2b47a7de34",
+    "file": "conditions/clock.json",
+    "script": "pipeline/conditions/clockfile.py",
+    "units": "min",
+    "utc": "2026-11-14T10:09:10Z",
+    "value": 549.61
+  },
+  "clock.eva.t_dark_min_by_observer.v120_1264": {
+    "commit": "1a98e90f274acdbc021c057bcc5f3b2b47a7de34",
+    "file": "conditions/clock.json",
+    "script": "pipeline/conditions/clockfile.py",
+    "units": "min",
+    "utc": "2026-11-14T10:09:10Z",
+    "value": 551.7
+  },
+  "clock.eva.t_dark_min_by_observer.v120_2366": {
+    "commit": "1a98e90f274acdbc021c057bcc5f3b2b47a7de34",
+    "file": "conditions/clock.json",
+    "script": "pipeline/conditions/clockfile.py",
+    "units": "min",
+    "utc": "2026-11-14T10:09:10Z",
+    "value": 549.96
+  },
+  "clock.eva.t_dark_min_by_observer.v121_0": {
+    "commit": "1a98e90f274acdbc021c057bcc5f3b2b47a7de34",
+    "file": "conditions/clock.json",
+    "script": "pipeline/conditions/clockfile.py",
+    "units": "min",
+    "utc": "2026-11-14T10:09:10Z",
+    "value": 540.31
+  },
+  "clock.eva.t_dark_min_by_observer.v121_1446": {
+    "commit": "1a98e90f274acdbc021c057bcc5f3b2b47a7de34",
+    "file": "conditions/clock.json",
+    "script": "pipeline/conditions/clockfile.py",
+    "units": "min",
+    "utc": "2026-11-14T10:09:10Z",
+    "value": 523.73
+  },
+  "clock.eva.t_dark_min_by_observer.v121_2490": {
+    "commit": "1a98e90f274acdbc021c057bcc5f3b2b47a7de34",
+    "file": "conditions/clock.json",
+    "script": "pipeline/conditions/clockfile.py",
+    "units": "min",
+    "utc": "2026-11-14T10:09:10Z",
+    "value": 553.72
+  },
+  "clock.eva.t_dark_min_by_observer.v122_1716": {
+    "commit": "1a98e90f274acdbc021c057bcc5f3b2b47a7de34",
+    "file": "conditions/clock.json",
+    "script": "pipeline/conditions/clockfile.py",
+    "units": "min",
+    "utc": "2026-11-14T10:09:10Z",
+    "value": 571.37
+  },
+  "clock.eva.t_dark_min_by_observer.v122_2352": {
+    "commit": "1a98e90f274acdbc021c057bcc5f3b2b47a7de34",
+    "file": "conditions/clock.json",
+    "script": "pipeline/conditions/clockfile.py",
+    "units": "min",
+    "utc": "2026-11-14T10:09:10Z",
+    "value": 571.42
+  },
+  "clock.eva.t_dark_min_by_observer.v122_690": {
+    "commit": "1a98e90f274acdbc021c057bcc5f3b2b47a7de34",
+    "file": "conditions/clock.json",
+    "script": "pipeline/conditions/clockfile.py",
+    "units": "min",
+    "utc": "2026-11-14T10:09:10Z",
+    "value": 571.31
+  },
+  "clock.eva.t_dark_min_by_observer.v123_2328": {
+    "commit": "1a98e90f274acdbc021c057bcc5f3b2b47a7de34",
+    "file": "conditions/clock.json",
+    "script": "pipeline/conditions/clockfile.py",
+    "units": "min",
+    "utc": "2026-11-14T10:09:10Z",
+    "value": 571.49
+  },
+  "clock.eva.t_dark_min_by_observer.v123_246": {
+    "commit": "1a98e90f274acdbc021c057bcc5f3b2b47a7de34",
+    "file": "conditions/clock.json",
+    "script": "pipeline/conditions/clockfile.py",
+    "units": "min",
+    "utc": "2026-11-14T10:09:10Z",
+    "value": 569.16
+  },
+  "clock.h0.light_time_min": {
+    "commit": "1a98e90f274acdbc021c057bcc5f3b2b47a7de34",
+    "file": "conditions/clock.json",
+    "script": "pipeline/conditions/clockfile.py",
+    "units": "min",
+    "utc": "2026-11-14T10:09:10Z",
+    "value": 10.9908
+  },
+  "clock.h0.lmst": {
+    "commit": "1a98e90f274acdbc021c057bcc5f3b2b47a7de34",
+    "file": "conditions/clock.json",
+    "script": "pipeline/conditions/clockfile.py",
+    "units": null,
+    "utc": "2026-11-14T10:09:10Z",
+    "value": "06:13:17"
+  },
+  "clock.h0.ls_deg": {
+    "commit": "1a98e90f274acdbc021c057bcc5f3b2b47a7de34",
+    "file": "conditions/clock.json",
+    "script": "pipeline/conditions/clockfile.py",
+    "units": "deg",
+    "utc": "2026-11-14T10:09:10Z",
+    "value": 21.7306
+  },
+  "clock.h0.ltst": {
+    "commit": "1a98e90f274acdbc021c057bcc5f3b2b47a7de34",
+    "file": "conditions/clock.json",
+    "script": "pipeline/conditions/clockfile.py",
+    "units": null,
+    "utc": "2026-11-14T10:09:10Z",
+    "value": "05:46:48"
+  },
+  "clock.h0.mars_year": {
+    "commit": "1a98e90f274acdbc021c057bcc5f3b2b47a7de34",
+    "file": "conditions/clock.json",
+    "script": "pipeline/conditions/clockfile.py",
+    "units": "MY",
+    "utc": "2026-11-14T10:09:10Z",
+    "value": 39
+  },
+  "clock.h0.msl_sol": {
+    "commit": "1a98e90f274acdbc021c057bcc5f3b2b47a7de34",
+    "file": "conditions/clock.json",
+    "script": "pipeline/conditions/clockfile.py",
+    "units": "sol",
+    "utc": "2026-11-14T10:09:10Z",
+    "value": 5074
+  },
+  "clock.h0.sun_azimuth_deg": {
+    "commit": "1a98e90f274acdbc021c057bcc5f3b2b47a7de34",
+    "file": "conditions/clock.json",
+    "script": "pipeline/conditions/clockfile.py",
+    "units": "deg",
+    "utc": "2026-11-14T10:09:10Z",
+    "value": 81.127
+  },
+  "clock.h0.sun_elevation_deg": {
+    "commit": "1a98e90f274acdbc021c057bcc5f3b2b47a7de34",
+    "file": "conditions/clock.json",
+    "script": "pipeline/conditions/clockfile.py",
+    "units": "deg",
+    "utc": "2026-11-14T10:09:10Z",
+    "value": -4.01
+  },
+  "clock.h0.utc": {
+    "commit": "1a98e90f274acdbc021c057bcc5f3b2b47a7de34",
+    "file": "conditions/clock.json",
+    "script": "pipeline/conditions/clockfile.py",
+    "units": null,
+    "utc": "2026-11-14T10:09:10Z",
+    "value": "2026-11-14T08:00:00Z"
+  },
+  "clock.light_time.rows.0.light_time_min": {
+    "commit": "1a98e90f274acdbc021c057bcc5f3b2b47a7de34",
+    "file": "conditions/clock.json",
+    "script": "pipeline/conditions/clockfile.py",
+    "units": "min",
+    "utc": "2026-11-14T10:09:10Z",
+    "value": 11.01438304
+  },
+  "clock.light_time.rows.1.light_time_min": {
+    "commit": "1a98e90f274acdbc021c057bcc5f3b2b47a7de34",
+    "file": "conditions/clock.json",
+    "script": "pipeline/conditions/clockfile.py",
+    "units": "min",
+    "utc": "2026-11-14T10:09:10Z",
+    "value": 11.01143856
+  },
+  "clock.light_time.rows.10.light_time_min": {
+    "commit": "1a98e90f274acdbc021c057bcc5f3b2b47a7de34",
+    "file": "conditions/clock.json",
+    "script": "pipeline/conditions/clockfile.py",
+    "units": "min",
+    "utc": "2026-11-14T10:09:10Z",
+    "value": 10.98492366
+  },
+  "clock.light_time.rows.11.light_time_min": {
+    "commit": "1a98e90f274acdbc021c057bcc5f3b2b47a7de34",
+    "file": "conditions/clock.json",
+    "script": "pipeline/conditions/clockfile.py",
+    "units": "min",
+    "utc": "2026-11-14T10:09:10Z",
+    "value": 10.98197596
+  },
+  "clock.light_time.rows.12.light_time_min": {
+    "commit": "1a98e90f274acdbc021c057bcc5f3b2b47a7de34",
+    "file": "conditions/clock.json",
+    "script": "pipeline/conditions/clockfile.py",
+    "units": "min",
+    "utc": "2026-11-14T10:09:10Z",
+    "value": 10.97902794
+  },
+  "clock.light_time.rows.13.light_time_min": {
+    "commit": "1a98e90f274acdbc021c057bcc5f3b2b47a7de34",
+    "file": "conditions/clock.json",
+    "script": "pipeline/conditions/clockfile.py",
+    "units": "min",
+    "utc": "2026-11-14T10:09:10Z",
+    "value": 10.9760796
+  },
+  "clock.light_time.rows.14.light_time_min": {
+    "commit": "1a98e90f274acdbc021c057bcc5f3b2b47a7de34",
+    "file": "conditions/clock.json",
+    "script": "pipeline/conditions/clockfile.py",
+    "units": "min",
+    "utc": "2026-11-14T10:09:10Z",
+    "value": 10.97313094
+  },
+  "clock.light_time.rows.15.light_time_min": {
+    "commit": "1a98e90f274acdbc021c057bcc5f3b2b47a7de34",
+    "file": "conditions/clock.json",
+    "script": "pipeline/conditions/clockfile.py",
+    "units": "min",
+    "utc": "2026-11-14T10:09:10Z",
+    "value": 10.97018197
+  },
+  "clock.light_time.rows.16.light_time_min": {
+    "commit": "1a98e90f274acdbc021c057bcc5f3b2b47a7de34",
+    "file": "conditions/clock.json",
+    "script": "pipeline/conditions/clockfile.py",
+    "units": "min",
+    "utc": "2026-11-14T10:09:10Z",
+    "value": 10.96723268
+  },
+  "clock.light_time.rows.17.light_time_min": {
+    "commit": "1a98e90f274acdbc021c057bcc5f3b2b47a7de34",
+    "file": "conditions/clock.json",
+    "script": "pipeline/conditions/clockfile.py",
+    "units": "min",
+    "utc": "2026-11-14T10:09:10Z",
+    "value": 10.96428308
+  },
+  "clock.light_time.rows.18.light_time_min": {
+    "commit": "1a98e90f274acdbc021c057bcc5f3b2b47a7de34",
+    "file": "conditions/clock.json",
+    "script": "pipeline/conditions/clockfile.py",
+    "units": "min",
+    "utc": "2026-11-14T10:09:10Z",
+    "value": 10.96133316
+  },
+  "clock.light_time.rows.19.light_time_min": {
+    "commit": "1a98e90f274acdbc021c057bcc5f3b2b47a7de34",
+    "file": "conditions/clock.json",
+    "script": "pipeline/conditions/clockfile.py",
+    "units": "min",
+    "utc": "2026-11-14T10:09:10Z",
+    "value": 10.95838293
+  },
+  "clock.light_time.rows.2.light_time_min": {
+    "commit": "1a98e90f274acdbc021c057bcc5f3b2b47a7de34",
+    "file": "conditions/clock.json",
+    "script": "pipeline/conditions/clockfile.py",
+    "units": "min",
+    "utc": "2026-11-14T10:09:10Z",
+    "value": 11.00849375
+  },
+  "clock.light_time.rows.20.light_time_min": {
+    "commit": "1a98e90f274acdbc021c057bcc5f3b2b47a7de34",
+    "file": "conditions/clock.json",
+    "script": "pipeline/conditions/clockfile.py",
+    "units": "min",
+    "utc": "2026-11-14T10:09:10Z",
+    "value": 10.95543238
+  },
+  "clock.light_time.rows.21.light_time_min": {
+    "commit": "1a98e90f274acdbc021c057bcc5f3b2b47a7de34",
+    "file": "conditions/clock.json",
+    "script": "pipeline/conditions/clockfile.py",
+    "units": "min",
+    "utc": "2026-11-14T10:09:10Z",
+    "value": 10.95248152
+  },
+  "clock.light_time.rows.22.light_time_min": {
+    "commit": "1a98e90f274acdbc021c057bcc5f3b2b47a7de34",
+    "file": "conditions/clock.json",
+    "script": "pipeline/conditions/clockfile.py",
+    "units": "min",
+    "utc": "2026-11-14T10:09:10Z",
+    "value": 10.94953036
+  },
+  "clock.light_time.rows.23.light_time_min": {
+    "commit": "1a98e90f274acdbc021c057bcc5f3b2b47a7de34",
+    "file": "conditions/clock.json",
+    "script": "pipeline/conditions/clockfile.py",
+    "units": "min",
+    "utc": "2026-11-14T10:09:10Z",
+    "value": 10.94657888
+  },
+  "clock.light_time.rows.24.light_time_min": {
+    "commit": "1a98e90f274acdbc021c057bcc5f3b2b47a7de34",
+    "file": "conditions/clock.json",
+    "script": "pipeline/conditions/clockfile.py",
+    "units": "min",
+    "utc": "2026-11-14T10:09:10Z",
+    "value": 10.94362708
+  },
+  "clock.light_time.rows.25.light_time_min": {
+    "commit": "1a98e90f274acdbc021c057bcc5f3b2b47a7de34",
+    "file": "conditions/clock.json",
+    "script": "pipeline/conditions/clockfile.py",
+    "units": "min",
+    "utc": "2026-11-14T10:09:10Z",
+    "value": 10.94067498
+  },
+  "clock.light_time.rows.26.light_time_min": {
+    "commit": "1a98e90f274acdbc021c057bcc5f3b2b47a7de34",
+    "file": "conditions/clock.json",
+    "script": "pipeline/conditions/clockfile.py",
+    "units": "min",
+    "utc": "2026-11-14T10:09:10Z",
+    "value": 10.93772257
+  },
+  "clock.light_time.rows.27.light_time_min": {
+    "commit": "1a98e90f274acdbc021c057bcc5f3b2b47a7de34",
+    "file": "conditions/clock.json",
+    "script": "pipeline/conditions/clockfile.py",
+    "units": "min",
+    "utc": "2026-11-14T10:09:10Z",
+    "value": 10.93476986
+  },
+  "clock.light_time.rows.28.light_time_min": {
+    "commit": "1a98e90f274acdbc021c057bcc5f3b2b47a7de34",
+    "file": "conditions/clock.json",
+    "script": "pipeline/conditions/clockfile.py",
+    "units": "min",
+    "utc": "2026-11-14T10:09:10Z",
+    "value": 10.93181683
+  },
+  "clock.light_time.rows.29.light_time_min": {
+    "commit": "1a98e90f274acdbc021c057bcc5f3b2b47a7de34",
+    "file": "conditions/clock.json",
+    "script": "pipeline/conditions/clockfile.py",
+    "units": "min",
+    "utc": "2026-11-14T10:09:10Z",
+    "value": 10.9288635
+  },
+  "clock.light_time.rows.3.light_time_min": {
+    "commit": "1a98e90f274acdbc021c057bcc5f3b2b47a7de34",
+    "file": "conditions/clock.json",
+    "script": "pipeline/conditions/clockfile.py",
+    "units": "min",
+    "utc": "2026-11-14T10:09:10Z",
+    "value": 11.00554862
+  },
+  "clock.light_time.rows.30.light_time_min": {
+    "commit": "1a98e90f274acdbc021c057bcc5f3b2b47a7de34",
+    "file": "conditions/clock.json",
+    "script": "pipeline/conditions/clockfile.py",
+    "units": "min",
+    "utc": "2026-11-14T10:09:10Z",
+    "value": 10.92590986
+  },
+  "clock.light_time.rows.31.light_time_min": {
+    "commit": "1a98e90f274acdbc021c057bcc5f3b2b47a7de34",
+    "file": "conditions/clock.json",
+    "script": "pipeline/conditions/clockfile.py",
+    "units": "min",
+    "utc": "2026-11-14T10:09:10Z",
+    "value": 10.92295591
+  },
+  "clock.light_time.rows.32.light_time_min": {
+    "commit": "1a98e90f274acdbc021c057bcc5f3b2b47a7de34",
+    "file": "conditions/clock.json",
+    "script": "pipeline/conditions/clockfile.py",
+    "units": "min",
+    "utc": "2026-11-14T10:09:10Z",
+    "value": 10.92000166
+  },
+  "clock.light_time.rows.33.light_time_min": {
+    "commit": "1a98e90f274acdbc021c057bcc5f3b2b47a7de34",
+    "file": "conditions/clock.json",
+    "script": "pipeline/conditions/clockfile.py",
+    "units": "min",
+    "utc": "2026-11-14T10:09:10Z",
+    "value": 10.91704711
+  },
+  "clock.light_time.rows.34.light_time_min": {
+    "commit": "1a98e90f274acdbc021c057bcc5f3b2b47a7de34",
+    "file": "conditions/clock.json",
+    "script": "pipeline/conditions/clockfile.py",
+    "units": "min",
+    "utc": "2026-11-14T10:09:10Z",
+    "value": 10.91409225
+  },
+  "clock.light_time.rows.35.light_time_min": {
+    "commit": "1a98e90f274acdbc021c057bcc5f3b2b47a7de34",
+    "file": "conditions/clock.json",
+    "script": "pipeline/conditions/clockfile.py",
+    "units": "min",
+    "utc": "2026-11-14T10:09:10Z",
+    "value": 10.91113709
+  },
+  "clock.light_time.rows.36.light_time_min": {
+    "commit": "1a98e90f274acdbc021c057bcc5f3b2b47a7de34",
+    "file": "conditions/clock.json",
+    "script": "pipeline/conditions/clockfile.py",
+    "units": "min",
+    "utc": "2026-11-14T10:09:10Z",
+    "value": 10.90818162
+  },
+  "clock.light_time.rows.37.light_time_min": {
+    "commit": "1a98e90f274acdbc021c057bcc5f3b2b47a7de34",
+    "file": "conditions/clock.json",
+    "script": "pipeline/conditions/clockfile.py",
+    "units": "min",
+    "utc": "2026-11-14T10:09:10Z",
+    "value": 10.90522585
+  },
+  "clock.light_time.rows.38.light_time_min": {
+    "commit": "1a98e90f274acdbc021c057bcc5f3b2b47a7de34",
+    "file": "conditions/clock.json",
+    "script": "pipeline/conditions/clockfile.py",
+    "units": "min",
+    "utc": "2026-11-14T10:09:10Z",
+    "value": 10.90226979
+  },
+  "clock.light_time.rows.39.light_time_min": {
+    "commit": "1a98e90f274acdbc021c057bcc5f3b2b47a7de34",
+    "file": "conditions/clock.json",
+    "script": "pipeline/conditions/clockfile.py",
+    "units": "min",
+    "utc": "2026-11-14T10:09:10Z",
+    "value": 10.89931342
+  },
+  "clock.light_time.rows.4.light_time_min": {
+    "commit": "1a98e90f274acdbc021c057bcc5f3b2b47a7de34",
+    "file": "conditions/clock.json",
+    "script": "pipeline/conditions/clockfile.py",
+    "units": "min",
+    "utc": "2026-11-14T10:09:10Z",
+    "value": 11.00260316
+  },
+  "clock.light_time.rows.40.light_time_min": {
+    "commit": "1a98e90f274acdbc021c057bcc5f3b2b47a7de34",
+    "file": "conditions/clock.json",
+    "script": "pipeline/conditions/clockfile.py",
+    "units": "min",
+    "utc": "2026-11-14T10:09:10Z",
+    "value": 10.89635675
+  },
+  "clock.light_time.rows.41.light_time_min": {
+    "commit": "1a98e90f274acdbc021c057bcc5f3b2b47a7de34",
+    "file": "conditions/clock.json",
+    "script": "pipeline/conditions/clockfile.py",
+    "units": "min",
+    "utc": "2026-11-14T10:09:10Z",
+    "value": 10.89339978
+  },
+  "clock.light_time.rows.42.light_time_min": {
+    "commit": "1a98e90f274acdbc021c057bcc5f3b2b47a7de34",
+    "file": "conditions/clock.json",
+    "script": "pipeline/conditions/clockfile.py",
+    "units": "min",
+    "utc": "2026-11-14T10:09:10Z",
+    "value": 10.89044252
+  },
+  "clock.light_time.rows.43.light_time_min": {
+    "commit": "1a98e90f274acdbc021c057bcc5f3b2b47a7de34",
+    "file": "conditions/clock.json",
+    "script": "pipeline/conditions/clockfile.py",
+    "units": "min",
+    "utc": "2026-11-14T10:09:10Z",
+    "value": 10.88748495
+  },
+  "clock.light_time.rows.44.light_time_min": {
+    "commit": "1a98e90f274acdbc021c057bcc5f3b2b47a7de34",
+    "file": "conditions/clock.json",
+    "script": "pipeline/conditions/clockfile.py",
+    "units": "min",
+    "utc": "2026-11-14T10:09:10Z",
+    "value": 10.88452709
+  },
+  "clock.light_time.rows.45.light_time_min": {
+    "commit": "1a98e90f274acdbc021c057bcc5f3b2b47a7de34",
+    "file": "conditions/clock.json",
+    "script": "pipeline/conditions/clockfile.py",
+    "units": "min",
+    "utc": "2026-11-14T10:09:10Z",
+    "value": 10.88156893
+  },
+  "clock.light_time.rows.46.light_time_min": {
+    "commit": "1a98e90f274acdbc021c057bcc5f3b2b47a7de34",
+    "file": "conditions/clock.json",
+    "script": "pipeline/conditions/clockfile.py",
+    "units": "min",
+    "utc": "2026-11-14T10:09:10Z",
+    "value": 10.87861048
+  },
+  "clock.light_time.rows.47.light_time_min": {
+    "commit": "1a98e90f274acdbc021c057bcc5f3b2b47a7de34",
+    "file": "conditions/clock.json",
+    "script": "pipeline/conditions/clockfile.py",
+    "units": "min",
+    "utc": "2026-11-14T10:09:10Z",
+    "value": 10.87565173
+  },
+  "clock.light_time.rows.48.light_time_min": {
+    "commit": "1a98e90f274acdbc021c057bcc5f3b2b47a7de34",
+    "file": "conditions/clock.json",
+    "script": "pipeline/conditions/clockfile.py",
+    "units": "min",
+    "utc": "2026-11-14T10:09:10Z",
+    "value": 10.87269269
+  },
+  "clock.light_time.rows.5.light_time_min": {
+    "commit": "1a98e90f274acdbc021c057bcc5f3b2b47a7de34",
+    "file": "conditions/clock.json",
+    "script": "pipeline/conditions/clockfile.py",
+    "units": "min",
+    "utc": "2026-11-14T10:09:10Z",
+    "value": 10.99965738
+  },
+  "clock.light_time.rows.6.light_time_min": {
+    "commit": "1a98e90f274acdbc021c057bcc5f3b2b47a7de34",
+    "file": "conditions/clock.json",
+    "script": "pipeline/conditions/clockfile.py",
+    "units": "min",
+    "utc": "2026-11-14T10:09:10Z",
+    "value": 10.99671128
+  },
+  "clock.light_time.rows.7.light_time_min": {
+    "commit": "1a98e90f274acdbc021c057bcc5f3b2b47a7de34",
+    "file": "conditions/clock.json",
+    "script": "pipeline/conditions/clockfile.py",
+    "units": "min",
+    "utc": "2026-11-14T10:09:10Z",
+    "value": 10.99376486
+  },
+  "clock.light_time.rows.8.light_time_min": {
+    "commit": "1a98e90f274acdbc021c057bcc5f3b2b47a7de34",
+    "file": "conditions/clock.json",
+    "script": "pipeline/conditions/clockfile.py",
+    "units": "min",
+    "utc": "2026-11-14T10:09:10Z",
+    "value": 10.99081811
+  },
+  "clock.light_time.rows.9.light_time_min": {
+    "commit": "1a98e90f274acdbc021c057bcc5f3b2b47a7de34",
+    "file": "conditions/clock.json",
+    "script": "pipeline/conditions/clockfile.py",
+    "units": "min",
+    "utc": "2026-11-14T10:09:10Z",
+    "value": 10.98787105
+  },
+  "clock.sols.0.ls_deg_at_noon": {
+    "commit": "1a98e90f274acdbc021c057bcc5f3b2b47a7de34",
+    "file": "conditions/clock.json",
+    "script": "pipeline/conditions/clockfile.py",
+    "units": "deg",
+    "utc": "2026-11-14T10:09:10Z",
+    "value": 21.3651
+  },
+  "clock.sols.0.msl_sol": {
+    "commit": "1a98e90f274acdbc021c057bcc5f3b2b47a7de34",
+    "file": "conditions/clock.json",
+    "script": "pipeline/conditions/clockfile.py",
+    "units": "sol",
+    "utc": "2026-11-14T10:09:10Z",
+    "value": 5073
+  },
+  "clock.sols.0.sunrise_lmst": {
+    "commit": "1a98e90f274acdbc021c057bcc5f3b2b47a7de34",
+    "file": "conditions/clock.json",
+    "script": "pipeline/conditions/clockfile.py",
+    "units": null,
+    "utc": "2026-11-14T10:09:10Z",
+    "value": "06:29:53"
+  },
+  "clock.sols.0.sunrise_utc": {
+    "commit": "1a98e90f274acdbc021c057bcc5f3b2b47a7de34",
+    "file": "conditions/clock.json",
+    "script": "pipeline/conditions/clockfile.py",
+    "units": null,
+    "utc": "2026-11-14T10:09:10Z",
+    "value": "2026-11-13T07:37:28Z"
+  },
+  "clock.sols.0.sunset_lmst": {
+    "commit": "1a98e90f274acdbc021c057bcc5f3b2b47a7de34",
+    "file": "conditions/clock.json",
+    "script": "pipeline/conditions/clockfile.py",
+    "units": null,
+    "utc": "2026-11-14T10:09:10Z",
+    "value": "18:23:35"
+  },
+  "clock.sols.0.sunset_utc": {
+    "commit": "1a98e90f274acdbc021c057bcc5f3b2b47a7de34",
+    "file": "conditions/clock.json",
+    "script": "pipeline/conditions/clockfile.py",
+    "units": null,
+    "utc": "2026-11-14T10:09:10Z",
+    "value": "2026-11-13T19:50:47Z"
+  },
+  "clock.sols.1.ls_deg_at_noon": {
+    "commit": "1a98e90f274acdbc021c057bcc5f3b2b47a7de34",
+    "file": "conditions/clock.json",
+    "script": "pipeline/conditions/clockfile.py",
+    "units": "deg",
+    "utc": "2026-11-14T10:09:10Z",
+    "value": 21.8465
+  },
+  "clock.sols.1.msl_sol": {
+    "commit": "1a98e90f274acdbc021c057bcc5f3b2b47a7de34",
+    "file": "conditions/clock.json",
+    "script": "pipeline/conditions/clockfile.py",
+    "units": "sol",
+    "utc": "2026-11-14T10:09:10Z",
+    "value": 5074
+  },
+  "clock.sols.1.sunrise_lmst": {
+    "commit": "1a98e90f274acdbc021c057bcc5f3b2b47a7de34",
+    "file": "conditions/clock.json",
+    "script": "pipeline/conditions/clockfile.py",
+    "units": null,
+    "utc": "2026-11-14T10:09:10Z",
+    "value": "06:29:35"
+  },
+  "clock.sols.1.sunrise_utc": {
+    "commit": "1a98e90f274acdbc021c057bcc5f3b2b47a7de34",
+    "file": "conditions/clock.json",
+    "script": "pipeline/conditions/clockfile.py",
+    "units": null,
+    "utc": "2026-11-14T10:09:10Z",
+    "value": "2026-11-14T08:16:45Z"
+  },
+  "clock.sols.1.sunset_lmst": {
+    "commit": "1a98e90f274acdbc021c057bcc5f3b2b47a7de34",
+    "file": "conditions/clock.json",
+    "script": "pipeline/conditions/clockfile.py",
+    "units": null,
+    "utc": "2026-11-14T10:09:10Z",
+    "value": "18:23:09"
+  },
+  "clock.sols.1.sunset_utc": {
+    "commit": "1a98e90f274acdbc021c057bcc5f3b2b47a7de34",
+    "file": "conditions/clock.json",
+    "script": "pipeline/conditions/clockfile.py",
+    "units": null,
+    "utc": "2026-11-14T10:09:10Z",
+    "value": "2026-11-14T20:29:56Z"
+  },
+  "clock.sols.2.ls_deg_at_noon": {
+    "commit": "1a98e90f274acdbc021c057bcc5f3b2b47a7de34",
+    "file": "conditions/clock.json",
+    "script": "pipeline/conditions/clockfile.py",
+    "units": "deg",
+    "utc": "2026-11-14T10:09:10Z",
+    "value": 22.3273
+  },
+  "clock.sols.2.msl_sol": {
+    "commit": "1a98e90f274acdbc021c057bcc5f3b2b47a7de34",
+    "file": "conditions/clock.json",
+    "script": "pipeline/conditions/clockfile.py",
+    "units": "sol",
+    "utc": "2026-11-14T10:09:10Z",
+    "value": 5075
+  },
+  "clock.sols.2.sunrise_lmst": {
+    "commit": "1a98e90f274acdbc021c057bcc5f3b2b47a7de34",
+    "file": "conditions/clock.json",
+    "script": "pipeline/conditions/clockfile.py",
+    "units": null,
+    "utc": "2026-11-14T10:09:10Z",
+    "value": "06:29:17"
+  },
+  "clock.sols.2.sunrise_utc": {
+    "commit": "1a98e90f274acdbc021c057bcc5f3b2b47a7de34",
+    "file": "conditions/clock.json",
+    "script": "pipeline/conditions/clockfile.py",
+    "units": null,
+    "utc": "2026-11-14T10:09:10Z",
+    "value": "2026-11-15T08:56:01Z"
+  },
+  "clock.sols.2.sunset_lmst": {
+    "commit": "1a98e90f274acdbc021c057bcc5f3b2b47a7de34",
+    "file": "conditions/clock.json",
+    "script": "pipeline/conditions/clockfile.py",
+    "units": null,
+    "utc": "2026-11-14T10:09:10Z",
+    "value": "18:22:43"
+  },
+  "clock.sols.2.sunset_utc": {
+    "commit": "1a98e90f274acdbc021c057bcc5f3b2b47a7de34",
+    "file": "conditions/clock.json",
+    "script": "pipeline/conditions/clockfile.py",
+    "units": null,
+    "utc": "2026-11-14T10:09:10Z",
+    "value": "2026-11-15T21:09:04Z"
+  },
+  "coreg.dx_m": {
+    "commit": "4ff8b1bd4f760e2a74921db6998fe129b42213c8-dirty",
+    "file": "validation/coreg.json",
+    "script": "pipeline/terrain/build.py",
+    "units": "m",
+    "utc": "2026-11-14T09:57:31Z",
+    "value": 0.0
+  },
+  "coreg.dy_m": {
+    "commit": "4ff8b1bd4f760e2a74921db6998fe129b42213c8-dirty",
+    "file": "validation/coreg.json",
+    "script": "pipeline/terrain/build.py",
+    "units": "m",
+    "utc": "2026-11-14T09:57:31Z",
+    "value": 0.0
+  },
+  "coreg.n": {
+    "commit": "4ff8b1bd4f760e2a74921db6998fe129b42213c8-dirty",
+    "file": "validation/coreg.json",
+    "script": "pipeline/terrain/build.py",
+    "units": "1",
+    "utc": "2026-11-14T09:57:31Z",
+    "value": 537
+  },
+  "coreg.residual_mad_m": {
+    "commit": "4ff8b1bd4f760e2a74921db6998fe129b42213c8-dirty",
+    "file": "validation/coreg.json",
+    "script": "pipeline/terrain/build.py",
+    "units": "m",
+    "utc": "2026-11-14T09:57:31Z",
+    "value": 0.037
+  },
+  "coreg.residual_median_m": {
+    "commit": "4ff8b1bd4f760e2a74921db6998fe129b42213c8-dirty",
+    "file": "validation/coreg.json",
+    "script": "pipeline/terrain/build.py",
+    "units": "m",
+    "utc": "2026-11-14T09:57:31Z",
+    "value": -0.0
+  },
+  "coverage.disc_30.assessed_pct": {
+    "commit": "4ff8b1bd4f760e2a74921db6998fe129b42213c8-dirty",
+    "file": "validation/coverage.json",
+    "script": "pipeline/terrain/build.py",
+    "units": "%",
+    "utc": "2026-11-14T09:57:31Z",
+    "value": 58.77
+  },
+  "coverage.disc_30.blocked_pct": {
+    "commit": "4ff8b1bd4f760e2a74921db6998fe129b42213c8-dirty",
+    "file": "validation/coverage.json",
+    "script": "pipeline/terrain/build.py",
+    "units": "%",
+    "utc": "2026-11-14T09:57:31Z",
+    "value": 41.23
+  },
+  "coverage.disc_30.unknown_pct": {
+    "commit": "4ff8b1bd4f760e2a74921db6998fe129b42213c8-dirty",
+    "file": "validation/coverage.json",
+    "script": "pipeline/terrain/build.py",
+    "units": "%",
+    "utc": "2026-11-14T09:57:31Z",
+    "value": 0.0
+  },
+  "coverage.disc_60.assessed_pct": {
+    "commit": "4ff8b1bd4f760e2a74921db6998fe129b42213c8-dirty",
+    "file": "validation/coverage.json",
+    "script": "pipeline/terrain/build.py",
+    "units": "%",
+    "utc": "2026-11-14T09:57:31Z",
+    "value": 68.64
+  },
+  "coverage.disc_60.blocked_pct": {
+    "commit": "4ff8b1bd4f760e2a74921db6998fe129b42213c8-dirty",
+    "file": "validation/coverage.json",
+    "script": "pipeline/terrain/build.py",
+    "units": "%",
+    "utc": "2026-11-14T09:57:31Z",
+    "value": 31.36
+  },
+  "coverage.disc_60.unknown_pct": {
+    "commit": "4ff8b1bd4f760e2a74921db6998fe129b42213c8-dirty",
+    "file": "validation/coverage.json",
+    "script": "pipeline/terrain/build.py",
+    "units": "%",
+    "utc": "2026-11-14T09:57:31Z",
+    "value": 0.0
+  },
+  "coverage.source_fractions_pct.ctx": {
+    "commit": "4ff8b1bd4f760e2a74921db6998fe129b42213c8-dirty",
+    "file": "validation/coverage.json",
+    "script": "pipeline/terrain/build.py",
+    "units": "%",
+    "utc": "2026-11-14T09:57:31Z",
+    "value": 0.0
+  },
+  "coverage.source_fractions_pct.hirise": {
+    "commit": "4ff8b1bd4f760e2a74921db6998fe129b42213c8-dirty",
+    "file": "validation/coverage.json",
+    "script": "pipeline/terrain/build.py",
+    "units": "%",
+    "utc": "2026-11-14T09:57:31Z",
+    "value": 100.0
+  },
+  "coverage.source_fractions_pct.hrsc_mola": {
+    "commit": "4ff8b1bd4f760e2a74921db6998fe129b42213c8-dirty",
+    "file": "validation/coverage.json",
+    "script": "pipeline/terrain/build.py",
+    "units": "%",
+    "utc": "2026-11-14T09:57:31Z",
+    "value": 0.0
+  },
+  "coverage.source_fractions_pct.nodata": {
+    "commit": "4ff8b1bd4f760e2a74921db6998fe129b42213c8-dirty",
+    "file": "validation/coverage.json",
+    "script": "pipeline/terrain/build.py",
+    "units": "%",
+    "utc": "2026-11-14T09:57:31Z",
+    "value": 0.0
+  },
+  "donki.counts.CME": {
+    "commit": "1a98e90f274acdbc021c057bcc5f3b2b47a7de34",
+    "file": "conditions/donki.json",
+    "script": "pipeline/conditions/donki.py",
+    "units": "1",
+    "utc": "2026-11-14T10:09:11Z",
+    "value": 58
+  },
+  "donki.counts.IPS": {
+    "commit": "1a98e90f274acdbc021c057bcc5f3b2b47a7de34",
+    "file": "conditions/donki.json",
+    "script": "pipeline/conditions/donki.py",
+    "units": "1",
+    "utc": "2026-11-14T10:09:11Z",
+    "value": 6
+  },
+  "donki.counts.SEP": {
+    "commit": "1a98e90f274acdbc021c057bcc5f3b2b47a7de34",
+    "file": "conditions/donki.json",
+    "script": "pipeline/conditions/donki.py",
+    "units": "1",
+    "utc": "2026-11-14T10:09:11Z",
+    "value": 6
+  },
+  "donki.counts.WSAEnlilSimulations": {
+    "commit": "1a98e90f274acdbc021c057bcc5f3b2b47a7de34",
+    "file": "conditions/donki.json",
+    "script": "pipeline/conditions/donki.py",
+    "units": "1",
+    "utc": "2026-11-14T10:09:11Z",
+    "value": 57
+  },
+  "donki.counts.notifications": {
+    "commit": "1a98e90f274acdbc021c057bcc5f3b2b47a7de34",
+    "file": "conditions/donki.json",
+    "script": "pipeline/conditions/donki.py",
+    "units": "1",
+    "utc": "2026-11-14T10:09:11Z",
+    "value": 60
+  },
+  "dummy": false,
+  "file.validation/coreg.json": {
+    "commit": "4ff8b1bd4f760e2a74921db6998fe129b42213c8-dirty",
+    "file": "validation/coreg.json",
+    "script": "pipeline/terrain/build.py",
+    "units": "sha256",
+    "utc": "2026-11-14T09:57:31Z",
+    "value": "c700ec8fcd541fe788d54a11a2ec0a27d506c740861b06b4ba19cf5a772d60ba"
+  },
+  "file.validation/coverage.json": {
+    "commit": "4ff8b1bd4f760e2a74921db6998fe129b42213c8-dirty",
+    "file": "validation/coverage.json",
+    "script": "pipeline/terrain/build.py",
+    "units": "sha256",
+    "utc": "2026-11-14T09:57:31Z",
+    "value": "62592768685e2cd7a733d5b41e9252eecd550d8c251647ce7c44ea5cfd74944e"
+  },
+  "file.validation/coverage.png": {
+    "commit": "4ff8b1bd4f760e2a74921db6998fe129b42213c8-dirty",
+    "file": "validation/coverage.png",
+    "script": "pipeline/terrain/build.py",
+    "units": "sha256",
+    "utc": "2026-11-14T09:57:31Z",
+    "value": "db4368c0a754ceb1dbd9f6d1f6922d616e9f593d0e45dc62e51fb75b5f012d95"
+  },
+  "file_sha256.conditions/clock.json": {
+    "commit": "1a98e90f274acdbc021c057bcc5f3b2b47a7de34",
+    "file": "conditions/clock.json",
+    "script": "pipeline/conditions/clockfile.py",
+    "units": null,
+    "utc": "2026-11-14T10:09:10Z",
+    "value": "422abb4ff026b1503358a82d77124a9e9390437d3a257aefa5c29069c90edec0"
+  },
+  "file_sha256.conditions/donki.json": {
+    "commit": "1a98e90f274acdbc021c057bcc5f3b2b47a7de34",
+    "file": "conditions/donki.json",
+    "script": "pipeline/conditions/donki.py",
+    "units": null,
+    "utc": "2026-11-14T10:09:11Z",
+    "value": "96523d8d80cd088debdf89dfb6ac1a162461216efd64503f54f0b202eab950a3"
+  },
+  "file_sha256.conditions/rad.json": {
+    "commit": "1a98e90f274acdbc021c057bcc5f3b2b47a7de34",
+    "file": "conditions/rad.json",
+    "script": "pipeline/conditions/rad.py",
+    "units": null,
+    "utc": "2026-11-14T10:09:10Z",
+    "value": "13dd8f4a27df9d58a649e3a8df28b293c1192014a4a587facd45f66aaba467ea"
+  },
+  "file_sha256.conditions/rems.json": {
+    "commit": "1a98e90f274acdbc021c057bcc5f3b2b47a7de34",
+    "file": "conditions/rems.json",
+    "script": "pipeline/conditions/rems.py",
+    "units": null,
+    "utc": "2026-11-14T10:09:11Z",
+    "value": "17cdb50ecdd7e2a95e319f2a2f77709a5b7e763bea3a5fdc47e33a8df6700f6c"
+  },
+  "nav.vo_probe.decision": {
+    "commit": "c7e9a5da9ac78be49173db18dd82615f319f2801",
+    "file": "vo/probe.json",
+    "script": "pipeline/navigation/vo_probe.py",
+    "units": null,
+    "utc": "2026-11-14T10:14:48Z",
+    "value": "go"
+  },
+  "nav.vo_probe.drives_meeting_rule": {
+    "commit": "c7e9a5da9ac78be49173db18dd82615f319f2801",
+    "file": "vo/probe.json",
+    "script": "pipeline/navigation/vo_probe.py",
+    "units": "1",
+    "utc": "2026-11-14T10:14:48Z",
+    "value": 5
+  },
+  "nav.vo_probe.sol5041.median_spacing_m": {
+    "commit": "c7e9a5da9ac78be49173db18dd82615f319f2801",
+    "file": "vo/probe.json",
+    "script": "pipeline/navigation/vo_probe.py",
+    "units": "m",
+    "utc": "2026-11-14T10:14:48Z",
+    "value": 0.985
+  },
+  "nav.vo_probe.sol5041.stereo_pairs": {
+    "commit": "c7e9a5da9ac78be49173db18dd82615f319f2801",
+    "file": "vo/probe.json",
+    "script": "pipeline/navigation/vo_probe.py",
+    "units": "1",
+    "utc": "2026-11-14T10:14:48Z",
+    "value": 108
+  },
+  "nav.vo_probe.sol5045.median_spacing_m": {
+    "commit": "c7e9a5da9ac78be49173db18dd82615f319f2801",
+    "file": "vo/probe.json",
+    "script": "pipeline/navigation/vo_probe.py",
+    "units": "m",
+    "utc": "2026-11-14T10:14:48Z",
+    "value": 0.933
+  },
+  "nav.vo_probe.sol5045.stereo_pairs": {
+    "commit": "c7e9a5da9ac78be49173db18dd82615f319f2801",
+    "file": "vo/probe.json",
+    "script": "pipeline/navigation/vo_probe.py",
+    "units": "1",
+    "utc": "2026-11-14T10:14:48Z",
+    "value": 25
+  },
+  "nav.vo_probe.sol5069.median_spacing_m": {
+    "commit": "c7e9a5da9ac78be49173db18dd82615f319f2801",
+    "file": "vo/probe.json",
+    "script": "pipeline/navigation/vo_probe.py",
+    "units": "m",
+    "utc": "2026-11-14T10:14:48Z",
+    "value": 0.953
+  },
+  "nav.vo_probe.sol5069.stereo_pairs": {
+    "commit": "c7e9a5da9ac78be49173db18dd82615f319f2801",
+    "file": "vo/probe.json",
+    "script": "pipeline/navigation/vo_probe.py",
+    "units": "1",
+    "utc": "2026-11-14T10:14:48Z",
+    "value": 126
+  },
+  "nav.vo_probe.sol5070.median_spacing_m": {
+    "commit": "c7e9a5da9ac78be49173db18dd82615f319f2801",
+    "file": "vo/probe.json",
+    "script": "pipeline/navigation/vo_probe.py",
+    "units": "m",
+    "utc": "2026-11-14T10:14:48Z",
+    "value": 0.945
+  },
+  "nav.vo_probe.sol5070.stereo_pairs": {
+    "commit": "c7e9a5da9ac78be49173db18dd82615f319f2801",
+    "file": "vo/probe.json",
+    "script": "pipeline/navigation/vo_probe.py",
+    "units": "1",
+    "utc": "2026-11-14T10:14:48Z",
+    "value": 33
+  },
+  "nav.vo_probe.sol5073.median_spacing_m": {
+    "commit": "c7e9a5da9ac78be49173db18dd82615f319f2801",
+    "file": "vo/probe.json",
+    "script": "pipeline/navigation/vo_probe.py",
+    "units": "m",
+    "utc": "2026-11-14T10:14:48Z",
+    "value": 0.946
+  },
+  "nav.vo_probe.sol5073.stereo_pairs": {
+    "commit": "c7e9a5da9ac78be49173db18dd82615f319f2801",
+    "file": "vo/probe.json",
+    "script": "pipeline/navigation/vo_probe.py",
+    "units": "1",
+    "utc": "2026-11-14T10:14:48Z",
+    "value": 37
+  },
+  "rad.baseline_uGy_day": {
+    "commit": "1a98e90f274acdbc021c057bcc5f3b2b47a7de34",
+    "file": "conditions/rad.json",
+    "script": "pipeline/conditions/rad.py",
+    "units": "uGy/day",
+    "utc": "2026-11-14T10:09:10Z",
+    "value": 152.3
+  },
+  "rad.latest.dose_rate_uGy_day": {
+    "commit": "1a98e90f274acdbc021c057bcc5f3b2b47a7de34",
+    "file": "conditions/rad.json",
+    "script": "pipeline/conditions/rad.py",
+    "units": "uGy/day",
+    "utc": "2026-11-14T10:09:10Z",
+    "value": 190.9
+  },
+  "rad.latest.lag_days": {
+    "commit": "1a98e90f274acdbc021c057bcc5f3b2b47a7de34",
+    "file": "conditions/rad.json",
+    "script": "pipeline/conditions/rad.py",
+    "units": "days",
+    "utc": "2026-11-14T10:09:10Z",
+    "value": 2.72
+  },
+  "rad.latest.utc": {
+    "commit": "1a98e90f274acdbc021c057bcc5f3b2b47a7de34",
+    "file": "conditions/rad.json",
+    "script": "pipeline/conditions/rad.py",
+    "units": null,
+    "utc": "2026-11-14T10:09:10Z",
+    "value": "2026-11-11T16:45:49Z"
+  },
+  "rad.leash.D_allow_mGy": {
+    "commit": "1a98e90f274acdbc021c057bcc5f3b2b47a7de34",
+    "file": "conditions/rad.json",
+    "script": "pipeline/conditions/rad.py",
+    "units": "mGy",
+    "utc": "2026-11-14T10:09:10Z",
+    "value": 0.5
+  },
+  "rad.leash.table.0.D_allow_mGy": {
+    "commit": "1a98e90f274acdbc021c057bcc5f3b2b47a7de34",
+    "file": "conditions/rad.json",
+    "script": "pipeline/conditions/rad.py",
+    "units": "mGy",
+    "utc": "2026-11-14T10:09:10Z",
+    "value": 0.25
+  },
+  "rad.leash.table.0.tau_min_at_latest": {
+    "commit": "1a98e90f274acdbc021c057bcc5f3b2b47a7de34",
+    "file": "conditions/rad.json",
+    "script": "pipeline/conditions/rad.py",
+    "units": "min",
+    "utc": "2026-11-14T10:09:10Z",
+    "value": 1885.8
+  },
+  "rad.leash.table.0.tau_min_at_peak": {
+    "commit": "1a98e90f274acdbc021c057bcc5f3b2b47a7de34",
+    "file": "conditions/rad.json",
+    "script": "pipeline/conditions/rad.py",
+    "units": "min",
+    "utc": "2026-11-14T10:09:10Z",
+    "value": 43.0
+  },
+  "rad.leash.table.1.D_allow_mGy": {
+    "commit": "1a98e90f274acdbc021c057bcc5f3b2b47a7de34",
+    "file": "conditions/rad.json",
+    "script": "pipeline/conditions/rad.py",
+    "units": "mGy",
+    "utc": "2026-11-14T10:09:10Z",
+    "value": 0.3
+  },
+  "rad.leash.table.1.tau_min_at_latest": {
+    "commit": "1a98e90f274acdbc021c057bcc5f3b2b47a7de34",
+    "file": "conditions/rad.json",
+    "script": "pipeline/conditions/rad.py",
+    "units": "min",
+    "utc": "2026-11-14T10:09:10Z",
+    "value": 2263.0
+  },
+  "rad.leash.table.1.tau_min_at_peak": {
+    "commit": "1a98e90f274acdbc021c057bcc5f3b2b47a7de34",
+    "file": "conditions/rad.json",
+    "script": "pipeline/conditions/rad.py",
+    "units": "min",
+    "utc": "2026-11-14T10:09:10Z",
+    "value": 51.6
+  },
+  "rad.leash.table.10.D_allow_mGy": {
+    "commit": "1a98e90f274acdbc021c057bcc5f3b2b47a7de34",
+    "file": "conditions/rad.json",
+    "script": "pipeline/conditions/rad.py",
+    "units": "mGy",
+    "utc": "2026-11-14T10:09:10Z",
+    "value": 0.75
+  },
+  "rad.leash.table.10.tau_min_at_latest": {
+    "commit": "1a98e90f274acdbc021c057bcc5f3b2b47a7de34",
+    "file": "conditions/rad.json",
+    "script": "pipeline/conditions/rad.py",
+    "units": "min",
+    "utc": "2026-11-14T10:09:10Z",
+    "value": 5657.4
+  },
+  "rad.leash.table.10.tau_min_at_peak": {
+    "commit": "1a98e90f274acdbc021c057bcc5f3b2b47a7de34",
+    "file": "conditions/rad.json",
+    "script": "pipeline/conditions/rad.py",
+    "units": "min",
+    "utc": "2026-11-14T10:09:10Z",
+    "value": 128.9
+  },
+  "rad.leash.table.11.D_allow_mGy": {
+    "commit": "1a98e90f274acdbc021c057bcc5f3b2b47a7de34",
+    "file": "conditions/rad.json",
+    "script": "pipeline/conditions/rad.py",
+    "units": "mGy",
+    "utc": "2026-11-14T10:09:10Z",
+    "value": 0.8
+  },
+  "rad.leash.table.11.tau_min_at_latest": {
+    "commit": "1a98e90f274acdbc021c057bcc5f3b2b47a7de34",
+    "file": "conditions/rad.json",
+    "script": "pipeline/conditions/rad.py",
+    "units": "min",
+    "utc": "2026-11-14T10:09:10Z",
+    "value": 6034.6
+  },
+  "rad.leash.table.11.tau_min_at_peak": {
+    "commit": "1a98e90f274acdbc021c057bcc5f3b2b47a7de34",
+    "file": "conditions/rad.json",
+    "script": "pipeline/conditions/rad.py",
+    "units": "min",
+    "utc": "2026-11-14T10:09:10Z",
+    "value": 137.5
+  },
+  "rad.leash.table.12.D_allow_mGy": {
+    "commit": "1a98e90f274acdbc021c057bcc5f3b2b47a7de34",
+    "file": "conditions/rad.json",
+    "script": "pipeline/conditions/rad.py",
+    "units": "mGy",
+    "utc": "2026-11-14T10:09:10Z",
+    "value": 0.85
+  },
+  "rad.leash.table.12.tau_min_at_latest": {
+    "commit": "1a98e90f274acdbc021c057bcc5f3b2b47a7de34",
+    "file": "conditions/rad.json",
+    "script": "pipeline/conditions/rad.py",
+    "units": "min",
+    "utc": "2026-11-14T10:09:10Z",
+    "value": 6411.7
+  },
+  "rad.leash.table.12.tau_min_at_peak": {
+    "commit": "1a98e90f274acdbc021c057bcc5f3b2b47a7de34",
+    "file": "conditions/rad.json",
+    "script": "pipeline/conditions/rad.py",
+    "units": "min",
+    "utc": "2026-11-14T10:09:10Z",
+    "value": 146.1
+  },
+  "rad.leash.table.13.D_allow_mGy": {
+    "commit": "1a98e90f274acdbc021c057bcc5f3b2b47a7de34",
+    "file": "conditions/rad.json",
+    "script": "pipeline/conditions/rad.py",
+    "units": "mGy",
+    "utc": "2026-11-14T10:09:10Z",
+    "value": 0.9
+  },
+  "rad.leash.table.13.tau_min_at_latest": {
+    "commit": "1a98e90f274acdbc021c057bcc5f3b2b47a7de34",
+    "file": "conditions/rad.json",
+    "script": "pipeline/conditions/rad.py",
+    "units": "min",
+    "utc": "2026-11-14T10:09:10Z",
+    "value": 6788.9
+  },
+  "rad.leash.table.13.tau_min_at_peak": {
+    "commit": "1a98e90f274acdbc021c057bcc5f3b2b47a7de34",
+    "file": "conditions/rad.json",
+    "script": "pipeline/conditions/rad.py",
+    "units": "min",
+    "utc": "2026-11-14T10:09:10Z",
+    "value": 154.7
+  },
+  "rad.leash.table.14.D_allow_mGy": {
+    "commit": "1a98e90f274acdbc021c057bcc5f3b2b47a7de34",
+    "file": "conditions/rad.json",
+    "script": "pipeline/conditions/rad.py",
+    "units": "mGy",
+    "utc": "2026-11-14T10:09:10Z",
+    "value": 0.95
+  },
+  "rad.leash.table.14.tau_min_at_latest": {
+    "commit": "1a98e90f274acdbc021c057bcc5f3b2b47a7de34",
+    "file": "conditions/rad.json",
+    "script": "pipeline/conditions/rad.py",
+    "units": "min",
+    "utc": "2026-11-14T10:09:10Z",
+    "value": 7166.1
+  },
+  "rad.leash.table.14.tau_min_at_peak": {
+    "commit": "1a98e90f274acdbc021c057bcc5f3b2b47a7de34",
+    "file": "conditions/rad.json",
+    "script": "pipeline/conditions/rad.py",
+    "units": "min",
+    "utc": "2026-11-14T10:09:10Z",
+    "value": 163.3
+  },
+  "rad.leash.table.15.D_allow_mGy": {
+    "commit": "1a98e90f274acdbc021c057bcc5f3b2b47a7de34",
+    "file": "conditions/rad.json",
+    "script": "pipeline/conditions/rad.py",
+    "units": "mGy",
+    "utc": "2026-11-14T10:09:10Z",
+    "value": 1.0
+  },
+  "rad.leash.table.15.tau_min_at_latest": {
+    "commit": "1a98e90f274acdbc021c057bcc5f3b2b47a7de34",
+    "file": "conditions/rad.json",
+    "script": "pipeline/conditions/rad.py",
+    "units": "min",
+    "utc": "2026-11-14T10:09:10Z",
+    "value": 7543.2
+  },
+  "rad.leash.table.15.tau_min_at_peak": {
+    "commit": "1a98e90f274acdbc021c057bcc5f3b2b47a7de34",
+    "file": "conditions/rad.json",
+    "script": "pipeline/conditions/rad.py",
+    "units": "min",
+    "utc": "2026-11-14T10:09:10Z",
+    "value": 171.9
+  },
+  "rad.leash.table.2.D_allow_mGy": {
+    "commit": "1a98e90f274acdbc021c057bcc5f3b2b47a7de34",
+    "file": "conditions/rad.json",
+    "script": "pipeline/conditions/rad.py",
+    "units": "mGy",
+    "utc": "2026-11-14T10:09:10Z",
+    "value": 0.35
+  },
+  "rad.leash.table.2.tau_min_at_latest": {
+    "commit": "1a98e90f274acdbc021c057bcc5f3b2b47a7de34",
+    "file": "conditions/rad.json",
+    "script": "pipeline/conditions/rad.py",
+    "units": "min",
+    "utc": "2026-11-14T10:09:10Z",
+    "value": 2640.1
+  },
+  "rad.leash.table.2.tau_min_at_peak": {
+    "commit": "1a98e90f274acdbc021c057bcc5f3b2b47a7de34",
+    "file": "conditions/rad.json",
+    "script": "pipeline/conditions/rad.py",
+    "units": "min",
+    "utc": "2026-11-14T10:09:10Z",
+    "value": 60.2
+  },
+  "rad.leash.table.3.D_allow_mGy": {
+    "commit": "1a98e90f274acdbc021c057bcc5f3b2b47a7de34",
+    "file": "conditions/rad.json",
+    "script": "pipeline/conditions/rad.py",
+    "units": "mGy",
+    "utc": "2026-11-14T10:09:10Z",
+    "value": 0.4
+  },
+  "rad.leash.table.3.tau_min_at_latest": {
+    "commit": "1a98e90f274acdbc021c057bcc5f3b2b47a7de34",
+    "file": "conditions/rad.json",
+    "script": "pipeline/conditions/rad.py",
+    "units": "min",
+    "utc": "2026-11-14T10:09:10Z",
+    "value": 3017.3
+  },
+  "rad.leash.table.3.tau_min_at_peak": {
+    "commit": "1a98e90f274acdbc021c057bcc5f3b2b47a7de34",
+    "file": "conditions/rad.json",
+    "script": "pipeline/conditions/rad.py",
+    "units": "min",
+    "utc": "2026-11-14T10:09:10Z",
+    "value": 68.8
+  },
+  "rad.leash.table.4.D_allow_mGy": {
+    "commit": "1a98e90f274acdbc021c057bcc5f3b2b47a7de34",
+    "file": "conditions/rad.json",
+    "script": "pipeline/conditions/rad.py",
+    "units": "mGy",
+    "utc": "2026-11-14T10:09:10Z",
+    "value": 0.45
+  },
+  "rad.leash.table.4.tau_min_at_latest": {
+    "commit": "1a98e90f274acdbc021c057bcc5f3b2b47a7de34",
+    "file": "conditions/rad.json",
+    "script": "pipeline/conditions/rad.py",
+    "units": "min",
+    "utc": "2026-11-14T10:09:10Z",
+    "value": 3394.4
+  },
+  "rad.leash.table.4.tau_min_at_peak": {
+    "commit": "1a98e90f274acdbc021c057bcc5f3b2b47a7de34",
+    "file": "conditions/rad.json",
+    "script": "pipeline/conditions/rad.py",
+    "units": "min",
+    "utc": "2026-11-14T10:09:10Z",
+    "value": 77.3
+  },
+  "rad.leash.table.5.D_allow_mGy": {
+    "commit": "1a98e90f274acdbc021c057bcc5f3b2b47a7de34",
+    "file": "conditions/rad.json",
+    "script": "pipeline/conditions/rad.py",
+    "units": "mGy",
+    "utc": "2026-11-14T10:09:10Z",
+    "value": 0.5
+  },
+  "rad.leash.table.5.tau_min_at_latest": {
+    "commit": "1a98e90f274acdbc021c057bcc5f3b2b47a7de34",
+    "file": "conditions/rad.json",
+    "script": "pipeline/conditions/rad.py",
+    "units": "min",
+    "utc": "2026-11-14T10:09:10Z",
+    "value": 3771.6
+  },
+  "rad.leash.table.5.tau_min_at_peak": {
+    "commit": "1a98e90f274acdbc021c057bcc5f3b2b47a7de34",
+    "file": "conditions/rad.json",
+    "script": "pipeline/conditions/rad.py",
+    "units": "min",
+    "utc": "2026-11-14T10:09:10Z",
+    "value": 85.9
+  },
+  "rad.leash.table.6.D_allow_mGy": {
+    "commit": "1a98e90f274acdbc021c057bcc5f3b2b47a7de34",
+    "file": "conditions/rad.json",
+    "script": "pipeline/conditions/rad.py",
+    "units": "mGy",
+    "utc": "2026-11-14T10:09:10Z",
+    "value": 0.55
+  },
+  "rad.leash.table.6.tau_min_at_latest": {
+    "commit": "1a98e90f274acdbc021c057bcc5f3b2b47a7de34",
+    "file": "conditions/rad.json",
+    "script": "pipeline/conditions/rad.py",
+    "units": "min",
+    "utc": "2026-11-14T10:09:10Z",
+    "value": 4148.8
+  },
+  "rad.leash.table.6.tau_min_at_peak": {
+    "commit": "1a98e90f274acdbc021c057bcc5f3b2b47a7de34",
+    "file": "conditions/rad.json",
+    "script": "pipeline/conditions/rad.py",
+    "units": "min",
+    "utc": "2026-11-14T10:09:10Z",
+    "value": 94.5
+  },
+  "rad.leash.table.7.D_allow_mGy": {
+    "commit": "1a98e90f274acdbc021c057bcc5f3b2b47a7de34",
+    "file": "conditions/rad.json",
+    "script": "pipeline/conditions/rad.py",
+    "units": "mGy",
+    "utc": "2026-11-14T10:09:10Z",
+    "value": 0.6
+  },
+  "rad.leash.table.7.tau_min_at_latest": {
+    "commit": "1a98e90f274acdbc021c057bcc5f3b2b47a7de34",
+    "file": "conditions/rad.json",
+    "script": "pipeline/conditions/rad.py",
+    "units": "min",
+    "utc": "2026-11-14T10:09:10Z",
+    "value": 4525.9
+  },
+  "rad.leash.table.7.tau_min_at_peak": {
+    "commit": "1a98e90f274acdbc021c057bcc5f3b2b47a7de34",
+    "file": "conditions/rad.json",
+    "script": "pipeline/conditions/rad.py",
+    "units": "min",
+    "utc": "2026-11-14T10:09:10Z",
+    "value": 103.1
+  },
+  "rad.leash.table.8.D_allow_mGy": {
+    "commit": "1a98e90f274acdbc021c057bcc5f3b2b47a7de34",
+    "file": "conditions/rad.json",
+    "script": "pipeline/conditions/rad.py",
+    "units": "mGy",
+    "utc": "2026-11-14T10:09:10Z",
+    "value": 0.65
+  },
+  "rad.leash.table.8.tau_min_at_latest": {
+    "commit": "1a98e90f274acdbc021c057bcc5f3b2b47a7de34",
+    "file": "conditions/rad.json",
+    "script": "pipeline/conditions/rad.py",
+    "units": "min",
+    "utc": "2026-11-14T10:09:10Z",
+    "value": 4903.1
+  },
+  "rad.leash.table.8.tau_min_at_peak": {
+    "commit": "1a98e90f274acdbc021c057bcc5f3b2b47a7de34",
+    "file": "conditions/rad.json",
+    "script": "pipeline/conditions/rad.py",
+    "units": "min",
+    "utc": "2026-11-14T10:09:10Z",
+    "value": 111.7
+  },
+  "rad.leash.table.9.D_allow_mGy": {
+    "commit": "1a98e90f274acdbc021c057bcc5f3b2b47a7de34",
+    "file": "conditions/rad.json",
+    "script": "pipeline/conditions/rad.py",
+    "units": "mGy",
+    "utc": "2026-11-14T10:09:10Z",
+    "value": 0.7
+  },
+  "rad.leash.table.9.tau_min_at_latest": {
+    "commit": "1a98e90f274acdbc021c057bcc5f3b2b47a7de34",
+    "file": "conditions/rad.json",
+    "script": "pipeline/conditions/rad.py",
+    "units": "min",
+    "utc": "2026-11-14T10:09:10Z",
+    "value": 5280.3
+  },
+  "rad.leash.table.9.tau_min_at_peak": {
+    "commit": "1a98e90f274acdbc021c057bcc5f3b2b47a7de34",
+    "file": "conditions/rad.json",
+    "script": "pipeline/conditions/rad.py",
+    "units": "min",
+    "utc": "2026-11-14T10:09:10Z",
+    "value": 120.3
+  },
+  "rad.leash.tau_min_at_latest": {
+    "commit": "1a98e90f274acdbc021c057bcc5f3b2b47a7de34",
+    "file": "conditions/rad.json",
+    "script": "pipeline/conditions/rad.py",
+    "units": "min",
+    "utc": "2026-11-14T10:09:10Z",
+    "value": 3771.6
+  },
+  "rad.leash.tau_min_at_peak": {
+    "commit": "1a98e90f274acdbc021c057bcc5f3b2b47a7de34",
+    "file": "conditions/rad.json",
+    "script": "pipeline/conditions/rad.py",
+    "units": "min",
+    "utc": "2026-11-14T10:09:10Z",
+    "value": 85.9
+  },
+  "rad.storm_2024.dose_equivalent_mSv": {
+    "commit": "1a98e90f274acdbc021c057bcc5f3b2b47a7de34",
+    "file": "conditions/rad.json",
+    "script": "pipeline/conditions/rad.py",
+    "units": "mSv",
+    "utc": "2026-11-14T10:09:10Z",
+    "value": 1.733
+  },
+  "rad.storm_2024.end_utc": {
+    "commit": "1a98e90f274acdbc021c057bcc5f3b2b47a7de34",
+    "file": "conditions/rad.json",
+    "script": "pipeline/conditions/rad.py",
+    "units": null,
+    "utc": "2026-11-14T10:09:10Z",
+    "value": "2024-05-22T23:50:54Z"
+  },
+  "rad.storm_2024.excess_mGy": {
+    "commit": "1a98e90f274acdbc021c057bcc5f3b2b47a7de34",
+    "file": "conditions/rad.json",
+    "script": "pipeline/conditions/rad.py",
+    "units": "mGy",
+    "utc": "2026-11-14T10:09:10Z",
+    "value": 1.733
+  },
+  "rad.storm_2024.onset_utc": {
+    "commit": "1a98e90f274acdbc021c057bcc5f3b2b47a7de34",
+    "file": "conditions/rad.json",
+    "script": "pipeline/conditions/rad.py",
+    "units": null,
+    "utc": "2026-11-14T10:09:10Z",
+    "value": "2024-05-20T05:15:52Z"
+  },
+  "rad.storm_2024.peak_mGy_h": {
+    "commit": "1a98e90f274acdbc021c057bcc5f3b2b47a7de34",
+    "file": "conditions/rad.json",
+    "script": "pipeline/conditions/rad.py",
+    "units": "mGy/h",
+    "utc": "2026-11-14T10:09:10Z",
+    "value": 0.3491
+  },
+  "rad.storm_2024.peak_uGy_day": {
+    "commit": "1a98e90f274acdbc021c057bcc5f3b2b47a7de34",
+    "file": "conditions/rad.json",
+    "script": "pipeline/conditions/rad.py",
+    "units": "uGy/day",
+    "utc": "2026-11-14T10:09:10Z",
+    "value": 8377.9
+  },
+  "rad.storm_2024.peak_utc": {
+    "commit": "1a98e90f274acdbc021c057bcc5f3b2b47a7de34",
+    "file": "conditions/rad.json",
+    "script": "pipeline/conditions/rad.py",
+    "units": null,
+    "utc": "2026-11-14T10:09:10Z",
+    "value": "2024-05-20T06:19:52Z"
+  },
+  "rad.storm_2024.tripwire_threshold_uGy_day": {
+    "commit": "1a98e90f274acdbc021c057bcc5f3b2b47a7de34",
+    "file": "conditions/rad.json",
+    "script": "pipeline/conditions/rad.py",
+    "units": "uGy/day",
+    "utc": "2026-11-14T10:09:10Z",
+    "value": 456.9
+  },
+  "rad.storm_2024.tripwire_utc": {
+    "commit": "1a98e90f274acdbc021c057bcc5f3b2b47a7de34",
+    "file": "conditions/rad.json",
+    "script": "pipeline/conditions/rad.py",
+    "units": null,
+    "utc": "2026-11-14T10:09:10Z",
+    "value": "2024-05-20T05:57:07Z"
+  },
+  "rems.latest_feed.sol": {
+    "commit": "1a98e90f274acdbc021c057bcc5f3b2b47a7de34",
+    "file": "conditions/rems.json",
+    "script": "pipeline/conditions/rems.py",
+    "units": null,
+    "utc": "2026-11-14T10:09:11Z",
+    "value": 4995
+  },
+  "rems.latest_feed.stale_since": {
+    "commit": "1a98e90f274acdbc021c057bcc5f3b2b47a7de34",
+    "file": "conditions/rems.json",
+    "script": "pipeline/conditions/rems.py",
+    "units": null,
+    "utc": "2026-11-14T10:09:11Z",
+    "value": "2026-08-25"
+  },
+  "rems.sols_used": {
+    "commit": "1a98e90f274acdbc021c057bcc5f3b2b47a7de34",
+    "file": "conditions/rems.json",
+    "script": "pipeline/conditions/rems.py",
+    "units": "sol",
+    "utc": "2026-11-14T10:09:11Z",
+    "value": 159
+  },
+  "rems.variables.0.daily_max.median": {
+    "commit": "1a98e90f274acdbc021c057bcc5f3b2b47a7de34",
+    "file": "conditions/rems.json",
+    "script": "pipeline/conditions/rems.py",
+    "units": "degC",
+    "utc": "2026-11-14T10:09:11Z",
+    "value": -19.5
+  },
+  "rems.variables.0.daily_max.p10": {
+    "commit": "1a98e90f274acdbc021c057bcc5f3b2b47a7de34",
+    "file": "conditions/rems.json",
+    "script": "pipeline/conditions/rems.py",
+    "units": "degC",
+    "utc": "2026-11-14T10:09:11Z",
+    "value": -27.4
+  },
+  "rems.variables.0.daily_max.p90": {
+    "commit": "1a98e90f274acdbc021c057bcc5f3b2b47a7de34",
+    "file": "conditions/rems.json",
+    "script": "pipeline/conditions/rems.py",
+    "units": "degC",
+    "utc": "2026-11-14T10:09:11Z",
+    "value": -13.9
+  },
+  "rems.variables.0.daily_min.median": {
+    "commit": "1a98e90f274acdbc021c057bcc5f3b2b47a7de34",
+    "file": "conditions/rems.json",
+    "script": "pipeline/conditions/rems.py",
+    "units": "degC",
+    "utc": "2026-11-14T10:09:11Z",
+    "value": -74.5
+  },
+  "rems.variables.0.daily_min.p10": {
+    "commit": "1a98e90f274acdbc021c057bcc5f3b2b47a7de34",
+    "file": "conditions/rems.json",
+    "script": "pipeline/conditions/rems.py",
+    "units": "degC",
+    "utc": "2026-11-14T10:09:11Z",
+    "value": -77.3
+  },
+  "rems.variables.0.daily_min.p90": {
+    "commit": "1a98e90f274acdbc021c057bcc5f3b2b47a7de34",
+    "file": "conditions/rems.json",
+    "script": "pipeline/conditions/rems.py",
+    "units": "degC",
+    "utc": "2026-11-14T10:09:11Z",
+    "value": -72.5
+  },
+  "rems.variables.1.daily_max.median": {
+    "commit": "1a98e90f274acdbc021c057bcc5f3b2b47a7de34",
+    "file": "conditions/rems.json",
+    "script": "pipeline/conditions/rems.py",
+    "units": "degC",
+    "utc": "2026-11-14T10:09:11Z",
+    "value": -4.6
+  },
+  "rems.variables.1.daily_max.p10": {
+    "commit": "1a98e90f274acdbc021c057bcc5f3b2b47a7de34",
+    "file": "conditions/rems.json",
+    "script": "pipeline/conditions/rems.py",
+    "units": "degC",
+    "utc": "2026-11-14T10:09:11Z",
+    "value": -9.3
+  },
+  "rems.variables.1.daily_max.p90": {
+    "commit": "1a98e90f274acdbc021c057bcc5f3b2b47a7de34",
+    "file": "conditions/rems.json",
+    "script": "pipeline/conditions/rems.py",
+    "units": "degC",
+    "utc": "2026-11-14T10:09:11Z",
+    "value": 3.8
+  },
+  "rems.variables.1.daily_min.median": {
+    "commit": "1a98e90f274acdbc021c057bcc5f3b2b47a7de34",
+    "file": "conditions/rems.json",
+    "script": "pipeline/conditions/rems.py",
+    "units": "degC",
+    "utc": "2026-11-14T10:09:11Z",
+    "value": -101.9
+  },
+  "rems.variables.1.daily_min.p10": {
+    "commit": "1a98e90f274acdbc021c057bcc5f3b2b47a7de34",
+    "file": "conditions/rems.json",
+    "script": "pipeline/conditions/rems.py",
+    "units": "degC",
+    "utc": "2026-11-14T10:09:11Z",
+    "value": -116.6
+  },
+  "rems.variables.1.daily_min.p90": {
+    "commit": "1a98e90f274acdbc021c057bcc5f3b2b47a7de34",
+    "file": "conditions/rems.json",
+    "script": "pipeline/conditions/rems.py",
+    "units": "degC",
+    "utc": "2026-11-14T10:09:11Z",
+    "value": -92.2
+  },
+  "rems.variables.2.daily_max.median": {
+    "commit": "1a98e90f274acdbc021c057bcc5f3b2b47a7de34",
+    "file": "conditions/rems.json",
+    "script": "pipeline/conditions/rems.py",
+    "units": "Pa",
+    "utc": "2026-11-14T10:09:11Z",
+    "value": 861.6
+  },
+  "rems.variables.2.daily_max.p10": {
+    "commit": "1a98e90f274acdbc021c057bcc5f3b2b47a7de34",
+    "file": "conditions/rems.json",
+    "script": "pipeline/conditions/rems.py",
+    "units": "Pa",
+    "utc": "2026-11-14T10:09:11Z",
+    "value": 846.1
+  },
+  "rems.variables.2.daily_max.p90": {
+    "commit": "1a98e90f274acdbc021c057bcc5f3b2b47a7de34",
+    "file": "conditions/rems.json",
+    "script": "pipeline/conditions/rems.py",
+    "units": "Pa",
+    "utc": "2026-11-14T10:09:11Z",
+    "value": 883.9
+  },
+  "rems.variables.2.daily_min.median": {
+    "commit": "1a98e90f274acdbc021c057bcc5f3b2b47a7de34",
+    "file": "conditions/rems.json",
+    "script": "pipeline/conditions/rems.py",
+    "units": "Pa",
+    "utc": "2026-11-14T10:09:11Z",
+    "value": 792.2
+  },
+  "rems.variables.2.daily_min.p10": {
+    "commit": "1a98e90f274acdbc021c057bcc5f3b2b47a7de34",
+    "file": "conditions/rems.json",
+    "script": "pipeline/conditions/rems.py",
+    "units": "Pa",
+    "utc": "2026-11-14T10:09:11Z",
+    "value": 775.9
+  },
+  "rems.variables.2.daily_min.p90": {
+    "commit": "1a98e90f274acdbc021c057bcc5f3b2b47a7de34",
+    "file": "conditions/rems.json",
+    "script": "pipeline/conditions/rems.py",
+    "units": "Pa",
+    "utc": "2026-11-14T10:09:11Z",
+    "value": 809.7
+  },
+  "rems.variables.3.daily_max.median": {
+    "commit": "1a98e90f274acdbc021c057bcc5f3b2b47a7de34",
+    "file": "conditions/rems.json",
+    "script": "pipeline/conditions/rems.py",
+    "units": "W/m2",
+    "utc": "2026-11-14T10:09:11Z",
+    "value": 9.49
+  },
+  "rems.variables.3.daily_max.p10": {
+    "commit": "1a98e90f274acdbc021c057bcc5f3b2b47a7de34",
+    "file": "conditions/rems.json",
+    "script": "pipeline/conditions/rems.py",
+    "units": "W/m2",
+    "utc": "2026-11-14T10:09:11Z",
+    "value": 8.43
+  },
+  "rems.variables.3.daily_max.p90": {
+    "commit": "1a98e90f274acdbc021c057bcc5f3b2b47a7de34",
+    "file": "conditions/rems.json",
+    "script": "pipeline/conditions/rems.py",
+    "units": "W/m2",
+    "utc": "2026-11-14T10:09:11Z",
+    "value": 11.46
+  },
+  "rems.variables.3.daily_min.median": {
+    "commit": "1a98e90f274acdbc021c057bcc5f3b2b47a7de34",
+    "file": "conditions/rems.json",
+    "script": "pipeline/conditions/rems.py",
+    "units": "W/m2",
+    "utc": "2026-11-14T10:09:11Z",
+    "value": 0.0
+  },
+  "rems.variables.3.daily_min.p10": {
+    "commit": "1a98e90f274acdbc021c057bcc5f3b2b47a7de34",
+    "file": "conditions/rems.json",
+    "script": "pipeline/conditions/rems.py",
+    "units": "W/m2",
+    "utc": "2026-11-14T10:09:11Z",
+    "value": 0.0
+  },
+  "rems.variables.3.daily_min.p90": {
+    "commit": "1a98e90f274acdbc021c057bcc5f3b2b47a7de34",
+    "file": "conditions/rems.json",
+    "script": "pipeline/conditions/rems.py",
+    "units": "W/m2",
+    "utc": "2026-11-14T10:09:11Z",
+    "value": 0.0
+  },
+  "stations.S1.value": {
+    "commit": "fb7e9795f4619532a0614869e00ef4bab23799ab-dirty",
+    "file": "data/interim/terrain/stations.json",
+    "script": "pipeline/terrain/build.py",
+    "units": "1",
+    "utc": "2026-11-14T09:59:39Z",
+    "value": 0.8683
+  },
+  "stations.S2.value": {
+    "commit": "fb7e9795f4619532a0614869e00ef4bab23799ab-dirty",
+    "file": "data/interim/terrain/stations.json",
+    "script": "pipeline/terrain/build.py",
+    "units": "1",
+    "utc": "2026-11-14T09:59:39Z",
+    "value": 0.7443
+  },
+  "stations.S4.value": {
+    "commit": "fb7e9795f4619532a0614869e00ef4bab23799ab-dirty",
+    "file": "data/interim/terrain/stations.json",
+    "script": "pipeline/terrain/build.py",
+    "units": "1",
+    "utc": "2026-11-14T09:59:39Z",
+    "value": 0.475
+  },
+  "terrain.blocked_pct.30min": {
+    "commit": "4ff8b1bd4f760e2a74921db6998fe129b42213c8-dirty",
+    "file": "data/interim/terrain/cellstate_3m.tif",
+    "script": "pipeline/terrain/build.py",
+    "units": "%",
+    "utc": "2026-11-14T09:57:26Z",
+    "value": 41.23
+  },
+  "terrain.blocked_pct.60min": {
+    "commit": "4ff8b1bd4f760e2a74921db6998fe129b42213c8-dirty",
+    "file": "data/interim/terrain/cellstate_3m.tif",
+    "script": "pipeline/terrain/build.py",
+    "units": "%",
+    "utc": "2026-11-14T09:57:26Z",
+    "value": 31.357
+  },
+  "terrain.cellstate.pct.assessed": {
+    "commit": "f646f23fc6ee9d65296a522059c312d9b886ed5d-dirty",
+    "file": "terrain/cellstate.json",
+    "script": "tools/make_web.py",
+    "units": "%",
+    "utc": "2026-11-14T10:33:11Z",
+    "value": 68.78
+  },
+  "terrain.cellstate.pct.blocked": {
+    "commit": "f646f23fc6ee9d65296a522059c312d9b886ed5d-dirty",
+    "file": "terrain/cellstate.json",
+    "script": "tools/make_web.py",
+    "units": "%",
+    "utc": "2026-11-14T10:33:11Z",
+    "value": 31.22
+  },
+  "terrain.cellstate.pct.unknown": {
+    "commit": "f646f23fc6ee9d65296a522059c312d9b886ed5d-dirty",
+    "file": "terrain/cellstate.json",
+    "script": "tools/make_web.py",
+    "units": "%",
+    "utc": "2026-11-14T10:33:11Z",
+    "value": 0.0
+  },
+  "terrain.slope_compare.median_abs_diff": {
+    "commit": "4ff8b1bd4f760e2a74921db6998fe129b42213c8-dirty",
+    "file": "data/interim/terrain/slope_5m.tif",
+    "script": "pipeline/terrain/build.py",
+    "units": "deg",
+    "utc": "2026-11-14T09:57:26Z",
+    "value": 0.341
+  },
+  "terrain.xcheck.DTEEC_009149_1750_009294_1750_U01.median": {
+    "commit": "4ff8b1bd4f760e2a74921db6998fe129b42213c8-dirty",
+    "file": "data/interim/terrain/hirise_xcheck.json",
+    "script": "pipeline/terrain/build.py",
+    "units": "m",
+    "utc": "2026-11-14T09:57:17Z",
+    "value": -14.543
+  },
+  "terrain.xcheck.DTEEC_009149_1750_009294_1750_U01.p90_abs": {
+    "commit": "4ff8b1bd4f760e2a74921db6998fe129b42213c8-dirty",
+    "file": "data/interim/terrain/hirise_xcheck.json",
+    "script": "pipeline/terrain/build.py",
+    "units": "m",
+    "utc": "2026-11-14T09:57:17Z",
+    "value": 36.572
+  },
+  "terrain.xcheck.DTEEC_019698_1750_019988_1750_U01.median": {
+    "commit": "4ff8b1bd4f760e2a74921db6998fe129b42213c8-dirty",
+    "file": "data/interim/terrain/hirise_xcheck.json",
+    "script": "pipeline/terrain/build.py",
+    "units": "m",
+    "utc": "2026-11-14T09:57:46Z",
+    "value": -9.426
+  },
+  "terrain.xcheck.DTEEC_019698_1750_019988_1750_U01.p90_abs": {
+    "commit": "4ff8b1bd4f760e2a74921db6998fe129b42213c8-dirty",
+    "file": "data/interim/terrain/hirise_xcheck.json",
+    "script": "pipeline/terrain/build.py",
+    "units": "m",
+    "utc": "2026-11-14T09:57:46Z",
+    "value": 15.34
+  },
+  "v2.far.median_abs_deg": {
+    "commit": "eb9046b7dba30fbf7b376b997f0d6f3a6944f09b-dirty",
+    "file": "validation/v2.json",
+    "script": "pipeline/validation/v2_skyline.py",
+    "units": "deg",
+    "utc": "2026-11-14T10:12:30Z",
+    "value": 4.3035
+  },
+  "v2.far.median_deg": {
+    "commit": "eb9046b7dba30fbf7b376b997f0d6f3a6944f09b-dirty",
+    "file": "validation/v2.json",
+    "script": "pipeline/validation/v2_skyline.py",
+    "units": "deg",
+    "utc": "2026-11-14T10:12:30Z",
+    "value": -4.3035
+  },
+  "v2.far.n": {
+    "commit": "eb9046b7dba30fbf7b376b997f0d6f3a6944f09b-dirty",
+    "file": "validation/v2.json",
+    "script": "pipeline/validation/v2_skyline.py",
+    "units": "1",
+    "utc": "2026-11-14T10:12:30Z",
+    "value": 26861
+  },
+  "v2.far.p90_abs_deg": {
+    "commit": "eb9046b7dba30fbf7b376b997f0d6f3a6944f09b-dirty",
+    "file": "validation/v2.json",
+    "script": "pipeline/validation/v2_skyline.py",
+    "units": "deg",
+    "utc": "2026-11-14T10:12:30Z",
+    "value": 7.89
+  },
+  "v2.mid.median_abs_deg": {
+    "commit": "eb9046b7dba30fbf7b376b997f0d6f3a6944f09b-dirty",
+    "file": "validation/v2.json",
+    "script": "pipeline/validation/v2_skyline.py",
+    "units": "deg",
+    "utc": "2026-11-14T10:12:30Z",
+    "value": 0.1964
+  },
+  "v2.mid.median_deg": {
+    "commit": "eb9046b7dba30fbf7b376b997f0d6f3a6944f09b-dirty",
+    "file": "validation/v2.json",
+    "script": "pipeline/validation/v2_skyline.py",
+    "units": "deg",
+    "utc": "2026-11-14T10:12:30Z",
+    "value": 0.1698
+  },
+  "v2.mid.n": {
+    "commit": "eb9046b7dba30fbf7b376b997f0d6f3a6944f09b-dirty",
+    "file": "validation/v2.json",
+    "script": "pipeline/validation/v2_skyline.py",
+    "units": "1",
+    "utc": "2026-11-14T10:12:30Z",
+    "value": 951
+  },
+  "v2.mid.p90_abs_deg": {
+    "commit": "eb9046b7dba30fbf7b376b997f0d6f3a6944f09b-dirty",
+    "file": "validation/v2.json",
+    "script": "pipeline/validation/v2_skyline.py",
+    "units": "deg",
+    "utc": "2026-11-14T10:12:30Z",
+    "value": 0.3637
+  },
+  "v2.n_stops": {
+    "commit": "eb9046b7dba30fbf7b376b997f0d6f3a6944f09b-dirty",
+    "file": "validation/v2.json",
+    "script": "pipeline/validation/v2_skyline.py",
+    "units": "1",
+    "utc": "2026-11-14T10:12:30Z",
+    "value": 27
+  },
+  "v2.near.median_abs_deg": {
+    "commit": "eb9046b7dba30fbf7b376b997f0d6f3a6944f09b-dirty",
+    "file": "validation/v2.json",
+    "script": "pipeline/validation/v2_skyline.py",
+    "units": "deg",
+    "utc": "2026-11-14T10:12:30Z",
+    "value": 0.095
+  },
+  "v2.near.median_deg": {
+    "commit": "eb9046b7dba30fbf7b376b997f0d6f3a6944f09b-dirty",
+    "file": "validation/v2.json",
+    "script": "pipeline/validation/v2_skyline.py",
+    "units": "deg",
+    "utc": "2026-11-14T10:12:30Z",
+    "value": -0.00775
+  },
+  "v2.near.n": {
+    "commit": "eb9046b7dba30fbf7b376b997f0d6f3a6944f09b-dirty",
+    "file": "validation/v2.json",
+    "script": "pipeline/validation/v2_skyline.py",
+    "units": "1",
+    "utc": "2026-11-14T10:12:30Z",
+    "value": 2016
+  },
+  "v2.near.p90_abs_deg": {
+    "commit": "eb9046b7dba30fbf7b376b997f0d6f3a6944f09b-dirty",
+    "file": "validation/v2.json",
+    "script": "pipeline/validation/v2_skyline.py",
+    "units": "deg",
+    "utc": "2026-11-14T10:12:30Z",
+    "value": 0.53015
+  },
+  "validation.coverage.discs.0.budget_min": {
+    "commit": "4ff8b1bd4f760e2a74921db6998fe129b42213c8-dirty",
+    "file": "validation/coverage.json",
+    "script": "pipeline/terrain/build.py",
+    "units": "min",
+    "utc": "2026-11-14T09:57:31Z",
+    "value": 30
+  },
+  "validation.coverage.discs.0.radius_m": {
+    "commit": "4ff8b1bd4f760e2a74921db6998fe129b42213c8-dirty",
+    "file": "validation/coverage.json",
+    "script": "pipeline/terrain/build.py",
+    "units": "m",
+    "utc": "2026-11-14T09:57:31Z",
+    "value": 1764.0
+  },
+  "validation.coverage.discs.1.budget_min": {
+    "commit": "4ff8b1bd4f760e2a74921db6998fe129b42213c8-dirty",
+    "file": "validation/coverage.json",
+    "script": "pipeline/terrain/build.py",
+    "units": "min",
+    "utc": "2026-11-14T09:57:31Z",
+    "value": 60
+  },
+  "validation.coverage.discs.1.radius_m": {
+    "commit": "4ff8b1bd4f760e2a74921db6998fe129b42213c8-dirty",
+    "file": "validation/coverage.json",
+    "script": "pipeline/terrain/build.py",
+    "units": "m",
+    "utc": "2026-11-14T09:57:31Z",
+    "value": 3528.0
+  },
+  "validation.coverage.pad_check.budget_min": {
+    "commit": "4ff8b1bd4f760e2a74921db6998fe129b42213c8-dirty",
+    "file": "validation/coverage.json",
+    "script": "pipeline/terrain/build.py",
+    "units": "min",
+    "utc": "2026-11-14T09:57:31Z",
+    "value": 30
+  },
+  "validation.coverage.pad_check.known_pct": {
+    "commit": "4ff8b1bd4f760e2a74921db6998fe129b42213c8-dirty",
+    "file": "validation/coverage.json",
+    "script": "pipeline/terrain/build.py",
+    "units": "%",
+    "utc": "2026-11-14T09:57:31Z",
+    "value": 100.0
+  },
+  "validation.coverage.pad_check.min_assessed_pct": {
+    "commit": "4ff8b1bd4f760e2a74921db6998fe129b42213c8-dirty",
+    "file": "validation/coverage.json",
+    "script": "pipeline/terrain/build.py",
+    "units": "%",
+    "utc": "2026-11-14T09:57:31Z",
+    "value": 90
+  },
+  "validation.coverage.pad_check.pass": {
+    "commit": "4ff8b1bd4f760e2a74921db6998fe129b42213c8-dirty",
+    "file": "validation/coverage.json",
+    "script": "pipeline/terrain/build.py",
+    "units": null,
+    "utc": "2026-11-14T09:57:31Z",
+    "value": true
+  }
+}
