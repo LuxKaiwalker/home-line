@@ -36,8 +36,13 @@ describe.skipIf(!have)(`real ${SC}: HUD vs WS2 timeline`, () => {
     expect(index.dummy).toBe(false)
     expect(index.res_m).toBe(5)
   })
-  it('T_home = 0 at the pad (route start)', () => {
-    expect(computeReadout(playbackPosition(plan, 0), ctx).tHomeMin).toBe(0)
+  it('T_home at the pad (route start) = 0 within the timeline tolerance (0.5 min)', () => {
+    // Since D21 the pad is not the grid anchor, so no 5 m pixel centre falls on WS2's single
+    // T_home = 0 cell: the pad's pixel shows the 3 m cell under its centre (a few metres away).
+    const r = computeReadout(playbackPosition(plan, 0), ctx).tHomeMin
+    expect(r).not.toBeNull()
+    expect(r!).toBeGreaterThanOrEqual(0)
+    expect(r!).toBeLessThanOrEqual(0.5)
   })
   it('T_home and margin match every timeline row within 0.5 min', () => {
     const rows = plan.events.filter((e) => e.t_home_min !== null && e.margin_min !== null)

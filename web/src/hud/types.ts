@@ -35,7 +35,8 @@ export interface FieldsIndex extends GridSpec {
   fields: Record<string, FieldMeta>
 }
 
-export type Binding = 'O2' | 'daylight' | 'dose' | null
+/** margin / turn-back binding term (timeline + card contract v1.1.3: "EVA duration", D28) */
+export type Binding = 'O2' | 'daylight' | 'dose' | 'EVA duration' | null
 
 /** timeline_{scenario}.json row (contracts/timeline.schema.json v1.1.0). */
 export interface TimelineEvent {
@@ -101,7 +102,14 @@ export interface PadFile {
 export interface Rad {
   latest: { utc: string | null; dose_rate_uGy_day: number | null; lag_days: number | null }
   baseline_uGy_day: number | null
-  storm_2024?: { series: [string, number][]; onset_utc: string | null; tripwire_utc: string | null }
+  storm_2024?: {
+    series: [string, number][]
+    onset_utc: string | null
+    tripwire_utc: string | null
+    peak_utc?: string | null
+    /** "± 9 min" (D35, WS4 session 2); absent in older files */
+    tripwire_halfwidth_label?: string | null
+  }
   leash: { D_allow_mGy: number | null; tau_min_at_peak: number | null }
 }
 

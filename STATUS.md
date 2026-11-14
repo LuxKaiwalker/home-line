@@ -1346,40 +1346,87 @@ Branch: `ws7-hud`
   re-run at 1dbbff8 -> 96 `fields.*` keys, all clean, all citing `fields/...`; the 26 previous PNGs are
   byte-identical, +9 `con_{80,104,120}` fields (WS2's con rasters now exist), index gains only those.
 
+- 2026-11-14T15:45Z (session 4): **D39 storm placement** (`config/conditions.yaml storm_replay`):
+  `storm.ts` is a TypeScript port of WS4's `pipeline/conditions/storm_replay.py`
+  (`tripwireTargetMin`, `stormOffsetUtcMs`, `stormUtcAtMs`, `evaMinOf`, `stormReplay`;
+  `parseStormReplayConfig` refuses any rule other than route_max_t_home / tripwire / min / first, as
+  `check_config`). The tripwire fires at t* = the EVA minute of the route's largest T_home (samples:
+  WS2's timeline rows along the walk, turn_back excluded, so the HUD's t* = WS2's; on the official-pad
+  nom_104 **t* = 44.39 min, arrive S7** = WS2 session 7; a 5 m field lookup along route vertices gave
+  44.28, one vertex early, so it was dropped); turning
+  the switch on no longer moves the storm ("onset at switch-on" removed). The tripwire row reads
+  "armed: fires T+h:mm:ss ± 9 min" / "FIRED …" with the label from `rad.json
+  storm_2024.tripwire_halfwidth_label` (none shown if absent); its provenance cites
+  `rad.storm_2024.tripwire_utc`, `.tripwire_halfwidth_label`, `rad.leash.tau_min_at_peak`,
+  `fields.{sc}/t_home.sha256`. KATs `storm.test.ts` mirror all seven WS4 KATs (same inputs, same
+  answers) + HUD placement, alarm 2 timing, ± label on the real rad.json.
+- 2026-11-14T15:45Z: **D39 drift radius**: the core circle (D19) is max(`fallback_drift.sigma_floor_m`
+  5 m, `pct_of_distance` 2 % of distance since the last fix), also at a fix (5 m at the rover pad;
+  before: the fix's 2 m). The `sigma_floor_m: 5` key already existed; now cited as D39 in
+  `config/hud.yaml`. The F21 ellipse is a separate optional toggle "Odometry (F21, set, optional)"
+  shown only with WS9's files; "Drift" is always the D39 circle (before, WS9's files replaced it).
+- 2026-11-14T15:45Z: **D28 turn-back binding** (contracts v1.1.3): BINDING row and the turn-back
+  sub-line show the term incl. **"EVA duration"** ("bound by EVA duration"); during a dwell the
+  station's WS2 `turn_back` row adds e.g. "S2 latest leave T+6:22:10 (O₂)" (pre-D28 timeline). Read from the
+  timeline (`margin_binding` of the row in force and of the `turn_back` rows); the card's
+  `turn_back_binding` carries the same term (the HUD loads no cards).
+- 2026-11-14T16:21Z: **`make fields` on the D21 official pad** (WS2 session 7 rasters, all 9
+  scenarios incl. **con_\***), from clean commit **8a1e249** (main + WS2 + WS3 s5): **38 index entries
+  (35 PNGs + WS9's 3 `fix_interval_*`), 58.1 MB in `data/interim/export/fields/`** (pointers 9 × ≈ 2.2
+  = 20.1 MB; con_\* 14.3 MB incl. their pointers; largest `shared/slope.png` 4.06 MB) + WS9 0.7 MB =
+  **58.8 MB in the web tree**; every file < 50 MB. Manifest: 98 `fields.*` keys, all at 8a1e249 (0
+  `-dirty`). nom_104 T_home max 199.6 min, known 66.8 % of the grid; con_104 max 264.8 min.
+- **Fix (D21): `home_bearing` now aims at the pad in use** (`engine/public/pad.json` `pad`, projected
+  with grid.json's crs; manifest `fields.nom_104/home_bearing.pad_lon/lat` = 137.401783 / −4.77748).
+  Before, it aimed at `grid.json` pad = pad_default, 2 km off the official pad. KATs: projection round
+  trip, synthetic pad shift, real bearing + WS2's T_home = 0 cell at the official pad.
+- **Finding (C):** the pad is no longer the grid anchor, so no 5 m pixel centre falls on WS2's single
+  T_home = 0 cell: the HUD reads **0.1 min (6 s) at the pad** (the 3 m cell under the pad pixel's
+  centre). Data left as sampled (no special case); the KATs "T_home = 0 at the pad" now use the
+  brief's ±0.5 min timeline tolerance (`real.test.ts`, `test_real_index_valid_and_pad_zero`). The
+  real wayhome KAT read its pad from grid.json (test bug; the app uses pad.json): fixed.
+- **WS8 (info):** `src/fp3d/fp3d.test.ts` "camera on the route … real route (nom_104)" fails on the
+  new route until `make fp3d` is re-run on the official pad (not WS7's).
+- KATs session 4: `web/src/hud/*.test.ts` **114 pass** (93 before; storm 18 incl. 2 real, drift D39,
+  D28 4); `tests/test_fields_png.py` **54 pass** (incl. 3 real); whole web suite 479 pass, 1 fail
+  (WS8 above), 2 skipped; `tsc --noEmit` clean; `vite build` OK.
+
 ### Doing
 
 - —
 
 ### Next
 
+- C: `make web` to publish the official-pad fields (58.8 MB incl. con_\*).
 - C: `make web` to publish the pointers and the merged index (the HUD already runs on the real tree).
-- con_* fields when V1 lands (`make fields` again; worst-case + bearing unchanged).
 - 60 fps check at 60× on a real laptop (the automated browser here is throttled to ~15 fps even
   when the HUD is idle, so it measures nothing).
 
 ### Blocked
 
-- **Fields size, C (info):** 41.9 MB in the web tree now (28.4 MB fields + 12.8 MB pointers + 0.7 MB
-  WS9); con_* will add ≈ 8 MB fields + ≈ 6 MB pointers (≈ 56 MB). The HUD reads one pointer (the
-  active scenario). If that is too much: `--no-pointer` and a nom_104-only pointer run (2.0 MB), or
-  pointers for the 104 kg suits only. Way-home path and pointer-field proposal: resolved (v1.1.1).
+- — (fields size accepted by C 14:28, "≈ 56 MB with con_*"; actual with con_* on the official pad
+  **58.8 MB** in the web tree, every file < 50 MB. If too much: `--no-pointer` + a nom_104-only
+  pointer run, or pointers for the 104 kg suits only.)
 
 ### Assumptions added
 
 - A-WS7-1: within a leg the marker follows the route's `times_min`; without them, uniform speed.
-- A-WS7-2: worst-case fields and the alarm-3 circle skip cells with no T_home (blocked > no-go,
+- ~~A-WS7-2~~ **Accepted (D39, user 16:20, "HUD no-route skip accepted"), no longer an assumption:**
+  worst-case fields and the alarm-3 circle skip cells with no T_home (blocked > no-go,
   unreached): the crew cannot be there on the plan. Unknown only if no reachable cell is in the
   disc. (The M0 dummy used "any unknown → unknown".) Disc radius rounded up to whole 3 m cells
   (12 / 51 / 102 m).
 - A-WS7-3: HUD margin = (timeline `margin_min` + `t_home_min`, interpolated in t) − T_home at the
   position (worst case within σ); turn-back countdown = that margin.
-- A-WS7-4: storm switch puts the 2024 onset at the EVA minute the switch is turned on; the
-  tripwire fires after the real onset→tripwire delay (rad.json); the dose budget then counts down
-  from `leash.tau_min_at_peak`; alarm 2 when T_home ≥ budget left.
+- A-WS7-4 (revised session 4; placement decided D39): the storm tripwire fires at t* per
+  `conditions.yaml storm_replay` (no longer at switch-on). Assumed: the route T_home samples are
+  WS2's timeline rows along the walk (turn_back excluded), as WS2 uses; the dose budget
+  counts down from `leash.tau_min_at_peak` after the tripwire; alarm 2 when T_home ≥ budget left.
 - A-WS7-6: the pad is "reached" when the pointer path stops within one 3 m pixel of the pad
   (pad on a cell corner). Sun row minutes are floored; outside WS4's series the sun position is
   unknown (not extrapolated).
-- A-WS7-5: drift σ = fix σ at the fix, else max(fix σ, floor 5 m, 2 % of distance since the fix).
+- ~~A-WS7-5~~ **Decided (D39):** drift σ = max(5 m, 2 % of distance since the last fix), also at
+  the fix (a fix σ above the floor would still hold; none is).
 - 5 m sampling: each 5 m pixel takes the 3 m cell under its centre (no ties on these grids);
   slope = the 1 m `slope_5m` cell at the 5 m pixel centre; `home_bearing` = geometric bearing to
   the pad (grid.json), known everywhere.
