@@ -15,8 +15,10 @@ import fixIntervalSummarySchema from '../../../contracts/fix_interval_summary.sc
 import fixesSchema from '../../../contracts/fixes.schema.json'
 import fp3dIndexSchema from '../../../contracts/fp3d_index.schema.json'
 import goldenSchema from '../../../contracts/golden.schema.json'
+import highlightsSchema from '../../../contracts/highlights.schema.json'
 import horizonRingSchema from '../../../contracts/horizon_ring.schema.json'
 import isochronesSchema from '../../../contracts/isochrones.schema.json'
+import labelsSchema from '../../../contracts/labels.schema.json'
 import localisationSchema from '../../../contracts/localisation.schema.json'
 import manifestSchema from '../../../contracts/manifest.schema.json'
 import montecarloSchema from '../../../contracts/montecarlo.schema.json'
@@ -30,6 +32,7 @@ import routeSchema from '../../../contracts/route.schema.json'
 import scenariosIndexSchema from '../../../contracts/scenarios_index.schema.json'
 import sitingPngSchema from '../../../contracts/siting_png.schema.json'
 import stationsSchema from '../../../contracts/stations.schema.json'
+import terrainTilesSchema from '../../../contracts/terrain_tiles.schema.json'
 import timelineSchema from '../../../contracts/timeline.schema.json'
 import tilejsonSchema from '../../../contracts/tilejson.schema.json'
 import tracksSchema from '../../../contracts/tracks.schema.json'
@@ -86,6 +89,11 @@ export const SCHEMA_MAP: [pattern: string, schema: JsonSchema][] = [
   ['scenarios/pads/*/timeline_*.json', timelineSchema],
   // v1.1.5: WS2 physiology golden vectors (D41)
   ['physio/golden.json', goldenSchema],
+  // Design contracts v1 (DESIGN §6, D3)
+  ['labels.json', labelsSchema],
+  ['terrain/tiles.json', terrainTilesSchema],
+  ['terrain_low/tiles.json', terrainTilesSchema],
+  ['highlights/*.geojson', highlightsSchema],
 ]
 
 /** fnmatch-style match where `*` does not cross `/` (one glob per path segment, as in Python). */

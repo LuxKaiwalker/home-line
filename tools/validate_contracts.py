@@ -89,7 +89,16 @@ SCHEMA_MAP: list[tuple[str, str]] = [
     ("scenarios/pads/*/timeline_*.json", "timeline.schema.json"),
     # v1.1.5: WS2 physiology golden vectors (D41; the simulator's C# port must reproduce them)
     ("physio/golden.json", "golden.schema.json"),
+    # Design contracts v1 (DESIGN §6, D3): labels, terrain tile metadata, highlight polygons
+    ("labels.json", "labels.schema.json"),
+    ("terrain/tiles.json", "terrain_tiles.schema.json"),
+    ("terrain_low/tiles.json", "terrain_tiles.schema.json"),
+    ("highlights/*.geojson", "highlights.schema.json"),
 ]
+
+# Contracts for files outside the data root (validated by their own tests):
+# storyboard.schema.json covers web/public/story/*.json (tests/test_design_contracts.py).
+NON_DATA_SCHEMAS: tuple[str, ...] = ("storyboard.schema.json",)
 
 # Pipeline-internal JSON (not web-facing), relative to data/interim/. Checked only with
 # --interim DIR (producers also validate on write).
