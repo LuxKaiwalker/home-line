@@ -13,6 +13,8 @@ formulas:
   speed: "v_haul = min(v_safe(theta), eps * P / F); downhill: min(v_haul, 0.5 * v_safe)"
   infeasible: "v_haul < 0.1 m/s or F > boot_mu * (m_b + suit + tools) * g * cos(theta)"
 contour_min: 60                    # Scoville, Artemis III 1 h benchmark
+partner_cases: [cart]             # D20 (user 2026-11-14 14:24, SPEC §11): partner line + haul fields are cart only; drag stays in `cases` and is reported as a finding (haul.drag.flat.*), not drawn
+partner_caption: "Partner line ({case} haul, {contour_min:g} min)"   # D20 label (user 14:24); filled from partner_cases and contour_min
 mask_ridges: true
 g_moon: 1.62                       # added by WS2 2026-11-14 (assumed: true): standard lunar g, m/s^2; only for the SPEC §9 Mars/Moon = 2.29 KAT
 assumed: true

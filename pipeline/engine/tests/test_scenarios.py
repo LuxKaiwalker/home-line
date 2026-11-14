@@ -115,12 +115,26 @@ def test_partner_on_plane(tmp_path, settings):
     ridge = np.zeros(g.shape)
     ridge[:, 120] = 1.0  # one ridge line, masked for hauling
     f = scenarios.partner_fields(g, pad, ridge, 104, settings, out_dir=tmp_path)
-    assert {k[0] for k in f} == {"cart", "drag"} and len(f) == 4
+    # D20: cart only, 2 casualty masses (suited 179 kg, bound 343 kg); no drag fields
+    assert set(f) == {("cart", 179.0), ("cart", 343.0)}
+    assert not list(tmp_path.glob("haul/*drag*"))
     assert np.isinf(f[("cart", 179.0)][:, 121:]).all()
     fc = scenarios.partner_product(g, f, 104, settings, public=tmp_path / "public")
     validate(fc, "partner.schema.json")
     assert all(ft["properties"]["style"] == "dashed" and not ft["properties"]["default_visible"]
                for ft in fc["features"])  # fmt: skip
+    assert {ft["properties"]["case"] for ft in fc["features"]} == {"cart"}
+    assert all(ft["properties"]["caption"] == "Partner line (cart haul, 60 min)"
+               for ft in fc["features"])  # fmt: skip
+    # the drag finding travels with the file and its numbers are in the manifest (D20)
+    d = fc["drag_finding"]
+    assert d["feasible"] is False and d["reason"] == "traction"
+    assert d["max_mass_kg"] == pytest.approx(157.5)
+    keys = provenance.load_all()
+    for q in ("force_N", "traction_limit_N", "max_mass_kg", "casualty_kg"):
+        assert keys[f"haul.drag.flat.{q}"]["value"] == pytest.approx(d[q], abs=1e-3)
+        assert keys[f"haul.drag.flat.{q}"]["file"] == "scenarios/nom_104/partner.geojson"
+        assert f"haul.drag.flat.nom_104.{q}" in keys
 
 
 # ------------------------------------------------------------------ traverse
@@ -191,6 +205,26 @@ def test_traverse_plan_and_timeline(plane_world, tmp_path):
     assert json.loads((tmp_path / "timeline_nom_104.json").read_text()) == tl
 
 
+def test_traverse_manifest_keys(plane_world, tmp_path):
+    """WS6 audit: every route leg number and each station's access_dist_m has a key."""
+    g, pad, p, tab, home, st = plane_world
+    rst = [{**s, "access_dist_m": 2.5 * (i + 1)} for i, s in enumerate(st)]
+    res = traverse.plan(g, tab, home, pad, rst, 390.0, 30.0, margin.inputs(p))
+    traverse.write(res, "nom_104", tmp_path)
+    keys = provenance.load_all()
+    assert res.legs
+    for lg in res.legs:
+        i = lg["leg"]
+        for q, u in (("t_min", "min"), ("o2_L", "L"), ("length_m", "m"), ("t_start_min", "min"),
+                     ("t_end_min", "min")):  # fmt: skip
+            e = keys[f"route.nom_104.leg.{i}.{q}"]
+            assert e["value"] == lg[q] and e["units"] == u
+            assert e["file"] == "route_nom_104.geojson"
+    for s in rst:
+        e = keys[f"timeline.nom_104.{s['id']}.access_dist_m"]
+        assert e["value"] == s["access_dist_m"] and e["file"] == "timeline_nom_104.json"
+
+
 def test_traverse_daylight_cuts_the_route(plane_world):
     """A tight daylight limit drops stations; the plan stays feasible."""
     g, pad, p, tab, home, st = plane_world
@@ -218,6 +252,12 @@ def test_trade_product(plane_world, tmp_path, settings):
     assert c60["science_value"] == pytest.approx(trade.science_value(t_at, vals, 60))
     assert c30["science_value"] <= c60["science_value"]
     assert tt["cells"][0][0]["science_value"] is None  # 80 kg not run: unknown stays null
+
+
+def test_siting_scenario_is_the_rule_variant():
+    """F8: the siting forward runs start at the access cells of the rule's scenario
+    (site.yaml siting.score variant at the default suit), not the default scenario's."""
+    assert scenarios.siting_scenario() == "con_104"
 
 
 def test_siting_run(plane_world, tmp_path):

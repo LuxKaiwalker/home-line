@@ -9,6 +9,10 @@ VO2_walk_self is the rescuer's own walking cost (physio, F3) *at the haul speed*
 v = eps P(v) / F linear in v:  v = eps K (E - V0) / (F + eps K c(th)),  K = m_b 20.1 / 60,
 E = effort_frac VO2max, c = physio.cost_slope. F <= 0 (load pulls downhill) leaves the caps.
 Ridge cells (ridge_index > site.yaml ridge.threshold_m) are masked for hauling.
+
+D20 (user 2026-11-14 14:24, SPEC §11): the partner line and the haul fields use
+``haul.yaml partner_cases`` (cart only). The drag case stays in the config and is reported as a
+finding: on flat ground its force exceeds boot traction (``drag_flat``).
 """
 
 from __future__ import annotations
@@ -86,6 +90,51 @@ def speed(p: Params, c: HaulCase, theta):
     return v if v.ndim else float(v)
 
 
+def infeasible_reason(p: Params, c: HaulCase, theta: float) -> str | None:
+    """Why the haul is infeasible at one grade: "traction" (F > boot_mu (m_b + suit + tools) g
+    cos th, checked first), "speed" (v_haul < min speed) or None (feasible)."""
+    th = float(theta)
+    F = force(c.casualty_kg, c.mu, th, p.g)
+    if F > c.boot_mu * (p.m_b + p.carried_kg) * p.g * np.cos(th):
+        return "traction"
+    return "speed" if speed(p, c, th) <= 0.0 else None
+
+
+def drag_flat(suit_kg: float, variant: str = "nominal") -> dict:
+    """D20 finding: dragging the suited crewmate on flat ground (theta = 0), from config.
+    force_N = m_IC g mu_drag; traction_limit_N = boot_mu (m_b + suit + tools) g;
+    max_mass_kg = boot_mu (m_b + suit + tools) / mu_drag (g cancels)."""
+    p = physio.params(variant, suit_kg=suit_kg)
+    c = case("drag", suited_casualty_kg(suit_kg))
+    system = p.m_b + p.carried_kg
+    reason = infeasible_reason(p, c, 0.0)
+    return {
+        "case": "drag",
+        "theta_deg": 0.0,
+        "suit_kg": float(suit_kg),
+        "casualty_kg": c.casualty_kg,
+        "rescuer_system_kg": float(system),
+        "mu": c.mu,
+        "boot_mu": c.boot_mu,
+        "g_ms2": p.g,
+        "force_N": float(force(c.casualty_kg, c.mu, 0.0, p.g)),
+        "traction_limit_N": float(c.boot_mu * system * p.g),
+        "max_mass_kg": float(c.boot_mu * system / c.mu),
+        "feasible": reason is None,
+        "reason": reason,
+    }
+
+
+def partner_cases() -> list[str]:
+    """Haul cases drawn as the partner line (haul.yaml partner_cases; D20: cart only)."""
+    h = load("haul")
+    names = list(h["partner_cases"])
+    unknown = [n for n in names if n not in h["cases"]]
+    if unknown:
+        raise ValueError(f"haul.yaml partner_cases not in cases: {unknown}")
+    return names
+
+
 def grade_table(p: Params, c: HaulCase, step_deg: float = 0.01) -> GradeTable:
     """Router table for hauling. O2 is the rescuer's at effort_frac x VO2max while hauling."""
     n = int(round(180.0 / step_deg)) + 1
@@ -117,7 +166,8 @@ def partner(grid: Grid, fields: dict[tuple[str, float], np.ndarray], simplify_m:
     from .envelope import envelope_mask, mask_polygon
     from .geo import feature_collection
 
-    cmin = load("haul")["contour_min"]
+    h = load("haul")
+    cmin = h["contour_min"]
     items = []
     for (name, m_ic), t in fields.items():
         props = {
@@ -126,7 +176,8 @@ def partner(grid: Grid, fields: dict[tuple[str, float], np.ndarray], simplify_m:
             "contour_min": cmin,
             "style": "dashed",
             "default_visible": False,
-            "caption": "Design question. Every haul parameter is an assumed band.",
+            "caption": h["partner_caption"].format(case=name, contour_min=cmin),
+            "note": "Design question. Every haul parameter is an assumed band.",
         }
         m = envelope_mask(t, cmin)
         n = int(m.sum())
