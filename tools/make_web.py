@@ -19,7 +19,8 @@ AGENTS.md: web-facing files reach web/public/data/ only via `make web` (owner C)
      tiles written.
    * WS1 ``cellstate_3m.tif`` -> ``terrain/cellstate.png`` + ``terrain/cellstate.json``
      (contracts/cellstate.schema.json): one pixel per routing cell, RGBA, counts = state
-     (0 assessed, 1 blocked), A = 0 unknown.
+     (0 assessed, 1 blocked), A = 0 unknown. ``cellstate_3m_conservative.tif`` (v1.1.2) ->
+     ``terrain/cellstate_conservative.{png,json}`` the same way (variant from the file name).
    * Station cards (C decision 2026-11-14 11:42): ``cards/{S}.json`` = WS3's
      ``horizon/public/cards/{S}.json`` (navcam, skyline error, panorama, landmarks) merged with
      WS2's ``engine/public/cards/{S}.timeline.json`` (timeline, margin, contingency, access).
@@ -77,6 +78,11 @@ BASEMAP_DEST = "tiles/basemap"
 TILEJSON = f"{BASEMAP_DEST}/tilejson.json"
 CELLSTATE_JSON = "terrain/cellstate.json"
 CELLSTATE_PNG = "terrain/cellstate.png"
+CELLSTATE_CONS_JSON = "terrain/cellstate_conservative.json"  # v1.1.2
+CELLSTATE_CONS_PNG = "terrain/cellstate_conservative.png"
+# variant (from the source file name, WS1) -> manifest key prefix of its pct
+CELLSTATE_KEYS = {"nominal": "terrain.cellstate.pct", "conservative":
+                  "terrain.cellstate_conservative.pct"}
 CELLSTATE_CODES = {"0": "assessed", "1": "blocked", "2": "unknown"}
 TILE_SUFFIX = {"webp": ".webp", "png": ".png"}
 CARD_PARTS = {"WS3": re.compile(r"^(S[0-9]+)\.json$"),
@@ -135,6 +141,8 @@ RULES: list[Rule] = [
     Rule("WS1", "terrain", "coverage.png", to="validation/coverage.png"),
     Rule("WS1", "terrain", "coreg.json", to="validation/coreg.json"),
     Rule("WS1", "terrain", "cellstate_3m.tif", to=CELLSTATE_JSON, kind="cellstate"),
+    Rule("WS1", "terrain", "cellstate_3m_conservative.tif", to=CELLSTATE_CONS_JSON,
+         kind="cellstate"),
     Rule("WS1", "terrain/tiles/basemap", "*/*/*.png", to=BASEMAP_DEST, kind="tiles"),
     # WS2 engine: engine/public/ mirrors web/public/data/ (pipeline/engine/scenarios.py PUBLIC)
     Rule("WS2", "engine/public", "scenarios/index.json"),
@@ -170,6 +178,7 @@ RULES: list[Rule] = [
     Rule("WS8", "export", "fp3d/near/*.f32.gz"),
     Rule("WS8", "export", "fp3d/near_tex/*.jpg"),
     Rule("WS8", "export", "fp3d/far.f32.gz"),
+    Rule("WS8", "export", "fp3d/far_tex.jpg"),  # WS8 STATUS: 8 m ortho over the far mesh
     # WS9 navigation, real run only (pipeline/navigation/real.py REAL_OUT; never nav_synthetic/)
     Rule("WS9", "navigation", "nav/montecarlo_*.json"),
     Rule("WS9", "navigation", "nav/fixes.json"),
@@ -593,6 +602,16 @@ def lonlat_bounds(transform, width: int, height: int, site: dict) -> list[float]
     return [round(min(lon), 6), round(min(lat), 6), round(max(lon), 6), round(max(lat), 6)]
 
 
+def cellstate_variant(src: Path) -> str:
+    """WS1 names the conservative raster ``cellstate_3m_conservative.tif``."""
+    return "conservative" if "conservative" in src.name else "nominal"
+
+
+def cellstate_png(dst: Path) -> str:
+    """The PNG beside a cell-state JSON web path (terrain/cellstate[_conservative].png)."""
+    return dst.with_suffix(".png").as_posix()
+
+
 def write_cellstate(c: Copy, public: Path, site: dict, out=print,
                     fragment_dir: Path | None = None) -> dict:
     import rasterio
@@ -604,22 +623,23 @@ def write_cellstate(c: Copy, public: Path, site: dict, out=print,
         bounds = lonlat_bounds(ds.transform, ds.width, ds.height, site)
         res = float(ds.transform.a)
     png, pct = encode_cellstate(state)
-    (public / CELLSTATE_PNG).parent.mkdir(parents=True, exist_ok=True)
-    (public / CELLSTATE_PNG).write_bytes(png)
-    variant = "conservative" if "conservative" in c.src.name else "nominal"
-    doc = {"image": CELLSTATE_PNG, "bounds": bounds, "width": int(state.shape[1]),
+    js = c.dst.as_posix()
+    im = cellstate_png(c.dst)
+    (public / im).parent.mkdir(parents=True, exist_ok=True)
+    (public / im).write_bytes(png)
+    variant = cellstate_variant(c.src)
+    doc = {"image": im, "bounds": bounds, "width": int(state.shape[1]),
            "height": int(state.shape[0]), "res_m": res, "variant": variant,
            "codes": CELLSTATE_CODES, "pct": pct,
            "source": f"data/interim/{c.src.relative_to(c.src.parents[1]).as_posix()} (WS1)"}
-    (public / CELLSTATE_JSON).write_text(json.dumps(doc, indent=1) + "\n", encoding="utf-8")
-    for p in (CELLSTATE_PNG, CELLSTATE_JSON):
+    (public / js).write_text(json.dumps(doc, indent=1) + "\n", encoding="utf-8")
+    for p in (im, js):
         keep_mtime(c.src, public / p)
     from pipeline.provenance.manifest import record
 
     for k, v in pct.items():
-        record(f"terrain.cellstate.pct.{k}", v, "%", CELLSTATE_JSON, SCRIPT,
-               fragment_dir=fragment_dir)
-    out(f"cellstate: {state.shape[1]} x {state.shape[0]} at {res:g} m -> {CELLSTATE_PNG} "
+        record(f"{CELLSTATE_KEYS[variant]}.{k}", v, "%", js, SCRIPT, fragment_dir=fragment_dir)
+    out(f"cellstate ({variant}): {state.shape[1]} x {state.shape[0]} at {res:g} m -> {im} "
         f"({len(png) / 1e6:.2f} MB; assessed {pct['assessed']} %, blocked {pct['blocked']} %, "
         f"unknown {pct['unknown']} %)")
     return doc
@@ -629,7 +649,8 @@ def write_cellstate(c: Copy, public: Path, site: dict, out=print,
 
 
 def manifest_fragments(fragment_dir: Path, interim: Path, tmp: Path, out=print,
-                       skip_files: list[str] = (), written: set[str] | None = None) -> list[str]:
+                       skip_files: list[str] = (), written: set[str] | None = None,
+                       pattern: str = "*.json", bridge: bool = True) -> list[str]:
     """Stage the fragments to merge in ``tmp``; returns refusals (dummy-made fragments).
     Entries whose ``file`` matches a ``skip_files`` pattern (a skipped owner's paths), or names
     a web path (not ``data/...``) outside ``written`` (an output missing this run), are left
@@ -643,7 +664,7 @@ def manifest_fragments(fragment_dir: Path, interim: Path, tmp: Path, out=print,
 
     refused = []
     tmp.mkdir(parents=True, exist_ok=True)
-    for f in sorted(fragment_dir.glob("*.json")) if fragment_dir.is_dir() else []:
+    for f in sorted(fragment_dir.glob(pattern)) if fragment_dir.is_dir() else []:
         frag = json.loads(f.read_text(encoding="utf-8"))
         bad = [k for k, e in frag.items()
                if isinstance(e, dict) and (e.get("script") == DUMMY_SCRIPT
@@ -660,7 +681,7 @@ def manifest_fragments(fragment_dir: Path, interim: Path, tmp: Path, out=print,
             continue
         shutil.copy2(f, tmp / f.name)
     pending = interim / WS1_PENDING
-    if pending.is_file() and not (tmp / WS1_FRAGMENT).exists():
+    if bridge and pending.is_file() and not (tmp / WS1_FRAGMENT).exists():
         frag = json.loads(pending.read_text(encoding="utf-8"))
         kept = {k: e for k, e in frag.items()
                 if not (isinstance(e, dict) and drop(str(e.get("file") or "")))}
@@ -736,7 +757,8 @@ def dangling(public: Path) -> list[str]:
         for ref in (nav.get("url_local"), nav.get("overlay_png"), doc.get("panorama_png")):
             if isinstance(ref, str):
                 need(ref, f"cards/{card.name}")
-    for rel, key in (("siting_png.json", "image"), (CELLSTATE_JSON, "image")):
+    for rel, key in (("siting_png.json", "image"), (CELLSTATE_JSON, "image"),
+                     (CELLSTATE_CONS_JSON, "image")):
         if (public / rel).is_file():
             need(json.loads((public / rel).read_text())[key], rel)
     return out
@@ -781,8 +803,7 @@ def run(interim: Path = INTERIM, public: Path = PUBLIC, *, fragments: Path | Non
         skip_files += [pat for st in p.unbuilt_cards for pat in (f"cards/{st}.json",
                                                                   f"cards/{st}/*")]
         written = {c.dst.as_posix() for c in p.copies} | {c.dst.as_posix() for c in p.cards}
-        if any(c.kind == "cellstate" for c in p.copies):
-            written |= {CELLSTATE_PNG, CELLSTATE_JSON}
+        written |= {cellstate_png(c.dst) for c in p.copies if c.kind == "cellstate"}
         if p.tiles:
             written.add(TILEJSON)
         p.refused += manifest_fragments(fragments, interim, staged, out, skip_files, written)
@@ -803,9 +824,11 @@ def run(interim: Path = INTERIM, public: Path = PUBLIC, *, fragments: Path | Non
         for c in p.copies:
             if c.kind == "cellstate":
                 write_cellstate(c, public, site, out, fragment_dir=record_dir or fragments)
-                # the cell-state keys were just recorded: stage that fragment too
-                for f in (record_dir or fragments).glob("tools__make_web*.json"):
-                    shutil.copy2(f, staged / f.name)
+        if any(c.kind == "cellstate" for c in p.copies):
+            # the cell-state keys were just recorded: stage that fragment again, through the
+            # same filter (a key of a cell-state file not written this run stays out)
+            manifest_fragments(record_dir or fragments, interim, staged, out, skip_files,
+                               written, pattern="tools__make_web*.json", bridge=False)
         write_tiles(p.tiles, public, settings, interim, out)
         n_src = len(p.copies) + sum(len(c.parts) for c in p.cards)
         out(f"make web: {n_src} source files, {len(p.cards)} cards merged ({removed} old files "

@@ -76,6 +76,8 @@ SCHEMA_MAP: list[tuple[str, str]] = [
     ("siting_png.json", "siting_png.schema.json"),
     ("tiles/basemap/tilejson.json", "tilejson.schema.json"),
     ("terrain/cellstate.json", "cellstate.schema.json"),
+    # v1.1.2: conservative cell states (WS1 cellstate_3m_conservative.tif, make web)
+    ("terrain/cellstate_conservative.json", "cellstate.schema.json"),
 ]
 
 # Pipeline-internal JSON (not web-facing), relative to data/interim/. Checked only with

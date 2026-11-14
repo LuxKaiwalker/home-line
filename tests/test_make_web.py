@@ -103,12 +103,12 @@ def write_tile(path: Path, rgb=(120, 90, 60)) -> None:
     Image.fromarray(arr, "RGB").save(path)
 
 
-def write_cellstate_tif(path: Path) -> None:
+def write_cellstate_tif(path: Path, blocked_rows: int = 10) -> None:
     import rasterio
     from rasterio.transform import Affine
 
     state = np.zeros((40, 50), dtype=np.uint8)
-    state[:10, :] = 1
+    state[:blocked_rows, :] = 1
     state[30:, 40:] = 2
     path.parent.mkdir(parents=True, exist_ok=True)
     with rasterio.open(path, "w", driver="GTiff", height=40, width=50, count=1, dtype="uint8",
@@ -220,6 +220,56 @@ def test_run_end_to_end(tree):
     src_t = (tree["interim"] / "conditions/rad.json").stat().st_mtime
     assert (pub / "conditions/rad.json").stat().st_mtime == pytest.approx(src_t)
     assert any(line.startswith("  WS2: 0 files present") for line in lines)
+
+
+def test_run_conservative_cellstate_own_web_path(tree):
+    """WS1's cellstate_3m_conservative.tif -> terrain/cellstate_conservative.{png,json}
+    (variant from the file name, own manifest keys); the nominal files are unchanged."""
+    write_cellstate_tif(tree["interim"] / "terrain" / "cellstate_3m_conservative.tif", 20)
+    rc, lines = run(tree)
+    assert rc == 0, "\n".join(lines)
+    pub = tree["public"]
+    nom = json.loads((pub / mw.CELLSTATE_JSON).read_text())
+    con = json.loads((pub / mw.CELLSTATE_CONS_JSON).read_text())
+    assert errors("cellstate.schema.json", con) == []
+    assert (nom["variant"], nom["image"]) == ("nominal", mw.CELLSTATE_PNG)
+    assert (con["variant"], con["image"]) == ("conservative", mw.CELLSTATE_CONS_PNG)
+    assert nom["pct"] == {"assessed": 70.0, "blocked": 25.0, "unknown": 5.0}
+    assert con["pct"] == {"assessed": 45.0, "blocked": 50.0, "unknown": 5.0}
+    assert con["bounds"] == nom["bounds"]
+    rgba = decode((pub / mw.CELLSTATE_CONS_PNG).read_bytes())
+    assert (rgba[:20, :, 1] == 1).all() and (rgba[20:30, :, 1] == 0).all()
+    m = json.loads((pub / "manifest.json").read_text())
+    assert m["terrain.cellstate.pct.blocked"]["value"] == 25.0
+    assert m["terrain.cellstate_conservative.pct.blocked"]["value"] == 50.0
+    assert m["terrain.cellstate_conservative.pct.blocked"]["file"] == mw.CELLSTATE_CONS_JSON
+    assert not any(line.startswith("DANGLING") for line in lines)
+
+
+def test_run_without_conservative_drops_its_keys(tree):
+    """A stale conservative key in make_web's own fragment never cites an unwritten file."""
+    (tree["rec"]).mkdir()
+    (tree["rec"] / "tools__make_web.json").write_text(json.dumps({
+        "terrain.cellstate_conservative.pct.blocked": entry(mw.CELLSTATE_CONS_JSON, 50.0)}))
+    (tree["frags"] / "tools__make_web.json").write_text(json.dumps({
+        "terrain.cellstate_conservative.pct.blocked": entry(mw.CELLSTATE_CONS_JSON, 50.0)}))
+    rc, lines = run(tree)
+    assert rc == 0, "\n".join(lines)
+    m = json.loads((tree["public"] / "manifest.json").read_text())
+    assert "terrain.cellstate.pct.blocked" in m
+    assert "terrain.cellstate_conservative.pct.blocked" not in m
+    assert ("WS1", "terrain/cellstate_conservative.json",
+            "data/interim/terrain/cellstate_3m_conservative.tif") in mw.plan(
+        tree["interim"], settings=SETTINGS, dummy_tree=tree["dummy"], h0=H0).missing
+
+
+def test_plan_ws8_far_texture_rule(tree):
+    """WS8 STATUS: far texture fp3d/far_tex.jpg (8 m ortho over the far mesh)."""
+    src = tree["interim"] / "export" / "fp3d" / "far_tex.jpg"
+    src.parent.mkdir(parents=True)
+    src.write_bytes(b"\xff\xd8jpg")
+    p = mw.plan(tree["interim"], settings=SETTINGS, dummy_tree=tree["dummy"], h0=H0)
+    assert any(c.owner == "WS8" and c.dst.as_posix() == "fp3d/far_tex.jpg" for c in p.copies)
 
 
 def test_run_drops_top_zoom_over_budget(tree):

@@ -32,7 +32,7 @@ def test_schema_is_valid_draft_2020_12(path):
     Draft202012Validator.check_schema(schema)
     assert schema["$schema"] == "https://json-schema.org/draft/2020-12/schema"
     assert schema["$id"] == f"homeline/contracts/{path.name}"
-    assert schema["x-contract-version"] in ("1.0.0", "1.1.0", "1.1.1")  # 1.1.x is additive
+    assert schema["x-contract-version"] in ("1.0.0", "1.1.0", "1.1.1", "1.1.2")  # 1.1.x is additive
     for key in ("title", "description", "x-source"):
         assert schema.get(key)
 
@@ -227,3 +227,46 @@ def test_fields_index_pointer_entry_on_its_own_grid():
     assert errs("fields_index.schema.json", idx) == []
     idx["fields"]["nom_104/pointer"]["stencil"] = [[-1, 0, 1]]
     assert errs("fields_index.schema.json", idx)
+
+
+# --------------------------------------------------------------------------- v1.1.2
+
+
+def test_partner_d20_cart_only_properties():
+    """v1.1.2 (D20, user 14:22): cart-only partner line with label/caption/drag_note per feature
+    and the drag finding as a top-level member (WS2 haul.py)."""
+    note = "One astronaut cannot drag a suited crewmate on Mars without a cart or sled."
+    doc = {"type": "FeatureCollection",
+           "drag_finding": {"case": "drag", "theta_deg": 0.0, "suit_kg": 104.0,
+                            "casualty_kg": 179.0, "rescuer_system_kg": 189.0, "mu": 0.6,
+                            "boot_mu": 0.5, "g_ms2": 3.71, "force_N": 398.454,
+                            "traction_limit_N": 350.595, "max_mass_kg": 157.5,
+                            "feasible": False, "reason": "traction", "note": note},
+           "features": [{"type": "Feature",
+                         "geometry": {"type": "Polygon", "coordinates": [[[0, 0], [1, 0], [0, 1],
+                                                                          [0, 0]]]},
+                         "properties": {"case": "cart", "casualty_kg": 179.0, "contour_min": 60,
+                                        "style": "dashed", "default_visible": False,
+                                        "label": "Partner line (cart haul, 60 min)",
+                                        "caption": "Design question.", "drag_note": note,
+                                        "feasible": True, "area_km2": 1.233072}}]}
+    assert errs("partner.schema.json", doc) == []
+    bad = json.loads(json.dumps(doc))
+    bad["drag_finding"]["force_N"] = "a lot"
+    assert errs("partner.schema.json", bad)
+    bad = json.loads(json.dumps(doc))
+    bad["features"][0]["properties"]["label"] = 3
+    assert errs("partner.schema.json", bad)
+
+
+def test_card_drag_note_optional():
+    doc = {"navcam": {"sol": None, "image_id": None, "url_local": None, "overlay_png": None},
+           "skyline_error_deg": {"near": None, "mid": None, "far": None}, "panorama_png": None,
+           "landmarks": [], "timeline": {"arrive": None, "leave": None, "turn_back": None},
+           "margin_binding": None, "contingency": "x", "drag_note": "no drag on Mars"}
+    assert errs("card.schema.json", doc) == []
+    assert errs("card.schema.json", doc | {"drag_note": 1})
+
+
+def test_conservative_cellstate_path_mapped():
+    assert vc.match_schema("terrain/cellstate_conservative.json") == "cellstate.schema.json"

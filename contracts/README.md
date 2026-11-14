@@ -1,8 +1,8 @@
 # Data contracts (pipeline → web)
 
-**Contracts v1.1.1** (2026-11-14, additive; see "Changes" at the end). Only C changes a contract,
+**Contracts v1.1.2** (2026-11-14, additive; see "Changes" at the end). Only C changes a contract,
 by PR with a version bump and a note to every consumer (AGENTS.md rule 4). A schema's
-`x-contract-version` is the version that last changed it (1.0.0, 1.1.0 or 1.1.1). Every schema carries `"x-contract-version"` and `"x-source"` (the SPEC
+`x-contract-version` is the version that last changed it (1.0.0, 1.1.0, 1.1.1 or 1.1.2). Every schema carries `"x-contract-version"` and `"x-source"` (the SPEC
 section or brief it comes from).
 
 Source of truth: SPEC.md §6, §6.1, §6.2. Schemas are JSON Schema draft 2020-12.
@@ -63,6 +63,7 @@ other workstreams read them. Each schema says where it comes from.
 | `siting_png.json` (v1.1.0) | `siting_png.schema.json` | F8 siting heatmap `siting.png` placement (4 corners, MapLibre order); WS2 |
 | `tiles/basemap/tilejson.json` (v1.1.0) | `tilejson.schema.json` | F17 basemap index (TileJSON 3.0.0 subset); written by `make web` |
 | `terrain/cellstate.json` (v1.1.0) | `cellstate.schema.json` | F1 cell states for hatching unknown terrain; written by `make web` from WS1 |
+| `terrain/cellstate_conservative.json` (v1.1.2) | `cellstate.schema.json` | the same at the conservative no-go (20° − V1 RMSE); written by `make web` from WS1 |
 
 The web paths `validation/coverage.json` and `validation/coreg.json` are B0's choice (WS1's
 brief names the files, not their web path); `make web` copies them there.
@@ -127,6 +128,7 @@ object-shaped files may carry an optional `"dummy"`. CI fails if any file under
 | `fp3d/near/{i}_{j}.f32.gz` | Near height chunk: 256 × 256 Float32 heights at 1 m, gzipped; corridor ≈ 300 m wide along the route |
 | `fp3d/near_tex/{i}_{j}.jpg` | JPEG texture for the matching near chunk |
 | `fp3d/far.f32.gz` | Far heights: Float32 at 8 m over the planning extent, gzipped |
+| `fp3d/far_tex.jpg` (v1.1.2) | JPEG ortho texture (8 m) over the far mesh; placement in `fp3d/index.json` (WS8) |
 | `fp3d/horizon_ring.json` | Far skyline ring (JSON, schema above) |
 
 Byte order, row order and the height-scale/offset convention are not fixed by SPEC; WS8 records
@@ -199,6 +201,12 @@ edges (lon/lat; the analysis CRS is equirectangular, so the grid is axis-aligned
 keys `terrain.cellstate.pct.*`). WS5: hatch where A = 0, exactly as the field-alpha hatch, placed on
 `bounds` as a MapLibre image source. The dummy tree has a 5 m version (`res_m` says which).
 
+**Conservative (v1.1.2):** `terrain/cellstate_conservative.png` + `.json`, same encoding, grid and
+schema, from WS1's `cellstate_3m_conservative.tif` (blocked iff the cell's max 1 m slope >
+20° − V1 `rmse_deg` = 14.553°; unknown stays unknown). `variant: conservative` (from the file name);
+manifest keys `terrain.cellstate_conservative.pct.*`. Display and checks only: WS2's con_* runs
+re-derive passability from `maxslope_3m.tif` (same rule). Not in the dummy tree.
+
 ### Siting heatmap — `siting.png` + `siting_png.json` (v1.1.0)
 
 Grey PNG of the F8 siting score (WS2 `pipeline/engine/siting.py`; white = `grey_max_score`).
@@ -223,6 +231,7 @@ its run is in progress), with its manifest entries.
 | --- | --- | --- |
 | WS1 | `terrain/coverage.json`, `coverage.png`, `coreg.json` | `validation/…` |
 | WS1 | `terrain/cellstate_3m.tif` | `terrain/cellstate.png` + `.json` (transform) |
+| WS1 | `terrain/cellstate_3m_conservative.tif` | `terrain/cellstate_conservative.png` + `.json` (transform, v1.1.2) |
 | WS1 | `terrain/tiles/basemap/{z}/{x}/{y}.png` | `tiles/basemap/{z}/{x}/{y}.webp` + `tilejson.json` (transform) |
 | WS2 | `engine/public/**` (mirror of the web tree: `scenarios/`, `stations.json`, `route_*`, `timeline_*`, `trade_table.json`, `pad.json`, `siting.png`, `siting_png.json`) | same path |
 | WS3 | `horizon/validation/v2.json` | `validation/v2.json` |
@@ -231,13 +240,13 @@ its run is in progress), with its manifest entries.
 | WS4 | `conditions/{rad,clock,rems,donki}.json` | `conditions/…` |
 | WS6 | `validation/v1.json`, `v1.svg`, `kats.json` | `validation/…` |
 | WS7 | `export/fields/index.json`, `export/fields/{scenario}/*.png` | `fields/…` |
-| WS8 | `export/fp3d/{index.json, near/*.f32.gz, near_tex/*.jpg, far.f32.gz}` | `fp3d/…` |
+| WS8 | `export/fp3d/{index.json, near/*.f32.gz, near_tex/*.jpg, far.f32.gz, far_tex.jpg}` | `fp3d/…` |
 | WS9 | `navigation/{nav,localisation,fields}/…` (real run only) | same path |
 | WS10 | `vo/probe.json`, `vo/drift.json` | `vo/…` |
 
 Manifest: every fragment in `data/interim/manifest/` is merged (WS6 `manifest.merge`); WS1's
 `terrain/manifest_pending.json` is merged as WS1's fragment until WS1 records through
-`pipeline.provenance.manifest.record`. Fragments made by the dummy generator are refused. An entry
+`pipeline.provenance.manifest.record` (WS1 has since 11:36Z, so the bridge is idle). Fragments made by the dummy generator are refused. An entry
 whose `file` is a web path that this run does not write (a skipped owner, a missing output, a card
 not built) is left out, as is a skipped owner's entry citing its `data/interim/` source; entries
 citing other pipeline-internal `data/...` files stay.
@@ -279,3 +288,12 @@ that range (its first and last `D_allow_mGy` are the range). There is no
 
 `SCHEMA_MAP` is unchanged (`cards/*.json` is safe: the `*.timeline.json` parts are never copied to
 the web tree; one there would fail the card schema).
+
+### v1.1.2 (2026-11-14, C) — additive; every new property is optional
+
+| Schema / path | Change | Consumers |
+| --- | --- | --- |
+| `partner.schema.json` | D20 (user 14:22, cart only): feature properties `label`, `drag_note` (`caption` already there); top-level `drag_finding` {`case`, `theta_deg`, `suit_kg`, `casualty_kg`, `rescuer_system_kg`, `mu`, `boot_mu`, `g_ms2`, `force_N`, `traction_limit_N`, `max_mass_kg`, `feasible`, `reason`, `note`} (WS2 `haul.drag_flat`; manifest `haul.drag.flat.*`, file `scenarios/nom_104/partner.geojson`; per suit `haul.drag.flat.nom_{suit}.*`). Drag is text, never a line | WS5 |
+| `card.schema.json` | `drag_note` (WS2 timeline part) | WS5 |
+| `cellstate.schema.json` + `SCHEMA_MAP` | new web path `terrain/cellstate_conservative.json` (+ `.png`), same schema; `variant: conservative`; keys `terrain.cellstate_conservative.pct.*` | WS5 (optional conservative hatch) |
+| `fp3d/far_tex.jpg` (format table) | new non-JSON file, WS8 far-mesh texture; `make web` copies `data/interim/export/fp3d/far_tex.jpg` | WS8 |
