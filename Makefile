@@ -1,12 +1,12 @@
 # HOMELINE pipeline entry points. Stub targets print a message until the owning workstream
 # adds its CLI (ownership: AGENTS.md "Folder ownership"; this file is owned by C).
-.PHONY: all terrain engine horizons conditions conditions-fetch nav web web-plan dummy test lint validate kats h0 clean
+.PHONY: all terrain engine horizons conditions conditions-fetch nav fields web web-plan dummy test lint validate kats h0 clean
 
 PY := uv run --no-sync python
 
 # Pipeline order (SPEC §4): WS1 terrain -> WS2 engine -> WS3 horizons -> WS4 conditions
 # -> WS9 nav -> copy to web/public/data (C).
-all: terrain engine horizons conditions nav web
+all: terrain engine horizons conditions nav fields web
 
 terrain:     ## WS1: fetch raw (cached) then build data/interim/terrain/
 	$(PY) -m pipeline.terrain.fetch dem
@@ -27,6 +27,8 @@ conditions-fetch:  ## WS4: download/refresh data/raw/conditions/ (needs NASA_API
 	$(PY) -m pipeline.conditions.fetch all
 nav:         ## WS9: F21 Monte Carlo + fix-interval map, F22 skyline fixes -> data/interim/navigation/
 	$(PY) -m pipeline.navigation.run real $(NAV_ARGS)
+fields:      ## WS7: HUD field PNGs + worst-case fields -> data/interim/export/fields/ (WS1 grid/slope, WS2 rasters; merges WS9 fields_index_nav.json)
+	$(PY) -m pipeline.export.fields_png
 web:         ## C: copy/transform data/interim -> web/public/data, merge manifest, validate, H0 check
 	$(PY) tools/make_web.py
 web-plan:    ## C: what make web would copy, and what is missing per owner (no writes)
