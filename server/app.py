@@ -1,4 +1,5 @@
-"""HOMELINE live API (F23; WS11 plan row 1.1): GET /health, /engine/version, /defaults.
+"""HOMELINE live API (F23; WS11 plan rows 1.1, 1.3): GET /health, /engine/version, /defaults,
+/results/{hash}/... (server.api.compute.results).
 
 Run: ``uv run --no-sync uvicorn server.app:app`` (``make serve``), then
 http://localhost:8000/api/v1/health. Contract: contracts/backend/openapi.yaml (v1.0.0); prefix,
@@ -18,6 +19,7 @@ from fastapi import APIRouter, FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
+from server.api.compute import results_router
 from server.engine import defaults as engine_defaults
 from server.engine import version as engine_version
 from server.engine.warmup import EngineState, warm_engine
@@ -80,6 +82,7 @@ def create_app(warmup: Callable[[], object] = warm_engine) -> FastAPI:
     app.add_middleware(CORSMiddleware, allow_origins=list(cfg.api.cors_origins),
                        allow_methods=["*"], allow_headers=["*"])
     app.include_router(meta, prefix=cfg.api.prefix)
+    app.include_router(results_router, prefix=cfg.api.prefix)
     return app
 
 
