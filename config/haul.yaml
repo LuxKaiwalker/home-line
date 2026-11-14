@@ -14,4 +14,5 @@ formulas:
   infeasible: "v_haul < 0.1 m/s or F > boot_mu * (m_b + suit + tools) * g * cos(theta)"
 contour_min: 60                    # Scoville, Artemis III 1 h benchmark
 mask_ridges: true
+g_moon: 1.62                       # added by WS2 2026-11-14 (assumed: true): standard lunar g, m/s^2; only for the SPEC §9 Mars/Moon = 2.29 KAT
 assumed: true

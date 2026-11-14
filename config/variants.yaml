@@ -27,3 +27,10 @@ outputs:                           # added 13 Nov (gap found by WS2)
   isochrone_size_budget_mb_gz: 1.5
   simplify_tolerance_m: 2
   band_budgets_min: [30, 60]
+route:                             # added by WS2 2026-11-14 (values from SPEC F9; flagged in STATUS)
+  o2_checkpoint_min: 30            # SPEC F9: "O2 checkpoints every 30 min"
+  budget: "crew.eva_h"             # SPEC F9: sum(walk + dwell) <= 6.5 h
+  assumed: true
+numerics:                          # added by WS2 2026-11-14; numerical resolution, not a model parameter
+  grade_table_step_deg: 0.01       # router pace/O2 lookup table step (linear interpolation; KAT rel err < 1e-4)
+  assumed: true
