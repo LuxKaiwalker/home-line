@@ -188,7 +188,7 @@ def test_engine_version_known_answers(instant_client, server_data):
     assert v["engine_tree"] == git("rev-parse", "HEAD:pipeline")
     assert v["config_hash"] == config_hash()  # D57: backend.yaml left out
     assert v["terrain_hash"] == "sha256:" + hashlib.sha256(manifest).hexdigest()
-    assert v["backend_contract_version"] == OPENAPI["info"]["version"] == "1.0.0"
+    assert v["backend_contract_version"] == OPENAPI["info"]["version"]
     assert v["backend_contract_version"] == settings().contract_version
     assert v["bundle_contract_version"] == BUNDLE_VERSION
     # web family = the newest x-contract-version of contracts/*.schema.json, and it is the newest

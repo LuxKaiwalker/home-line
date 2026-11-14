@@ -308,7 +308,7 @@ data trees; CI also checks every tracked file.
 
 ## Backend family
 
-The live API's contracts (F23–F36, kit K1/K4, D50–D57) are their own family, **v1.0.0, frozen at
+The live API's contracts (F23–F36, kit K1/K4, D50–D57) are their own family, **v1.0.1, frozen at
 backend gate P0**, in `contracts/backend/` (see its README): `plan_inputs.schema.json` (user
 inputs, D52), `run_record.schema.json` (`results/{hash}/run_record.json`), `job.schema.json`,
 `telemetry.schema.json` (telemetry sample batch + state event), `openapi.yaml` (API v1, spec §5) and
