@@ -720,6 +720,7 @@ def test_kats_area_and_feature_map():
     assert kats.classify("tests/test_provenance.py::test_h0_x") == ("Provenance", ["F16"])
     assert kats.classify("web/src/hud/hud.test.ts > HUD > t_home")[0] == "HUD logic"
     assert kats.classify("tests/test_new_thing.py::test_y") == ("other", [])
+    assert kats.classify("tests/test_fp3d_export.py::test_chunk") == ("3D", ["F20"])
 
 
 def test_kats_document_validates_and_records_summary(tmp_path, frag_dir):
