@@ -39,6 +39,8 @@ limits:                            # section 8
   user_heavy_jobs: {count: 30, window_min: 10}
   telemetry_posts_per_s: 2
   upload_max_bytes: 1048576        # plan.json import, 1 MB
+  proxy_max_body_bytes: 2097152    # assumed: true (team lead, O3): reverse-proxy request body cap,
+                                   # a backstop above upload_max_bytes; server/ops Caddy (O1) uses 2 MB
   telemetry_max_samples: 30000     # per session (8 h at 1 Hz = 28,800)
   ip_hash_retention_days: 7
   title_max_chars: 120             # assumed: true (section 8 says "length-capped", no value)

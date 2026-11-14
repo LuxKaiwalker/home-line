@@ -108,6 +108,14 @@ class Limits(_Strict):
     ip_hash_retention_days: int = Field(ge=1)
     title_max_chars: int = Field(ge=1)
     notes_max_chars: int = Field(ge=1)
+    # reverse-proxy body cap (server/ops Caddy); assumed (O3); a backstop, never below the upload
+    proxy_max_body_bytes: int = Field(ge=1)
+
+    @model_validator(mode="after")
+    def _proxy_cap_above_upload(self):
+        if self.proxy_max_body_bytes < self.upload_max_bytes:
+            raise ValueError("limits.proxy_max_body_bytes must be >= limits.upload_max_bytes")
+        return self
 
 
 class Range(_Strict):
