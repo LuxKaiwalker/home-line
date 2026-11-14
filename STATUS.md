@@ -837,6 +837,15 @@ Branch: `ws5-web`
   - **Pad in use**: new "Rover pad" section on the console (always shown) and the scorecard pad line: F8 score 0 (`pad.score`; no station within a conservative 30-min walk home), **steepest slope in the 21 m pad block** 28.06° (`pad.checks.max_slope_deg`; rule ≤ 5° from `site.yaml siting.max_slope_deg`; caption: not the slope at the pad cell), disc 100 % → "**pad_default fails the F8 rule**"; S decides. The 21 m is derived in the browser (`DerivedNum`) from `siting.block_m` on `grids_m.route` as WS2 siting.py does. Old fallback wording (WS2 session-4 quote when the block was missing) removed.
   - **Smoke test** (vite dev on the scratch tree, every route): **0 unbacked numbers on every view** (`/` 27 backed, 44 with the siting layer on; S1 8, S2 32, S4 37, `/trade` 21, `/conditions` 50, `/scorecard` 126, `/cuff` 64, `/nav` 17), no data problems, no console errors or warnings (WS7's "optional pad.json unavailable" warning is gone).
 
+- 2026-11-14T15:29Z (session 5): **D21 "Rover parking options" picker** (user 16:14, C layout 16:17), built against test fixtures (WS2's files and C's `scenarios/pads/` contract rows do not exist yet). vitest **459 pass, 2 skipped** on main's tree (+23 picker tests in `web/src/data/pads.test.ts`; 1 new real-tree KAT skips until `scenarios/pads/index.json` is published and covered); `tsc` clean; build 2.5 MB without data.
+  - **Optional by construction**: `loadPadsIndex()` returns absent / no-contract / error / ok; only `ok` shows the picker. Before C adds the SCHEMA_MAP rows the loader refuses the path (no-contract) and the console is exactly as before. `createLoader(…, { schemaFor })` lets tests inject the future rows; the app always uses SCHEMA_MAP.
+  - **Picker** (console, under the headline): table of every index row by rank (official first, the default): label (Official pad / #rank / pad_default), rank, tiebreak values, **feasible EVAs** (= score), elevation; radio + row click; parking-option markers on the map (click selects; selected outlined). Help text: switching changes bands, route, partner line, headline and feasible-EVA count (nominal variant, suit of the default scenario only); **the HUD, the 3D view and the station cards stay on the official pad**.
+  - **A non-official option** loads `scenarios/pads/{id}/bands_{suit}.geojson`, `edges.geojson`, `partner.geojson`, `route_{sid}.geojson`, `timeline_{sid}.json`, `summary.json` (suit and sid from `scenarios/index.json` default, not hard-coded). Headline from summary.json at the selected 30/60-min budget + range + feasible EVAs; route section and leg table from the pad files; D20 drag note with `pads.{id}.haul.drag.flat.*`. No isochrones: the budget slider is replaced by a note; the variant/suit picker is locked to the default scenario; the stations table says walk-home times, access cells and cards are the official pad's.
+  - **Manifest keys** (`<Num>` everywhere, file + value fallback citing the web paths): index `pads.{id}.{rank,score,elev_m}`, `pads.{id}.tiebreak.{name}`; summary `pads.{id}.score`, `pads.{id}.headline.{budget}.reachable_pct`, `.range_pct.low|high`; route `pads.{id}.route.leg.{i}.{t_min,length_m,o2_L,to_access_dist_m}`, `pads.{id}.route.total_min`; timeline `pads.{id}.timeline.{i}.t_min`; partner `pads.{id}.haul.drag.flat.{force_N,traction_limit_N,max_mass_kg}`.
+  - **F8 heatmap**: the "Pad siting proposal (F8)" layer is now "F8 heatmap" (siting.png on siting_png.json); text says D21 picks the official pad by feasible EVAs, not by the F8 score. The pad.json `proposal` block (if still written) is shown as "top F8 score". Rover pad / scorecard pad text follows `pad.source` (pad_default vs the official pad) and states that HUD, 3D and cards use it.
+  - **Route-legs table fixed**: units moved into the headers, header cells wrap, tighter padding: 292 px in the 292 px content box (was 313 px). Also fixed: the partner legend's drag note overflowed the panel by ~95 px (legend `li` is flex).
+  - **Smoke test** (scratch vite config serving a fixture tree, SCHEMA_MAP rows added in memory by a scratch plugin only; no repo file changed): picker shown, official default, option #2 switches headline (30 and 60 min), feasible EVAs, route, partner + drag note; slider note and locked scenario picker; back to official restores slider. **0 unbacked numbers** (fixture manifest with `pads.*` keys), no console errors, panel has no horizontal scroll.
+
 ### Doing
 
 - —
@@ -844,12 +853,16 @@ Branch: `ws5-web`
 ### Next
 
 - Re-run the smoke test on C's next `make web` with pad.json (the session-4 pad KATs in `web/src/data/real.test.ts` switch on when `pad.json` is in the tree).
-- Polish: the console route-legs table is ~20 px wider than the side panel (horizontal scroll).
+- D21: smoke-test the picker on WS2's real `scenarios/pads/` after C's contract rows; adjust `parsePadsIndex`/`parsePadSummary` if the final shape differs from the provisional one (see Assumptions).
+- D21: when WS2 rewrites pad.json for the official pad, the session-4 pad KATs in `real.test.ts` (pad = pad_default, fails the F8 rule; `proposal` block) must be updated.
+- Follow-ups from D22–D39 (16:16/16:20) for the web app, e.g. D27 access radius 50 m is now decided (drop the "assumed" tag), D33 hidden-landmark ticks, D35 "± 8 min" on tripwire times: not started this session.
 - HUD-on-card strip if WS7 is not green at G2; about page licences/SI text (needs the team).
 
 ### Blocked
 
-- (user) GitHub Pages: repo private and `gh` not logged in; `pages.yml` ready but cannot deploy yet.
+- (C) D21 SCHEMA_MAP rows (`tools/validate_contracts.py` + `web/src/data/contracts.ts`): `scenarios/pads/index.json` (new contract), `scenarios/pads/*/summary.json` (new contract), `scenarios/pads/*/bands_*.geojson` → bands, `scenarios/pads/*/edges.geojson` → edges, `scenarios/pads/*/partner.geojson` → partner, `scenarios/pads/*/route_*.geojson` → route, `scenarios/pads/*/timeline_*.json` → timeline (list in `web/src/data/pads.ts PAD_SCHEMA_PATTERNS`). Until then the picker stays hidden.
+
+- Resolved 16:28 (C): GitHub Pages live, deploys after green CI on main.
 - (C / WS6) `.github/workflows/ci.yml`: please add `npm test` (vitest) to the `web` job.
 - (WS3) D7 wording: SPEC's "far rim (41–57 km) … in 21 north-facing frames" has no data field or manifest key, so the app says it without the numbers. Please add them to `validation/v2.json` (e.g. `far_note` or `far.rim_km`, `far.haze_frames`) with keys, and drop "far class pending the D7 manual check" from the card `skyline_error_scope`.
 - (WS3) `validation/v2.json n_frames_ok` has no key; the scorecard counts `frames[]` in the browser instead.
@@ -858,6 +871,8 @@ Branch: `ws5-web`
 - Resolved session 4: pad.json `proposal` shape (contract v1.1.2, WS2 session 5).
 
 ### Assumptions added
+
+- Session 5 (D21, provisional until C's contracts): index rows under `pads` (or `rows`), each `{id, lon, lat, elev_m, rank, score, official, tiebreak: {name: value}}`, exactly one `official: true` (or top-level `official: id`); summary `{id, pad: {lon, lat, elev_m}, rank, score, headline: {"30": {reachable_pct, range_pct}, "60": …}` (or `[{budget_min, …}]`), `route: {stops, total_min}}`. Ids must be plain file names. An elevation tiebreak equal to `elev_m` is not printed twice.
 
 - Contract gaps (for C): no web artefact for cell states / source mask, so hatched unknowns use the alpha of the shared `slope` field (A = 0 = no terrain value); this does not mark non-HiRISE (CTX) cells as unknown. Loose schemas (coverage, rems, clock, v2 summary, v1 confusion, donki records) are shown as generic key/value tables until producers fix their structure.
 - Manifest keys are not fixed by contracts v1.0; `<Num>` resolves a named key first, then an entry with the same file and value.
@@ -1526,3 +1541,4 @@ Branch: `ws10-vo`
 | 2026-11-14 16:17 | D21 picker file layout (C) | Per picker pad `scenarios/pads/{id}/`: `summary.json` (pad lon/lat/elev, rank, score = feasible-EVA count, tiebreak values, headline 30/60 min, route summary), `bands_104.geojson`, `edges.geojson`, `partner.geojson`, `route_nom_104.geojson`, `timeline_nom_104.json`; plus `scenarios/pads/index.json` (ranking table incl. the official pad, `dummy`); **no isochrones or fields for picker pads** (size); return-field rasters stay in data/interim only | C |
 | 2026-11-14 16:16 | D22–D25 (+ D21 grid filter) | D22 3 m plane-fit cell slope + 30° step guard, max-slope grid = rough-footing overlay, cell states for 25/20/17°; D23 con no-go 17°; D24 reserve = 30 min × 1.35 L/min (derived, labelled EMU precedent); D25 flat-disc denominator = assessed cells within 1,764 / 3,528 m for all variants; D21 drops candidates whose 30-min disc leaves the DEM grid. ONE re-run: WS1 → WS2 → C downstream (SPEC §11) | User |
 | 2026-11-14 16:20 | D26–D39 | Stations re-placed after D22 (+ up to 3 F7 stations, S3/S5 dropped unless S picks by 19:00), radius 50 m, turn-back incl. EVA duration, one o2_energy_j_per_ml = 21.0, IST-2 pass/miss in manifest, EVA start 09:00 LMST, spacing 300 m, hidden landmarks as bearing ticks, RAD E column/midpoints/± 8 min/lower-bound excess, REMS ground T dropped, fp3d.yaml accepted, shared storm-timing key + drift max(5 m, 2 %). Same single re-run (SPEC §11) | User |
+| 16:28 | Deployment | GitHub Pages live at https://luxkaiwalker.github.io/home-line/ (private repo, owner has Pro). Earlier failures: Pages not yet configured (15:11 configure-pages 404) and a manual dispatch before CI finished (guard works). Deploys automatically after green CI on main | C |
