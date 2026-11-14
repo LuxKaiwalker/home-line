@@ -378,6 +378,11 @@ def test_build_plan_bundle_official_result_tree_equals_fixture(fixture_meta, tmp
     interim = _interim_as_recorded(FIXTURE, tmp_path / "interim")
     if interim is None:
         pytest.skip("inputs changed since the fixture was built: run make bundle-fixture")
+    fixture_pad = json.loads(zipfile.ZipFile(FIXTURE / "plan_bundle.zip").read("planner/pad.json"))
+    public_pad = json.loads((mb.PUBLIC / "pad.json").read_text(encoding="utf-8"))
+    if public_pad != fixture_pad and public_pad == _drop_key(fixture_pad, "screening_s"):
+        pytest.skip("D51 dropped screening_s from the published pad.json; the frozen fixture "
+                    "predates it (C rebuilds it with make bundle-fixture to re-arm this test)")
     raw = mb.build_plan_bundle(mb.PUBLIC, interim=interim)
     _assert_same_zip(raw, (FIXTURE / "plan_bundle.zip").read_bytes(),
                      fixture_meta.get("zlib_runtime"))
@@ -399,5 +404,20 @@ def test_build_plan_bundle_without_interim_matches_fixture_data(fixture_meta, tm
     got, want = zipfile.ZipFile(io.BytesIO(raw)), zipfile.ZipFile(FIXTURE / "plan_bundle.zip")
     assert got.namelist() == want.namelist()
     diff = [n for n in want.namelist() if got.read(n) != want.read(n)]
+    # D51: screening_s (wall-clock) left the published pad.json; the frozen fixture keeps it.
+    # That is the only allowed difference in planner/pad.json: everything else stays equal.
+    if "planner/pad.json" in diff and _drop_key(json.loads(got.read("planner/pad.json")),
+                                                "screening_s") == _drop_key(
+            json.loads(want.read("planner/pad.json")), "screening_s"):
+        diff.remove("planner/pad.json")
     assert set(diff) <= INTERIM_DEPENDENT, diff
     assert json.loads(got.read("plan.json"))["plan_id"] == fixture_meta["plan_id"]
+
+
+def _drop_key(obj, key):
+    """obj with every `key` removed at any depth (D51 fixture comparison)."""
+    if isinstance(obj, dict):
+        return {k: _drop_key(v, key) for k, v in obj.items() if k != key}
+    if isinstance(obj, list):
+        return [_drop_key(v, key) for v in obj]
+    return obj
