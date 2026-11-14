@@ -1,0 +1,24 @@
+{
+  "name": "web",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "dev:dummy": "VITE_DATA=dummy vite",
+    "build": "tsc && vite build",
+    "build:dummy": "tsc && VITE_DATA=dummy vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/three": "^0.187.0",
+    "typescript": "~7.0.2",
+    "vite": "^8.3.6"
+  },
+  "dependencies": {
+    "maplibre-gl": "^6.18.0",
+    "preact": "^11.2.0",
+    "three": "^0.187.0"
+  }
+}

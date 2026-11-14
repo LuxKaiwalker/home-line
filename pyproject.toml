@@ -1,0 +1,42 @@
+[project]
+name = "homeline"
+version = "0.1.0"
+description = "HOMELINE — NASA Space Apps 2026 (Martian Map) data pipeline"
+readme = "README.md"
+license = "Apache-2.0"
+requires-python = ">=3.11,<3.12"
+dependencies = [
+    "numpy",
+    "scipy",
+    "numba",
+    "rasterio",
+    "pyproj",
+    "shapely>=2",
+    "geopandas",
+    "scikit-image",
+    "pillow",
+    "opencv-python-headless",
+    "requests",
+    "pyyaml",
+    "jsonschema",
+    "cdasws",
+]
+
+[dependency-groups]
+dev = ["pytest", "ruff"]
+
+[tool.uv]
+package = false
+
+[tool.pytest.ini_options]
+testpaths = ["pipeline", "tools", "tests"]
+pythonpath = ["."]
+addopts = "-q"
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+extend-exclude = ["web", "data"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP"]
