@@ -22,7 +22,10 @@ from fastapi import APIRouter, FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
+from server.api.auth import HeavyJobLimiter, admin_router
 from server.api.compute import jobs_router, results_router
+from server.api.plans import build_docs_router, import_router
+from server.api.plans.pinning import evict_after_new_job
 from server.engine import defaults as engine_defaults
 from server.engine import version as engine_version
 from server.engine.jobs import JobRunner
@@ -91,11 +94,17 @@ def create_app(warmup: Callable[[], object] = warm_engine,
                   openapi_url=None, docs_url=None, redoc_url=None)
     app.state.engine = EngineState(warmup)
     app.state.jobs = jobs if jobs is not None else JobRunner.from_config(cfg)
+    # WS12: per-IP heavy-job limit on POST /jobs; added before CORS so it runs inside it (a
+    # browser can read the 429)
+    app.add_middleware(HeavyJobLimiter, cfg=cfg, on_new_job=evict_after_new_job)
     app.add_middleware(CORSMiddleware, allow_origins=list(cfg.api.cors_origins),
                        allow_methods=["*"], allow_headers=["*"])
     app.include_router(meta, prefix=cfg.api.prefix)
     app.include_router(results_router, prefix=cfg.api.prefix)
     app.include_router(jobs_router, prefix=cfg.api.prefix)
+    app.include_router(import_router, prefix=cfg.api.prefix)  # WS12: POST /plans/import
+    app.include_router(admin_router, prefix=cfg.api.prefix)  # WS12: /admin (team token)
+    app.include_router(build_docs_router())  # WS12: api.docs_path from openapi.yaml (F35)
     return app
 
 
