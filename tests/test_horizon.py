@@ -211,3 +211,71 @@ def test_lonlat_to_xy_uses_analysis_crs():
     assert x2 == pytest.approx(R * math.cos(math.radians(4.8)) * math.radians(0.01), rel=1e-9)
     lon, lat = xy_to_lonlat(x2, y)
     assert lon == pytest.approx(137.40) and lat == pytest.approx(-4.8)
+
+
+# --------------------------------------------------------------------------------------------
+# Sky detector (F13 V2, reused by F22)
+# --------------------------------------------------------------------------------------------
+
+SKY = CFG["sky_detector_params"]
+
+
+def test_sky_detector_rule_known_answer():
+    """horizon.yaml sky_detector: first pixel where the vertical gradient > 3x the median gradient
+    of the top 10% rows (rule as written: no border, no smoothing)."""
+    from pipeline.horizon.sky import detect_skyline
+
+    assert SKY["grad_ratio"] == 3.0 and SKY["ref_top_frac"] == 0.10  # same as the prose rule
+    img = np.full((100, 4), 200, dtype=np.uint8)
+    img[60:, 0] = 100          # column 0: sharp boundary between rows 59 and 60
+    img[60:, 1] = 198          # column 1: 2-DN step < 3 x one-count guard -> no detection
+    img[::2, 2] = 202          # column 2: noisy sky (median grad 2) ...
+    img[70:, 2] = 150          # ... a step of ~50 at row 70 still fires
+    det = detect_skyline(img, border_px=0, smooth_sigma_px=0)
+    assert det.rows[0] == pytest.approx(59.5)
+    assert math.isnan(det.rows[1])
+    assert det.rows[2] == pytest.approx(69.5)
+    assert math.isnan(det.rows[3])          # uniform sky: unknown, not a fake skyline
+    assert det.ref_median[2] == pytest.approx(2.0)
+    assert not det.in_ref_band.any()
+
+
+def test_sky_detector_flags_skyline_inside_reference_band():
+    from pipeline.horizon.sky import detect_skyline
+
+    img = np.full((100, 1), 200, dtype=np.uint8)
+    img[5:, 0] = 80
+    det = detect_skyline(img, border_px=0, smooth_sigma_px=0)
+    assert det.rows[0] == pytest.approx(4.5)
+    assert det.in_ref_band[0]
+
+
+def test_sky_detector_ignores_artefact_border():
+    from pipeline.horizon.sky import detect_skyline
+
+    b = SKY["border_px"]
+    img = np.full((100, 20), 200, dtype=np.uint8)
+    img[60:, :] = 100        # true boundary between rows 59 and 60
+    img[0, :] = 254          # bright artefact row (as on the fresh Navcam JPEGs)
+    img[:, 0] = 5            # dark artefact column
+    raw = detect_skyline(img, border_px=0, smooth_sigma_px=0)
+    assert raw.in_ref_band[1:].all()          # without the exclusion the artefact row fires
+    det = detect_skyline(img, smooth_sigma_px=0)
+    assert np.isnan(det.rows[:b]).all() and np.isnan(det.rows[-b:]).all()
+    assert det.rows[b:-b] == pytest.approx(np.full(20 - 2 * b, 59.5))
+    assert not det.in_ref_band.any()
+
+
+def test_sky_detector_presmoothing_keeps_edge_position():
+    from pipeline.horizon.sky import detect_skyline
+
+    assert SKY["presmooth_sigma_px"] > 0
+    rng = np.random.default_rng(3)
+    img = np.clip(np.where(np.arange(200)[:, None] >= 120, 90.0, 180.0)
+                  + rng.normal(0, 4.0, (200, 64)), 0, 255).astype(np.uint8)
+    raw = detect_skyline(img, smooth_sigma_px=0)
+    assert np.mean(np.abs(raw.rows - 119.5) <= 1.0) < 0.5   # the bare rule fires on noise
+    det = detect_skyline(img)
+    ok = np.isfinite(det.rows) & ~det.in_ref_band
+    assert ok.mean() > 0.9
+    assert np.all(np.abs(det.rows[ok] - 119.5) <= 1.0)   # no smoothing bias
