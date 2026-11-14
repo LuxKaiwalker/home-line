@@ -423,7 +423,10 @@ def test_station_observer_access_cell_rule():
     assert "none walkable" in o["note"]
 
 
-def test_pad_observer_prefers_ws2_pad_then_ws1_grid(tmp_path):
+def test_pad_observer_is_pad_default_never_the_proposal(tmp_path):
+    """C 14:58: the pad horizon is at the pad in use (site.yaml pad_default). WS2 pad.json's
+    top-level pad counts only when it is pad_default and not marked as a proposal; its
+    `proposal` block (F8 siting) is never read; anything else falls back to pad_default."""
     import json
 
     from pipeline.horizon.cards import pad_observer
@@ -432,21 +435,30 @@ def test_pad_observer_prefers_ws2_pad_then_ws1_grid(tmp_path):
     eng.mkdir()
     ter.mkdir()
     pad = hcfg.site()["pad_default"]
+    (ter / "grid.json").write_text(json.dumps({"pad": {"lon": 137.383, "lat": -4.807}}))
+    o = pad_observer(eng, ter)                                  # no pad.json
+    assert (o["lon"], o["lat"]) == (pad["lon"], pad["lat"]) and "site.yaml" in o["source"]
+    assert "source_note" not in o
+    # the wrong file WS2 wrote at 14:45: the F8 proposal as the top-level pad
+    (eng / "pad.json").write_text(json.dumps({"pad": {"lon": 137.402443, "lat": -4.769028}}))
     o = pad_observer(eng, ter)
     assert (o["lon"], o["lat"]) == (pad["lon"], pad["lat"]) and "site.yaml" in o["source"]
-    (ter / "grid.json").write_text(json.dumps({"pad": {"lon": 137.383, "lat": -4.807}}))
+    assert "ignored" in o["source_note"] and "not pad_default" in o["source_note"]
+    # the fixed file: pad_default at the top level, the proposal in its own block
+    fixed = {"pad": {"lon": pad["lon"] + 4e-7, "lat": pad["lat"]},
+             "proposal": {"lon": 137.402443, "lat": -4.769028}}
+    (eng / "pad.json").write_text(json.dumps(fixed))
     o = pad_observer(eng, ter)
-    assert (o["lon"], o["lat"]) == (137.383, -4.807) and "grid.json" in o["source"]
-    # C 14:58: pad.json `pad` = the pad in use = pad_default; a WS2 pad.json whose pad is the F8
-    # siting proposal (anything else) is ignored, so the pad horizon stays at pad_default
-    (eng / "pad.json").write_text(json.dumps({"pad": {"lon": 137.384, "lat": -4.808}}))
+    assert "pad.json" in o["source"] and "source_note" not in o
+    assert o["lon"] == pytest.approx(pad["lon"]) and o["lat"] == pytest.approx(pad["lat"])
+    # a top-level pad marked as a proposal is ignored even at pad_default's coordinates
+    for mark in ({"proposal": True}, {"is_proposal": True}, {"role": "proposal"}):
+        (eng / "pad.json").write_text(json.dumps({"pad": {**fixed["pad"], **mark}}))
+        o = pad_observer(eng, ter)
+        assert "site.yaml" in o["source"] and "marked as a proposal" in o["source_note"]
+    (eng / "pad.json").write_text(json.dumps({"proposal": fixed["proposal"]}))   # no pad
     o = pad_observer(eng, ter)
-    assert (o["lon"], o["lat"]) == (137.383, -4.807) and "grid.json" in o["source"]
-    assert "ignored" in o["source_note"] and "pad_default" in o["source_note"]
-    (eng / "pad.json").write_text(json.dumps({"pad": {"lon": pad["lon"] + 4e-7,
-                                                      "lat": pad["lat"]}}))
-    o = pad_observer(eng, ter)
-    assert "pad.json" in o["source"] and o["lon"] == pytest.approx(pad["lon"])
+    assert (o["lon"], o["lat"]) == (pad["lon"], pad["lat"]) and "ignored" in o["source_note"]
 
 
 IAU_CSV = hcfg.REPO / "data/raw/discovery/iau_mars.csv"

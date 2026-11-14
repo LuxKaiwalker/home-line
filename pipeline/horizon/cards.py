@@ -4,8 +4,9 @@ fragments (F12).
     python -m pipeline.horizon.cards
 
 Observers (eye height ``horizon.yaml eye_height_m``):
-  * pad: WS2 ``engine/public/pad.json`` if present and its pad is pad_default (C 14:58), else
-    WS1 ``terrain/grid.json`` pad, else ``site.yaml pad_default`` (kept, user decision 11:24).
+  * pad: ``site.yaml pad_default`` (the pad in use, user 11:24; C 14:58). WS2
+    ``engine/public/pad.json`` is used only when its top-level pad is pad_default and not marked
+    as a proposal; its ``proposal`` block (F8 siting) is never read.
   * stations: WS2 ``engine/public/stations.json``. Access-cell rule (user decision 11:40): the
     observer stands at the station's access cell once WS2 publishes it; until then at the science
     coordinate, and the card is marked ``provisional``.
@@ -95,32 +96,32 @@ def observer_from_station(rec: dict) -> dict:
 
 
 def pad_observer(engine_public: Path = ENGINE_PUBLIC, terrain: Path = TERRAIN) -> dict:
-    """Pad position: WS2 pad.json, else WS1 grid.json pad, else site.yaml pad_default.
+    """Pad observer = the pad in use, ``site.yaml pad_default`` (user 11:24; C 14:58).
 
-    C 14:58: pad.json ``pad`` is the pad in use = ``pad_default`` (user 11:24); the F8 siting
-    result is only a proposal. A pad.json whose ``pad`` differs from pad_default at the file's
-    6-decimal precision (SPEC §6) is therefore ignored, with a ``source_note``."""
+    WS2 ``pad.json``'s top-level ``pad`` is used only when it is not marked as a proposal and
+    equals pad_default at the file's 6-decimal precision (SPEC §6); its ``proposal`` block (the
+    F8 siting result) is never read. Otherwise the pad is ``pad_default`` from config, with a
+    ``source_note`` saying why pad.json was ignored. ``terrain`` is kept for call compatibility
+    (WS1 grid.json's pad is pad_default too)."""
     default = hcfg.site()["pad_default"]
-    note = None
+    out = {"id": "pad", "lon": default["lon"], "lat": default["lat"],
+           "source": "config/site.yaml pad_default"}
     p = Path(engine_public) / "pad.json"
-    if p.exists():
-        d = json.loads(p.read_text())["pad"]
-        if (round(float(d["lon"]), 6), round(float(d["lat"]), 6)) == \
-                (round(float(default["lon"]), 6), round(float(default["lat"]), 6)):
-            return {"id": "pad", "lon": d["lon"], "lat": d["lat"], "source": f"WS2 {_rel(p)}"}
-        note = (f"WS2 {_rel(p)} pad ({d['lon']}, {d['lat']}) ignored: not pad_default "
-                f"(C 14:58, the F8 siting result is a proposal, not the pad in use)")
-    out = None
-    g = Path(terrain) / "grid.json"
-    if g.exists():
-        d = json.loads(g.read_text()).get("pad")
-        if d and d.get("lon") is not None:
-            out = {"id": "pad", "lon": d["lon"], "lat": d["lat"], "source": f"WS1 {_rel(g)} pad"}
-    if out is None:
-        out = {"id": "pad", "lon": default["lon"], "lat": default["lat"],
-               "source": "config/site.yaml pad_default"}
-    if note:
-        out["source_note"] = note
+    if not p.exists():
+        return out
+    d = json.loads(p.read_text()).get("pad") or {}
+    marked = any(bool(d.get(k)) for k in ("proposal", "is_proposal")) or \
+        str(d.get("role", d.get("kind", ""))).lower() == "proposal"
+    try:
+        same = (round(float(d["lon"]), 6), round(float(d["lat"]), 6)) == \
+            (round(float(default["lon"]), 6), round(float(default["lat"]), 6))
+    except (KeyError, TypeError, ValueError):
+        same = False
+    if same and not marked:
+        return {"id": "pad", "lon": d["lon"], "lat": d["lat"], "source": f"WS2 {_rel(p)}"}
+    why = "marked as a proposal" if marked else "not pad_default"
+    out["source_note"] = (f"WS2 {_rel(p)} pad ({d.get('lon')}, {d.get('lat')}) ignored: {why} "
+                          f"(C 14:58: the pad in use is pad_default; F8 siting is a proposal)")
     return out
 
 
