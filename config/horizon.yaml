@@ -35,8 +35,9 @@ navcam_selection:
   min_stop_spacing_m: 30           # distinct stops: farthest-point order over focus-area drive ends
   first_stops:                     # stations.yaml rules that name a drive end go first
     - {station: S4, nearest_sol: 4200}   # S4 rule "Curiosity drive end nearest sol 4200 from MMGIS"
-  top_row_min_el_deg: 10.0         # frame's top-centre pixel at least this far above local level (sky in frame)
+  top_row_min_el_deg: 0.0          # pre-test only (no DEM needed): top-centre pixel above local level; the predicted-skyline test below decides (WS3 run 1: 10 deg kept 15/116 stops, most frames still had no sky)
   bottom_row_max_el_deg: -5.0      # ... and its bottom-centre pixel at most this (ground in frame)
+  min_predicted_skyline_col_frac: 0.5   # keep a frame only if the DEM-predicted skyline is testable (below the detector reference band, inside the frame) in >= 50 % of columns; WS3 run 1: the geometric test alone kept frames filled by rising terrain
   max_extra_sols: 1                # also look at drive-end sol + 1 if the drive-end sol has no usable frame
   max_total_mb: 150                # cache budget for API JSON + JPG
   timeout_s: 60
@@ -70,3 +71,12 @@ bands:
     res_m: 200
     radius_m: 84000                # 80 km sampling limit + planning radius 3.7 km, rounded up
     assumed: true
+# V2 frame-level failure: if the detector's boundary falls inside the top reference band in more
+# than this share of columns, the top of the frame is not clear sky; the frame is reported as
+# failed (not dropped). Fresh evidence: 34 of 44 geometric candidates had 88-100 % of columns there.
+v2_frame_fail: {max_in_ref_band_frac: 0.5, assumed: true}
+# Presentation only (overlay PNGs and V2 check composites; panorama strips for station cards).
+overlay: {line_rgba: [255, 90, 0, 255], line_width_px: 2, tick_rgba: [255, 215, 0, 255],
+          tick_len_px: 14, detected_rgba: [0, 200, 255, 255], assumed: true}
+panorama: {px_per_deg: 4, el_margin_deg: 2, sky_rgb: [210, 168, 140], ground_rgb: [118, 84, 62],
+           line_rgb: [255, 255, 255], tick_rgb: [255, 215, 0], assumed: true}

@@ -447,6 +447,46 @@ def candidates_at_stop(cache: Cache, de: dict, sel: dict, instruments) -> tuple[
     return passing, rejected
 
 
+def stop_xy(de: dict, recs: list[dict] | None = None) -> tuple[float, float]:
+    """Analysis-CRS position of the Navcam at a stop: the drive end (WS1 coreg shift is 0, so MMGIS
+    = DEM frame) plus the mean horizontal camera offset from the rover origin (site N, E)."""
+    x, y = (float(v) for v in lonlat_to_xy(de["lon"], de["lat"]))
+    if recs:
+        off = np.mean([camera_offset_site(r) for r in recs], axis=0)
+        x, y = x + float(off[1]), y + float(off[0])
+    return x, y
+
+
+def predicted_skyline_frac(rec: dict, profile) -> float:
+    """Share of image columns whose predicted skyline row lies below the sky detector's top
+    reference band and artefact border and above the bottom border, i.e. where V2 can test it."""
+    from pipeline.horizon.overlay import skyline_rows  # noqa: PLC0415
+
+    p = hcfg.load()["sky_detector_params"]
+    b = int(hcfg.value(p["border_px"]))
+    w, h = rec["width"], rec["height"]
+    top = b + max(1, int(round(p["ref_top_frac"] * (h - 2 * b))))
+    m = frame_model(rec)
+    rows = skyline_rows(profile, m, rec["attitude_quaternion"], (w, h))
+    ok = np.isfinite(rows) & (rows > top) & (rows < h - 1 - b)
+    return float(np.mean(ok))
+
+
+def filter_by_predicted_skyline(passing: list[dict], profile, min_frac: float):
+    """(kept, rejected) using ``predicted_skyline_frac`` (stores it in rec['geometry'])."""
+    kept, rejected = [], []
+    for rec in passing:
+        f = predicted_skyline_frac(rec, profile)
+        rec["geometry"]["predicted_skyline_col_frac"] = round(f, 3)
+        if f >= min_frac:
+            kept.append(rec)
+        else:
+            rejected.append({"image_id": rec["image_id"],
+                             "reason": f"predicted skyline testable in {f:.0%} of columns "
+                                       f"< {min_frac:.0%}"})
+    return kept, rejected
+
+
 def check_jpeg(path: Path, rec: dict) -> str | None:
     from PIL import Image  # noqa: PLC0415
 
@@ -489,7 +529,11 @@ def _log(msg: str) -> None:
 
 
 def build(*, dry_run: bool = False, max_mb: float | None = None, offline: bool = False,
-          waypoints=WAYPOINTS_D0, out=OUT, cache_root=CACHE, log=_log) -> dict:
+          waypoints=WAYPOINTS_D0, out=OUT, cache_root=CACHE, log=_log, engine=None,
+          horizons_dir=None) -> dict:
+    """With ``engine`` (rays.HorizonEngine over the real bands), each stop's horizon is computed
+    at Navcam height, written to ``horizons_dir/{stop_id}.json``, and frames are kept only where
+    the predicted skyline is testable (``navcam_selection.min_predicted_skyline_col_frac``)."""
     cfg = hcfg.load()
     sel = cfg["navcam_selection"]
     aoi = hcfg.site()["aoi_focus"]
@@ -515,6 +559,16 @@ def build(*, dry_run: bool = False, max_mb: float | None = None, offline: bool =
                  "station": de.get("station"), "lon": de["lon"], "lat": de["lat"]}
         try:
             passing, rejected = candidates_at_stop(cache, de, sel, instruments)
+            if engine is not None and passing:
+                prof = engine.horizon(*stop_xy(de, passing), eye_height_m=cfg["navcam_height_m"])
+                prof.meta = {"kind": "stop", "rmc": de["rmc"], "lon": de["lon"],
+                             "lat": de["lat"], "height_kind": "navcam",
+                             "position": "MMGIS drive end + mean camera offset (WS1 coreg 0 m)"}
+                hdir = Path(horizons_dir or OUT.parent / "horizons")
+                prof.write_json(hdir / f"{stop_id(de)}.json", observer_id=stop_id(de))
+                passing, rej2 = filter_by_predicted_skyline(
+                    passing, prof, float(sel["min_predicted_skyline_col_frac"]))
+                rejected += rej2
             picked = spread_pick(passing, sel["max_frames_per_stop"])
             got = []
             for rec in picked:
@@ -583,12 +637,20 @@ def main(argv=None):
     f = sub.add_parser("fetch", help="query the API, cache frames, write navcam_frames.json")
     f.add_argument("--dry-run", action="store_true", help="list the stop order only")
     f.add_argument("--max-mb", type=float)
-    sub.add_parser("rebuild", help="rebuild navcam_frames.json from the cache (no network)")
+    r = sub.add_parser("rebuild", help="rebuild navcam_frames.json from the cache (no network)")
+    for q in (f, r):
+        q.add_argument("--no-horizons", action="store_true",
+                       help="skip the stop horizons and the predicted-skyline frame filter")
     a = ap.parse_args(argv)
+    engine = None
+    if not a.no_horizons and not getattr(a, "dry_run", False):
+        from pipeline.horizon.bands import load_engine  # noqa: PLC0415
+
+        engine = load_engine()
     if a.cmd == "fetch":
-        build(dry_run=a.dry_run, max_mb=a.max_mb)
+        build(dry_run=a.dry_run, max_mb=a.max_mb, engine=engine)
     else:
-        build(offline=True)
+        build(offline=True, engine=engine)
     return 0
 
 

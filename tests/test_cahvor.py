@@ -23,6 +23,7 @@ from pipeline.horizon.cahvor import (
     site_to_enu,
     ypr_to_quat,
 )
+from pipeline.horizon.rays import HorizonProfile
 
 CFG = hcfg.load()
 
@@ -402,3 +403,164 @@ def test_s4_first_stop_is_the_discovery_drive_end():
     s4 = CFG["navcam_selection"]["first_stops"][0]
     assert s4["station"] == "S4"
     assert nearest_sol_rmc(load_drive_ends(), s4["nearest_sol"]) == "107_2484"
+
+
+# --------------------------------------------------------------------------------------------
+# Skyline in the image: overlay, sky detector, V2 comparison
+# --------------------------------------------------------------------------------------------
+
+def wavy_profile(base=2.0, amp=1.5, dist=5_000.0):
+    az = np.arange(0.0, 360.0, CFG["az_step_deg"])
+    el = base + amp * np.sin(np.radians(3 * az))
+    return HorizonProfile(az_deg=az, elevation_deg=el, distance_m=np.full(az.size, dist),
+                          source=["ctx_20m"] * az.size, observer={"x": 0.0, "y": 0.0, "z": 0.0},
+                          eye_height_m=CFG["navcam_height_m"], az_step_deg=CFG["az_step_deg"])
+
+
+def test_skyline_projects_to_expected_row():
+    from pipeline.horizon.overlay import skyline_pixels
+
+    m = base_cahv(0.0)
+    q = ypr_to_quat(90.0, 0.0, 0.0)  # rover faces east
+    flat = wavy_profile(amp=0.0)
+    lines = skyline_pixels(flat, m, q, (W, H_IMG))
+    pts = np.vstack(lines)
+    centre = pts[np.argmin(np.abs(pts[:, 0] - CX))]
+    assert centre[1] == pytest.approx(CY - F * math.tan(math.radians(2.0)), abs=0.5)
+    assert np.all((pts[:, 0] >= -1) & (pts[:, 0] <= W))
+
+
+def test_overlay_is_transparent_except_on_the_skyline(tmp_path):
+    from pipeline.horizon.overlay import render_overlay, skyline_pixels
+
+    m = base_cahv(0.0)
+    q = ypr_to_quat(90.0, 0.0, 0.0)
+    lines = skyline_pixels(wavy_profile(amp=0.0), m, q, (W, H_IMG))
+    img = render_overlay((W, H_IMG), lines, ticks=[{"x": CX, "label": "S1"}])
+    path = tmp_path / "overlay.png"
+    img.save(path)
+    a = np.asarray(img)
+    assert a.shape == (H_IMG, W, 4)
+    row = int(round(CY - F * math.tan(math.radians(2.0))))
+    assert a[row, 300, 3] > 0
+    assert a[row + 40, 300, 3] == 0
+    assert tuple(a[row, 300]) == tuple(CFG["overlay"]["line_rgba"])
+
+
+def synth_frame(m, q, prof, seed=1):
+    """Smooth sky above the projected skyline, textured terrain below (uint8)."""
+    from pipeline.horizon.overlay import skyline_rows
+
+    rows = skyline_rows(prof, m, q, (W, H_IMG))  # continuous row per column (NaN if none)
+    rng = np.random.default_rng(seed)
+    yy = np.arange(H_IMG, dtype=float)[:, None]
+    sky = 200.0 - 20.0 * yy / H_IMG + rng.normal(0.0, 0.3, (H_IMG, W))
+    ground = 100.0 + rng.uniform(-25.0, 25.0, (H_IMG, W))
+    img = np.where(yy >= rows[None, :], ground, sky)
+    return np.clip(np.round(img), 0, 255).astype(np.uint8), rows
+
+
+def test_sky_detector_recovers_synthetic_skyline():
+    from pipeline.horizon.sky import detect_skyline
+
+    m = cahvor(pitch_deg=0.0)
+    q = ypr_to_quat(10.0, 1.0, -2.0)
+    img, truth = synth_frame(m, q, wavy_profile())
+    det = detect_skyline(img)
+    ok = ~np.isnan(truth)
+    err = np.abs(det.rows[ok] - truth[ok])
+    assert np.mean(err <= 1.0) >= 0.98
+
+
+def test_v2_comparison_recovers_angles_and_summary():
+    from pipeline.horizon.sky import detect_skyline
+    from pipeline.validation.v2_skyline import compare_columns, summarise
+
+    m = cahvor(pitch_deg=0.0)
+    q = ypr_to_quat(10.0, 1.0, -2.0)
+    prof = wavy_profile()
+    img, _ = synth_frame(m, q, prof)
+    det = detect_skyline(img)
+    rec = compare_columns(m, q, prof, det.rows)
+    assert len(rec["column"]) > 0.9 * W
+    err = np.asarray(rec["error_deg"])
+    # one pixel is ~0.046 deg for this camera
+    assert np.median(np.abs(err)) < 0.05
+    s = summarise([rec])
+    assert s["far"]["n"] == len(err) and s["near"]["n"] == 0
+    assert s["far"]["p90_abs_deg"] < 0.1
+
+
+# --------------------------------------------------------------------------------------------
+# validation/v2.json writer (contract v2.schema.json)
+# --------------------------------------------------------------------------------------------
+
+def _synthetic_frame(i, station=None):
+    m = cahvor(pitch_deg=0.0)
+    q = ypr_to_quat(10.0 + 30.0 * i, 1.0, -2.0)
+    rec = {"image_id": f"SYN_{i:03d}", "sol": 4000 + i, "station": station,
+           "stop_id": f"v1_{i}", "attitude_quaternion": q.tolist(),
+           "camera_model": {"type": "CAHVOR", "C": m.C.tolist(), "A": m.A.tolist(),
+                            "H": m.H.tolist(), "V": m.V.tolist(), "O": m.O.tolist(),
+                            "R": m.R.tolist()}}
+    return rec, m, q
+
+
+def test_v2_writer_on_synthetic_frames(tmp_path, monkeypatch):
+    import json
+
+    from pipeline.validation.v2_skyline import build_v2, evaluate_frame, write_v2
+
+    monkeypatch.setenv("HOMELINE_MANIFEST_DIR", str(tmp_path / "manifest"))
+    n_ok = CFG["v2"]["min_stops"]
+    prof = wavy_profile()
+    entries = []
+    for i in range(n_ok):
+        rec, m, q = _synthetic_frame(i, station="S4" if i == 0 else None)
+        img, _ = synth_frame(m, q, prof, seed=i)
+        entries.append(evaluate_frame(rec, prof, img))
+    rec, m, q = _synthetic_frame(98)
+    entries.append(evaluate_frame(rec, None, synth_frame(m, q, prof)[0]))   # no horizon
+    entries.append(evaluate_frame(_synthetic_frame(99)[0], prof, None))    # no image
+    flat = np.full((H_IMG, W), 128, dtype=np.uint8)
+    entries.append(evaluate_frame(_synthetic_frame(97)[0], prof, flat))    # no sky boundary
+    terrain = np.full((H_IMG, W), 200, dtype=np.uint8)
+    terrain[30:, :] = 90                                                   # edge in the ref band
+    entries.append(evaluate_frame(_synthetic_frame(96)[0], prof, terrain))
+    doc = build_v2(entries)
+    assert doc["available"] is True and doc["method"] == "automatic"
+    assert doc["n_stops"] == n_ok and doc["n_frames_tried"] == n_ok + 4
+    failed = [f for f in doc["frames"] if f["status"] == "failed"]
+    assert len(failed) == 4 and all(f["failure"] for f in failed)   # reported, not dropped
+    assert any("reference band" in f["failure"] for f in failed)
+    assert doc["summary"]["far"]["n"] > 0.9 * W * n_ok
+    assert doc["summary"]["far"]["median_abs_deg"] < 0.05
+    assert doc["summary"]["near"]["n"] == 0 and doc["summary"]["near"]["median_deg"] is None
+    assert sum(f["manual_check"] for f in doc["frames"]) == \
+        math.ceil(CFG["v2"]["manual_check_frac"] * len(entries))
+    path = write_v2(doc, tmp_path / "v2.json")
+    from pipeline.horizon.contracts import validate
+
+    validate(json.loads(path.read_text()), "v2.schema.json")
+    frag = {}
+    for p in (tmp_path / "manifest").rglob("*.json"):
+        frag.update(json.loads(p.read_text()))
+    assert frag["v2.far.n"]["value"] == doc["summary"]["far"]["n"]
+    assert frag["v2.far.median_abs_deg"]["units"] == "deg"
+    assert frag["skyline_error_deg.S4.far"]["value"] < 0.05
+    assert frag["skyline_error_deg.S4.near"]["value"] is None
+    assert frag["v2.n_stops"]["value"] == n_ok
+
+
+def test_v2_hand_aligned_and_too_few_stops_are_not_available():
+    from pipeline.validation.v2_skyline import build_v2, evaluate_frame
+
+    prof = wavy_profile()
+    rec, m, q = _synthetic_frame(0)
+    e = evaluate_frame(rec, prof, synth_frame(m, q, prof)[0])
+    doc = build_v2([e])  # 1 stop < v2.min_stops
+    assert doc["available"] is False and doc["summary"]["far"]["median_abs_deg"] is None
+    doc = build_v2([e], hand_aligned=True)
+    assert doc["available"] is False and doc["method"] == "hand-aligned"
+    doc = build_v2([e], manual={rec["image_id"]: False})
+    assert doc["method"] == "automatic+manual_check" and doc["n_stops"] == 0

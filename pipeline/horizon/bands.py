@@ -275,6 +275,27 @@ def band_paths() -> dict[str, Path]:
             "ctx_20m": OUT / "ctx_20m.tif", "mola_hrsc_200m": OUT / "mola_hrsc_200m.tif"}
 
 
+def load_engine(log=print):
+    """HorizonEngine over every band present (horizon.yaml ``sampling`` order); each band must
+    be north-up in the analysis CRS."""
+    import rasterio
+    from pyproj import CRS
+
+    from pipeline.horizon.rays import DemBand, HorizonEngine
+
+    want = CRS.from_proj4(hcfg.analysis_proj())
+    bands = []
+    for src, path in band_paths().items():
+        if not path.exists():
+            log(f"band {src}: missing ({path}); rays fall back to the next coarser band")
+            continue
+        with rasterio.open(path) as ds:
+            if ds.crs is None or not CRS.from_user_input(ds.crs).equals(want):
+                raise ValueError(f"{path}: CRS {ds.crs} is not the analysis CRS")
+        bands.append(DemBand.from_geotiff(path, src))
+    return HorizonEngine(bands)
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--only", choices=["mola", "ctx"])
