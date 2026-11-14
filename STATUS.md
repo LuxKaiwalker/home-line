@@ -1950,15 +1950,15 @@ Branch: `ws10-vo`
 - Caveat for step 2: 256² only (f ≈ 306 px); the mast looks right and down (az 90°, el −29°) on 4 drives and forward on sol 5070, so VO sees near-field ground.
 - VO: a failed step or a missing drive-end pair is bridged with the onboard relative pose (reported as `bridged_m`, never hidden); at the start pose the last pair before driving is used, elsewhere the first pair at a pose.
 
-## Backend (WS2 support, WS11–WS14), orchestrated — P0 met  (updated 2026-11-14T21:05Z)
-Source of truth: Notion decision log D1–D69 and the backend agent kit. Demo cut D69: WS14, accounts, route editing, VM deploy and stretch are cut. Orchestrator state: /tmp/hl-orch/ on the build machine.
-Done:        setup S1–S6 (#1 #2 #3 #5 #6 #7 #9 #10 #11 #13 #14 #17: contracts/backend v1.0.1, config/backend.yaml + loader, server deps + Makefile + server.yml, docs, build_plan_bundle, dataUrl base); WS2 support W1–W3 (#4 067696d, #12); WS11 E1 (#8 e334d68), E2 (#16 b324744)
-Doing:       WS11 E3 /results/{hash} (critical path)
-Next:        WS11 E4 parity harness, E5 server data, E7 job runner; WS12 O1 once Docker exists; WS13 U1 after B0′
-Blocked:     WS12 O1 needs Docker on the build machine (D59, team lead)
+## Backend (WS2 support, WS11–WS14), orchestrated — B0′ met  (updated 2026-11-14T23:24Z)
+Source of truth: Notion decision log D1–D81 and the backend agent kit. Demo cut D69. Orchestrator state: /tmp/hl-orch/ on the build machine. Overnight (D71): Notion Overnight log.
+Done:        setup S1–S9 (contracts/backend v1.0.1; config + loader; server deps, Makefile (serve on 127.0.0.1:8012, stack-up/down), server.yml; docs; build_plan_bundle; dataUrl base; labels.precomputed; design.yaml outside the engine hash; live mounts in main.ts and the console behind VITE_LIVE); WS2 W1–W3 (#4); WS11 E1 (#8), E2 (#16), E3 (#19), E4 (#23), E5 (#21), E7 (#28), E1b (#32); WS12 O1 (#22); WS13 U1 (#20), U2 (#24), U3 (#34)
+Doing:       WS11 E8 plan job for custom pads (D81: 3 variants at 104 kg, staged; critical path to B1′); WS12 O3 limits, kill switch, import, /api/docs; SIM0 simulator findings (D76); WS2 W4 (#25) waiting for its real-data parity run
+Next:        E6 pad validate/screen, E10 custom crew, U4 crew panel; hardening right after B2′ (D75)
+Blocked:     none
 Assumptions: config/backend.yaml assumed: title/notes/message caps, ranges.start_lmst_h, ranges.reserve_min (D66)
-Parity:      no real-data harness yet (E4); W1 evidence = make engine && make web re-run, only the D51 changes
-Follow-up:   C rebuilds the Unity fixture (make bundle-fixture); until then the local bundle KAT is skipped (#17)
+Parity:      real-data make parity PASSED on E4 (faebfda): 98 files, 0 differ; E3 serves identical bytes. K10: 586 MB per worker
+Follow-up:   C rebuilds the Unity fixture (make bundle-fixture) before the deadline; the local bundle KAT is skipped until then
 
 ## Decision log (fresh run, recorded by C)
 
