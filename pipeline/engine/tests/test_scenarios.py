@@ -82,7 +82,12 @@ def test_batch_on_dummy_world(tmp_path, settings, manifest_dir):
     h = {s["id"]: s["headline"] for s in index["scenarios"]}["nom_104"]
     assert h == {"budget_min": 30, "reachable_pct": None, "range_pct": [None, None]}
     keys = set(provenance.load_all())
-    assert not any(k.startswith("reachable_pct") for k in keys)
+    assert not any(k.startswith("reachable_pct") and ".30" in k for k in keys)
+    # D41: the 60-min entry is the share over the disc's part inside the data, with its size
+    h60 = {s["id"]: s["headline_60"] for s in index["scenarios"]}["nom_104"]
+    assert h60["basis"] == "in_data" and 0 < h60["in_data_pct"] < 100
+    assert h60["range_pct"][0] <= h60["reachable_pct"] <= h60["range_pct"][1]
+    assert "reachable_pct.nom_104.60" in keys and "headline.nom_104.disc_60.in_data_pct" in keys
     assert "file.scenarios/index.json" in keys and "isochrone_step_min.nom_104" in keys
     validate(provenance.load_all(), "manifest.schema.json")
 
@@ -459,6 +464,57 @@ def test_main_d21_on_synthetic_terrain(tmp_path, monkeypatch):
             f"scenarios/pads/{r['id']}/timeline_nom_104.json")
         assert f"pads.{r['id']}.haul.drag.flat.force_N" in keys
         assert (out / "pads" / r["id"] / "nom_104" / "t_home.tif").exists()
+        # user 17:28: combinations the effort-cap rule excludes = screening - full run
+        fb = summ["feasible"]
+        assert fb["excluded_by_effort_cap_rule"] == r["screen_score"] - r["score"] >= 0
+        assert r["feasible"] == fb
+        assert keys[f"pads.{r['id']}.feasible.excluded_by_effort_cap_rule"]["value"] == (
+            fb["excluded_by_effort_cap_rule"])
+        # D41: the 60-min disc leaves this small world: in-data share + its size
+        h60 = summ["headline"]["60"]
+        assert h60["basis"] == "in_data" and 0 < h60["in_data_pct"] < 100
+        assert h60["reachable_pct"] is not None
+        assert keys[f"pads.{r['id']}.headline.60.in_data_pct"]["value"] == h60["in_data_pct"]
+    for r in idx["pads"]:
+        if not r["picker"]:
+            assert keys[f"pads.{r['id']}.feasible.excluded_by_effort_cap_rule"]["file"] == (
+                "scenarios/pads/index.json")
+    sidx = json.loads((pub / "scenarios/index.json").read_text())
+    for e in sidx["scenarios"]:
+        h = e["headline_60"]
+        assert h["basis"] == "in_data" and h["reachable_pct"] is not None
+        assert h["label"] == f"{h['in_data_pct']:.1f} % of the circle lies inside the terrain data"
+        assert keys[f"headline.{e['id']}.disc_60.in_data_pct"]["value"] == h["in_data_pct"]
+        assert keys[f"reachable_pct.{e['id']}.60"]["value"] == h["reachable_pct"]
+    tt = json.loads((pub / "trade_table.json").read_text())
+    row60 = tt["cells"][tt["rows"].index(60)]
+    assert row60[tt["cols"].index(104)]["reachable_pct"] == next(
+        e for e in sidx["scenarios"] if e["id"] == "nom_104")["headline_60"]["reachable_pct"]
+    # --headline-patch reproduces the full run's files from the session-7 shape
+    full = {rel: (pub / rel).read_text() for rel in
+            ["scenarios/index.json", "trade_table.json", "scenarios/pads/index.json"]
+            + [r["summary"] for r in picks]}  # fmt: skip
+    old = json.loads(full["scenarios/index.json"])
+    for e in old["scenarios"]:
+        del e["headline_60"]
+    (pub / "scenarios/index.json").write_text(json.dumps(old))
+    for rel in full:
+        if rel.endswith("summary.json") or rel == "scenarios/pads/index.json":
+            d = json.loads(full[rel])
+            for row in d.get("pads", [d]):
+                row.pop("feasible")
+            if "headline" in d:
+                d["headline"]["60"]["reachable_pct"] = None
+            (pub / rel).write_text(json.dumps(d))
+    t2 = json.loads(full["trade_table.json"])
+    for c in t2["cells"][1]:
+        c["reachable_pct"] = None
+        c.pop("in_data_pct", None)
+    (pub / "trade_table.json").write_text(json.dumps(t2))
+    rc = scenarios.main(["--terrain", str(terr), "--out", str(out), "--headline-patch"])
+    assert rc == 0
+    for rel, txt in full.items():
+        assert json.loads((pub / rel).read_text()) == json.loads(txt), rel
 
 
 def test_conditions_inputs(monkeypatch):

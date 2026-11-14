@@ -773,14 +773,41 @@ Branch: `ws2-engine`
   - Note: con_104 T_home at S6 (30.07) is below nom_104 (41.23): the conservative access cell (other side of a ridge within 50 m) is not the nominal one. It is the access-cell rule as decided (D27), reported, not changed.
   - **Downstream (C to re-run):** everything that reads the pad must take it from `pad.json` (or the engine outputs), not `site.yaml pad_default`: **WS3** pad horizon (`pipeline/horizon` reads pad_default) + station cards for the new stations (S1, S2, S4, S6, S7, S8 access cells all new); **WS7** `make fields` + worst-case (all 9 return fields changed, pad moved; HUD timeline O2 482.31 L, EVA-duration binding, D39 timing); **WS8** fp3d terrain chunks / corridor / camera start (route and pad moved); WS4 `clock.json t_dark` is computed at pad_default (flat horizon; 578.63 min used) — re-run at the official pad if it matters; WS9 (suspended) stale; `make web` (stations.json, cards timeline parts with `turn_back_binding`, pads tree). WS5: picker shapes above; differences from C's 16:5x note: summary has extra keys, `headline` entries carry `budget_min` and `range_pct` as `[low, high]` (con, opt), index rows carry extra `kind`, `picker`, `screen_*`, `summary`.
 
+- 2026-11-14T16:44Z (session 8): **D41 60-min headline, user 17:28 excluded-combination counts, D40 golden.json.** D43's DP switch was **not** made (user 17:28 supersedes it: the route DP keeps the effort-cap bound; routes, timelines, cards, counts and the ranking are byte-identical to session 7, checked by diff). D44: official pad rank1 frozen, `pad.json` untouched. KATs first (`test_envelope_edges.py` D41 half-disc known answer + headline entry; `test_scenarios.py` headline_60 on the dummy world, `--d21` feasible blocks + `--headline-patch` reproduces the full-run files; `test_golden.py` 12 tests). Code commits c57ee3f, bbe8cf8; full suite green.
+  - **D41 (`envelope.reachable_pct(in_data=True)`, `envelope.disc_in_data_pct`, `scenarios.headline_entry`; config `variants.yaml outputs.headline_in_data_budgets_min: [60]`):** at 60 min a disc that leaves the terrain data gives the share over its part inside the data (in = inside the 3 m grid and not unknown), shipped with that part's size; 30 min keeps the strict rule. Run: `scenarios --headline-patch` from clean c57ee3f (return fields recomputed in memory, bounded at 60 min, never written; the 30-min headline is recomputed and must equal the published one: it did). 0 `-dirty` keys (1,842 engine keys at 30403d4 / c57ee3f).
+    | Where | 60 min (before: null) | Manifest keys |
+    | --- | --- | --- |
+    | `scenarios/index.json` new `headline_60` per scenario {budget_min, reachable_pct, range_pct [con, opt], basis "in_data", in_data_pct, label} | **nom_104 31.5 % (16.2–43.8)**, in data 75.8 %; nom_80 33.3, nom_120 30.2; con 17.3/16.2/15.4; opt 45.9/43.8/42.4 | `reachable_pct.{sid}.60`, `reachable_pct_range.{sid}.60.{low,high}`, **`headline.{sid}.disc_60.in_data_pct`** (75.8, label "75.8 % of the circle lies inside the terrain data") |
+    | `trade_table.json` 60-min row (+ cell `in_data_pct`) | 33.3 / 31.5 / 30.2 % (80/104/120) | `trade.60.{m}.reachable_pct`, `trade.60.{m}.in_data_pct` |
+    | Picker `summary.json` `headline["60"]` (+ basis, in_data_pct, label) | rank2 22.7 (12.0–38.8), in data 80.3 %; rank3 22.6 (11.9–38.7), 79.9 %; rank4 17.0 (10.4–35.1), 87.2 %; pad_default 14.9 (10.2–27.6), full disc (unchanged) | `pads.{id}.headline.60.{reachable_pct, range_pct.low/high, in_data_pct}` |
+    The 30-min figure stays the headline (`headline`); `headline_60` is an extra key (scenarios_index schema is open; C to add it to the contract).
+  - **User 17:28: combinations the effort-cap rule excludes** (`padpick.feasible_block`): `feasible` {screen_count, full_run_count, excluded_by_effort_cap_rule, note} on every `scenarios/pads/index.json` row and each picker `summary.json`; manifest `pads.{id}.feasible.excluded_by_effort_cap_rule` + `pads.{id}.feasible.screen_count` (file: the summary for picker pads, `scenarios/pads/index.json` for rank1).
+    | Pad | Screening (time only) | Full run (margin, effort cap) | Excluded |
+    | --- | --- | --- | --- |
+    | rank1 (official) | 52 | 38 | **14** |
+    | rank2 | 51 | 38 | 13 |
+    | rank3 | 51 | 38 | 13 |
+    | rank4 | 50 | 37 | 13 |
+    | pad_default | 50 | 31 | 19 |
+    Caveat in the note: the difference is screening − full run as C asked; besides the effort-cap O2 bound it also holds the daylight / EVA-duration leg checks and the access-cell tie-break difference (row/col vs T_home), so it is an upper bound on what the O2 bound alone removes.
+  - **D40 `physio/golden.json`** (`pipeline/engine/golden.py`, `make engine` runs it; written to `data/interim/engine/public/physio/golden.json`, 74.6 kB, version 1.0.0, manifest `file.physio/golden.json`, `physio.golden.version`, `physio.golden.n_cases` = 83, commit bbe8cf8). Deterministic (no clock/commit inside); `golden.check(doc)` re-evaluates every case from its inputs (`python -m pipeline.engine.golden --check FILE`: all pass); a 1 % change to any expected value is caught (KAT). Contents: `coords` (pad-local metres, x E, y N, z up), `units`, `conventions`, `tolerances` per group, `config` snapshot (crew, variants, derived alpha/reserve 40.5 L/effort 1.35/task 0.8373/budget 482.31/EVA 390, formulas, o2_margin, haul, leash) and cases:
+    - `physio` (45): 5 grades (-20, -10, 0, 10, 20 deg) x 3 variants x 3 suits: a(M), k, cost slope, v_safe, v*, VO2 at v*, passable, pace, O2 L/m, heat W.
+    - `o2_leg` (3): a 4-segment leg (level 300 m, +5.0 deg over 400 m, -6.7 deg over 300 m, -7.6 deg over 300 m) per variant at 104 kg: per segment and total t, O2.
+    - `haul` (13) + `haul_drag_finding` (1): cart, suited 179 kg and bound 343 kg at -10..20 deg (force, traction limit, speed, feasible, reason); drag flat = traction failure (398.5 N > 350.6 N, max 157.5 kg).
+    - `margin` (6): depart, arrival with station tasks, O2 / daylight / dose (negative) / EVA-duration binding: every term, margin, binding, O2 left, planning-rate O2 term.
+    - `turn_back` (2): latest departure on a straight way home, EVA duration binds (390 − T_home) and O2 binds (small budget).
+    - `dose_leash` (12): tau = 60 D_allow / Ddot for D_allow 0.25/0.5/1.0 mGy x 226/3000/6000/24000 uGy/day.
+    - `route` (1): 3 % plane, 3 stations, nominal 104 kg, t_dark 578.6, static tau 113.7: legs with per-vertex xyz / tau / O2 / T_home / O2_home, way-home series per station, expected order A -> C -> B (119.09 min, 7 feasible subsets) and 14 timeline rows with their inputs.
+  - Before → after (session 7 → 8): everything identical except the files listed above (diff of the public tree: `scenarios/index.json`, `trade_table.json`, `scenarios/pads/index.json`, 4 picker summaries; new `physio/golden.json`).
 ### Doing
 
-- Waiting for C: merge session 7, contracts for `scenarios/pads/index.json` + `summary.json`, downstream re-runs (list above).
+- Waiting for C: merge session 8; contracts for `physio/golden.json` (+ make_web rule), `headline_60` in scenarios_index, `feasible` in pads index/summary, trade cell `in_data_pct`.
 
 ### Next
 
 - C (after merging session 7): WS3 pad horizon + cards, WS7 `make fields`, WS8 fp3d, `make web` (downstream list in the 15:43Z entry).
-- If C/user want a 60-min number around the official pad: decide between null (now) and the in-grid share (report-only values above), or have WS1 widen the DEM window around the official pad.
+- ~~60-min number around the official pad~~: D41 shipped (session 8).
+- C: `make web` copies `physio/golden.json`, picks up `headline_60`; WS5 labels `pads.{id}.feasible.excluded_by_effort_cap_rule` and shows `headline.nom_104.disc_60.in_data_pct` with the 60-min share.
 
 ### Blocked
 
@@ -805,7 +832,8 @@ Branch: `ws2-engine`
 
 ### Assumptions added
 
-- **60-min reachable % around the official pad (session 7, for C/user):** the 3,528 m disc leaves the 3 m grid (75.8 % inside), so `reachable_pct` at 60 min is **null** (headline rule since session 1: never a number from a partial disc). The in-grid share is only reported in STATUS, not shipped.
+- ~~60-min reachable % null~~ → D41 (session 8): `variants.yaml outputs.headline_in_data_budgets_min: [60]`; "inside the terrain data" = inside the 3 m routing grid and not unknown, as a share of the whole flat disc's cells.
+- golden.json (D40): `golden.py` tolerances are WS2's choice (physio rel 1e-6; route segments rel 1e-3 because the router interpolates a 0.01-deg table; timeline rows abs 0.011 because the contract rounds to 0.01); version 1.0.0 until C freezes the contract.
 - `variants.yaml d21` (D21 settings; `screening_order` and `elevation` assumed): tiebreak 1 is computed in the screening for every candidate at or above the 5th-best count (so the top 5 follow the full D21 order); tiebreak 2 = pad-cell (3 m) elevation; a block's pad = its representative cell (nearest the block centre). Screening access cells: equal distances broken by row/col (`access.find` breaks them by T_home; the full runs use `access.find`). Only the top 5 by screening order get full runs (D21), so a lower-screened candidate with a higher margin-checked count is not considered.
 - The DP margin check bounds O2 used before each leg at the 1.35 L/min effort cap (unchanged since session 3). With 6 stations this is what removes 12–19 subsets per pad between screening and full run; the timeline reports the actual O2 (e.g. 124.87 L left at return).
 - D39 modelling: the DP plans without the timed dose term (it depends on the route); t* and the dose margins are evaluated on the planned route; a turn-back with the timed term is found by scanning departures in 0.05-min steps.

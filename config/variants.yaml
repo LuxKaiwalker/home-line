@@ -41,6 +41,7 @@ outputs:                           # added 13 Nov (gap found by WS2)
   simplify_tolerance_m: 2
   band_budgets_min: [30, 60]
   display_min_hole_m2: 100         # C decision 2026-11-14 11:42 (assumed: true): display isochrones fill holes (blocked islands) < 100 m2 (nom_104 2-min: 2.66 -> 1.18 MB gz); routing, bands, edges and T_home unchanged
+  headline_in_data_budgets_min: [60]   # D41 (user 2026-11-14 17:22): at these budgets a flat disc that leaves the terrain data gives the share over its part inside the data, shipped with that part's size ("75.8 % of the circle lies inside the terrain data"); other budgets keep the strict rule (null when the disc leaves the grid)
 route:                             # added by WS2 2026-11-14 (values from SPEC F9)
   o2_checkpoint_min: 30            # SPEC F9: "O2 checkpoints every 30 min"
   budget: "crew.eva_h"             # SPEC F9: sum(walk + dwell) <= 6.5 h

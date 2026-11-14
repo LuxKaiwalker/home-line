@@ -196,6 +196,68 @@ def write_pointer_offsets(out_dir: Path) -> Path:
     return path
 
 
+def in_data_budgets() -> set[int]:
+    """D41: budgets whose headline uses the in-data share (variants.yaml outputs)."""
+    return {int(b) for b in load("variants")["outputs"].get("headline_in_data_budgets_min", [])}
+
+
+IN_DATA_LABEL = "{pct:.1f} % of the circle lies inside the terrain data"
+
+
+def headline_entry(grid: Grid, t_own, t_con, t_opt, pad, budget: float, speed: float,
+                   in_data: bool | None = None) -> dict:  # fmt: skip
+    """Headline at one budget: reachable % (own field) and range [conservative, optimistic],
+    plus ``basis`` ("full_disc" | "in_data" | "off_grid"), ``in_data_pct`` (% of the flat disc
+    inside the terrain data) and ``label`` (D41, user 17:22: the 60-min share is over the part
+    of the circle inside the data, labelled with that part's size). in_data defaults to the
+    budget being in variants.yaml outputs.headline_in_data_budgets_min."""
+    if in_data is None:
+        in_data = int(budget) in in_data_budgets()
+    inside = envelope.disc_in_grid(grid, pad, speed * budget * 60.0)
+
+    def pct(t):
+        if t is None:
+            return None
+        x = envelope.reachable_pct(grid, t, pad, budget, speed, in_data=in_data)
+        return None if x is None else round(float(x), 1)
+
+    cov = round(envelope.disc_in_data_pct(grid, pad, budget, speed), 1)
+    basis = "full_disc" if inside else ("in_data" if in_data else "off_grid")
+    return {"budget_min": int(budget), "reachable_pct": pct(t_own),
+            "range_pct": [pct(t_con), pct(t_opt)], "basis": basis, "in_data_pct": cov,
+            "label": IN_DATA_LABEL.format(pct=cov) if basis == "in_data" else None}  # fmt: skip
+
+
+def headline_extra(grid: Grid, pad, t_by_sid: dict[str, np.ndarray], settings: Settings,
+                   entries: list[dict], file: str = "scenarios/index.json") -> None:  # fmt: skip
+    """D41: ``headline_{b}`` for every budget after the first (the 30-min headline stays the
+    headline) on each scenarios/index.json entry, with manifest keys reachable_pct.{sid}.{b},
+    reachable_pct_range.{sid}.{b}.{low,high} and headline.{sid}.disc_{b}.in_data_pct."""
+    by_suit: dict[int, dict[str, np.ndarray]] = {}
+    for sid, t in t_by_sid.items():
+        v, suit = physio.parse_scenario(sid)
+        by_suit.setdefault(suit, {})[v] = t
+    for e in entries:
+        sid = e["id"]
+        if sid not in t_by_sid:
+            continue
+        _, suit = physio.parse_scenario(sid)
+        for b in settings.budgets[1:]:
+            h = headline_entry(grid, t_by_sid[sid], by_suit[suit].get("conservative"),
+                               by_suit[suit].get("optimistic"), pad, b,
+                               settings.disc_speed_ms)  # fmt: skip
+            e[f"headline_{int(b)}"] = h
+            if h["reachable_pct"] is not None:
+                provenance.record(f"reachable_pct.{sid}.{int(b)}", h["reachable_pct"], "%", file,
+                                  SCRIPT)  # fmt: skip
+            for end, val in zip(("low", "high"), h["range_pct"], strict=True):
+                if val is not None:
+                    provenance.record(f"reachable_pct_range.{sid}.{int(b)}.{end}", val, "%",
+                                      file, SCRIPT)  # fmt: skip
+            provenance.record(f"headline.{sid}.disc_{int(b)}.in_data_pct", h["in_data_pct"], "%",
+                              file, SCRIPT)  # fmt: skip
+
+
 def web_products(grid: Grid, pad, fields: dict[str, dijkstra.Field], settings: Settings,
                  public: Path = PUBLIC, default: str | None = None) -> dict:  # fmt: skip
     """Isochrones, edges, bands, headline and scenarios/index.json for the scenarios given."""
@@ -250,6 +312,7 @@ def web_products(grid: Grid, pad, fields: dict[str, dijkstra.Field], settings: S
             },
             "headline": {"budget_min": budget, "reachable_pct": own_r, "range_pct": rng_r},
         })  # fmt: skip
+    headline_extra(grid, pad, {sid: f.t_min for sid, f in fields.items()}, settings, entries)
     index = {"dummy": False, "default": default, "scenarios": entries}
     _write_web(public, "scenarios/index.json", index, "scenarios_index.schema.json")
     web_products.iso_info = iso_info  # sizes for the run summary
@@ -376,6 +439,114 @@ def siting_only(grid: Grid, pad, a, rmse, settings: Settings, out: Path, pub: Pa
     return 0
 
 
+def _insert_after(d: dict, after: str, key: str, value) -> dict:
+    out = {}
+    for k, v in d.items():
+        if k != key:
+            out[k] = v
+        if k == after:
+            out[key] = value
+    if key not in out:
+        out[key] = value
+    return out
+
+
+def headline_patch(grid: Grid, settings: Settings, pub: Path) -> int:
+    """--headline-patch (D41 + user 17:28): fill the 60-min headline (in-data share, in_data_pct)
+    in scenarios/index.json (headline_60), trade_table.json and the picker summaries, and add the
+    per-pad ``feasible`` block (station combinations the effort-cap rule excludes) to the picker
+    summaries and scenarios/pads/index.json. Return fields are recomputed in memory, bounded at
+    the largest budget (exact inside it), never written; routes, timelines, cards, stations and
+    the ranking are not touched. The pad is pad.json's (D44: frozen). The 30-min headline is
+    recomputed as a check and must equal the published one."""
+    import json
+
+    from . import padpick
+
+    def read(rel):
+        return json.loads((pub / rel).read_text(encoding="utf-8"))
+
+    pj = read("pad.json")
+    pad = pad_rc(grid, (pj["pad"]["lon"], pj["pad"]["lat"]))
+    tmax = max(settings.budgets)
+    b0 = settings.budgets[0]
+
+    def field_t(sid, rc):
+        p = physio.scenario_params(sid)
+        return dijkstra.return_field(grid.with_nogo(p.nogo_deg), physio.grade_table(p), rc,
+                                     tmax_min=tmax).t_min  # fmt: skip
+
+    index = read("scenarios/index.json")
+    t_by = {e["id"]: field_t(e["id"], pad) for e in index["scenarios"]}
+    for e in index["scenarios"]:
+        own = envelope.reachable_pct(grid, t_by[e["id"]], pad, b0, settings.disc_speed_ms)
+        own = None if own is None else round(own, 1)
+        if own != e["headline"]["reachable_pct"]:
+            raise SystemExit(f"{e['id']}: {b0}-min headline {own} != published "
+                             f"{e['headline']['reachable_pct']} (pad or grid changed)")
+    headline_extra(grid, pad, t_by, settings, index["scenarios"])
+    _write_web(pub, "scenarios/index.json", index, "scenarios_index.schema.json")
+    out = {"scenarios": {e["id"]: e.get(f"headline_{tmax}") for e in index["scenarios"]}}
+
+    tt = read("trade_table.json")
+    for i, b in enumerate(tt["rows"]):
+        if int(b) not in in_data_budgets():
+            continue
+        for j, m in enumerate(tt["cols"]):
+            pct, cov = trade_pct(grid, t_by.get(f"nom_{int(m)}"), pad, b, settings)
+            cell = tt["cells"][i][j]
+            cell["reachable_pct"] = pct
+            if cov is not None:
+                cell["in_data_pct"] = cov
+            for k, u in (("reachable_pct", "%"), ("in_data_pct", "%")):
+                if cell.get(k) is not None:
+                    provenance.record(f"trade.{int(b)}.{int(m)}.{k}", cell[k], u,
+                                      "trade_table.json", SCRIPT)  # fmt: skip
+    _write_web(pub, "trade_table.json", tt, "trade_table.schema.json")
+    out["trade"] = tt
+
+    ps = padpick.settings_from_config()
+    pidx = read("scenarios/pads/index.json")
+    rows = []
+    out["pads"] = {}
+    for row in pidx["pads"]:
+        fb = padpick.feasible_block(row.get("screen_score"), row.get("score"))
+        row = _insert_after(row, "screen_rank", "feasible", fb)
+        kp = f"pads.{row['id']}."
+        if row.get("summary"):
+            summ = read(row["summary"])
+            rc = pad_rc(grid, (summ["pad"]["lon"], summ["pad"]["lat"]))
+            head = padpick._headline(grid, rc, field_t(ps.scenario, rc), ps.scenario,
+                                     settings.budgets, ps.disc_speed_ms)  # fmt: skip
+            old = summ["headline"][str(int(b0))]
+            new = head[str(int(b0))]
+            if (old["reachable_pct"], list(old["range_pct"])) != (new["reachable_pct"],
+                                                                   new["range_pct"]):
+                raise SystemExit(f"{row['id']}: {b0}-min headline {new} != published {old}")
+            summ["headline"] = head
+            summ = _insert_after(summ, "headline", "feasible", fb)
+            _write_web(pub, row["summary"], summ, None)
+            padpick.record_headline(kp, head, row["summary"])
+            padpick.record_feasible(kp, fb, row["summary"])
+            out["pads"][row["id"]] = {"headline": head, "feasible": fb}
+        else:
+            padpick.record_feasible(kp, fb, "scenarios/pads/index.json")
+            out["pads"][row["id"]] = {"feasible": fb}
+        rows.append(row)
+    pidx["pads"] = rows
+    _write_web(pub, "scenarios/pads/index.json", pidx, None)
+    summ_path = pub.parent / "summary.json"
+    if summ_path.exists():
+        doc = json.loads(summ_path.read_text(encoding="utf-8"))
+        doc["headline_patch"] = {"note": "D41 + user 17:28 (scenarios --headline-patch)", **out}
+        summ_path.write_text(json.dumps(doc, indent=1, default=str), encoding="utf-8")
+    for sid, h in out["scenarios"].items():
+        print(f"{sid} {tmax} min: {h}")
+    for pid, v in out["pads"].items():
+        print(f"pad {pid}: {v}")
+    return 0
+
+
 def diagnostics(grid: Grid, pad, fields: dict[str, dijkstra.Field], settings: Settings) -> dict:
     """Sanity numbers per scenario (internal, not shown in the app): reachable % of the
     assessed flat disc and envelope area / flat-circle area at every budget, edge cause shares
@@ -477,24 +648,36 @@ def trade_product(grid: Grid, pad, fields, partner_by_suit, station_list, settin
             if con is not None and station_list and all(v is not None for v in values.values()):
                 t_at = {s["id"]: _t_access(s, f"con_{m}", con) for s in station_list}
                 sv = round(trade.science_value(t_at, values, b), 4)
-            pct = None
-            if nom is not None:
-                pct = envelope.reachable_pct(grid, nom.t_min, pad, b, settings.disc_speed_ms)
-                pct = None if pct is None else round(pct, 1)
+            pct, cov = trade_pct(grid, None if nom is None else nom.t_min, pad, b, settings)
             area = None
             pt = partner_by_suit.get(m)
             if pt is not None:
                 area = round(float(envelope.envelope_mask(pt, cmin).sum()) * grid.res_m**2
                              / 1e6, 4)  # fmt: skip
             cells[(b, m)] = {"science_value": sv, "reachable_pct": pct, "partner_area_km2": area}
+            if cov is not None:
+                cells[(b, m)]["in_data_pct"] = cov  # D41: share of the flat disc in the data
     tt = trade.table(rows, cols, cells)
     _write_web(public, "trade_table.json", tt, "trade_table.schema.json")
     for (b, m), c in cells.items():
         for k, u in (("science_value", "score"), ("reachable_pct", "%"),
-                     ("partner_area_km2", "km2")):  # fmt: skip
-            if c[k] is not None:
+                     ("partner_area_km2", "km2"), ("in_data_pct", "%")):  # fmt: skip
+            if c.get(k) is not None:
                 provenance.record(f"trade.{b}.{m}.{k}", c[k], u, "trade_table.json", SCRIPT)
     return tt
+
+
+def trade_pct(grid: Grid, t_nom, pad, budget: float, settings: Settings):
+    """(reachable %, in_data_pct or None) of a trade cell: nominal variant; at a D41 budget
+    the in-data share and the disc's in-data size, else the strict rule."""
+    if t_nom is None:
+        return None, None
+    in_data = int(budget) in in_data_budgets()
+    pct = envelope.reachable_pct(grid, t_nom, pad, budget, settings.disc_speed_ms,
+                                 in_data=in_data)  # fmt: skip
+    cov = (round(envelope.disc_in_data_pct(grid, pad, budget, settings.disc_speed_ms), 1)
+           if in_data else None)  # fmt: skip
+    return (None if pct is None else round(float(pct), 1)), cov
 
 
 def _t_access(s: dict, sid: str, f: dijkstra.Field) -> float:
@@ -637,6 +820,9 @@ def main(argv=None) -> int:
                          "(in memory, no rasters), access cells, siting; patches summary.json")
     ap.add_argument("--pad", nargs=2, type=float, metavar=("LON", "LAT"), default=None,
                     help="pad override; default site.yaml pad_default (or the D21 pad)")
+    ap.add_argument("--headline-patch", action="store_true",
+                    help="D41 + user 17:28: patch the 60-min headline (in-data share) and the "
+                         "per-pad excluded-combination counts into the published files only")
     ap.add_argument("--d21", action="store_true",
                     help="D21: screen every candidate pad, full runs for the top 5, run "
                          "everything on the official pad, write the pad picker")
@@ -665,6 +851,8 @@ def main(argv=None) -> int:
 
     grid = load_ws1_grid(a.terrain)
     lap("load_grid")
+    if a.headline_patch:
+        return headline_patch(grid, settings, pub)
     if a.siting_only:
         return siting_only(grid, pad_rc(grid, tuple(a.pad) if a.pad else None), a, rmse,
                            settings, out, pub)  # fmt: skip
