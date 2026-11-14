@@ -1,9 +1,10 @@
-"""Backend contract family (contracts/backend/, v1.0.0, frozen at P0; kit K1/K4, D50-D57).
+"""Backend contract family (contracts/backend/, v1.0.1, frozen at P0; kit K1/K4, D50-D57).
 
 Known answers: every schema is valid draft 2020-12 and versioned; every example validates against
 its schema; the OpenAPI document covers every route of backend spec §5, its refs resolve, and it
 passes the OpenAPI 3.1 meta-schema (openapi-spec-validator, skipped when not installed); the share
-code is HL- + 6 Crockford base32 characters (D55).
+code is HL- + 6 Crockford base32 characters (D55); YAML 1.1 readers (PyYAML) see "on"/"off" as
+strings, not booleans (v1.0.1).
 """
 
 import json
@@ -231,7 +232,7 @@ METHODS = {"get", "put", "post", "delete", "patch"}
 def test_openapi_covers_spec_5_exactly_with_auth():
     api = _api()
     assert api["openapi"].startswith("3.1")
-    assert api["info"]["version"] == "1.0.0"
+    assert api["info"]["version"] == "1.0.1"
     assert api["servers"][0]["url"] == "/api/v1"
     ops = {(m, path): op for path, item in api["paths"].items()
            for m, op in item.items() if m in METHODS}
@@ -244,6 +245,31 @@ def test_openapi_covers_spec_5_exactly_with_auth():
             assert names == {AUTH[auth]}, key
     ids = [op["operationId"] for op in ops.values()]
     assert len(ids) == len(set(ids))
+
+
+def test_openapi_on_off_are_strings_under_yaml_1_1():
+    # v1.0.1: PyYAML follows YAML 1.1, where a bare on/off/yes/no is a boolean.
+    schemas = _api()["components"]["schemas"]
+    assert schemas["Health"]["properties"]["heavy_jobs"]["enum"] == ["on", "off"]
+    assert schemas["AdminStatus"]["properties"]["heavy_jobs"]["enum"] == ["on", "off"]
+
+
+def _enums(node, path=""):
+    if isinstance(node, dict):
+        for k, v in node.items():
+            if k == "enum":
+                yield path, v
+            yield from _enums(v, f"{path}/{k}")
+    elif isinstance(node, list):
+        for i, v in enumerate(node):
+            yield from _enums(v, f"{path}/{i}")
+
+
+def test_openapi_no_enum_holds_a_bool_under_yaml_1_1():
+    found = list(_enums(_api()))
+    assert found  # the walk reaches the enums
+    bad = [(path, e) for path, e in found if any(isinstance(x, bool) for x in e)]
+    assert not bad, bad
 
 
 def _resolve_pointer(doc, pointer: str):
