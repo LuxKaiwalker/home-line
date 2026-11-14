@@ -36,6 +36,9 @@ export function partnerScenarioId(file: string): string | null {
  */
 export function dragKeyPrefix(file: string, defaultFile: string | null): string {
   if (file === defaultFile) return 'haul.drag.flat'
+  // D21 parking option: scenarios/pads/{id}/partner.geojson -> pads.{id}.haul.drag.flat (C 16:17).
+  const pad = /(?:^|\/)scenarios\/pads\/([^/]+)\/partner\.geojson$/.exec(file)?.[1]
+  if (pad) return `pads.${pad}.haul.drag.flat`
   const sid = partnerScenarioId(file)
   return sid ? `haul.drag.flat.${sid}` : 'haul.drag.flat'
 }

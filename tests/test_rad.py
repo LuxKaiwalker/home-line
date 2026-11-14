@@ -256,3 +256,88 @@ def test_real_excess_in_range(real_numbers):
 def test_real_tripwire_before_peak(real_numbers):
     assert real_numbers["tripwire_utc"] is not None
     assert real_numbers["onset_utc"] <= real_numbers["tripwire_utc"] < real_numbers["peak_utc"]
+
+
+# ------------------------------------------------------------------ D34-D36 (user 16:20)
+
+
+def test_series_times_are_sample_midpoints(series):
+    # D35: tag = observation start; the series uses midpoints (tag + half the sample)
+    obj = rad.build_rad(series, None, CFG, BUILD_UTC)
+    first = obj["storm_2024"]["series"][0][0]
+    assert first == "2024-05-19T00:00:00Z"  # midpoint T0; its tag is T0 - 9 min
+    assert series.tag[7 * 80] == T0 - CAD / 2
+
+
+@pytest.mark.parametrize("cad_min,half_min,label", [(18, 9.0, "± 9 min"), (16, 8.0, "± 8 min"),
+                                                    (17.1, 8.55, "± 9 min"), (17, 8.5, "± 9 min")])
+def test_tripwire_halfwidth_derived_from_sample_duration(cad_min, half_min, label):
+    cad = timedelta(minutes=cad_min)
+    tags = [T0 + k * cad for k in range(10)]
+    med, durs = rad.sample_durations(tags)
+    s = rad.RadSeries(tag=tags, mid=tags, value=[1.0] * 10, durations=durs, median_spacing=med,
+                      component=COMP, units_in="uGy/day")
+    hw = rad.tripwire_halfwidth(s, CFG)
+    assert hw / timedelta(minutes=1) == pytest.approx(half_min)
+    assert rad.pm_label(hw, CFG) == label
+
+
+def test_halfwidth_in_rad_json(series):
+    st = rad.build_rad(series, None, CFG, BUILD_UTC)["storm_2024"]
+    assert st["tripwire_halfwidth_min"] == pytest.approx(9.0)  # 18-min samples
+    assert st["tripwire_halfwidth_label"] == "± 9 min"
+
+
+def test_returned_to_baseline_is_not_a_lower_bound(numbers):
+    assert numbers["excess_is_lower_bound"] is False
+    assert numbers["end_of_window_rate_uGy_day"] == pytest.approx(BASE)
+    assert numbers["end_of_window_utc"] == T0 + 319 * CAD
+
+
+def _plateau(k: int) -> float:
+    # pulse rises to 8200 at k = 102, then drops to a 1200 plateau that outlasts the window
+    return _value(k) if k <= ONSET_K + RISE else 1200.0
+
+
+def test_excess_lower_bound_and_end_of_window_rate():
+    s = rad.parse_cdas_text(cdas_text(-7 * 80, 4 * 80, _plateau), COMP, "start")
+    n = rad.storm_numbers(s, CFG)
+    day = CAD / timedelta(days=1)
+    # rise triangle + 102->103 trapezoid + plateau 103..319, all above the 200 baseline
+    want_ugy = 0.5 * 8000 * RISE * day + 0.5 * (8000 + 1000) * day + 1000 * 216 * day
+    assert n["excess_mGy"] == pytest.approx(want_ugy / 1000.0, rel=1e-9)  # 3.35625 mGy
+    assert n["excess_is_lower_bound"] is True
+    assert n["end_bound"].startswith("storm-window end")
+    assert n["end_of_window_rate_uGy_day"] == pytest.approx(1200.0)
+    obj = rad.build_rad(s, None, CFG, BUILD_UTC)["storm_2024"]
+    assert obj["end_of_window_rate_over_baseline_ratio"] == pytest.approx(6.0)
+    assert obj["end_of_window_rate_minus_baseline_uGy_day"] == pytest.approx(1000.0)
+    assert obj["excess_is_lower_bound"] is True
+    assert obj["excess_label"].startswith("≥ 3.36 mGy (lower bound")
+
+
+def test_labels_and_status_in_rad_json(series, tmp_path):
+    obj = rad.build_rad(series, None, CFG, BUILD_UTC)
+    src = obj["source"]
+    assert src["component"] == "TOTAL_DOSE_E"
+    assert src["component_label"] == "dose in plastic (E)"  # D34
+    assert src["component_status"] == CFG["rad"]["dose_component_status"]
+    assert "dataset notes not yet read" in src["component_status"]
+    assert "unverified" in src["time_tag_status"]  # D35
+    rad.write_rad(obj, tmp_path / "rad.json", fragment_dir=tmp_path / "m")
+    frag = json.loads(next((tmp_path / "m").glob("*.json")).read_text())
+    assert frag["rad.storm_2024.tripwire_halfwidth_min"]["units"] == "min"
+    assert frag["rad.storm_2024.end_of_window_rate_uGy_day"]["units"] == "uGy/day"
+    assert frag["rad.storm_2024.end_of_window_rate_over_baseline_ratio"]["units"] == "1"
+    for k in ("tripwire_halfwidth_label", "excess_is_lower_bound", "end_of_window_utc",
+              "excess_label"):
+        assert f"rad.storm_2024.{k}" in frag
+    assert "rad.source.component_label" in frag
+
+
+@real
+def test_real_halfwidth_and_lower_bound(real_numbers):
+    hw = real_numbers["tripwire_halfwidth"] / timedelta(minutes=1)
+    assert hw == pytest.approx(17.1 / 2, abs=0.01)  # median RAD sample 17.1 min
+    assert real_numbers["excess_is_lower_bound"] is True  # still above baseline on 22 May
+    assert real_numbers["end_of_window_rate_uGy_day"] > real_numbers["baseline_uGy_day"]
