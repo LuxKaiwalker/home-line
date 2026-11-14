@@ -511,3 +511,219 @@ def test_records_under_pytest_never_reach_shared_fragments(monkeypatch):
     manifest.record("t.leak", 1, "1", "x.json", "pipeline/leak_probe.py")
     assert (d / "pipeline__leak_probe.json").exists()
     assert not (manifest.DEFAULT_FRAGMENT_DIR / "pipeline__leak_probe.json").exists()
+
+
+
+def _mmgis(path: Path, rows: list[dict]) -> Path:
+    feats = [{"type": "Feature", "geometry": {"type": "Point",
+                                              "coordinates": [r["lon"], r["lat"], -3700.0]},
+              "properties": {"RMC": f"1_{i}", "sol": 4000 + i, "drive_type": "final", **r}}
+             for i, r in enumerate(rows)]
+    path.write_text(json.dumps({"type": "FeatureCollection", "features": feats}))
+    return path
+
+
+def test_v1_load_mmgis_and_imu_tilt_validity(tmp_path):
+    p = _mmgis(tmp_path / "wp.json", [
+        {"lon": 137.39, "lat": -4.80, "tilt": 5.0, "roll": 3.0, "pitch": 4.0},
+        {"lon": 137.39, "lat": -4.80, "tilt": -2.24, "roll": 1.0, "pitch": 2.0},  # anomaly
+        {"lon": 137.39, "lat": -4.80, "tilt": None, "roll": 0.0, "pitch": 0.0},
+    ])
+    de = v1_tilt.load_mmgis(p)
+    assert de["rmc"].tolist() == ["1_0", "1_1", "1_2"] and de["sol"].tolist() == [4000, 4001, 4002]
+    t = v1_tilt.imu_tilt(de, "tilt")
+    assert t[0] == 5.0 and math.isnan(t[1]) and math.isnan(t[2])  # negative tilt is invalid
+    rp = v1_tilt.imu_tilt(de, "roll_pitch")
+    assert rp[0] == pytest.approx(v1_tilt.tilt_from_roll_pitch(3.0, 4.0))
+    with pytest.raises(ValueError):
+        v1_tilt.imu_tilt(de, "yaw")
+
+
+def test_v1_coreg_shift_is_applied(tmp_path, frag_dir):
+    """Drive ends sit on a ridge-free slope z = 0.5*k*x^2 whose tilt varies with x: a known x
+    shift moves every DEM tilt; applying it gives zero bias, omitting it does not."""
+    a = SITE["aoi_focus"]
+    lon_c, lat_c = (a["west"] + a["east"]) / 2, (a["south"] + a["north"]) / 2
+    lon = lon_c + np.array([-0.0003, 0.0, 0.0003])
+    lat = np.full(3, lat_c)
+    x, y = v1_tilt.lonlat_to_xy(lon, lat)
+    shift = (20.0, 0.0)  # DEM frame = rover position + shift
+    xd = x + shift[0]
+    import rasterio
+    from rasterio.crs import CRS
+
+    n, k = 200, 0.004
+    x_origin = round(float(x[1])) - n / 2
+    t = _north_up(x_origin, round(float(y[1])) + n / 2)
+    cols, rows = np.meshgrid(np.arange(n), np.arange(n))
+    xs, _ = _centres(t, cols + 0.5, rows + 0.5)
+    u = xs - x_origin
+    dem = tmp_path / "dem.tif"
+    prof = dict(driver="GTiff", width=n, height=n, count=1, dtype="float64",
+                crs=CRS.from_proj4(SITE["crs"]["analysis_proj"]), transform=t, nodata=None)
+    with rasterio.open(dem, "w", **prof) as dst:
+        dst.write(0.5 * k * u**2, 1)
+    imu = np.degrees(np.arctan(k * (xd - x_origin)))  # truth at the shifted positions
+    good = v1_tilt.run(dem, lon, lat, imu, tmp_path / "a.json", None, footprint_m=FP,
+                       shift_xy_m=shift)
+    assert good["n"] == 3 and good["shift_xy_m"] == [20.0, 0.0]
+    assert abs(good["bias_deg"]) < 0.2  # the 1 m window centres within 0.5 m of the point
+    bad = v1_tilt.run(dem, lon, lat, imu, tmp_path / "b.json", None, footprint_m=FP)
+    assert abs(bad["bias_deg"]) > 1.0
+
+
+
+def _real_inputs(tmp_path: Path, dx=0.0, dy=0.0):
+    a = SITE["aoi_focus"]
+    lon_c, lat_c = (a["west"] + a["east"]) / 2, (a["south"] + a["north"]) / 2
+    rows = [
+        {"lon": lon_c, "lat": lat_c, "tilt": PLANE_TILT, "roll": 0.0, "pitch": PLANE_TILT},
+        {"lon": lon_c + 2e-4, "lat": lat_c + 1e-4, "tilt": PLANE_TILT, "roll": 0.0,
+         "pitch": PLANE_TILT},
+        {"lon": lon_c - 2e-4, "lat": lat_c, "tilt": -2.24, "roll": 0.0, "pitch": PLANE_TILT},
+        {"lon": lon_c + 0.01, "lat": lat_c, "tilt": PLANE_TILT, "roll": 0.0,
+         "pitch": PLANE_TILT},  # in focus, off the DEM
+        {"lon": a["east"] + 0.01, "lat": lat_c, "tilt": PLANE_TILT, "roll": 0.0,
+         "pitch": PLANE_TILT},  # outside the focus area
+    ]
+    mm = _mmgis(tmp_path / "wp.json", rows)
+    x, y = v1_tilt.lonlat_to_xy([lon_c], [lat_c])
+    dem = tmp_path / "dem_1m.tif"
+    _write_plane_tif(dem, float(x[0]), float(y[0]))
+    coreg = tmp_path / "coreg.json"
+    coreg.write_text(json.dumps({"dx_m": dx, "dy_m": dy, "residual_median_m": 0.0,
+                                 "residual_mad_m": 0.0, "residuals": []}))
+    return mm, coreg, dem
+
+
+def test_v1_run_real_blocked_until_footprint_decided(tmp_path, frag_dir):
+    mm, coreg, dem = _real_inputs(tmp_path)
+    assert v1_tilt.main(["--mmgis", str(mm), "--coreg", str(coreg), "--dem", str(dem),
+                         "--out", str(tmp_path / "v1.json"), "--svg", str(tmp_path / "v1.svg")]
+                        ) == 2
+    assert not (tmp_path / "v1.json").exists()
+
+
+def test_v1_run_real_blocked_on_null_shift(tmp_path, frag_dir, monkeypatch):
+    monkeypatch.setattr(v1_tilt, "_v1_config", lambda: {**VCFG, "footprint_m": FP})
+    mm, coreg, dem = _real_inputs(tmp_path)
+    coreg.write_text(json.dumps({"dx_m": None, "dy_m": None}))
+    with pytest.raises(v1_tilt.V1Blocked):
+        v1_tilt.run_real(mm, coreg, dem, tmp_path / "v1.json", None)
+
+
+def test_v1_run_real_plane(tmp_path, frag_dir, monkeypatch):
+    monkeypatch.setattr(v1_tilt, "_v1_config", lambda: {**VCFG, "footprint_m": FP})
+    mm, coreg, dem = _real_inputs(tmp_path)
+    out, svg = tmp_path / "v1.json", tmp_path / "v1.svg"
+    doc = v1_tilt.run_real(mm, coreg, dem, out, svg)
+    assert doc["n_drive_ends"] == 5 and doc["n_in_focus"] == 4
+    assert doc["n"] == 2 and doc["n_excluded"] == 2
+    assert doc["excluded"] == {"dem_nodata_or_outside": 1, "imu_invalid": 1}
+    assert doc["point_ids"] == ["1_0", "1_1"]
+    assert abs(doc["bias_deg"]) < 1e-4 and doc["rmse_deg"] < 1e-4
+    sens = doc["sensitivity"]
+    assert set(sens) == {"footprint_5m", "imu_roll_pitch"}  # 3 m is primary here
+    assert abs(sens["footprint_5m"]["bias_deg"]) < 1e-4
+    assert sens["imu_roll_pitch"]["n"] == 3  # roll/pitch is valid where tilt was -2.24
+    assert Draft202012Validator(V1_SCHEMA).is_valid(json.loads(out.read_text()))
+    m = manifest.merge(out_path=tmp_path / "manifest.json")
+    assert m["v1.rmse_deg"]["file"] == "validation/v1.json"
+    assert "v1.sensitivity.footprint_5m.rmse_deg" in m
+    assert len(ET.parse(svg).getroot().findall(f".//{{{figures.SVG_NS}}}circle")) == 2
+
+
+# --------------------------------------------------------------------------- KAT pass list (F16)
+
+from pipeline.provenance import kats  # noqa: E402
+
+JUNIT_XUNIT1 = """<?xml version="1.0" encoding="utf-8"?>
+<testsuites><testsuite name="pytest" errors="1" failures="1" skipped="2" tests="6" time="1.0">
+<testcase classname="tests.test_router" file="tests/test_router.py" line="10"
+  name="test_flat_plane" time="0.25"/>
+<testcase classname="tests.test_rad" file="tests/test_rad.py" line="20"
+  name="test_real_storm" time="0.5"><failure message="assert 7.3 == 8.2">trace</failure></testcase>
+<testcase classname="tests.test_clock" file="tests/test_clock.py" line="30"
+  name="test_navcam_labels" time="0.0"><skipped type="pytest.skip"
+  message="needs Navcam frames">skip</skipped></testcase>
+<testcase classname="tests.test_nav.TestSky" file="tests/test_nav.py" line="40"
+  name="test_skyline_fix_recovers_known_observer[a]" time="0.1"/>
+<testcase classname="tests.test_haul" file="tests/test_haul.py" line="5"
+  name="test_x" time="0.0"><skipped type="pytest.xfail" message="known bug">x</skipped></testcase>
+<testcase classname="" name="tests.test_broken" time="0.0"><error
+  message="collection failure">ImportError</error></testcase>
+</testsuite></testsuites>
+"""
+
+
+def test_kats_parse_junit_outcomes_and_reasons(tmp_path):
+    p = tmp_path / "junit.xml"
+    p.write_text(JUNIT_XUNIT1)
+    rows = kats.parse_junit(p)
+    by_id = {r["id"]: r for r in rows}
+    assert len(rows) == 6
+    assert by_id["tests/test_router.py::test_flat_plane"]["outcome"] == "passed"
+    assert by_id["tests/test_router.py::test_flat_plane"]["duration_s"] == pytest.approx(0.25)
+    fail = by_id["tests/test_rad.py::test_real_storm"]
+    assert fail["outcome"] == "failed" and "7.3" in fail["reason"]
+    assert by_id["tests/test_clock.py::test_navcam_labels"]["reason"] == "needs Navcam frames"
+    nav = by_id["tests/test_nav.py::TestSky::test_skyline_fix_recovers_known_observer[a]"]
+    assert nav["outcome"] == "passed" and nav["area"] == "F22 skyline fix"
+    xfail = by_id["tests/test_haul.py::test_x"]
+    assert xfail["outcome"] == "skipped" and xfail["reason"].startswith("xfail")
+    broken = [r for r in rows if "test_broken" in r["id"]]
+    assert broken and broken[0]["outcome"] == "failed"  # collection errors are never hidden
+
+
+def test_kats_area_and_feature_map():
+    assert kats.classify("tests/test_router.py::test_flat_plane") == ("Router", ["F4"])
+    assert kats.classify("tests/test_coreg.py::test_shift") == ("Co-registration", ["F1"])
+    assert kats.classify("tests/test_nav.py::test_skyline_fix_x")[0] == "F22 skyline fix"
+    assert kats.classify("tests/test_nav.py::test_error_resets_at_fix")[0] == "F21 navigation"
+    assert kats.classify("tests/test_provenance.py::test_v1_plane") == ("V1", ["F13"])
+    assert kats.classify("tests/test_provenance.py::test_h0_x") == ("Provenance", ["F16"])
+    assert kats.classify("web/src/hud/hud.test.ts > HUD > t_home")[0] == "HUD logic"
+    assert kats.classify("tests/test_new_thing.py::test_y") == ("other", [])
+
+
+def test_kats_document_validates_and_records_summary(tmp_path, frag_dir):
+    p = tmp_path / "junit.xml"
+    p.write_text(JUNIT_XUNIT1)
+    out = tmp_path / "kats.json"
+    kats.write_kats(kats.parse_junit(p), out, runner="pytest", exit_codes={"pytest": 1})
+    on_disk = json.loads(out.read_text())
+    errors = list(Draft202012Validator(kats.schema()).iter_errors(on_disk))
+    assert not errors, errors
+    s = on_disk["summary"]
+    assert s == {"total": 6, "passed": 2, "failed": 2, "skipped": 2}
+    assert on_disk["exit_codes"] == {"pytest": 1}
+    assert on_disk["generated_utc"] == AFTER_H0.strftime("%Y-%m-%dT%H:%M:%SZ")
+    m = manifest.merge(out_path=tmp_path / "manifest.json")
+    for k in ("total", "passed", "failed", "skipped"):
+        assert m[f"kats.summary.{k}"]["value"] == s[k]
+        assert m[f"kats.summary.{k}"]["file"] == "validation/kats.json"
+    assert on_disk["commit"] == m["kats.summary.total"]["commit"]
+
+
+def test_kats_parse_vitest_json(tmp_path):
+    vj = {"testResults": [{
+        "name": str(REPO / "web/src/hud/hud.test.ts"),
+        "assertionResults": [
+            {"ancestorTitles": ["HUD"], "title": "T_home is 0 at the pad", "status": "passed",
+             "duration": 3.0, "failureMessages": []},
+            {"ancestorTitles": ["HUD"], "title": "alarm", "status": "failed", "duration": 1.0,
+             "failureMessages": ["expected 3 to be 4"]},
+            {"ancestorTitles": [], "title": "later", "status": "todo", "duration": None,
+             "failureMessages": []},
+        ]}]}
+    p = tmp_path / "vitest.json"
+    p.write_text(json.dumps(vj))
+    rows = kats.parse_vitest_json(p)
+    assert [r["outcome"] for r in rows] == ["passed", "failed", "skipped"]
+    assert rows[0]["id"] == "web/src/hud/hud.test.ts > HUD > T_home is 0 at the pad"
+    assert rows[0]["area"] == "HUD logic" and rows[0]["duration_s"] == pytest.approx(0.003)
+    assert "expected 3" in rows[1]["reason"]
+
+
+def test_kats_proposed_schema_is_valid():
+    Draft202012Validator.check_schema(kats.schema())

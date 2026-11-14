@@ -129,6 +129,38 @@ def dem_tilt_at(dem, transform, x, y, footprint_m: float, nodata: float | None =
     return out
 
 
+def load_mmgis(path: str | os.PathLike[str]) -> dict[str, np.ndarray]:
+    """Drive ends from MMGIS ``MSL_waypoints.json`` (GeoJSON points; fields per
+    docs/discovery.md 3.1: RMC, sol, lon, lat, roll, pitch, yaw, tilt in deg). Missing -> NaN."""
+    feats = json.loads(Path(path).read_text())["features"]
+    props = [f["properties"] for f in feats]
+
+    def num(k: str) -> np.ndarray:
+        return np.array([np.nan if p.get(k) is None else float(p[k]) for p in props])
+
+    return {
+        "rmc": np.array([str(p.get("RMC")) for p in props], dtype=object),
+        "sol": np.array([p.get("sol") for p in props], dtype=object),
+        "lon": num("lon"), "lat": num("lat"),
+        "tilt": num("tilt"), "roll": num("roll"), "pitch": num("pitch"),
+    }
+
+
+def imu_tilt(de: dict[str, np.ndarray], source: str = "tilt") -> np.ndarray:
+    """IMU tilt (deg): MMGIS ``tilt``, or acos(cos roll cos pitch) with ``source="roll_pitch"``.
+    A tilt is non-negative by definition, so negative or non-finite values become NaN
+    (excluded and counted, never repaired)."""
+    if source == "tilt":
+        t = np.asarray(de["tilt"], float).copy()
+    elif source == "roll_pitch":
+        t = np.asarray(tilt_from_roll_pitch(np.asarray(de["roll"], float),
+                                            np.asarray(de["pitch"], float)), float)
+    else:
+        raise ValueError(f"unknown IMU source {source!r}")
+    t[~np.isfinite(t) | (t < 0)] = np.nan
+    return t
+
+
 # --------------------------------------------------------------------------- statistics
 
 
@@ -217,6 +249,25 @@ def write_result(
     return doc
 
 
+def _read_dem(dem_path: str | os.PathLike[str]):
+    """(dem float64, transform, nodata) from a GeoTIFF; refuses any CRS but the analysis CRS."""
+    import rasterio
+
+    with rasterio.open(dem_path) as src:
+        want = _site()["crs"]["analysis_proj"]
+        if src.crs is None or _norm_proj(src.crs.to_proj4()) != _norm_proj(want):
+            raise ValueError(f"DEM CRS {src.crs} is not the analysis CRS {want!r}")
+        return src.read(1, masked=False).astype(np.float64), src.transform, src.nodata
+
+
+def _focus_xy(lon, lat, shift_xy_m):
+    lon, lat = np.atleast_1d(np.asarray(lon, float)), np.atleast_1d(np.asarray(lat, float))
+    keep = in_focus(lon, lat)
+    x, y = lonlat_to_xy(lon[keep], lat[keep])
+    shift = [0.0, 0.0] if shift_xy_m is None else [float(v) for v in shift_xy_m]
+    return keep, x + shift[0], y + shift[1], shift
+
+
 def run(
     dem_path: str | os.PathLike[str],
     lon,
@@ -226,29 +277,105 @@ def run(
     svg_path: str | os.PathLike[str] | None = DEFAULT_SVG,
     *,
     footprint_m: float,
+    shift_xy_m: tuple[float, float] | None = None,
+    extra: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    """V1 on arrays: DEM GeoTIFF in the analysis CRS + co-registered drive ends (lon/lat) + IMU
-    tilt (deg). Drive ends outside the focus area are dropped before counting."""
-    import rasterio
+    """V1 on arrays: DEM GeoTIFF in the analysis CRS + drive ends (lon/lat) + IMU tilt (deg).
 
+    ``shift_xy_m`` (dx, dy) is added to the drive ends' analysis-CRS x/y to put them in the DEM
+    frame (WS1 co-registration; sign convention to confirm with WS1, STATUS WS6). Drive ends
+    outside the focus area are dropped before counting."""
     from pipeline.provenance.manifest import _rel
 
-    lon, lat = np.atleast_1d(np.asarray(lon, float)), np.atleast_1d(np.asarray(lat, float))
     imu = np.atleast_1d(np.asarray(imu_tilt_deg, float))
-    keep = in_focus(lon, lat)
-    x, y = lonlat_to_xy(lon[keep], lat[keep])
-    with rasterio.open(dem_path) as src:
-        want = _site()["crs"]["analysis_proj"]
-        if src.crs is None or _norm_proj(src.crs.to_proj4()) != _norm_proj(want):
-            raise ValueError(f"DEM CRS {src.crs} is not the analysis CRS {want!r}")
-        dem = src.read(1, masked=False).astype(np.float64)
-        tilt = dem_tilt_at(dem, src.transform, x, y, footprint_m, nodata=src.nodata)
+    keep, x, y, shift = _focus_xy(lon, lat, shift_xy_m)
+    dem, transform, nodata = _read_dem(dem_path)
+    tilt = dem_tilt_at(dem, transform, x, y, footprint_m, nodata=nodata)
     res = compare(tilt, imu[keep], confusion_thresholds())
     extra = {"n_drive_ends": int(keep.size), "n_in_focus": int(keep.sum()),
-             "aoi_focus": dict(_site()["aoi_focus"])}
+             "aoi_focus": dict(_site()["aoi_focus"]), "shift_xy_m": shift, **(extra or {})}
     return write_result(res, out_path, svg_path, footprint_m=footprint_m,
                         dem_file=_rel(dem_path), extra=extra)
 
 
+def load_coreg_shift(path: str | os.PathLike[str]) -> tuple[float, float]:
+    """(dx_m, dy_m) from WS1's ``coreg.json`` (contracts/coreg.schema.json)."""
+    doc = json.loads(Path(path).read_text())
+    if doc.get("dx_m") is None or doc.get("dy_m") is None:
+        raise V1Blocked(f"{path}: co-registration shift is null; V1 waits for WS1")
+    return float(doc["dx_m"]), float(doc["dy_m"])
+
+
+def run_real(
+    mmgis_path: str | os.PathLike[str],
+    coreg_path: str | os.PathLike[str],
+    dem_path: str | os.PathLike[str],
+    out_path: str | os.PathLike[str] = DEFAULT_OUT,
+    svg_path: str | os.PathLike[str] | None = DEFAULT_SVG,
+) -> dict[str, Any]:
+    """V1 on MMGIS drive ends + WS1 coreg shift + WS1 DEM, with the config footprint (V1Blocked
+    while undecided). Sensitivities: every candidate footprint, and IMU tilt from roll/pitch.
+    Each is reported next to the primary result; none replaces it."""
+    from pipeline.provenance.manifest import _rel
+
+    fp = footprint_m()
+    de = load_mmgis(mmgis_path)
+    shift = load_coreg_shift(coreg_path)
+    keep, x, y, _ = _focus_xy(de["lon"], de["lat"], shift)
+    dem, transform, nodata = _read_dem(dem_path)
+    thr = confusion_thresholds()
+    sensitivity: dict[str, Any] = {}
+    cands = [float(c) for c in _v1_config().get("footprint_candidates_m", [])]
+    for name, f, source in [*((f"footprint_{c:g}m", c, "tilt") for c in cands if c != fp),
+                            ("imu_roll_pitch", fp, "roll_pitch")]:
+        t = dem_tilt_at(dem, transform, x, y, f, nodata=nodata)
+        r = compare(t, imu_tilt(de, source)[keep], thr)
+        sensitivity[name] = {k: r[k] for k in ("n", "n_excluded", "bias_deg", "rmse_deg", "r",
+                                               "confusion")} | {"footprint_m": f,
+                                                                "imu_source": source}
+    imu = imu_tilt(de, "tilt")
+    dem_t = dem_tilt_at(dem, transform, x, y, fp, nodata=nodata)
+    ok = np.isfinite(dem_t) & np.isfinite(imu[keep])
+    extra = {
+        "imu_source": "tilt",
+        "excluded": {"dem_nodata_or_outside": int(np.sum(~np.isfinite(dem_t))),
+                     "imu_invalid": int(np.sum(np.isfinite(dem_t) & ~np.isfinite(imu[keep])))},
+        "point_ids": [str(v) for v in de["rmc"][keep][ok]],
+        "mmgis_file": _rel(mmgis_path),
+        "coreg_file": _rel(coreg_path),
+        "sensitivity": sensitivity,
+    }
+    doc = run(dem_path, de["lon"], de["lat"], imu, out_path, svg_path, footprint_m=fp,
+              shift_xy_m=shift, extra=extra)
+    for name, sres in sensitivity.items():
+        for key, units in (("bias_deg", "deg"), ("rmse_deg", "deg"), ("r", "1"), ("n", "count")):
+            record(f"v1.sensitivity.{name}.{key}", sres[key], units, WEB_JSON, __file__)
+    return doc
+
+
+def main(argv: list[str] | None = None) -> int:
+    import argparse
+
+    ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    ap.add_argument("--mmgis", required=True, help="cached MSL_waypoints.json")
+    ap.add_argument("--coreg", default=str(REPO / "data/interim/terrain/coreg.json"))
+    ap.add_argument("--dem", default=str(REPO / "data/interim/terrain/dem_1m.tif"))
+    ap.add_argument("--out", default=str(DEFAULT_OUT))
+    ap.add_argument("--svg", default=str(DEFAULT_SVG))
+    a = ap.parse_args(argv)
+    try:
+        doc = run_real(a.mmgis, a.coreg, a.dem, a.out, a.svg)
+    except V1Blocked as e:
+        print(f"V1 BLOCKED: {e}")
+        return 2
+    print(json.dumps({k: doc[k] for k in ("n", "n_excluded", "bias_deg", "rmse_deg", "r",
+                                          "confusion", "footprint_m")}, indent=1))
+    return 0
+
+
 def _norm_proj(p: str) -> str:
     return " ".join(sorted(t for t in p.split() if t not in ("+no_defs", "+no_defs=True")))
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
