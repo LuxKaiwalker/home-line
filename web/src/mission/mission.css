@@ -1,0 +1,35 @@
+/* Mission Planer (/mission): map left, panel right (PDF "Mission Planer" layout, app colours). */
+.mission-panel { width: 380px; }
+.mp-body h2 { margin-bottom: 0.25rem; }
+.mp-card { background: var(--panel-2, #2b221e); border: 1px solid var(--line); border-radius: 12px; padding: 0.6rem 0.8rem; margin: 0.75rem 0; }
+.mp-card h3 { margin-top: 0.1rem; }
+.mp-card details + details { margin-top: 0.6rem; border-top: 1px solid var(--line); padding-top: 0.5rem; }
+.mp-card summary { cursor: pointer; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); font-weight: 600; }
+.mp-est { display: grid; gap: 0.2rem; }
+.mp-row { display: flex; justify-content: space-between; gap: 0.75rem; font-size: 0.9rem; }
+.mp-row span { color: var(--muted); }
+.mp-row b { font-variant-numeric: tabular-nums; text-align: right; }
+.mp-row.mp-ok b { color: var(--ok); }
+.mp-row.mp-bad b, .mp-bad { color: var(--bad); }
+.mp-sep { border-top: 1px solid var(--line); margin: 0.3rem 0; }
+.mp-notice { border-left: 3px solid var(--warn); background: rgba(233, 185, 73, 0.08); padding: 4px 8px; font-size: 0.85rem; margin: 0.5rem 0; }
+.mp-empty { font-size: 0.85rem; margin: 0.5rem 0 0.2rem; }
+.mp-list { list-style: none; padding: 0; margin: 0.5rem 0; display: grid; gap: 0.35rem; }
+.mp-list li { border: 1px solid var(--line); border-radius: 8px; padding: 0.3rem 0.5rem; }
+.mp-list li.mp-li-bad { border-color: var(--bad); }
+.mp-li-head { display: flex; align-items: center; gap: 0.5rem; }
+.mp-num { display: inline-grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; background: var(--accent); color: #1a120e; font: 700 11px system-ui, sans-serif; flex: none; }
+.mp-leg { flex: 1; font-size: 0.85rem; }
+.mp-actions { display: flex; gap: 2px; }
+.mp-actions button, .mp-clear { background: transparent; color: var(--ink); border: 1px solid var(--line); border-radius: 4px; padding: 1px 6px; cursor: pointer; font-size: 0.8rem; }
+.mp-actions button:disabled { opacity: 0.35; cursor: default; }
+.mp-actions button:not(:disabled):hover, .mp-clear:hover { border-color: var(--accent); }
+.mp-li-body { font-size: 0.82rem; color: var(--muted); margin: 0.15rem 0 0 1.9rem; font-variant-numeric: tabular-nums; }
+.mp-select select { width: 100%; margin: 0.5rem 0 0.25rem; background: var(--bg); color: var(--ink); border: 1px solid var(--line); border-radius: 6px; padding: 4px 6px; }
+.mp-sources { margin-top: 1rem; }
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.mp-wp { width: 24px; height: 24px; border-radius: 50%; background: var(--accent, #e8925a); color: #1a120e; border: 2px solid #1a120e; display: grid; place-items: center; font: 700 11px system-ui, sans-serif; cursor: grab; box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.6); }
+.mp-wp-bad { background: var(--bad, #e5604d); }
+@media (max-width: 760px) {
+  .mission-panel { width: auto; }
+}

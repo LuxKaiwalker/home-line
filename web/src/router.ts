@@ -1,5 +1,5 @@
 // Hash router (SPEC F17). Hash routes survive GitHub Pages (no SPA fallback) and work logged out.
-// Pages: / (planning console), /station/:id, /trade, /conditions, /scorecard, /cuff, /about.
+// Pages: / (planning console), /mission (Mission Planer), /station/:id, /trade, /conditions, /scorecard, /cuff, /about.
 // Mount slots for other workstreams: /hud (WS7), /hud3d (WS8), /nav (WS9).
 
 export type Route =
@@ -13,9 +13,10 @@ export type Route =
   | { name: 'hud' }
   | { name: 'hud3d' }
   | { name: 'nav' }
+  | { name: 'mission' }
   | { name: 'notfound'; path: string }
 
-const SIMPLE = ['trade', 'conditions', 'cuff', 'about', 'hud', 'hud3d', 'nav'] as const
+const SIMPLE = ['trade', 'conditions', 'cuff', 'about', 'hud', 'hud3d', 'nav', 'mission'] as const
 
 export function parseRoute(hash: string): Route {
   const raw = hash.replace(/^#/, '')
@@ -55,6 +56,7 @@ export function href(route: Route): string {
 /** Top navigation, in display order. Slots (hud/hud3d/nav) are listed but owned by WS7/8/9. */
 export const NAV_ITEMS: { route: Route; label: string }[] = [
   { route: { name: 'console' }, label: 'Plan' },
+  { route: { name: 'mission' }, label: 'Mission Planer' },
   { route: { name: 'trade' }, label: 'Trade' },
   { route: { name: 'conditions' }, label: 'Conditions' },
   { route: { name: 'cuff' }, label: 'Cuff card' },

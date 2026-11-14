@@ -1161,6 +1161,8 @@ Branch: `ws5-web`
   - **real.test.ts**: pre-D21 numbers removed (12.4 %, pad_default fails F8, 14.55°, S1 no access, science 0); new suite runs when `pad.json` cites D21 (12 KATs: official pad, picker + excluded counts, headline 30/60 + in-data keys, route + tightest margin, turn-back bindings, D44 ids/names, D46, D33 ticks, V1 role, IST-2, RAD/REMS, trade). It skips on main's committed tree until C publishes.
   - **Smoke test** (vite dev on the scratch tree): **0 unbacked numbers on every view** (`/` 81 backed, S1 48, S2 38, S4 48, S6 51, S7 45, S8 37, `/trade` 36, `/conditions` 44, `/scorecard` 154, `/cuff` 114); picker option #2 at 60 min 0 unbacked; no data problems, no console errors, console panel without horizontal scroll.
 
+  - **Mission Planer (`#/mission`, user request 2026-11-14, branch `waypoint-routing`).** New page next to Plan: 2D map (HiRISE basemap, pad, chosen reachable-area boundary) left; right "Estimated times and consumption" (time home from the last waypoint, walk out, EVA total of 390 min, time margin, O₂ left / needed (home + reserve) / margin in L and min at max effort), then the waypoint list (per-leg time, distance, O₂; move up/down, delete, clear) and the boundary dropdown (homeline bands budget × variant, edge causes, isochrones; default 30-min nominal like Plan). Click adds a waypoint (refused with a notice where `T_home` is unknown), markers drag. Each leg is an A* route in the browser (`web/src/mission/router.ts`, engine move rules: 16 moves, no corner cutting) with the engine's walking model ported to TS (`mission/physio.ts`, all constants from config); the way home is WS2's pointer field, T_home and O₂ home WS2's fields. Grid: the 5 m field grid, walkable = `T_home` known; heights: `fp3d/far.f32.gz` (8 m). KATs: physio = Python engine at 9 grades × 3 scenarios, router on synthetic grids, budget, list edits (`web/src/mission/*.test.ts`). Check on the real tree: routing 40 random cells back to the pad vs WS2 `T_home`: median ratio 0.995 (0.957–1.127), O₂ 0.991; ~36 ms per leg. Numbers on this page are labelled "estimates, computed in the browser" (no manifest keys). Later (PDF): O₂/radiation budget dropdown, reachable foundries, Maps, Save.
+
 ### Doing
 
 - —
@@ -1173,6 +1175,7 @@ Branch: `ws5-web`
 ### Blocked
 
 - Resolved (C v1.1.4): D21 SCHEMA_MAP rows; the picker runs on WS2's real files.
+- (C / user, decision) The Mission Planer adds user-made waypoints, which SPEC §11 D40 lists as out of scope for the backend. It runs entirely in the browser (no backend), but D40 should be amended or a new decision logged. Reviewers: D (UI), N or S (routing / O₂ model).
 - (WS2 / user, wording) `config/variants.yaml route.access_radius_m` still says "still labelled assumed" after D27; the app now says "decided (D27)" per SPEC §11. Say if it should stay "assumed".
 
 - Resolved 16:28 (C): GitHub Pages live, deploys after green CI on main.
@@ -1185,6 +1188,7 @@ Branch: `ws5-web`
 
 ### Assumptions added
 
+- Mission Planer: leg time/O₂ are browser estimates on the 5 m field grid with 8 m heights (WS2 uses 3 m); a cell is walkable iff the scenario's `T_home` is known; O₂ capacity = `o2_budget` formula (482.31 L, as the engine), reserve 40.5 L, no station tasks or dwell at waypoints; scenario fixed to `scenarios/index.json` default.
 - Session 6: the "tightest margin" in the route section is the lowest `margin_min` over the timeline rows except `turn_back` rows (0 by definition), keyed `timeline.{sid}.{i}.margin_min`; WS2's `route.{sid}.dose.*` keys cite the timeline file but their values are not in it, so they are not shown. IST-2 grades (20, 30 %) are read from the key names. The compass draws only the card's bearings (no number printed).
 - Session 5 (D21, provisional until C's contracts): index rows under `pads` (or `rows`), each `{id, lon, lat, elev_m, rank, score, official, tiebreak: {name: value}}`, exactly one `official: true` (or top-level `official: id`); summary `{id, pad: {lon, lat, elev_m}, rank, score, headline: {"30": {reachable_pct, range_pct}, "60": …}` (or `[{budget_min, …}]`), `route: {stops, total_min}}`. Ids must be plain file names. An elevation tiebreak equal to `elev_m` is not printed twice.
 

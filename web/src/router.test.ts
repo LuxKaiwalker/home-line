@@ -13,6 +13,7 @@ describe('hash router (SPEC F17 routes; mount slots for WS7/8/9)', () => {
     ['#/cuff', { name: 'cuff' }],
     ['#/about', { name: 'about' }],
     ['#/hud', { name: 'hud' }],
+    ['#/mission', { name: 'mission' }],
     ['#/hud3d', { name: 'hud3d' }],
     ['#/nav', { name: 'nav' }],
     ['#/nope', { name: 'notfound', path: '/nope' }],
@@ -26,6 +27,6 @@ describe('hash router (SPEC F17 routes; mount slots for WS7/8/9)', () => {
   })
 
   it('the nav lists every page and slot', () => {
-    expect(NAV_ITEMS.map((n) => n.route.name)).toEqual(['console', 'trade', 'conditions', 'cuff', 'hud', 'hud3d', 'nav', 'scorecard', 'about'])
+    expect(NAV_ITEMS.map((n) => n.route.name)).toEqual(['console', 'mission', 'trade', 'conditions', 'cuff', 'hud', 'hud3d', 'nav', 'scorecard', 'about'])
   })
 })
