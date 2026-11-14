@@ -72,6 +72,11 @@ export const CONFIG = {
   isochroneMinutes: cfg<IsochroneMinutes>(variantsRaw, 'outputs.isochrone_minutes'),
   simulatedLabel: cfg<string>(hudRaw, 'labels.simulated'),
   haulContourMin: num(haulRaw, 'contour_min'),
+  /** D20 (SPEC F10): partner line cases, label template, caption and the drag note. */
+  haulPartnerCases: cfg<string[]>(haulRaw, 'partner_cases'),
+  haulPartnerLabel: cfg<string>(haulRaw, 'partner_label'),
+  haulPartnerCaption: cfg<string>(haulRaw, 'partner_caption'),
+  haulDragNote: cfg<string>(haulRaw, 'drag_note'),
   dAllowMgy: num(conditionsRaw, 'leash.d_allow_mgy'),
   /** D9 slider range and step (config/conditions.yaml, WS4; C answer 10:35Z). */
   dAllowRangeMgy: cfg<[number, number]>(conditionsRaw, 'leash.d_allow_range_mgy'),

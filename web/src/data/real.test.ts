@@ -12,10 +12,15 @@ import { leashSteps } from '../views/leash'
 import { routeSummary } from '../views/route'
 import { f22Rows, f22Verdict } from '../views/f22'
 import { accessFor } from './access'
+import { dragFinding, drawnPartner, partnerLabel } from './partner'
+import { padMarker, padProposal } from '../map/pad'
+import { allScienceZero } from '../views/trade'
+import { katAreas, v2Classes } from '../views/validation'
 import { createLoader, type TextFetcher } from './loader'
 import type { Localisation, ManifestEntry } from './types'
 
-const REAL = resolve(__dirname, '../../public/data')
+// HOMELINE_REAL_DATA points the checks at another real tree (e.g. a scratch `make web` output).
+const REAL = process.env.HOMELINE_REAL_DATA ? resolve(process.env.HOMELINE_REAL_DATA) : resolve(__dirname, '../../public/data')
 const fsFetcher: TextFetcher = async (path) => {
   try {
     return await readFile(resolve(REAL, path), 'utf8')
@@ -44,12 +49,10 @@ describe.skipIf(!has)('real data tree (web/public/data)', () => {
     expect(step).toBe((m['isochrone_step_min.nom_104'] as ManifestEntry).value)
   }, 60_000)
 
-  it('headline nom_104: 12.4 % reachable, range [pending V1, 17.5 %]', async () => {
+  it('headline nom_104: 12.4 % reachable, optimistic end 17.5 %', async () => {
     const h = (await L.scenarios()).scenarios.find((s) => s.id === 'nom_104')!.headline
     expect(h.reachable_pct).toBe(12.4)
     expect(h.range_pct[1]).toBe(17.5)
-    // con end: null until WS6 V1 lands (the console then says "pending V1"); a number once it does.
-    expect(h.range_pct[0] === null || typeof h.range_pct[0] === 'number').toBe(true)
   })
 
   it('route nom_104: pad -> S4 -> S2 -> pad, end = manifest route total (209.74 min)', async () => {
@@ -111,5 +114,98 @@ describe.skipIf(!has)('real data tree (web/public/data)', () => {
     expect(v.kind).toBe('none-pass')
     expect((await L.voDrift()).length).toBeGreaterThan(0)
     expect((await L.fixes()).some((f) => f.type === 'station')).toBe(true)
+  })
+})
+
+// Session-3 tree (C's make web after WS2 session 4 + WS6 V1): con_*, D20 partner, pad proposal, V1, KATs.
+const S3 = has && existsSync(resolve(REAL, 'validation/v1.json'))
+
+describe.skipIf(!S3)('real data tree, session-3 publish (D19, D20, V1, F8)', () => {
+  const L = createLoader(fsFetcher, 'real')
+  const entry = async (k: string) => (await L.manifest())[k] as ManifestEntry | undefined
+
+  it('headline range complete: 12.4 % [4.6, 17.5] at 30 min, both ends manifest-backed', async () => {
+    const h = (await L.scenarios()).scenarios.find((s) => s.id === 'nom_104')!.headline
+    expect([h.budget_min, h.reachable_pct, ...h.range_pct]).toEqual([30, 12.4, 4.6, 17.5])
+    expect((await entry('reachable_pct_range.nom_104.30.low'))?.value).toBe(4.6)
+  })
+
+  it('D20: partner line is cart only, labelled from the file; drag finding 398 N vs 351 N, max 157 kg (manifest)', async () => {
+    const idx = await L.scenarios()
+    const nom = idx.scenarios.find((s) => s.id === idx.default)!
+    const p = await L.partner(nom)
+    expect(partnerLabel(p)).toBe('Partner line (cart haul, 60 min)')
+    expect(p.features.every((f) => f.properties?.case !== 'drag')).toBe(true)
+    expect(drawnPartner(p).features.length).toBe(p.features.length)
+    const d = dragFinding(p)!
+    expect(d.feasible).toBe(false)
+    expect(d.force_N).toBeGreaterThan(d.traction_limit_N!)
+    for (const f of ['force_N', 'traction_limit_N', 'max_mass_kg'] as const) {
+      const e = (await entry(`haul.drag.flat.${f}`))!
+      expect(e.value).toBe(d[f])
+      expect(e.file).toBe(nom.files.partner)
+    }
+    expect(Math.round(d.force_N!)).toBe(398)
+    expect(Math.round(d.traction_limit_N!)).toBe(351)
+    expect(Math.round(d.max_mass_kg!)).toBe(158) // 157.5 kg
+  })
+
+  it('cards carry the D20 drag note', async () => {
+    for (const s of await L.stations()) expect((await L.card(s)).drag_note).toMatch(/cannot drag a suited crewmate/)
+  })
+
+  it('trade: science value 0 in every cell; S4 conservative walk home > 60 min, S1/S2 no access cell (con_104)', async () => {
+    const t = await L.trade()
+    expect(allScienceZero(t)).toBe(true)
+    const st = await L.stations()
+    const s4 = st.find((s) => s.id === 'S4')!
+    expect(s4.t_home_min.con_104!).toBeGreaterThan(Math.max(...t.rows))
+    for (const id of ['S1', 'S2']) expect(accessFor(st.find((s) => s.id === id)!, 'con_104').state).toBe('none')
+  })
+
+  it('F8 (C 14:58): pad.json, when published, is the pad in use (pad_default); siting heatmap is a proposal', async () => {
+    const pf = await L.optional(() => L.pad())
+    const m = padMarker(pf, CONFIG.padDefault)
+    expect([m.lon, m.lat]).toEqual([CONFIG.padDefault.lon, CONFIG.padDefault.lat])
+    expect(padProposal(pf)?.lon ?? null).not.toBe(m.lon)
+    const sp = await L.sitingPng()
+    expect(existsSync(resolve(REAL, sp.image))).toBe(true)
+  })
+
+  it('D7: V2 has near/mid/far; far is reported (not validated) with manifest keys', async () => {
+    const v = await L.v2()
+    const rows = v2Classes(v.summary)
+    expect(rows.map((r) => r.cls)).toEqual(['near', 'mid', 'far'])
+    for (const r of rows) expect((await entry(`${r.keyPrefix}.median_abs_deg`))?.value).toBe(r.median_abs_deg)
+  })
+
+  it('route legs: every displayed leg number has its route.nom_104.leg.{i}.* key', async () => {
+    const r = routeSummary(await L.route('nom_104'))!
+    for (const l of r.legs)
+      for (const f of ['t_min', 'length_m', 'o2_L'] as const) expect((await entry(`route.nom_104.leg.${l.leg}.${f}`))?.value, `leg ${l.leg} ${f}`).toBe(l[f])
+    for (const l of r.legs.filter((x) => x.to !== 'pad')) expect((await entry(`route.nom_104.leg.${l.leg}.to_access_dist_m`))?.value).toBe(l.to_access_dist_m)
+  })
+
+  it('station values keyed stations.{S}.value on stations.json (WS1 fix)', async () => {
+    for (const s of await L.stations()) {
+      const e = await entry(`stations.${s.id}.value`)
+      expect(e?.value).toBe(s.value)
+      expect(e?.file).toBe('stations.json')
+    }
+  })
+
+  it('V1: n 290, bias +1.31, RMSE 5.45, r 0.50; conservative no-go 14.55 deg', async () => {
+    const v = await L.v1()
+    expect(v.n).toBe(290)
+    expect(v.bias_deg!.toFixed(2)).toBe('1.31')
+    expect(v.rmse_deg!.toFixed(2)).toBe('5.45')
+    expect(v.r!.toFixed(2)).toBe('0.50')
+    expect(((v.conservative_nogo as { nogo_deg: number }).nogo_deg).toFixed(2)).toBe('14.55')
+    expect(existsSync(resolve(REAL, 'validation/v1.svg'))).toBe(true)
+  })
+
+  it('KAT list loads; area counts add up to the summary total', async () => {
+    const k = await L.json<{ summary: { total: number }; tests: { id: string; area: string; features: string[]; outcome: string; reason: string | null }[] }>('validation/kats.json')
+    expect(katAreas(k.tests).reduce((a, b) => a + b.total, 0)).toBe(k.summary.total)
   })
 })

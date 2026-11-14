@@ -6,20 +6,22 @@ import { CITED, CONFIG } from '../config'
 import { data } from '../data/loader'
 import { accessFor } from '../data/access'
 import { unknownMaskField } from '../data/fields'
-import type { RouteFC, ScenarioEntry, ScenariosIndex, Station, TimelineEvent } from '../data/types'
+import { partnerLabel } from '../data/partner'
+import type { PartnerFC, RouteFC, ScenarioEntry, ScenariosIndex, Station, TimelineEvent } from '../data/types'
 import { dataUrl } from '../env'
 import { ConsoleMap, DEFAULT_VISIBLE, type LayerGroup } from '../map/consoleMap'
 import { BASEMAP_CREDIT, basemapSources } from '../map/basemap'
 import { loadAlpha } from '../map/hatch'
-import { padMarker, type PadMarkerInfo } from '../map/pad'
+import { padMarker, padProposal, type PadMarkerInfo, type PadProposal } from '../map/pad'
 import { binEdges, binLabelsFor } from '../map/legend'
 import { isochroneMinutes, keyStep, snapMinutes, uniformStep } from '../map/slider'
 import { href } from '../router'
 import { THEME } from '../theme'
 import { AssumedTag, DataProblem, DummyNote } from '../components/labels'
 import { CfgNum, Num } from '../components/Num'
+import { DragNote } from '../components/DragNote'
 import { ensureManifest } from './common'
-import { routeSummary } from './route'
+import { routeSummary, type RouteLeg } from './route'
 import type { View } from './types'
 
 const LAYER_LABELS: Record<LayerGroup, string> = {
@@ -30,7 +32,8 @@ const LAYER_LABELS: Record<LayerGroup, string> = {
   stations: 'Stations and pad',
   slider: 'Budget slider (isochrones)',
   route: 'Planned route',
-  partner: 'Partner line (design question)',
+  partner: 'Partner line (cart haul)', // replaced by partner.geojson `label` (D20) once loaded
+  siting: 'Pad siting proposal (F8)',
 }
 
 export const view: View = async (el) => {
@@ -64,6 +67,9 @@ function ConsolePanel({ cmap }: { cmap: ConsoleMap }) {
   const [visible, setVisible] = useState<Record<LayerGroup, boolean>>({ ...DEFAULT_VISIBLE })
   const [notes, setNotes] = useState<Partial<Record<LayerGroup, ComponentChildren>>>({})
   const [padInfo, setPadInfo] = useState<PadMarkerInfo | null>(null)
+  const [proposal, setProposal] = useState<PadProposal | null>(null)
+  const [sitingShown, setSitingShown] = useState(false)
+  const [partner, setPartner] = useState<PartnerFC | null>(null)
   const [route, setRoute] = useState<RouteFC | null>(null)
   const [timeline, setTimeline] = useState<TimelineEvent[] | null>(null)
   const [credit, setCredit] = useState<string | null>(null)
@@ -83,11 +89,31 @@ function ConsolePanel({ cmap }: { cmap: ConsoleMap }) {
         if (alive) setError(e)
         return
       }
+      // The pad in use: pad.json (C 14:58: it describes pad_default), else config/site.yaml pad_default.
+      // The F8 siting result is a proposal only: siting.png + siting_png.json (+ optional pad.json proposal).
       let pad = padMarker(null, CONFIG.padDefault)
+      let pp: PadProposal | null = null
       try {
-        pad = padMarker(await L.optional(() => L.pad()), CONFIG.padDefault)
+        const pf = await L.optional(() => L.pad())
+        pad = padMarker(pf, CONFIG.padDefault)
+        pp = padProposal(pf)
       } catch (e) {
         note('stations', `pad.json: ${e instanceof Error ? e.message : String(e)}`)
+      }
+      try {
+        const sp = await L.optional(() => L.sitingPng())
+        if (!alive) return
+        setProposal(pp)
+        setSitingShown(!!sp)
+        if (sp || pp) {
+          await cmap.setSiting(
+            sp ? { url: dataUrl(sp.image), coordinates: sp.coordinates } : null,
+            pp ? { lon: pp.lon, lat: pp.lat, title: 'F8 siting proposal (not adopted; pad_default is kept, S decides)', alternatives: pp.alternatives } : null,
+          )
+        }
+        note('siting', sp ? '' : 'siting_png.json not available yet')
+      } catch (e) {
+        note('siting', `siting_png.json: ${e instanceof Error ? e.message : String(e)}`)
       }
       if (!alive) return
       setPadInfo(pad)
@@ -167,6 +193,7 @@ function ConsolePanel({ cmap }: { cmap: ConsoleMap }) {
         const [bands, isochrones, edges, partner] = await Promise.all([L.bands(scenario), L.isochrones(scenario), L.edges(scenario), L.partner(scenario)])
         if (!alive) return
         await cmap.setScenarioData({ bands, isochrones, edges, partner, variant: scenario.variant })
+        setPartner(partner)
         const mins = isochroneMinutes(isochrones)
         setIsoMinutes(mins)
         setSliderMin((v) => snapMinutes(mins, v) ?? v)
@@ -215,6 +242,8 @@ function ConsolePanel({ cmap }: { cmap: ConsoleMap }) {
   }
   const h = scenario.headline
   const hb = h.budget_min
+  const defaultPartnerFile = idx.scenarios.find((s) => s.id === idx.default)?.files.partner ?? null
+  const label = (g: LayerGroup) => (g === 'partner' ? partnerLabel(partner) : LAYER_LABELS[g])
 
   return (
     <div class="panel-body">
@@ -228,15 +257,8 @@ function ConsolePanel({ cmap }: { cmap: ConsoleMap }) {
         <div class="headline-text">
           reachable of the <i>assessed</i> flat disc within {hb} min.
           <br />
-          Range{' '}
-          {h.range_pct[0] === null ? (
-            <span class="pending" title="The conservative variant needs the V1 tilt RMSE (WS6 validation/v1.json); until then the low end is not computed">
-              conservative end pending V1
-            </span>
-          ) : (
-            <Num v={h.range_pct[0]} units="%" file="scenarios/index.json" k={`reachable_pct_range.${scenario.id}.${hb}.low`} />
-          )}{' '}
-          to <Num v={h.range_pct[1]} units="%" file="scenarios/index.json" k={`reachable_pct_range.${scenario.id}.${hb}.high`} /> (optimistic)
+          Range <Num v={h.range_pct[0]} units="%" file="scenarios/index.json" k={`reachable_pct_range.${scenario.id}.${hb}.low`} /> (conservative) to{' '}
+          <Num v={h.range_pct[1]} units="%" file="scenarios/index.json" k={`reachable_pct_range.${scenario.id}.${hb}.high`} /> (optimistic)
         </div>
       </section>
 
@@ -304,13 +326,24 @@ function ConsolePanel({ cmap }: { cmap: ConsoleMap }) {
           .map((g) => (
             <label class="toggle">
               <input type="checkbox" checked={visible[g]} onChange={(e) => toggle(g, (e.target as HTMLInputElement).checked)} />
-              {LAYER_LABELS[g]}
+              {label(g)}
               {notes[g] ? <span class="muted"> · {notes[g]}</span> : null}
             </label>
           ))}
       </section>
 
-      <Legend visible={visible} budget={budget} variant={scenario.variant} minutes={isoMinutes} pad={padInfo} credit={credit} />
+      <Legend
+        visible={visible}
+        budget={budget}
+        variant={scenario.variant}
+        minutes={isoMinutes}
+        pad={padInfo}
+        credit={credit}
+        partner={visible.partner ? { fc: partner, label: partnerLabel(partner), file: scenario.files.partner, defaultFile: defaultPartnerFile } : null}
+        proposal={visible.siting ? proposal : null}
+      />
+
+      {visible.siting && <PadProposalSection p={proposal} heatmap={sitingShown} pad={padInfo} />}
 
       <section>
         <h3>Stations</h3>
@@ -426,7 +459,16 @@ function Swatch({ kind, color, dashed }: { kind: 'fill' | 'line' | 'hatch' | 'do
   return <span class={`sw sw-${kind}${dashed ? ' sw-dashed' : ''}`} style={color ? { '--c': color } : undefined} />
 }
 
-function Legend(p: { visible: Record<LayerGroup, boolean>; budget: number; variant: string; minutes: number[]; pad: PadMarkerInfo | null; credit: string | null }) {
+function Legend(p: {
+  visible: Record<LayerGroup, boolean>
+  budget: number
+  variant: string
+  minutes: number[]
+  pad: PadMarkerInfo | null
+  credit: string | null
+  partner: { fc: PartnerFC | null; label: string; file: string; defaultFile: string | null } | null
+  proposal: PadProposal | null
+}) {
   const v = p.visible
   const edges = binEdges(CONFIG.isochroneMinutes.max, THEME.isoBinStepMin) // same bins as the map colour ramp
   return (
@@ -488,10 +530,23 @@ function Legend(p: { visible: Record<LayerGroup, boolean>; budget: number; varia
             <Swatch kind="line" color={THEME.route} dashed /> planned route (simulated EVA)
           </li>
         )}
-        {v.partner && (
+        {p.partner && (
           <li>
-            <Swatch kind="line" color={THEME.partner} dashed /> <CfgNum v={CONFIG.haulContourMin} units="min" source="config/haul.yaml: contour_min" /> partner-haul
-            contour. <i>Design question. Every haul parameter is an assumed band.</i> <AssumedTag />
+            <Swatch kind="line" color={THEME.partner} dashed /> <b>{p.partner.label}</b>: where one astronaut can still haul a downed crewmate home by cart. <i>{CONFIG.haulPartnerCaption}</i>{' '}
+            <AssumedTag />
+            <DragNote fc={p.partner.fc} file={p.partner.file} defaultFile={p.partner.defaultFile} />
+          </li>
+        )}
+        {v.siting && (
+          <li>
+            <Swatch kind="fill" color="#bbbbbb" /> F8 siting score (grey; white = highest)
+            {p.proposal ? (
+              <>
+                {' '}
+                · <span class="pad-marker pad-proposal">Pad?</span> proposed pad · <span class="pad-alt">#2</span> alternatives
+              </>
+            ) : null}
+            . <b>Proposal only</b>: the plan keeps pad_default.
           </li>
         )}
       </ul>
@@ -535,12 +590,98 @@ function RouteSection(p: { scenarioId: string; route: RouteFC | null; timeline: 
           )
         })}
       </ol>
+      <RouteLegs scenarioId={p.scenarioId} legs={r.legs} />
       <p>
         Total <Num v={r.endMin} units="min" file={tf} k={`route.${p.scenarioId}.total_min`} />{' '}
         <label class="toggle inline">
           <input type="checkbox" checked={p.shown} onChange={(e) => p.onShow((e.target as HTMLInputElement).checked)} /> show on map
         </label>
       </p>
+    </section>
+  )
+}
+
+/** Route legs (F9) from route_{scenario}.geojson; manifest keys route.{sid}.leg.{i}.* (WS2, i = the 1-based `leg`). */
+function RouteLegs({ scenarioId, legs }: { scenarioId: string; legs: RouteLeg[] }) {
+  const rf = `route_${scenarioId}.geojson`
+  const k = (l: RouteLeg, f: string) => `route.${scenarioId}.leg.${l.leg}.${f}`
+  const name = (s: string) => (s === 'pad' ? 'Pad' : s)
+  return (
+    <table class="mini route-legs">
+      <thead>
+        <tr>
+          <th>Leg</th>
+          <th class="r">Walk</th>
+          <th class="r">Distance</th>
+          <th class="r">O₂</th>
+          <th class="r" title="Straight walk-in from the access cell to the science point at the leg's end (not modelled)">
+            Walk-in
+          </th>
+        </tr>
+      </thead>
+      <tbody>
+        {legs.map((l) => (
+          <tr>
+            <td>
+              {name(l.from)} → {name(l.to)}
+            </td>
+            <td class="r">
+              <Num v={l.t_min} units="min" file={rf} k={k(l, 't_min')} />
+            </td>
+            <td class="r">
+              <Num v={l.length_m} units="m" file={rf} k={k(l, 'length_m')} />
+            </td>
+            <td class="r">
+              <Num v={l.o2_L} units="L" file={rf} k={k(l, 'o2_L')} />
+            </td>
+            <td class="r">{l.to === 'pad' ? <span class="muted">–</span> : <Num v={l.to_access_dist_m} units="m" file={rf} k={k(l, 'to_access_dist_m')} />}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  )
+}
+
+/** F8 pad siting proposal (C 14:58): siting.png heatmap + optional pad.json `proposal`; never the pad in use. */
+function PadProposalSection({ p, heatmap, pad }: { p: PadProposal | null; heatmap: boolean; pad: PadMarkerInfo | null }) {
+  const F = 'pad.json'
+  const b = CONFIG.walkbackBudgetsMin[0]
+  return (
+    <section>
+      <h3>
+        Pad siting <span class="tag tag-assumed">proposal</span>
+      </h3>
+      <p>
+        <b>pad_default is kept; S decides.</b> The pad in use is {pad?.file ? 'pad.json (= pad_default)' : 'config/site.yaml pad_default'}; every route, band
+        and number in the plan uses it. The F8 siting rule's result is shown here only as a proposal
+        {heatmap ? ' (grey heatmap: siting score, white = highest)' : ' (siting.png not available yet)'}.
+      </p>
+      {p ? (
+        <>
+          <p>
+            Proposed pad <Num v={p.lon} file={F} k="pad.proposal.lon" />, <Num v={p.lat} file={F} k="pad.proposal.lat" /> (score{' '}
+            <Num v={p.score} file={F} k="pad.proposal.score" />, steepest slope in its block{' '}
+            <Num v={p.maxSlopeDeg} units="deg" file={F} k="pad.proposal.checks.max_slope_deg" />
+            ); {b}-min disc assessed <Num v={p.assessedPct} units="%" file={F} k="pad.proposal.checks.assessed_pct_30min" />, pad rule {p.ruleLabel}.
+          </p>
+          {p.assessedPct === null && (
+            <p class="caption">
+              The disc check is null: the {b}-min flat disc around the proposed pad runs off the edge of the 3 m routing grid, so WS2 cannot assess it.
+            </p>
+          )}
+          {p.rule && <p class="caption">Rule: {p.rule}.</p>}
+        </>
+      ) : (
+        <p class="caption">
+          WS2 (STATUS, session 4): the proposal's {b}-min disc check is null because the disc runs off the 3 m routing grid, and with only one station reachable
+          under the conservative variant the top candidate blocks tie, so the rule cannot discriminate between them.
+        </p>
+      )}
+      {p?.tied && (
+        <p class="caption">
+          Every listed alternative has the proposal's score: with one reachable station the rule cannot tell the candidates apart (WS2 STATUS reports the full tie).
+        </p>
+      )}
     </section>
   )
 }

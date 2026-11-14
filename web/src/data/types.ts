@@ -24,7 +24,25 @@ type FC<G extends Polygon | MultiPolygon | LineString | MultiLineString | Point,
 export type IsochroneFC = FC<Polygon | MultiPolygon, { minutes: number }>
 export type BandsFC = FC<Polygon | MultiPolygon, { budget: number; variant: Variant; [k: string]: unknown }>
 export type EdgesFC = FC<LineString | MultiLineString, { budget: number; cause: EdgeCause; [k: string]: unknown }>
-export type PartnerFC = FC<Polygon | MultiPolygon | LineString | MultiLineString, Record<string, unknown>>
+export type PartnerFC = FC<Polygon | MultiPolygon | LineString | MultiLineString, Record<string, unknown>> & { drag_finding?: DragFinding }
+
+/** partner.geojson `drag_finding` (WS2, D20): dragging a suited crewmate on flat ground. Open member. */
+export interface DragFinding {
+  case?: string
+  theta_deg?: number
+  suit_kg?: number
+  casualty_kg?: number
+  rescuer_system_kg?: number
+  mu?: number
+  boot_mu?: number
+  g_ms2?: number
+  force_N: number | null
+  traction_limit_N: number | null
+  max_mass_kg: number | null
+  feasible: boolean | null
+  reason?: string
+  note?: string
+}
 export type RouteFC = FC<LineString | MultiLineString | Point, Record<string, unknown>>
 export type AnyFC = FeatureCollection & { dummy?: boolean }
 export type AnyFeature = Feature
@@ -88,6 +106,8 @@ export interface Card {
   o2_home_L?: number | null
   science?: { lon: number; lat: number }
   access?: StationAccess
+  /** D20 note (WS2 card part). */
+  drag_note?: string
   landmarks_note?: string
   skyline_error_scope?: string
   provisional?: boolean
@@ -116,6 +136,16 @@ export interface TradeTable {
   cells: TradeCell[][]
 }
 
+/** siting_png.json (v1.1.0): placement of the F8 siting heatmap siting.png (4 corners, MapLibre order). */
+export interface SitingPng {
+  dummy?: boolean
+  image: string
+  coordinates: [number, number][]
+  corner_order: string
+  grey_max_score: number | null
+  rule: string
+}
+
 export interface PadFile {
   dummy: boolean
   pad: {
@@ -128,6 +158,19 @@ export interface PadFile {
   alternatives: { rank: number; lon: number; lat: number; elev_m: number | null; score: number | null }[]
   hop_options: { pads: number[][]; note: string }[]
   site_rule_version: string | number
+  /** Optional F8 siting proposal (C 14:58): never the pad in use. Shape assumed until WS2/C fix it. */
+  proposal?: PadProposalBlock
+}
+
+export interface PadProposalBlock {
+  lon: number
+  lat: number
+  elev_m?: number | null
+  score?: number | null
+  checks?: { assessed_pct_30min?: number | null; max_slope_deg?: number | null; rule_passed?: boolean | null }
+  alternatives?: { rank: number; lon: number; lat: number; elev_m?: number | null; score?: number | null }[]
+  rule?: string
+  [k: string]: unknown
 }
 
 export interface Rad {

@@ -7,6 +7,7 @@ import 'maplibre-gl/dist/maplibre-gl.css'
 import workerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?url'
 import { CONFIG } from '../config'
 import { accessFor, walkInLines } from '../data/access'
+import { drawnPartner } from '../data/partner'
 import type { AnyFC, BandsFC, EdgesFC, IsochroneFC, PartnerFC, RouteFC, Station } from '../data/types'
 import { THEME } from '../theme'
 import type { BasemapSource } from './basemap'
@@ -18,7 +19,7 @@ import { MarsScaleControl } from './scale'
 // After bundling, MapLibre cannot find its worker next to itself; point it at the emitted asset.
 setWorkerUrl(workerUrl)
 
-export type LayerGroup = 'basemap' | 'bands' | 'unknown' | 'edges' | 'stations' | 'slider' | 'route' | 'partner'
+export type LayerGroup = 'basemap' | 'bands' | 'unknown' | 'edges' | 'stations' | 'slider' | 'route' | 'partner' | 'siting'
 
 /** Default visibility: SPEC F17 default view = basemap, 30-min nominal band, edge causes, stations. */
 export const DEFAULT_VISIBLE: Record<LayerGroup, boolean> = {
@@ -30,6 +31,7 @@ export const DEFAULT_VISIBLE: Record<LayerGroup, boolean> = {
   slider: false,
   route: false,
   partner: false, // never in the default view (brief WS5 "Don't")
+  siting: false, // F8 pad proposal: not adopted (pad_default kept, S decides)
 }
 
 const GROUP_LAYERS: Record<LayerGroup, string[]> = {
@@ -41,6 +43,7 @@ const GROUP_LAYERS: Record<LayerGroup, string[]> = {
   slider: ['iso-fill', 'iso-lines', 'iso-current'],
   route: ['route-line'],
   partner: ['partner-line'],
+  siting: ['siting-img'],
 }
 
 export function blankStyle(): StyleSpecification {
@@ -63,6 +66,7 @@ export class ConsoleMap {
   private edges: EdgesFC | null = null
   private stationMarkers: Marker[] = []
   private padMarker?: Marker
+  private sitingMarkers: Marker[] = []
   private edgeMarkers: Marker[] = []
   private hasBasemap = false
   private groupLayers: Record<LayerGroup, string[]> = Object.fromEntries(Object.entries(GROUP_LAYERS).map(([k, v]) => [k, [...v]])) as Record<LayerGroup, string[]>
@@ -179,7 +183,7 @@ export class ConsoleMap {
     ;(this.map.getSource('bands') as GeoJSONSource).setData(d.bands)
     ;(this.map.getSource('iso') as GeoJSONSource).setData(d.isochrones)
     ;(this.map.getSource('edges') as GeoJSONSource).setData(d.edges)
-    ;(this.map.getSource('partner') as GeoJSONSource).setData(d.partner)
+    ;(this.map.getSource('partner') as GeoJSONSource).setData(drawnPartner(d.partner)) // D20: cart only, drag never drawn
     this.applyFilters()
     this.renderEdgeLabels()
   }
@@ -240,6 +244,30 @@ export class ConsoleMap {
     this.applyVisibility()
   }
 
+  /** F8 siting heatmap (siting.png on siting_png.json corners) and the proposed pad + alternatives. */
+  async setSiting(img: { url: string; coordinates: [number, number][] } | null, proposal: { lon: number; lat: number; title: string; alternatives: { rank: number; lon: number; lat: number }[] } | null): Promise<void> {
+    this.sitingMarkers.forEach((m) => m.remove())
+    this.sitingMarkers = []
+    if (proposal) {
+      const mk = (cls: string, text: string, title: string, lon: number, lat: number) => {
+        const el = document.createElement('div')
+        el.className = cls
+        el.textContent = text
+        el.title = title
+        this.sitingMarkers.push(new Marker({ element: el }).setLngLat([lon, lat]).addTo(this.map))
+      }
+      mk('pad-marker pad-proposal', 'Pad?', proposal.title, proposal.lon, proposal.lat)
+      for (const a of proposal.alternatives) mk('pad-alt', `#${a.rank}`, `Siting alternative rank ${a.rank} (pad.json): same rule, not adopted`, a.lon, a.lat)
+    }
+    await this.ready
+    if (img && !this.map.getSource('siting')) {
+      const c = img.coordinates as [[number, number], [number, number], [number, number], [number, number]]
+      this.map.addSource('siting', { type: 'image', url: img.url, coordinates: c })
+      this.map.addLayer({ id: 'siting-img', type: 'raster', source: 'siting', paint: { 'raster-opacity': THEME.sitingOpacity, 'raster-fade-duration': 0 } }, 'iso-lines')
+    }
+    this.applyVisibility()
+  }
+
   setPad(p: { lon: number; lat: number; label: string; title: string }): void {
     this.padMarker?.remove()
     const el = document.createElement('div')
@@ -297,6 +325,7 @@ export class ConsoleMap {
     }
     for (const mk of this.stationMarkers) mk.getElement().hidden = !this.visible.stations
     if (this.padMarker) this.padMarker.getElement().hidden = !this.visible.stations
+    for (const mk of this.sitingMarkers) mk.getElement().hidden = !this.visible.siting
     for (const mk of this.edgeMarkers) mk.getElement().hidden = !this.visible.edges
   }
 
