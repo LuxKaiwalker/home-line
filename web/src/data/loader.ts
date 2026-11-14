@@ -1,5 +1,5 @@
 // The one data-loader module. Reads the active tree (data/ or data-dummy/), checks each file against
-// its contract schema (contracts/ v1.0.0), refuses files no contract covers, and refuses
+// its contract schema (contracts/ v1.1.x), refuses files no contract covers, and refuses
 // dummy-flagged files in real mode. Images (PNG overlays, panoramas, fields) are referenced by URL.
 import { DATA_MODE, dataUrl, type DataMode } from '../env'
 import { schemaFor } from './contracts'
@@ -8,6 +8,11 @@ import type {
   AnyFC,
   BandsFC,
   Card,
+  CellState,
+  Fix,
+  Localisation,
+  TileJson,
+  VoDriftRow,
   Clock,
   Coreg,
   Coverage,
@@ -118,6 +123,11 @@ export function createLoader(fetchText: TextFetcher, mode: DataMode) {
     coverage: () => json<Coverage>('validation/coverage.json'),
     coreg: () => json<Coreg>('validation/coreg.json'),
     fixIntervalSummary: () => json<FixIntervalSummary>('nav/fix_interval_summary.json'),
+    fixes: () => json<Fix[]>('nav/fixes.json'),
+    localisation: (imageId: string) => json<Localisation>(`localisation/${imageId}.json`),
+    voDrift: () => json<VoDriftRow[]>('vo/drift.json'),
+    tilejson: () => json<TileJson>('tiles/basemap/tilejson.json'),
+    cellstate: () => json<CellState>('terrain/cellstate.json'),
     geojson: (path: string) => json<AnyFC>(path),
     /** Run a load; resolve to null if the file is missing (any other failure still throws). */
     async optional<T>(fn: () => Promise<T>): Promise<T | null> {

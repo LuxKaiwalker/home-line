@@ -1,3 +1,4 @@
+import type { LeashRow } from '../data/types'
 // Dose-budget leash (F14, D9): tau_dose = D_allow / Ddot. The pipeline writes tau at the storm peak
 // for the default allowance (rad.json leash.tau_min_at_peak). The D9 slider changes D_allow, so the
 // page recomputes tau with the formula from config/conditions.yaml leash.formula:
@@ -19,4 +20,23 @@ export function tauMin(dAllowMgy: number, rateUGyDay: number | null): number | n
 export function sliderStops(lo: number, hi: number, step: number): number[] {
   const n = Math.round((hi - lo) / step)
   return Array.from({ length: n + 1 }, (_, i) => +(lo + i * step).toFixed(6))
+}
+
+export interface LeashStep {
+  d: number
+  /** The rad.json leash.table row for this allowance, or null when the table lacks it. */
+  row: LeashRow | null
+  /** Index of that row in leash.table (manifest key rad.leash.table.{i}.*), -1 when absent. */
+  rowIndex: number
+}
+
+/**
+ * D9 slider stops: range and step from config/conditions.yaml (leash.d_allow_range_mgy,
+ * leash.d_allow_step_mgy, read at build time), each matched to rad.json leash.table by D_allow.
+ */
+export function leashSteps(range: [number, number], step: number, table: LeashRow[] | undefined): LeashStep[] {
+  return sliderStops(range[0], range[1], step).map((d) => {
+    const rowIndex = (table ?? []).findIndex((r) => Math.abs(r.D_allow_mGy - d) < 1e-6)
+    return { d, row: rowIndex >= 0 ? table![rowIndex] : null, rowIndex }
+  })
 }
