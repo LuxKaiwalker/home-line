@@ -561,7 +561,10 @@ def test_clock_json_sun_series_is_ws4_sun_api():
     it, ia, ie = (cols.index(c) for c in ("t_eva_min", "sun_azimuth_deg", "sun_elevation_deg"))
     t0 = sun.eva_start_utc()  # clock.json start_utc is the same instant, rounded to 1 s
     assert abs((parse_utc(eva["start_utc"]) - t0).total_seconds()) <= 1.0
-    lat, lon = ck["site"]["lat_deg"], ck["site"]["lon_east_deg"]
+    # WS4 session 3 (D21): the sun is at the official pad (site.sun_lon_east_deg); lon_east_deg is
+    # the LMST clock longitude (MSL labels). Older clock.json files have no sun_lon_east_deg.
+    lat = ck["site"]["lat_deg"]
+    lon = ck["site"].get("sun_lon_east_deg", ck["site"]["lon_east_deg"])
     rows = eva["sun_series"]
     assert rows[0][it] == 0 and rows[-1][it] >= CFG_ALL["crew"]["eva_h"] * 60 - 1e-9
     for row in rows[:: max(1, len(rows) // 7)] + [rows[-1]]:
