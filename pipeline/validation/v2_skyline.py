@@ -160,28 +160,120 @@ def station_skyline_error(doc: dict) -> dict:
             for s, recs in by.items()}
 
 
+def _angle_from_north(az) -> float | None:
+    if az is None or not np.isfinite(float(az)):
+        return None
+    return abs((float(az) + 180.0) % 360.0 - 180.0)
+
+
+def far_note(doc: dict, frames_by_id: dict | None = None,
+             best_cuts: dict | None = None) -> dict:
+    """D7 (user 2026-11-14 15:01 CET) far-class note for v2.json (horizon.yaml d7_far_note).
+
+    ``frames_by_id``: navcam_frames.json records (``pointing_site.az_centre_deg``);
+    ``best_cuts``: image_id -> (best cut range km, median detected - predicted(cut) deg), the
+    manual-check sheet's visibility-range diagnostic. Far-fail frames are the V2-ok frames used
+    in the summary whose far-class median error exceeds ``far_fail_abs_deg``."""
+    cfg = hcfg.load()
+    nc = cfg["d7_far_note"]
+    lim = float(cfg["manual_check_sheet"]["far_fail_abs_deg"])
+    half, rng, tol = (float(nc["north_half_width_deg"]), float(nc["match_range_km"]),
+                      float(nc["match_tol_deg"]))
+    frames_by_id, best_cuts = frames_by_id or {}, best_cuts or {}
+    ff = []
+    for f in doc["frames"]:
+        far = ((f.get("summary") or {}).get("far") or {}).get("median_deg")
+        if (f["status"] == "ok" and f.get("manual_ok") is not False and far is not None
+                and abs(far) > lim):
+            ff.append(f)
+    north = unknown_az = 0
+    rim, counts = [], {}
+    n_match = n_match_tol = n_cut_unknown = 0
+    for f in ff:
+        pointing = (frames_by_id.get(f["image_id"]) or {}).get("pointing_site") or {}
+        d = _angle_from_north(pointing.get("az_centre_deg"))
+        if d is None:
+            unknown_az += 1
+        elif d <= half:
+            north += 1
+        m = _median_where(f.get("columns") or {}, "distance_m", "far")
+        if m is not None:
+            rim.append(m / 1000.0)
+        km, err = best_cuts.get(f["image_id"], (None, None))
+        if km is None:
+            n_cut_unknown += 1
+            continue
+        label = f"{float(km):g}"
+        counts[label] = counts.get(label, 0) + 1
+        if float(km) <= rng:
+            n_match += 1
+            if err is not None and abs(float(err)) <= tol:
+                n_match_tol += 1
+    return {
+        "status": "not_validated",
+        "decision": nc["decision"],
+        "reason": "far rim hidden by haze in north-facing frames: the automatic detector "
+                  "finds nearby terrain, not the rim (no manual review)",
+        "far_fail_abs_deg": lim,
+        "n_far_fail": len(ff),
+        "north_half_width_deg": half,
+        "n_far_fail_north": north,
+        "n_far_fail_az_unknown": unknown_az,
+        "rim_dist_km_min": round(min(rim), 1) if rim else None,
+        "rim_dist_km_max": round(max(rim), 1) if rim else None,
+        "rim_dist_basis": "per far-fail frame, median predicted-skyline distance over its far "
+                          "columns; min and max over those frames",
+        "match_range_km": rng,
+        "match_tol_deg": tol,
+        "n_match_near_terrain": n_match,
+        "n_match_near_terrain_within_tol": n_match_tol,
+        "n_best_cut_unknown": n_cut_unknown,
+        "best_cut_range_km_counts": dict(sorted(counts.items(), key=lambda kv: float(kv[0]))),
+        "frames": [f["image_id"] for f in ff],
+    }
+
+
+_FAR_NOTE_KEYS = (("far_fail_abs_deg", "deg"), ("n_far_fail", "1"),
+                  ("north_half_width_deg", "deg"), ("n_far_fail_north", "1"),
+                  ("n_far_fail_az_unknown", "1"), ("rim_dist_km_min", "km"),
+                  ("rim_dist_km_max", "km"), ("match_range_km", "km"), ("match_tol_deg", "deg"),
+                  ("n_match_near_terrain", "1"), ("n_match_near_terrain_within_tol", "1"),
+                  ("n_best_cut_unknown", "1"))
+
+
 def write_v2(doc: dict, path=V2_OUT, *, record_manifest: bool = True) -> Path:
-    """Write v2.json and record v2.n_stops, v2.{class}.{n,median_deg,median_abs_deg,p90_abs_deg}
-    (manifest file = web path validation/v2.json)."""
+    """Validate and write v2.json; record v2.n_stops, v2.n_frames_{tried,ok},
+    v2.{class}.{n,median_deg,median_abs_deg,p90_abs_deg} and, with a D7 ``far_note``, every
+    number in it as v2.far_note.* (manifest file = web path validation/v2.json)."""
+    from pipeline.horizon.contracts import validate  # noqa: PLC0415
     from pipeline.provenance.manifest import record  # noqa: PLC0415
 
+    validate(doc, "v2.schema.json")
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(doc, separators=(",", ":")))
     if record_manifest:
         rel = "validation/v2.json"
-        record("v2.n_stops", doc["n_stops"], "1", file=rel, script=__file__)
+        for k in ("n_stops", "n_frames_tried", "n_frames_ok"):
+            record(f"v2.{k}", doc[k], "1", file=rel, script=__file__)
         for c in CLASSES:
             for k in ("n", "median_deg", "median_abs_deg", "p90_abs_deg"):
                 record(f"v2.{c}.{k}", doc["summary"][c][k], "1" if k == "n" else "deg",
                        file=rel, script=__file__)
+        fn = doc.get("far_note")
+        if fn:
+            for k, units in _FAR_NOTE_KEYS:
+                record(f"v2.far_note.{k}", fn[k], units, file=rel, script=__file__)
+            for km, n in fn["best_cut_range_km_counts"].items():
+                record(f"v2.far_note.best_cut_range_km_counts.{km}", n, "1", file=rel,
+                       script=__file__)
         # card keys skyline_error_deg.{S}.* are recorded with the card (pipeline/horizon/cards.py)
     return path
 
 
-def run_v2(frames_json=None, horizons_dir=None, out=V2_OUT, *, manual_json=MANUAL_CHECKS,
-           record_manifest: bool = True) -> dict:
-    """Every frame in navcam_frames.json against horizons/{stop_id}.json (navcam eye height)."""
+def compute_v2(frames_json=None, horizons_dir=None, *, manual_json=MANUAL_CHECKS) -> dict:
+    """v2.json content (not written): every frame in navcam_frames.json against
+    horizons/{stop_id}.json (navcam eye height)."""
     from PIL import Image  # noqa: PLC0415
 
     root = hcfg.REPO / "data" / "interim" / "horizon"
@@ -199,7 +291,13 @@ def run_v2(frames_json=None, horizons_dir=None, out=V2_OUT, *, manual_json=MANUA
         entries.append(evaluate_frame(fr, profiles[sid], img))
     manual_path = Path(manual_json)
     manual = json.loads(manual_path.read_text()) if manual_path.exists() else {}
-    doc = build_v2(entries, manual=manual)
+    return build_v2(entries, manual=manual)
+
+
+def run_v2(frames_json=None, horizons_dir=None, out=V2_OUT, *, manual_json=MANUAL_CHECKS,
+           record_manifest: bool = True) -> dict:
+    """compute_v2 + write_v2 (without the D7 far note; ``main`` adds it)."""
+    doc = compute_v2(frames_json, horizons_dir, manual_json=manual_json)
     write_v2(doc, out, record_manifest=record_manifest)
     return doc
 
@@ -549,12 +647,20 @@ def main(argv=None) -> int:
         MANUAL_CHECKS.write_text(json.dumps(v, indent=1))
         print(f"{len(v)} verdicts ({sum(v.values())} ok) -> {MANUAL_CHECKS}")
         return 0
-    doc = run_v2(record_manifest=not a.no_manifest)
+    doc = compute_v2()
     n = write_composites(doc)
+    # the sheet (optional since D7) also computes the best-cut evidence used by the far note
     rows = write_manual_check_sheet(doc)
+    frames = json.loads((hcfg.REPO / "data" / "interim" / "horizon" / "navcam_frames.json")
+                        .read_text())["frames"]
+    cuts = {r["image_id"]: (r["best_cut_range_km"], r["far_det_minus_pred_cut_median_deg"])
+            for r in rows}
+    doc["far_note"] = far_note(doc, {f["image_id"]: f for f in frames}, cuts)
+    write_v2(doc, record_manifest=not a.no_manifest)
     print(f"{len(rows)} frames on the manual-check sheet in {MANUAL_SHEET_DIR}")
     print(json.dumps({k: doc[k] for k in ("available", "method", "n_stops", "n_frames_tried",
                                           "n_frames_ok", "summary")}, indent=1))
+    print(json.dumps({k: v for k, v in doc["far_note"].items() if k != "frames"}, indent=1))
     print(f"{n} check composites in data/interim/horizon/validation/overlays/")
     return 0
 
