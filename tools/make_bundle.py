@@ -124,7 +124,7 @@ class Frame:
 # --------------------------------------------------------------------------------- config ----
 # D57: server-only settings (rate limits, CORS, gates) are not engine inputs; leaving them out keeps
 # the config hash, the config snapshot and every result hash stable when a limit changes.
-NON_ENGINE_CONFIG = ("backend.yaml", "design.yaml")  # D57; design.yaml: UI-only values (design block)
+NON_ENGINE_CONFIG = ("backend.yaml", "design.yaml")  # D57; design.yaml: UI-only values
 
 
 def config_files(config_dir: Path = CONFIG) -> list[Path]:
