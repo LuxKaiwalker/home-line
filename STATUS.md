@@ -559,10 +559,12 @@ Branch: `ws9-nav`
   10 m grid step, every frame reported, contracts. Verified against `origin/ws3-horizon` (92d2f61) in a
   temp worktree: all 47 nav KATs pass there; on main the 4 engine KATs skip until WS3 merges.
 - `tests/test_nav.py`: 43 pass + 4 skipped (WS3) on this branch; full suite and ruff green.
+- 2026-11-14T10:31Z: merged `origin/main` (WS3 now on main): all 48 nav KATs pass, none skipped
+  (F22 synthetic-DEM KAT included); full pytest, ruff, tsc, vitest (212), validate_contracts green.
 
 ### Doing
 
-- Waiting for WS2's real `route_nom_104` / `timeline_nom_104` / `engine/nom_104/t_home.tif`.
+- Waiting for a non-empty WS2 `route_nom_104` (see Blocked).
 
 ### Next
 
@@ -571,8 +573,11 @@ Branch: `ws9-nav`
 
 ### Blocked
 
-- (WS2) Real run: `data/interim/engine/public/route_nom_104.geojson`, `timeline_nom_104.json` and
-  `data/interim/engine/nom_104/t_home.tif` not there yet (`run real --dry-run` lists them).
+- (WS2 / S) Real run: WS2's files exist since 10:29Z, but `route_nom_104.geojson` has no features and
+  `timeline_nom_104.json` is depart + return at t = 0 (stations.json: S1, S2 `t_home_min.nom_104` null,
+  S4 not in the route). With no walked route there is no Monte Carlo, so no r95 fit and no fix-interval
+  map; `run real --dry-run` refuses ("route has no legs"). WS9 will not substitute a synthetic route.
+  `engine/nom_104/t_home.tif` (2,468 x 2,468 at 3 m) reads fine; the fix-interval code runs on it in 3 s.
 - (WS3) F22 imports `pipeline.horizon.rays` / `cahvor` / `navcam` / `sky` from `ws3-horizon`; engine
   KATs skip on main until it merges. Real frames: all 49 frames in `navcam_frames.json` have
   `station: null`, so no frame is paired with a route station and every station keeps its surveyed
