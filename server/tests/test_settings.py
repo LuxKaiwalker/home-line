@@ -1,5 +1,6 @@
 """config/backend.yaml loads, references resolve to the one source, unknown keys are refused."""
 
+import json
 import shutil
 
 import pytest
@@ -53,9 +54,45 @@ def test_ranges_known_answers():
     assert r["d_allow_mgy"].default == 0.5
     assert {k for k, _ in r.items()} == {
         "body_mass_kg", "suit_kg", "tools_kg", "vo2max_ml_kg_min", "effort_cap_frac",
-        "walkback_budget_min", "d_allow_mgy", "dwell_min", "eva_duration_h", "start_lmst_h"}
+        "walkback_budget_min", "d_allow_mgy", "dwell_min", "eva_duration_h", "start_lmst_h",
+        "reserve_min"}
     with pytest.raises(KeyError):
         r["user_points_max"]  # not a range
+
+
+def test_cors_origins_known_answer():
+    """Decision 6 + hosting (2026-11-14): exactly these origins, in backend.yaml only."""
+    c = st.load()
+    assert c.api.cors_origins == ["https://luxkaiwalker.github.io", "https://homeline.vxliu.com",
+                                  "http://localhost:5173"]
+    assert "api.cors_origins" not in c.assumed  # confirmed, no longer assumed
+
+
+def test_reserve_min_range_known_answer():
+    """Decision 10: eva.reserve_min gets an assumed range around the D24 default (decision 12)."""
+    c = st.load()
+    crew = yaml.safe_load((st.CONFIG_DIR / "crew.yaml").read_text())
+    r = c.ranges["reserve_min"]
+    assert (r.min, r.max, r.assumed) == (15, 60, True)
+    assert r.default == crew["o2_margin"]["reserve_min_at_effort_cap"] == 30
+    assert r.contains(r.default)
+    assert "ranges.reserve_min" in c.assumed
+    # the range key is the plan_inputs eva field name (contracts/backend/plan_inputs.schema.json)
+    schema = json.loads((st.REPO / "contracts" / "backend" / "plan_inputs.schema.json").read_text())
+    assert "reserve_min" in schema["properties"]["eva"]["properties"]
+
+
+def test_assumed_list_known_answer():
+    """Decision 10: assumed values stay marked; every entry resolves to a key of the config."""
+    c = st.load()
+    assert c.assumed == ["limits.title_max_chars", "limits.notes_max_chars",
+                         "ranges.start_lmst_h", "ranges.reserve_min", "sessions.message_max_chars"]
+    for path in c.assumed:
+        node = c
+        for part in path.split("."):
+            node = getattr(node, part)  # raises if the entry no longer resolves
+        if isinstance(node, st.Range):
+            assert node.assumed is True, path
 
 
 def test_refs_resolve_to_other_config_files():

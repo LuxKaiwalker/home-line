@@ -9,10 +9,12 @@ contract_version: "1.0.0"          # contracts/backend/ family
 api:
   prefix: /api/v1
   health_timeout_s: 2              # F23: web client gives up after this and shows the offline banner
-  cors_origins:                    # section 8; the Unity WebGL origin is added when one exists
-    - "https://luxkaiwalker.github.io"   # GitHub Pages origin of LuxKaiwalker/home-line (assumed: confirm at deploy)
-    - "http://localhost:5173"           # vite dev
-    - "http://localhost:4173"           # vite preview
+  cors_origins:                    # section 8; confirmed (team lead decision 6 + hosting, 2026-11-14)
+    # The ONLY CORS source: FastAPI CORSMiddleware reads this list; nginx adds no CORS headers
+    # (an origin allowed in two places breaks the browser). A Unity WebGL origin is added here.
+    - "https://luxkaiwalker.github.io"   # GitHub Pages origin of LuxKaiwalker/home-line
+    - "https://homeline.vxliu.com"       # custom Pages domain
+    - "http://localhost:5173"            # vite dev server
   docs_path: /api/docs             # F35 OpenAPI page
 
 compute:
@@ -53,6 +55,12 @@ ranges:                            # F26 (crew) and F25 (route); inputs outside 
   dwell_min: {min: 5, max: 120}
   eva_duration_h: {min: 2, max: 8}
   start_lmst_h: {min: 6, max: 14, assumed: true}             # no range in the spec; daylight bound
+  # plan_inputs eva.reserve_min: no range in the contract or spec (decision 10). The default is the
+  # engine's D24 key (decision 12): 30 min at the effort cap, the Shuttle/EMU EVA reserve (NTRS
+  # 20140009556). Range = half to double that precedent, so users can test a leaner or a more
+  # conservative reserve without leaving the scale the one sourced value sets. No source gives
+  # the bounds themselves, hence assumed.
+  reserve_min: {min: 15, max: 60, default_ref: crew.o2_margin.reserve_min_at_effort_cap, assumed: true}
   user_points_max: 3                                         # access radius: D27 (stations.yaml), not repeated
   anchored_flag_note: "outside the anchored range (ICES-2026-127, IST-2)"
 
@@ -97,5 +105,5 @@ gates_local:                       # D50: backend starts Sat evening, gates shif
   B3: "2026-11-15T08:00:00+01:00"
   freeze_ref: event.gates_local.freeze
 
-assumed: [api.cors_origins, limits.title_max_chars, limits.notes_max_chars, ranges.start_lmst_h,
+assumed: [limits.title_max_chars, limits.notes_max_chars, ranges.start_lmst_h, ranges.reserve_min,
           sessions.message_max_chars]
