@@ -402,21 +402,39 @@ Branch: `ws3-horizon`
 - 2026-11-14T10:11Z: first **automatic V2** (`pipeline/validation/v2_skyline.py`, `validation/v2.json` validates, manifest keys `v2.*`): 49 frames tried, 35 ok at 27 stops, 14 failed (no clear sky at the top of the frame; reported, not dropped). Median |error| near 0.095° (n 2,016 columns), mid 0.196° (n 951), **far 4.30° (n 26,861, P90 7.89°)**. 49 check composites in `data/interim/horizon/validation/overlays/`. The far figure is not quotable yet: see Blocked 1.
 - `make horizons` wired (bands → navcam fetch with stop horizons → V2). 58 WS3 KATs pass; full suite 197 pass; ruff clean. Downloads: Navcam cache 51.1 MB (API JSON + JPG, from `index.json`); MOLA window ≈ 2.2 MB (discovery's measurement for this window; not re-measured); CTX windows 25 MB on disk (network bytes not measured, other agents share the machine counter).
 
+- 2026-11-14T10:50Z: **Canonical bands (C decision 11:15).** `horizon.yaml bands.{ctx_20m,mola_hrsc_200m}.path` now point at WS1's `data/interim/terrain/` bands; `python -m pipeline.horizon.bands` only reports their offsets (`--build` keeps my reference build, unused). Offsets on the canonical bands: CTX − dem_1m **+19.75 m** (p5/p95 −0.41/+47.2; mine was +15.6), CTX − MOLA −0.37 m (levelled). Stop horizons and frame selection rerun offline: the same 49 frames at 36 stops, 35 ok at 27 stops. **V2 median |error| before → after: near 0.095° → 0.095° (n 2,016), mid 0.196° → 0.196° (n 951), far 4.304° → 4.308° (P90 7.890° → 7.894°, n 26,861).** Near and mid use only dem_1m, so they cannot move; the far change is negligible. Pre-switch outputs are kept in `data/interim/horizon/runs/before_bandswitch/`.
+- 2026-11-14T11:00Z: **Pad, stations, ring, cards** (`pipeline/horizon/cards.py`, in `make horizons` after V2):
+  - Pad horizon `horizons/pad.json`, from WS1 `terrain/grid.json` pad (= `pad_default`, kept). The order is WS2 `pad.json` (none yet), then WS1 grid.json, then site.yaml.
+  - Station horizons `horizons/{S}.json` at eye height 1.7 m under the **access-cell rule**, read from WS2's `engine/public/stations.json` (`access_lon/lat`, written 12:01 CET): **S2 and S4 final at their access cells** (27.6 m and 2.1 m from the science point). **S1 has no access cell** (WS2: "38 assessed cells within 50 m, none with a walk home"), so its horizon is at the science coordinate, labelled `science_coordinate_no_access` (not provisional). The cards follow WS2 automatically on rerun.
+  - `public/fp3d/horizon_ring.json` for WS8: pad horizon counting terrain beyond `planning_radius_m` (3.7 km) only, 1,440 azimuths, with `elev_deg`, `dist_m`, `z_m`, `east_m`/`north_m`, `source`. A superset of the dummy ring's keys. I propose this structure for the (free) ring contract to C/WS8.
+  - Landmarks: the 8 IAU features within 80 km, read from D0's gazetteer CSV (a KAT reproduces the discovery 3.5 table to 0.05 km / 0.05°). The landmarks.yaml rule applies (above the skyline, or ≤ 5 km). **From every station only Gediz Vallis (≤ 5 km) qualifies; the other 7 centres are below the computed skyline** (e.g. Aeolis Mons centre +6.1° vs skyline 9.7–13.6°: lower Mount Sharp's own flanks hide it). So S1 and S4 show 1 landmark and S2 shows 0, each with a `landmarks_note`. I did not pad the list.
+  - Panoramas `public/cards/{S}/panorama.png`: 1,440 px wide, true scale, north at the left edge, landmark ticks.
+  - Navcam per station: the nearest V2 frame with status ok and manual_ok not false, with no choice by error. The frame is copied as `navcam.png`, and `overlay.png` is the transparent skyline from that frame's stop horizon. **S1: NLB_826633404 (sol 4834, 523 m), S2: NLB_789347468 (sol 4414, 925 m), S4: NLB_767161116 (sol 4164, 128 m).** All three are north-facing far-fail frames, so the cards show far errors of 4.24° / 3.18° / 6.50°, with near/mid null (no near/mid columns). The fragment says the far class is pending D7. The frames change automatically if the manual check rejects them.
+  - **Card fragments** `public/cards/{S}.json`: navcam, skyline_error_deg (median |error| per class on the card's frame), panorama_png, landmarks, plus observer, provisional, skyline_error_scope and landmarks_note. They validate against the card contract's fields. Manifest (`pipeline__horizon__cards.json`): `navcam_sol.{S}`, `skyline_error_deg.{S}.{class}`, `landmark.{S}.{name}.{bearing_deg,dist_km}`, file `cards/{S}.json`. The V2 fragment no longer writes `skyline_error_deg.*`.
+  - **C request (WS9 F22): `navcam_frames.json` now tags each card frame**: `station` S1/S2/S4, plus `stations[]`, `station_dist_m`, `station_observer` (`station_source: card_frame`). The tags are rewritten on every cards run.
+- 2026-11-14T11:05Z: **D7 manual-check sheet** in `data/interim/horizon/validation/manual_check/`: `manual_check.csv` (one row per frame with predicted vs detected per class and an empty `verdict`/`note`), a captioned composite per frame (`{image_id}.jpg`), `contact_01-04.jpg` and `HOW_TO.txt`.
+  - **39 frames: 10 sampled (20 %), 21 far-fail (|far median| > 2°), 14 V2-failed** (sets overlap). Verdicts: ok / rim_not_visible / detector_wrong / model_wrong / unsure.
+  - Run `python -m pipeline.validation.v2_skyline --import-manual <csv>` to write `manual_checks.json`. The next V2 run then leaves the rejected frames out of the summary.
+  - Visibility-range diagnostic: the cut range (2/5/10/20/30 km) whose predicted skyline best matches the detector, drawn in green. **On 19 of the 21 far-fail frames the best match is terrain ≤ 2 km, and 12 of those match within ±0.3°.** The chain is right in the near field, and terrain beyond about 2 km (incl. the rim at 41–57 km) is not seen. Clear-sol frames facing the same way match the rim (e.g. NLB_803472163, az 5°, far error −0.08°). This is evidence for option (a); D7 is not decided.
+- KATs: 14 new (canonical bands, access-cell rule incl. no-access, pad source order, landmark table vs discovery 3.5, landmark visibility, pick rule, panorama geometry, ring geometry, frame choice, fragment contract, station tags, manual-check rows/verdicts, cut-range engine). The full suite has 523 pass; ruff is clean.
+
 ### Doing
 
 - —
 
 ### Next
 
-- Station and pad horizons, panoramas with the 8 IAU landmarks, `horizon_ring.json` for WS8 and card fragments: waiting for `stations.json` and `pad.json` (WS1/WS2; not on disk yet).
-- Manual check of the 10 sampled frames (`manual_check: true` in v2.json) once C decides Blocked 1.
-- Hand the engine API (`bands.load_engine()`, `HorizonEngine.horizons(xs, ys, az_step_deg=1, min_dist_m=500)`), `sky.detect_skyline` and `navcam_frames.json` to WS9.
+- C/user: fill the manual-check sheet (D7). Then run `--import-manual` and `make horizons`. The V2 summary and the card frames update from it.
+- Rerun `make horizons` (or `python -m pipeline.horizon.cards`) when WS2 changes stations.json/pad.json. S3/S5 cards follow once S picks them.
+- Hand to WS9: engine API (`bands.load_engine()`, `HorizonEngine.horizons(xs, ys, az_step_deg=1, min_dist_m=500)`), `sky.detect_skyline`, and `navcam_frames.json` with station tags.
 
 ### Blocked
 
-1. **V2 far class and D7 (C decides).** The chain itself checks out: 13 of 35 ok frames (12 stops) have median error within ±0.5° (e.g. NLB_824771281 at v120_1264: near 0.46°, mid 0.21°). But 21 frames have median error ≤ −2° (−3.2 to −7.6°), and all face north (az 335–30°). There the predicted skyline is the crater rim at 37–54 km (+1 to +1.5°), which is hidden by haze in the image, so the detector finds the lower visible terrain. Options: (a) the 20 % manual check marks such frames `manual_ok: false` ("far rim not visible"), and the far figure is computed over the rest; (b) switch to fully manual (D7); (c) report the far class as is. I have not decided; v2.json is automatic only.
-2. **Duplicate far-field bands (C).** WS1 also built `data/interim/terrain/{ctx_20m,mola_hrsc_200m}.tif` (`farfield.json`) from the same 3 CTX items with the same rejection, and levels CTX to MOLA. I use my own (`data/interim/horizon/bands/`, not levelled), as the session prompt said. Which source is canonical? Switching is a path change in `horizon.yaml bands`.
-3. **Navcam height (C).** Horizons at stops use `navcam_height_m` 1.9 above DEM ground. The per-frame C height above the rover-frame origin is 1.88–1.93 m on the fresh frames; the origin's height above the ground is unknown (discovery 3.4). This is left unchanged.
+1. **D7 / V2 far class (C/user decides).** Evidence is now on the sheet (above). Options are unchanged: (a) manual verdicts drop the frames where the rim is not visible; (b) fully manual; (c) report as is. Until then the automatic far median stays 4.31°, and the card far errors (3.2–6.5°) come from the same far-fail frames.
+2. **Card fragment vs card contract (C).** `make web` copies `horizon/public/cards/{S}.json` straight to `cards/{S}.json`. Until C's merge with WS2's `engine/public/cards/{S}.timeline.json` exists, these files lack `timeline`, `margin_binding` and `contingency`, so they fail `card.schema.json` in make web's validation.
+3. **Band step at 2 km (WS1/C, reported only).** The canonical CTX is +19.75 m above dem_1m where they overlap (median; p95 +47 m). At 2–5 km that can lift predicted skylines by ~0.3–0.6°. It does not explain the 3–7° far failures (see the sheet), but it is a datum question for WS1: dem_1m vs CTX levelled to MOLA.
+4. **Navcam height (C).** Unchanged: 1.9 m above DEM ground at stops (C height 1.88–1.93 m above the rover origin; the origin's height above ground is unknown).
+5. **Landmarks rule yields < 3 (C/S, content).** Only Gediz Vallis qualifies. Options: keep it as is (honest), or show the hidden landmarks' bearings as "behind the skyline" on the panorama (needs a rule change in landmarks.yaml).
 
 ### Assumptions added
 
@@ -428,6 +446,14 @@ All in `config/horizon.yaml`, each with `assumed: true`:
 - `bands`: CTX listing = D0's 500 STAC items at the pad; greedy footprint gain, max 3 items, ≥ 1 % gain; reject an item whose median offset to MOLA-HRSC is > 20 m; radii 34 km (CTX) and 84 km (MOLA-HRSC); 20 m and 200 m grids.
 - `overlay`, `panorama`: colours and sizes (presentation only).
 - Landmarks: the 8 IAU names verified by D0 (discovery 3.5). The informal names are dropped (no verified coordinate). Not used yet.
+- Session 2 (`config/horizon.yaml`, `assumed: true`):
+  - `landmark_rule` (structured copy of landmarks.yaml: 3–6, ≤ 5 km, nearest first; + `above_skyline_tol_deg` 0.05 for ray sampling; label point = gazetteer centre). `landmarks_source` cites discovery 3.5.
+  - `horizon_ring` (pad, beyond `planning_radius_m`).
+  - `card_frame` (nearest ok frame, manual_ok not false).
+  - `manual_check_sheet` (far-fail > 2°, failed frames included, verdict list, cut ranges 2/5/10/20/30 km).
+  - `panorama` `min_el_span_deg` 10, `label_band_px`, `font_px`.
+- The card skyline error is the card frame's own median |error| per class (not the all-stops V2 median).
+- Navcam frame published as PNG (`cards/{S}/navcam.png`, 0.6–0.8 MB each), because the make web rule copies only `cards/*/*.png`.
 
 ## WS4 Conditions
 

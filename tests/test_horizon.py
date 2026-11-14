@@ -313,3 +313,230 @@ def test_band_target_grid_centred_on_pad():
     assert gt[0] <= px - 1000 and gt[0] + w * gt[1] >= px + 1000
     assert gt[3] >= py + 1000 and gt[3] + h * gt[5] <= py - 1000
     assert gt[0] % 20 == 0 and gt[3] % 20 == 0
+
+
+# --------------------------------------------------------------------------------------------
+# Canonical bands (C decision 11:15), stations, pad, ring, landmarks, panorama, card fragments
+# --------------------------------------------------------------------------------------------
+
+def test_engine_reads_canonical_ws1_far_field_bands():
+    """C decision (STATUS Decision log 11:15): the engine reads WS1's terrain/ bands."""
+    from pipeline.horizon.bands import band_paths
+
+    p = band_paths()
+    assert p["ctx_20m"] == hcfg.REPO / "data/interim/terrain/ctx_20m.tif"
+    assert p["mola_hrsc_200m"] == hcfg.REPO / "data/interim/terrain/mola_hrsc_200m.tif"
+    assert p["dem_1m"] == hcfg.REPO / "data/interim/terrain/dem_1m.tif"
+
+
+def test_station_observer_access_cell_rule():
+    """User decision 11:40: the observer stands at the access cell when WS2 publishes it; until
+    then the science coordinate, marked provisional."""
+    from pipeline.horizon.cards import observer_from_station
+
+    s = {"id": "S1", "lon": 137.39, "lat": -4.81}
+    o = observer_from_station(s)
+    assert (o["lon"], o["lat"]) == (137.39, -4.81)
+    assert o["position"] == "science_coordinate" and o["provisional"] is True
+    for acc in ({"access_lon": 137.3905, "access_lat": -4.8102},
+                {"access": {"lon": 137.3905, "lat": -4.8102, "walk_in_m": 21.0}}):
+        o = observer_from_station({**s, **acc})
+        assert (o["lon"], o["lat"]) == (137.3905, -4.8102)
+        assert o["position"] == "access_cell" and o["provisional"] is False
+        assert (o["science_lon"], o["science_lat"]) == (137.39, -4.81)
+    # WS2 session 3 format: access_lon/lat null + access_reason = published, no access cell
+    o = observer_from_station({**s, "access_lon": None, "access_lat": None,
+                               "access_reason": "none walkable within 50 m",
+                               "access": {"nom_104": {"lon": None, "lat": None}}})
+    assert (o["lon"], o["lat"]) == (137.39, -4.81)
+    assert o["position"] == "science_coordinate_no_access" and o["provisional"] is False
+    assert "none walkable" in o["note"]
+
+
+def test_pad_observer_prefers_ws2_pad_then_ws1_grid(tmp_path):
+    import json
+
+    from pipeline.horizon.cards import pad_observer
+
+    eng, ter = tmp_path / "engine", tmp_path / "terrain"
+    eng.mkdir()
+    ter.mkdir()
+    pad = hcfg.site()["pad_default"]
+    o = pad_observer(eng, ter)
+    assert (o["lon"], o["lat"]) == (pad["lon"], pad["lat"]) and "site.yaml" in o["source"]
+    (ter / "grid.json").write_text(json.dumps({"pad": {"lon": 137.383, "lat": -4.807}}))
+    o = pad_observer(eng, ter)
+    assert (o["lon"], o["lat"]) == (137.383, -4.807) and "grid.json" in o["source"]
+    (eng / "pad.json").write_text(json.dumps({"pad": {"lon": 137.384, "lat": -4.808}}))
+    o = pad_observer(eng, ter)
+    assert (o["lon"], o["lat"]) == (137.384, -4.808) and "pad.json" in o["source"]
+
+
+IAU_CSV = hcfg.REPO / "data/raw/discovery/iau_mars.csv"
+# docs/discovery.md 3.5: (distance km, bearing deg) from pad_default, great circle on R 3,396.19 km
+DISCOVERY_LANDMARKS = {
+    "Gediz Vallis": (4.3, 131.5), "Yellowknife": (13.8, 14.3), "Sakarya Vallis": (17.7, 190.0),
+    "Aeolis Palus": (20.3, 6.6), "Aeolis Mons": (31.9, 121.0), "Peace Vallis": (36.7, 345.6),
+    "Gale": (41.8, 142.7), "Dulce Vallis": (49.8, 269.1),
+}
+
+
+@pytest.mark.skipif(not IAU_CSV.exists(), reason="IAU gazetteer CSV not cached (discovery 3.5)")
+def test_iau_landmarks_within_80km_match_discovery_table():
+    from pipeline.horizon.cards import load_iau_landmarks
+    from pipeline.horizon.geo import great_circle
+
+    pad = hcfg.site()["pad_default"]
+    lms = load_iau_landmarks(IAU_CSV, pad["lon"], pad["lat"])
+    assert {lm["name"] for lm in lms} == set(DISCOVERY_LANDMARKS)
+    for lm in lms:
+        b, d = great_circle(pad["lon"], pad["lat"], lm["lon"], lm["lat"])
+        want_d, want_b = DISCOVERY_LANDMARKS[lm["name"]]
+        assert round(d / 1000, 1) == pytest.approx(want_d, abs=0.051)
+        assert round(b, 1) == pytest.approx(want_b, abs=0.051)
+
+
+@pytest.fixture(scope="module")
+def cone_engine():
+    """Flat plane (z 0) to 82 km with a 1,000 m cone (radius 5 km) whose apex is 30 km north."""
+    res = 200.0
+    n = int(round(2 * 82_000.0 / res)) + 1
+    c = (np.arange(n) * res) - 82_000.0
+    xx, yy = np.meshgrid(c, -c)
+    r = np.hypot(xx, yy - 30_000.0)
+    z = np.clip(1000.0 * (1.0 - r / 5000.0), 0.0, None)
+    return HorizonEngine([band_from_centers("mola_hrsc_200m", z, -82_000.0, 82_000.0, res)])
+
+
+def test_landmark_on_skyline_peak_is_visible_and_behind_it_is_hidden(cone_engine):
+    from pipeline.horizon.cards import landmark_view
+
+    prof = cone_engine.horizon(0.0, 0.0)
+    obs = {"x": 0.0, "y": 0.0, "z": prof.observer["z"]}
+    apex = landmark_view(obs, {"name": "apex", "x": 0.0, "y": 30_000.0}, cone_engine, prof)
+    assert apex["bearing_deg"] == pytest.approx(0.0, abs=1e-6)
+    assert apex["dist_km"] == pytest.approx(30.0)
+    want = math.degrees(math.atan((1000.0 - EYE - curvature_drop(30_000.0)) / 30_000.0))
+    assert apex["el_deg"] == pytest.approx(want, abs=1e-3)
+    assert apex["above_skyline"] is True
+    behind = landmark_view(obs, {"name": "behind", "x": 0.0, "y": 50_000.0}, cone_engine, prof)
+    assert behind["above_skyline"] is False
+    side = landmark_view(obs, {"name": "east", "x": 10_000.0, "y": 0.0}, cone_engine, prof)
+    assert side["bearing_deg"] == pytest.approx(90.0)
+
+
+def test_landmark_pick_rule():
+    """landmarks.yaml rule: 3-6 landmarks that rise above the skyline or are within 5 km;
+    drop_if: below the skyline and > 5 km. Fewer than 3 qualifying are reported, not padded."""
+    from pipeline.horizon.cards import pick_landmarks
+
+    rule = CFG["landmark_rule"]
+    assert (rule["min_n"], rule["max_n"], rule["near_km"]) == (3, 6, 5)
+
+    def v(name, d, above):
+        return {"name": name, "bearing_deg": 10.0, "dist_km": d, "above_skyline": above}
+
+    views = [v("far_hidden", 40, False), v("near_hidden", 4.9, False), v("far_up", 30, True),
+             v("mid_up", 12, True)] + [v(f"up{i}", 20 + i, True) for i in range(5)]
+    picked, note = pick_landmarks(views)
+    names = [p["name"] for p in picked]
+    assert len(picked) == 6 and "far_hidden" not in names and names[0] == "near_hidden"
+    assert names == sorted(names, key=lambda n: next(x["dist_km"] for x in views
+                                                     if x["name"] == n))
+    picked, note = pick_landmarks([v("a", 40, False), v("b", 2, False)])
+    assert [p["name"] for p in picked] == ["b"] and "fewer than 3" in note
+
+
+def test_panorama_rows_follow_profile_and_landmark_tick():
+    from pipeline.horizon.cards import pano_xy, render_panorama
+
+    az = np.arange(1440) * 0.25
+    el = 2.0 + np.sin(np.radians(az))
+    prof = HorizonProfile(az, el, np.full(az.size, 10_000.0), ["ctx_20m"] * az.size,
+                          {"x": 0, "y": 0, "z": 0}, EYE, 0.25)
+    img, meta = render_panorama(prof, [{"name": "Peak", "bearing_deg": 90.0, "dist_km": 10.0,
+                                        "el_deg": 3.0}])
+    pc = CFG["panorama"]
+    a = np.asarray(img.convert("RGB")).astype(int)
+    assert a.shape[1] == int(round(360 * pc["px_per_deg"]))
+    for az_q in (0.0, 90.0, 270.0):
+        x, y_want = pano_xy(meta, az_q, 2.0 + math.sin(math.radians(az_q)))
+        col = a[:, int(round(x))]
+        ground = np.nonzero(np.all(col == pc["ground_rgb"], axis=1))[0]
+        assert abs(ground[0] - y_want) <= 2.0          # first ground pixel under the line
+    x, y = pano_xy(meta, 90.0, 3.0)
+    assert tuple(a[int(round(y)) - 4, int(round(x))]) == tuple(pc["tick_rgb"])
+
+
+def test_horizon_ring_beyond_min_range_and_consistent_points(cone_engine):
+    from pipeline.horizon.cards import ring_doc
+
+    obs = {"id": "pad", "lon": 137.0, "lat": -4.8, "x": 0.0, "y": 0.0}
+    doc = ring_doc(cone_engine, obs, min_range_m=3700.0)
+    n = int(round(360 / CFG["az_step_deg"]))
+    assert len(doc["az_deg"]) == len(doc["elev_deg"]) == len(doc["dist_m"]) == n
+    d = np.array(doc["dist_m"], dtype=float)
+    assert np.nanmin(d) >= 3700.0
+    assert doc["dist_m"][0] == pytest.approx(30_000.0, abs=200.0)      # cone apex due north
+    assert doc["z_m"][0] == pytest.approx(1000.0, abs=1.0)
+    south = n // 2
+    assert doc["z_m"][south] == pytest.approx(0.0, abs=0.05)        # flat plane behind
+    e, nn = doc["east_m"][n // 4], doc["north_m"][n // 4]
+    assert e == pytest.approx(doc["dist_m"][n // 4], abs=0.5) and abs(nn) < 0.5
+    from pipeline.horizon.contracts import validate
+
+    validate(doc, "horizon_ring.schema.json")
+
+
+def test_nearest_suitable_frame_skips_failed_and_manual_rejects():
+    from pipeline.horizon.cards import nearest_suitable_frame
+
+    frames = [{"image_id": "A", "x": 10.0, "y": 0.0}, {"image_id": "B", "x": 20.0, "y": 0.0},
+              {"image_id": "C", "x": 30.0, "y": 0.0}, {"image_id": "D", "x": 40.0, "y": 0.0}]
+    v2 = {"A": {"status": "failed"}, "B": {"status": "ok", "manual_ok": False},
+          "C": {"status": "ok", "manual_ok": None}, "D": {"status": "ok", "manual_ok": True}}
+    f, dist = nearest_suitable_frame((0.0, 0.0), frames, v2)
+    assert f["image_id"] == "C" and dist == pytest.approx(30.0)
+    assert nearest_suitable_frame((0.0, 0.0), frames[:2], v2) == (None, None)
+
+
+def test_card_fragment_validates_against_card_contract_fields():
+    from pipeline.horizon.cards import FRAGMENT_FIELDS, card_fragment
+    from pipeline.horizon.contracts import validate
+
+    frag = card_fragment(
+        "S1", observer={"id": "S1", "position": "science_coordinate", "provisional": True},
+        frame={"image_id": "NLB_X", "sol": 4834, "stop_id": "v121_0"}, frame_dist_m=522.0,
+        frame_errors={"near": 0.1, "mid": None, "far": 4.2},
+        landmarks=[{"name": "Gale", "bearing_deg": 142.7, "dist_km": 41.8, "el_deg": 1.0,
+                    "above_skyline": True}], landmarks_note=None)
+    validate(frag, "card.schema.json", properties=FRAGMENT_FIELDS)
+    assert set(FRAGMENT_FIELDS) == {"navcam", "skyline_error_deg", "panorama_png", "landmarks"}
+    assert frag["navcam"]["url_local"] == "cards/S1/navcam.png"
+    assert frag["navcam"]["overlay_png"] == "cards/S1/overlay.png"
+    assert frag["panorama_png"] == "cards/S1/panorama.png"
+    assert frag["provisional"] is True
+    none = card_fragment("S2", observer={"id": "S2", "provisional": False}, frame=None,
+                         frame_dist_m=None, frame_errors=None, landmarks=[], landmarks_note="x")
+    validate(none, "card.schema.json", properties=FRAGMENT_FIELDS)
+    assert none["navcam"] == {"sol": None, "image_id": None, "url_local": None,
+                              "overlay_png": None}
+    assert none["skyline_error_deg"] == {"near": None, "mid": None, "far": None}
+
+
+def test_tag_station_frames_for_ws9():
+    """C request: the card frame of each station carries station = S in navcam_frames.json;
+    re-runs clear old card tags, keep stop-rule tags, and a shared frame lists all stations."""
+    from pipeline.horizon.cards import tag_station_frames
+
+    doc = {"frames": [{"image_id": "A", "station": None}, {"image_id": "B", "station": "S4"},
+                      {"image_id": "C", "station": None}]}
+    tag_station_frames(doc, {"S1": {"image_id": "A", "dist_m": 522.04, "position": "x"},
+                             "S2": {"image_id": "A", "dist_m": 900.0, "position": "y"}})
+    a = doc["frames"][0]
+    assert a["station"] == "S1" and a["stations"] == ["S1", "S2"]
+    assert a["station_dist_m"] == {"S1": 522.0, "S2": 900.0}
+    assert doc["frames"][1]["station"] == "S4" and "station_source" not in doc["frames"][1]
+    tag_station_frames(doc, {"S2": {"image_id": "C", "dist_m": 10.0, "position": "z"}})
+    assert doc["frames"][0]["station"] is None and "stations" not in doc["frames"][0]
+    assert doc["frames"][2]["station"] == "S2" and doc["frames"][1]["station"] == "S4"

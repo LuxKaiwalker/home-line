@@ -1,7 +1,11 @@
 """Far-field DEM bands for the horizon engine (F12): MOLA-HRSC 200 m and a CTX 20 m mosaic,
 windowed from the public COGs and reprojected to the analysis CRS (site.yaml).
 
-    python -m pipeline.horizon.bands [--only mola|ctx]
+    python -m pipeline.horizon.bands [--build mola|ctx|all]
+
+The engine reads the canonical bands named by horizon.yaml ``bands.{source}.path`` (WS1's
+far-field bands since C's decision at 11:15); without ``--build`` this module only reports the
+height offsets between them. ``--build`` remakes WS3's own reference bands (below).
 
 Inputs (docs/discovery.md 2.4, 2.5):
   * MOLA-HRSC blend v2 (geographic, uncompressed 1-row strips): read with GTIFF_DIRECT_IO=YES so
@@ -200,7 +204,7 @@ def build_ctx(log=print) -> dict:
     disc = Point(*_pad_xy()).buffer(radius, 256)
     mola = OUT / "mola_hrsc_200m.tif"
     if not mola.exists():
-        raise FileNotFoundError(f"{mola}: build the MOLA-HRSC band first (--only mola)")
+        raise FileNotFoundError(f"{mola}: build the MOLA-HRSC band first (--build mola)")
     gt, w, h = target_grid(radius, float(c["res_m"]))
     mosaic = np.full((h, w), np.nan, dtype=np.float32)
     accepted, rejected = [], []
@@ -270,8 +274,15 @@ def band_offsets(paths: dict[str, Path]) -> list[dict]:
 
 
 def band_paths() -> dict[str, Path]:
+    """The bands the engine reads: horizon.yaml ``bands.{source}.path`` (canonical: WS1's
+    far-field bands, C decision 11:15)."""
     c = _cfg()
-    return {"dem_1m": REPO / c["dem_1m"]["path"],
+    return {s: REPO / c[s]["path"] for s in ("dem_1m", "ctx_20m", "mola_hrsc_200m")}
+
+
+def own_band_paths() -> dict[str, Path]:
+    """WS3's reference build (``--build``), kept for comparison only."""
+    return {"dem_1m": REPO / _cfg()["dem_1m"]["path"],
             "ctx_20m": OUT / "ctx_20m.tif", "mola_hrsc_200m": OUT / "mola_hrsc_200m.tif"}
 
 
@@ -298,20 +309,27 @@ def load_engine(log=print):
 
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    ap.add_argument("--only", choices=["mola", "ctx"])
+    ap.add_argument("--build", choices=["mola", "ctx", "all"],
+                    help="rebuild WS3's own reference bands (not used by the engine)")
     a = ap.parse_args(argv)
     os.environ.setdefault("GDAL_HTTP_MAX_RETRY", "3")
     rep_path = OUT / "bands.json"
     rep = json.loads(rep_path.read_text()) if rep_path.exists() else {}
-    if a.only in (None, "mola"):
+    if a.build in ("all", "mola"):
         rep["mola_hrsc_200m"] = build_mola()
-    if a.only in (None, "ctx"):
+    if a.build in ("all", "ctx"):
         rep["ctx_20m"] = build_ctx()
-    rep["offsets"] = band_offsets(band_paths())
+    if a.build:
+        rep["offsets"] = band_offsets(own_band_paths())
+    missing = [str(p) for p in band_paths().values() if not p.exists()]
+    if missing:
+        print(f"canonical bands missing: {missing} (WS1 make terrain)")
+    rep["canonical"] = {s: str(p.relative_to(REPO)) for s, p in band_paths().items()}
+    rep["canonical_offsets"] = band_offsets(band_paths())
     rep["built_utc"] = _now()
     rep_path.parent.mkdir(parents=True, exist_ok=True)
     rep_path.write_text(json.dumps(rep, indent=1))
-    print(json.dumps(rep["offsets"], indent=1))
+    print(json.dumps(rep["canonical_offsets"], indent=1))
     return 0
 
 

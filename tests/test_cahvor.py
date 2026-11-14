@@ -547,8 +547,8 @@ def test_v2_writer_on_synthetic_frames(tmp_path, monkeypatch):
         frag.update(json.loads(p.read_text()))
     assert frag["v2.far.n"]["value"] == doc["summary"]["far"]["n"]
     assert frag["v2.far.median_abs_deg"]["units"] == "deg"
-    assert frag["skyline_error_deg.S4.far"]["value"] < 0.05
-    assert frag["skyline_error_deg.S4.near"]["value"] is None
+    # card keys skyline_error_deg.{S}.* are recorded by pipeline/horizon/cards.py (card file)
+    assert not any(k.startswith("skyline_error_deg.") for k in frag)
     assert frag["v2.n_stops"]["value"] == n_ok
 
 
@@ -582,3 +582,99 @@ def test_predicted_skyline_frac_known_answer():
     assert predicted_skyline_frac(rec(0.0), prof) > 0.99
     # skyline row = CY - F tan(2 deg - pitch) < top band (~10 % of rows) for pitch -19 deg
     assert predicted_skyline_frac(rec(-19.0), prof) == 0.0
+
+
+# --------------------------------------------------------------------------------------------
+# D7 preparation: manual-check sheet (does not decide D7)
+# --------------------------------------------------------------------------------------------
+
+def _v2_frame(i, status="ok", far=None, sample=False):
+    f = {"image_id": f"F{i}", "sol": 4000 + i, "stop_id": f"v1_{i}", "station": None,
+         "status": status, "failure": None if status == "ok" else "no clear sky",
+         "manual_check": sample, "manual_ok": None}
+    if status == "ok":
+        f["summary"] = {c: {"n": 0, "median_deg": None, "median_abs_deg": None,
+                            "p90_abs_deg": None} for c in ("near", "mid")}
+        f["summary"]["far"] = {"n": 100, "median_deg": far, "median_abs_deg": abs(far),
+                               "p90_abs_deg": abs(far) + 1}
+        f["columns"] = {"el_predicted_deg": [1.0, 1.2], "el_detected_deg": [1.0 + far, 1.2 + far],
+                        "distance_class": ["far", "far"], "distance_m": [40000.0, 41000.0],
+                        "az_deg": [350.0, 351.0], "error_deg": [far, far]}
+    return f
+
+
+def test_manual_check_rows_cover_sample_and_far_failures():
+    from pipeline.validation.v2_skyline import manual_check_rows
+
+    lim = CFG["manual_check_sheet"]["far_fail_abs_deg"]
+    doc = {"frames": [_v2_frame(0, far=0.1, sample=True), _v2_frame(1, far=-(lim + 1.0)),
+                      _v2_frame(2, far=0.2), _v2_frame(3, status="failed"),
+                      _v2_frame(4, far=-(lim + 2.0), sample=True)]}
+    rows = manual_check_rows(doc)
+    by = {r["image_id"]: r for r in rows}
+    assert set(by) == {"F0", "F1", "F3", "F4"}           # F2: ok, not sampled, far fine
+    assert by["F0"]["why"] == "sample_20pct"
+    assert by["F1"]["why"] == "far_fail"
+    assert by["F4"]["why"] == "sample_20pct+far_fail"
+    assert by["F3"]["why"] == "frame_failed"
+    assert by["F1"]["far_err_median_deg"] == pytest.approx(-(lim + 1.0))
+    assert by["F1"]["far_pred_el_median_deg"] == pytest.approx(1.1)
+    assert by["F1"]["far_det_el_median_deg"] == pytest.approx(1.1 - (lim + 1.0))
+    assert all(r["verdict"] == "" for r in rows)
+
+
+def test_manual_verdicts_import(tmp_path):
+    import csv
+
+    from pipeline.validation.v2_skyline import read_manual_verdicts
+
+    p = tmp_path / "sheet.csv"
+    with p.open("w", newline="") as fh:
+        w = csv.DictWriter(fh, fieldnames=["image_id", "verdict", "note"])
+        w.writeheader()
+        w.writerows([{"image_id": "A", "verdict": "ok", "note": ""},
+                     {"image_id": "B", "verdict": "rim_not_visible", "note": "haze"},
+                     {"image_id": "C", "verdict": "", "note": ""}])
+    assert read_manual_verdicts(p) == {"A": True, "B": False}
+    with p.open("a", newline="") as fh:
+        fh.write("D,maybe,\n")
+    with pytest.raises(ValueError):
+        read_manual_verdicts(p)
+
+
+def test_cut_engine_truncates_sampling_and_cut_error_known_answer():
+    from pipeline.horizon.rays import DemBand, HorizonEngine, HorizonProfile
+    from pipeline.validation.v2_skyline import best_cut, cut_engine, cut_error
+
+    def plane(src, half, res, z=0.0, wall=None):
+        n = int(round(2 * half / res)) + 1
+        zz = np.full((n, n), z)
+        if wall is not None:  # wall of height wall[1] from x = wall[0] eastwards
+            xs = np.arange(n) * res - half
+            zz[:, xs >= wall[0]] = wall[1]
+        return DemBand.from_transform(src, zz, (-half - res / 2, res, 0, half + res / 2, 0, -res))
+
+    eng = HorizonEngine([plane("ctx_20m", 40_000.0, 20.0, wall=(25_000.0, 2000.0)),
+                         plane("mola_hrsc_200m", 90_000.0, 200.0)])
+    c = cut_engine(eng, 5000.0)
+    assert [s_["to_m"] for s_ in c.cfg["sampling"]] == [2000.0, 5000.0, 5000.0]
+    d = np.array(c.horizon(0.0, 0.0, z_obs=1.9).distance_m)
+    assert np.nanmax(d) <= 5000.0                # nothing sampled beyond the cut
+    # wall at 25 km east: seen with the 30 km cut, not with the 20 km cut
+    obs = {"x": 0.0, "y": 0.0, "z": 1.9}
+    p30 = cut_engine(eng, 30_000.0).horizon(0.0, 0.0, z_obs=1.9)
+    p20 = cut_engine(eng, 20_000.0).horizon(0.0, 0.0, z_obs=1.9)
+    i = int(round(90 / CFG["az_step_deg"]))
+    assert p30.elevation_deg[i] > 4.0 and p20.elevation_deg[i] < 0.0
+    entry = {"columns": {"az_deg": [89.0, 90.0, 91.0],
+                         "el_detected_deg": [float(p20.elevation_deg[i])] * 3,
+                         "distance_class": ["far"] * 3}}
+    km, err, _ = best_cut(entry, eng, obs, 0.25)
+    assert km in (2.0, 5.0, 10.0, 20.0) and abs(err) < 0.01
+    az = np.arange(1440) * 0.25
+    prof = HorizonProfile(az, np.full(1440, 1.0), np.full(1440, 9000.0), ["x"] * 1440,
+                          {"x": 0, "y": 0, "z": 0}, 1.9, 0.25)
+    entry = {"columns": {"az_deg": [10.0, 20.0, 30.0], "el_detected_deg": [1.5, 1.4, 9.0],
+                         "distance_class": ["far", "far", "near"]}}
+    assert cut_error(entry, prof) == pytest.approx(0.45)
+    assert cut_error({"columns": {}}, prof) is None
