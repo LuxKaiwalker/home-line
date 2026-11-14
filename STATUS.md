@@ -169,15 +169,15 @@ Branch: `ws3-horizon`
 
 ### Done
 
-- —
+- 2026-11-14T10:05Z: M1 horizon ray engine (`pipeline/horizon/rays.py`, Numba, 1,440 rays, sampling 1 m / 20 m / 200 m from `horizon.yaml`, curvature d²/2R, coarser-band fallback, NaN = unknown) and CAHV/CAHVOR/CAHVORE projection + rover→site attitude chain (`pipeline/horizon/cahvor.py`). Ported from the pre-H0 reference code, checked against fresh contracts v1.0.0 and discovery.md. Synthetic KATs pass (36): curvature drop 58.9 m at 20 km; 100 m wall at 1 km from 1.7 m = 5.61°; flat plane = −dip within 0.01°; projection round trip < 0.5 px; attitude chain round trip. Horizon JSON validates against `horizon.schema.json`.
 
 ### Doing
 
-- —
+- Navcam frame cache for focus-area drive ends (`data/raw/navcam/`), real-frame CAHVOR KATs.
 
 ### Next
 
-- —
+- Frame selection and sky detector; real horizons once WS1 `dem_1m.tif` is final.
 
 ### Blocked
 
@@ -185,7 +185,7 @@ Branch: `ws3-horizon`
 
 ### Assumptions added
 
-- —
+- `horizon.yaml band_fallback: coarser` (assumed): a sample with no data in its configured band falls back to the next coarser band given.
 
 ## WS4 Conditions
 
