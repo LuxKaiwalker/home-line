@@ -223,3 +223,65 @@ def grids_doc() -> dict:
         "radius_note": f"planning_radius_m = {r} m; half-widths are rounded up to whole cells "
                        f"(3 m grid: +/- {half3:g} m)",
     }
+
+
+# --------------------------------------------------------------------------- terrain checks
+
+
+def _state_pct(s: np.ndarray) -> dict:
+    n = s.size
+    return {"assessed": _r(100 * np.count_nonzero(s == ASSESSED) / n),
+            "blocked": _r(100 * np.count_nonzero(s == BLOCKED) / n),
+            "unknown": _r(100 * np.count_nonzero((s != ASSESSED) & (s != BLOCKED)) / n)}
+
+
+def conservative_summary(nominal: np.ndarray, conservative: np.ndarray, g: G.Grid, pad_xy,
+                         radii: dict, *, nogo_deg: float, v1_rmse_deg: float,
+                         v1_source: str) -> dict:
+    """Shares of the conservative cell states (brief WS1 task 8) in each flat disc and over the
+    whole 3 m grid, with the nominal blocked share and the cells newly blocked by the lower limit
+    (nominal-assessed, conservative-blocked). Percentages of all disc cells, like ``discs``."""
+    from .coverage import disc
+
+    rows = []
+    for b, r in radii.items():
+        d = disc(g, pad_xy, r)
+        n = int(d.sum())
+        row = {"budget_min": int(b), "radius_m": round(float(r), 1),
+               **disc_state_pct(conservative, d)}
+        if n:
+            nb = np.count_nonzero(nominal[d] == BLOCKED)
+            cb = np.count_nonzero(conservative[d] == BLOCKED)
+            row["nominal_blocked_pct"] = _r(100 * nb / n)
+            row["newly_blocked_pct"] = _r(100 * (cb - nb) / n)
+        else:
+            row["nominal_blocked_pct"] = row["newly_blocked_pct"] = None
+        rows.append(row)
+    return {"nogo_deg": round(float(nogo_deg), 3), "v1_rmse_deg": round(float(v1_rmse_deg), 3),
+            "rule": "3 m cell blocked if its max 1 m slope > nogo_deg = 20 - V1 RMSE "
+                    "(config/site.yaml slope.nogo_deg.conservative); unknown cells unchanged",
+            "v1_source": v1_source, "raster": "data/interim/terrain/cellstate_3m_conservative.tif",
+            "discs": rows, "grid_pct": _state_pct(conservative),
+            "nominal_grid_pct": _state_pct(nominal)}
+
+
+def terrain_checks(xcheck: dict | None, slope_summary: dict | None,
+                   conservative: dict | None) -> dict:
+    """``terrain_checks`` block of validation/coverage.json: the WS1 numbers that have no web file
+    of their own (HiRISE cross-check, 1 m vs 5 m slope, blocked share of known cells, the
+    conservative cell states), so their manifest keys cite a published path."""
+    xc = None
+    if xcheck:
+        xc = {"definition": xcheck.get("definition"),
+              "items": {pid: {"median_m": it["median_m"], "p90_abs_m": it["p90_abs_m"]}
+                        for pid, it in xcheck["items"].items()}}
+    sc = bp = None
+    if slope_summary:
+        cmp_ = slope_summary["slope_compare"]
+        sc = {"median_abs_diff_deg": cmp_["median_abs_diff_deg"],
+              "definition": cmp_.get("definition")}
+        bp = {str(b): row["blocked_pct_of_known"] for b, row in slope_summary["discs"].items()}
+    return {"note": "WS1 terrain checks shown on the scorecard; never used for routing "
+                    "(HiRISE DTMs) or reported from data/interim files",
+            "hirise_xcheck": xc, "slope_compare": sc, "blocked_pct_of_known": bp,
+            "conservative": conservative}
