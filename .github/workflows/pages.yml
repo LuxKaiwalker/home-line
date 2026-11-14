@@ -3,6 +3,8 @@
 # web/public/data/ (filled by `make web`) and never data-dummy/. Dummy builds are never deployed.
 # Gated on CI: runs after the "ci" workflow succeeds for a push to main (and deploys exactly the
 # commit CI tested), or by manual dispatch, which first checks that "ci" succeeded on that commit.
+# The gate keys on "ci" only, never on "server" (server.yml): the static site never depends on
+# the backend (D48; the static fallback is never cut).
 name: pages
 
 on:
