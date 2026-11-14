@@ -872,7 +872,7 @@ Keep the partner line, the storm, the scorecard and any near-field number out of
 | # | Decision | Options | Recommendation | Decide by |
 | --- | --- | --- | --- | --- |
 | D3 | Source mask origin | Mosaic footprints if published vs HiRISE DTM footprints from STAC | Use STAC footprints if the mosaic gives none → ✅ **Decided 2026-11-14 11:24 CET (fresh run): A**, STAC footprint quads (mosaic footprints not published, per docs/discovery.md) | G0 |
-| D7 | Sky detection | Automatic + 20% manual check vs fully manual | Automatic + manual check; fully manual if the detector fails by Sat 23:00 | Sat 23:00 |
+| D7 | Sky detection | Automatic + 20% manual check vs fully manual | Automatic + manual check; fully manual if the detector fails by Sat 23:00 → ✅ **Decided 2026-11-14 15:01 (user): automatic only, no manual review**; near/mid V2 quoted; far class reported as not validated (rim hidden by haze in 21 north-facing frames); F22 is an optional add-on (D19) | Sat 23:00 |
 | D8 | Final station list | S1–S5 as above vs more stations from F7 | S1–S5 plus up to 3 from F7 scoring (≤8 for siting) | Sat 23:00 |
 | D16 | X8 visual odometry go/no-go | Go / no-go | Decided from the probe by the rule in §2.4 → ✅ **Decided 2026-11-14 11:24 CET (fresh run): go at 256² only** (probe: rule met 5/5 drives at 256², 0/5 full res) | H2 |
 | D17 | Fix-interval criterion | 95% radial error ≤ margin radius / 99% / 1σ | 95% | H10 |
