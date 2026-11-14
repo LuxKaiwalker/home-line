@@ -53,3 +53,17 @@ clock:
   sun_series_step_min: 5           # WS4 (assumed): clock.json EVA sun-series spacing
   assumed: [sun_horizon_elevation_deg, eva_start_lmst_h, eva_sol_ref_utc, sun_series_step_min]   # added by WS4
 event_weekend: {ls_deg: 22, mars_year: 39}
+# D39 (user 2026-11-14 16:20): ONE shared storm-timing key, read by WS2 (margins) and WS7 (HUD storm replay).
+# Semantics: the 20 May 2024 RAD storm series (rad.json storm_2024.series) is shifted onto the EVA clock
+# so that its tripwire (rad.json storm_2024.tripwire_utc) fires at the EVA minute t* where the route's
+# T_home is largest. T_home(t) = minutes to walk home from the position at EVA minute t (engine output).
+# t* = argmax over the route's samples of T_home (first sample on a tie), in minutes since EVA start
+# (EVA start = clock.eva_start_lmst_h, D31). Mapping, both sides in minutes:
+#   storm_utc(eva_min) = tripwire_utc + (eva_min - t*)  ->  storm onset at EVA minute t* - (tripwire_utc - onset_utc)
+# Helper: pipeline/conditions/storm_replay.py (storm_offset_utc, tripwire_target_min, storm_utc_at, eva_min_of).
+storm_replay:
+  tripwire_at: "route_max_t_home"  # D39: the anchor rule above (only value implemented)
+  anchor_event: "tripwire"         # D39: the storm-series instant aligned to t* (rad.json storm_2024.tripwire_utc)
+  eva_clock_units: "min"           # t*, eva_min and T_home are minutes since EVA start (D31: 09:00 LMST)
+  tie_break: "first"               # WS4 (assumed): earliest sample if T_home has several equal maxima
+  assumed: [tie_break]             # added by WS4
