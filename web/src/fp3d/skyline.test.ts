@@ -234,6 +234,18 @@ describe('station rings (fp3d/index.json station_rings, WS3 station horizons bey
     // station rings alone (no WS3 ring file) still draw
     expect(farCurtains(null, { rings: [stationRing] }, eqc, sq, opts)!.drawn).toBe(359)
   })
+  it('breaks a station ring at a distance jump (no mid-air top edge seen from elsewhere)', () => {
+    // S1 on real data: 12.2 km at az 140.75, 7.9 km at az 141; joined, the top edge between them
+    // hangs in the air and stood 0.36 deg above the pad's horizon at az 153
+    const jump = { ...stationRing, dist_m: stationRing.dist_m.map((v, k) => (v === null ? null : k < 180 ? 70000 : 40000)) }
+    const so = { ...opts, stationMaxDistanceRatio: FP3D_CONFIG.ring.stationMaxDistanceRatio }
+    expect(FP3D_CONFIG.ring.stationMaxDistanceRatio).toBe(1.25) // config/fp3d.yaml
+    const c = farCurtains(null, { rings: [jump] }, eqc, sq, so)!
+    expect(c.segments.map((s) => s.length).sort((a, b) => a - b)).toEqual([179, 180])
+    // the WS3 ring keeps its own rule (always joined)
+    const both = farCurtains({ ...pad, dist_m: pad.dist_m.map((_, k) => (k < 180 ? 15000 : 40000)) }, { rings: [jump] }, eqc, sq, so)!
+    expect(both.segments.length).toBe(3)
+  })
   it('ignores a malformed station_rings block', () => {
     expect(farCurtains(pad, { rings: 'x' }, eqc, sq, opts)!.segments).toHaveLength(1)
     expect(farCurtains(pad, 42, eqc, sq, opts)!.segments).toHaveLength(1)
@@ -252,6 +264,7 @@ function runCheck(root: string, check: SkylineCheck, label: string) {
   const ring = farCurtains(raw, idx.station_rings, parseEqc(idx.chunk_grid.crs), squareOf(idx), {
     skirtDeg: FP3D_CONFIG.ring.skirtDeg,
     maxDistanceRatio: FP3D_CONFIG.ring.maxDistanceRatio,
+    stationMaxDistanceRatio: FP3D_CONFIG.ring.stationMaxDistanceRatio,
   })
   const surf = new DrawnSurface(t)
   const rows: string[] = []
@@ -314,7 +327,7 @@ describe('SPEC F20: rendered skyline within 0.5 deg of the computed horizon', ()
     const inRule = res.filter((r) => r.inRule)
     expect(inRule.map((r) => r.id)).toContain('pad')
     for (const r of inRule) expect(r.cmp.maxAbsDeg).toBeLessThanOrEqual(real!.skyline_check!.tolerance_deg)
-  })
+  }, 120_000) // 7 stations x 360 rays over the near/far lattices and 7 ring curtains: ~6 s here
 })
 
 // --------------------------------------------------------------------------- sun track

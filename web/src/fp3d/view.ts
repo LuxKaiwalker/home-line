@@ -151,6 +151,7 @@ async function loadAll(
   const ring: RingCurtain | null = farCurtains(ws3Ring, index.station_rings, eqc, { west, north, size: index.far.width * index.far.res_m }, {
     skirtDeg: opts.cfg.ring.skirtDeg,
     maxDistanceRatio: opts.cfg.ring.maxDistanceRatio,
+    stationMaxDistanceRatio: opts.cfg.ring.stationMaxDistanceRatio,
   })
 
   const chunks = index.chunk_grid.chunks
