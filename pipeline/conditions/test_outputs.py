@@ -78,16 +78,16 @@ def test_real_outputs_and_margins():
 
 
 def test_ground_temperature_dropped_d37():
-    # D37: only air temperature and pressure (plus UV) are kept; no GTS column, no gts feed field
-    assert CFG["rems"]["variables"] == ["air_temperature", "pressure", "uv_abc"]
-    assert "ground_temperature" in CFG["rems"]["dropped"]
+    # D37: air temperature and pressure only; no GTS or UV column, no gts/uv feed field
+    assert CFG["rems"]["variables"] == ["air_temperature", "pressure"]
+    assert {"ground_temperature", "uv"} <= set(CFG["rems"]["dropped"])
     cols = rems.columns(CFG)
-    assert 7 not in cols and set(cols) == {15, 37, 20}
+    assert 7 not in cols and 20 not in cols and set(cols) == {15, 37}
     assert all("ground" not in name.lower() for name, _, _ in cols.values())
     feed = {"soles": [{"sol": "4995", "terrestrial_date": "2026-08-25", "ls": "341",
                        "min_temp": "-70", "max_gts_temp": "4", "min_gts_temp": "-84"}]}
     lf = rems.latest_feed(feed, CFG, datetime(2026, 11, 14, 12, tzinfo=UTC))
-    assert not any("gts" in k for k in lf["values"])
+    assert not any("gts" in k or "uv" in k for k in lf["values"])
     assert all("gts" not in fk for fk in rems.crosscheck_fields(CFG).values())
 
 
@@ -96,8 +96,8 @@ def test_real_rems_has_no_ground_temperature():
     remsj = json.loads((OUT / "rems.json").read_text())
     rems.validate(remsj)
     text = json.dumps(remsj).lower()
-    assert "gts" not in text and "ground" not in text
-    assert [v["units"] for v in remsj["variables"]] == ["degC", "Pa", "W/m2"]
+    assert "gts" not in text and "ground" not in text and "uv" not in text
+    assert [v["units"] for v in remsj["variables"]] == ["degC", "Pa"]
 
 
 def test_rewrite_drops_stale_manifest_keys(tmp_path):
