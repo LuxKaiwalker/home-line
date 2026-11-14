@@ -140,7 +140,7 @@ function CoverageSection() {
     <Show l={l} what="Coverage and co-registration">
       {({ coverage, coreg, pad }) => (
         <>
-          {coverage ? <LooseTable value={coverage} file="validation/coverage.json" /> : <p class="muted">validation/coverage.json not available yet (WS1).</p>}
+          {coverage ? <CoverageTable c={coverage} /> : <p class="muted">validation/coverage.json not available yet (WS1).</p>}
           {pad && (
             <p>
               Pad 30-min flat disc assessed: <Num v={pad.pad.checks.assessed_pct_30min} units="%" file="pad.json" k="pad.checks.assessed_pct_30min" /> (rule: at
@@ -518,5 +518,66 @@ function KatSection() {
         )
       }
     </Show>
+  )
+}
+
+interface CoverageDisc {
+  budget_min: number
+  radius_m: number | null
+  assessed_pct: number | null
+  blocked_pct: number | null
+  unknown_pct: number | null
+}
+
+/** WS1 coverage (F1, F16): cell states of the flat 30/60-min discs, DEM source shares, pad check. */
+function CoverageTable({ c }: { c: Record<string, unknown> }) {
+  const F = 'validation/coverage.json'
+  const discs = Array.isArray(c.discs) ? (c.discs as CoverageDisc[]) : null
+  const src = c.source_fractions_pct as Record<string, number | null> | undefined
+  const pc = c.pad_check as { budget_min: number; min_assessed_pct: number; pass: boolean; known_pct: number | null; basis?: string } | undefined
+  if (!discs) return <LooseTable value={c} file={F} />
+  return (
+    <>
+      <table class="mini">
+        <thead>
+          <tr>
+            <th>Flat disc around the pad</th>
+            <th class="r">Assessed</th>
+            <th class="r">Blocked</th>
+            <th class="r">Unknown</th>
+          </tr>
+        </thead>
+        <tbody>
+          {discs.map((d) => (
+            <tr>
+              <td>
+                {d.budget_min} min (radius <Num v={d.radius_m} units="m" file={F} />)
+              </td>
+              <td class="r">
+                <Num v={d.assessed_pct} units="%" file={F} k={`coverage.disc_${d.budget_min}.assessed_pct`} />
+              </td>
+              <td class="r">
+                <Num v={d.blocked_pct} units="%" file={F} k={`coverage.disc_${d.budget_min}.blocked_pct`} />
+              </td>
+              <td class="r">
+                <Num v={d.unknown_pct} units="%" file={F} k={`coverage.disc_${d.budget_min}.unknown_pct`} />
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      {src && (
+        <p>
+          Elevation source over the planning extent: HiRISE <Num v={src.hirise ?? null} units="%" file={F} k="coverage.source_fractions_pct.hirise" />, CTX/other{' '}
+          <Num v={src.ctx ?? null} units="%" file={F} k="coverage.source_fractions_pct.ctx" />, no data <Num v={src.nodata ?? null} units="%" file={F} k="coverage.source_fractions_pct.nodata" />.
+        </p>
+      )}
+      {pc && (
+        <p>
+          Pad check: <Num v={pc.known_pct} units="%" file={F} k="validation.coverage.pad_check.known_pct" /> of the {pc.budget_min}-min disc has terrain data (needs{' '}
+          <Num v={pc.min_assessed_pct} units="%" file={F} k="validation.coverage.pad_check.min_assessed_pct" />): {pc.pass ? <b class="ok">pass</b> : <b class="bad">fail</b>}.
+        </p>
+      )}
+    </>
   )
 }

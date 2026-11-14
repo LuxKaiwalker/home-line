@@ -109,6 +109,7 @@ export const CITED = {
   o2EffortRateFormula: cite<string>('crew.yaml', crewRaw, 'o2_margin.effort_rate_L_min'),
   stationTaskRateLMin: cite<number>('crew.yaml', crewRaw, 'o2_margin.station_task_rate_L_min'),
   accessRadiusM: cite<number>('variants.yaml', variantsRaw, 'route.access_radius_m'),
+  dwellMin: cite<number>('stations.yaml', stationsRaw, 'dwell_min'),
   walkbackBudgetsMin: cite<number[]>('crew.yaml', crewRaw, 'walkback_budgets_min'),
   suitMassesKg: cite<number[]>('crew.yaml', crewRaw, 'suit_masses_kg'),
   anchorVo2: cite<number>('crew.yaml', crewRaw, 'anchor.vo2_ml_kg_min'),

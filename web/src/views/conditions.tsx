@@ -156,12 +156,12 @@ function Context() {
           <h3>
             Mars clock and sun <StatusTag kind="modelled" />
           </h3>
-          {clock ? <LooseTable value={clock} file="conditions/clock.json" /> : <p class="muted">conditions/clock.json not available yet (WS4).</p>}
+          {clock ? <ClockView c={clock} /> : <p class="muted">conditions/clock.json not available yet (WS4).</p>}
 
           <h3>
             Weather (REMS same-season climatology) <StatusTag kind="real" />
           </h3>
-          {rems ? <LooseTable value={rems} file="conditions/rems.json" /> : <p class="muted">conditions/rems.json not available yet (WS4).</p>}
+          {rems ? <RemsTable r={rems} /> : <p class="muted">conditions/rems.json not available yet (WS4).</p>}
           <p class="caption">
             The REMS feed is stale since <CfgNum v={CITED.remsStaleSince.value} source={CITED.remsStaleSince.source} />.
           </p>
@@ -245,3 +245,98 @@ function ConditionsView() {
 }
 
 export const view = preactView(() => <ConditionsView />)
+
+const CF = 'conditions/clock.json'
+
+/** WS4 clock.json: the simulated EVA window and daylight, and Mars time at H0 (structure from WS4). */
+function ClockView({ c }: { c: Record<string, unknown> }) {
+  const eva = c.eva as Record<string, unknown> | undefined
+  const h0 = c.h0 as Record<string, unknown> | undefined
+  if (!eva || !h0) return <LooseTable value={c} file={CF} />
+  const n = (o: Record<string, unknown>, f: string) => (typeof o[f] === 'number' || typeof o[f] === 'string' ? (o[f] as number | string) : null)
+  return (
+    <>
+      <dl class="kv-grid">
+        <dt>
+          Simulated EVA <span class="tag tag-simulated">simulated</span>
+        </dt>
+        <dd>
+          sol <Num v={n(eva, 'msl_sol')} file={CF} k="clock.eva.msl_sol" />, start <Num v={n(eva, 'start_lmst')} file={CF} k="clock.eva.start_lmst" /> LMST (
+          <Num v={n(eva, 'start_utc')} file={CF} k="clock.eva.start_utc" fmt={utcLabel} />) to <Num v={n(eva, 'end_utc')} file={CF} k="clock.eva.end_utc" fmt={utcLabel} />,{' '}
+          <Num v={n(eva, 'eva_min')} units="min" file={CF} k="clock.eva.eva_min" />
+        </dd>
+        <dt>Daylight left at EVA start</dt>
+        <dd>
+          <b>
+            <Num v={n(eva, 't_dark_min')} units="min" file={CF} k="clock.eva.t_dark_min" />
+          </b>{' '}
+          (sunset on a flat horizon <Num v={n(eva, 'sunset_flat_utc')} file={CF} k="clock.eva.sunset_flat_utc" fmt={utcLabel} />)
+        </dd>
+        <dt>Mars time at H0</dt>
+        <dd>
+          sol <Num v={n(h0, 'msl_sol')} file={CF} k="clock.h0.msl_sol" />, LMST <Num v={n(h0, 'lmst')} file={CF} k="clock.h0.lmst" />, Ls{' '}
+          <Num v={n(h0, 'ls_deg')} units="deg" file={CF} k="clock.h0.ls_deg" />, Mars year <Num v={n(h0, 'mars_year')} file={CF} k="clock.h0.mars_year" />; one-way light time{' '}
+          <Num v={n(h0, 'light_time_min')} units="min" file={CF} k="clock.h0.light_time_min" />
+        </dd>
+      </dl>
+      {typeof eva.note === 'string' && <p class="caption">{eva.note}</p>}
+      {typeof c.algorithm === 'string' && <p class="caption">Clock: {c.algorithm}.</p>}
+    </>
+  )
+}
+
+interface RemsVar {
+  name: string
+  units: string | null
+  n_sols?: number
+  daily_min?: { median: number | null; p10: number | null; p90: number | null }
+  daily_max?: { median: number | null; p10: number | null; p90: number | null }
+}
+
+/** WS4 rems.json: same-season climatology per variable (median and P10-P90 of daily min and max). */
+function RemsTable({ r }: { r: Record<string, unknown> }) {
+  const RF = 'conditions/rems.json'
+  const vars = Array.isArray(r.variables) ? (r.variables as RemsVar[]) : null
+  if (!vars) return <LooseTable value={r} file={RF} />
+  const cell = (i: number, which: 'daily_min' | 'daily_max', st?: { median: number | null; p10: number | null; p90: number | null }, units?: string | null) =>
+    st ? (
+      <>
+        <Num v={st.median} units={units} file={RF} k={`rems.variables.${i}.${which}.median`} />{' '}
+        <span class="muted">
+          (<Num v={st.p10} file={RF} k={`rems.variables.${i}.${which}.p10`} /> to <Num v={st.p90} file={RF} k={`rems.variables.${i}.${which}.p90`} />)
+        </span>
+      </>
+    ) : (
+      <span class="num-unknown">unknown</span>
+    )
+  return (
+    <>
+      <table class="mini">
+        <thead>
+          <tr>
+            <th>Variable</th>
+            <th class="r">Daily minimum, median (P10 to P90)</th>
+            <th class="r">Daily maximum, median (P10 to P90)</th>
+          </tr>
+        </thead>
+        <tbody>
+          {vars.map((v, i) => (
+            <tr>
+              <td>{v.name}</td>
+              <td class="r">{cell(i, 'daily_min', v.daily_min, v.units)}</td>
+              <td class="r">{cell(i, 'daily_max', v.daily_max, v.units)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <p class="caption">
+        {typeof r.sols_used === 'number' ? (
+          <>
+            <Num v={r.sols_used} file={RF} k="rems.sols_used" /> sols in the same season
+          </>
+        ) : null}
+        {typeof r.source === 'string' ? ` · ${r.source}` : ''}.
+      </p>
+    </>
+  )
+}

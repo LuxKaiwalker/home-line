@@ -190,3 +190,6 @@ input[type='search'] { background: var(--panel-2); color: var(--ink); border: 1p
 .station-marker.no-access { background: transparent; color: #ffd166; border: 2px dashed #ffd166; }
 .route-stops { margin: 0.25rem 0; padding-left: 1.4rem; }
 .route-stops li { padding: 0.05rem 0; }
+.kv-grid { display: grid; grid-template-columns: max-content 1fr; gap: 0.25rem 1rem; margin: 0.5rem 0; }
+.kv-grid dt { color: var(--muted); }
+.kv-grid dd { margin: 0; }

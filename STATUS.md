@@ -563,23 +563,34 @@ Branch: `ws5-web`
   - Real mode (empty `web/public/data/`): every view shows "not available yet", no errors.
   - `.github/workflows/pages.yml` written (see Blocked): deploys only after `ci` succeeds on a push to main, real data only, refuses dummy, checks no dummy flag in dist and < 5 MB without data.
 
+- 2026-11-14T11:38Z (session 2): **G1 console on real data** (C's make web 3fe841a, contracts v1.1.1), smoke-tested in the browser on every view (`vite build` + preview): 0 unbacked numbers on `/`, `/conditions`, `/scorecard`, `/cuff`, `/trade`; no data problems; no console errors. vitest **310 pass** in 32 files (+8 real-tree KATs in `web/src/data/real.test.ts`, skipped when `web/public/data` is absent); `tsc` clean; build 2.0 MB without data. Commits 30a3fe5 + session-2 follow-up.
+  - Basemap: real HiRISE WebP tiles from `tiles/basemap/tilejson.json` (one source z13–16 on `bounds`, one per partial zoom z17/z18 on `zoom_bounds`, no 404s; KATs). Credit from the tilejson.
+  - Unknown hatch from `terrain/cellstate.png` (A = 0) on `cellstate.json bounds`; layer note shows `terrain.cellstate.pct.unknown` = 0 % (nothing to hatch: all HiRISE). Fallback: slope-field alpha.
+  - Headline nom_104 **12.4 %**, range "conservative end pending V1" to 17.5 % (optimistic): the null low end is said, not shown as a number.
+  - Isochrone slider: stops from the data (2–60 min, **2-min steps**, `isochrone_step_min.nom_104`), labelled as the size fallback.
+  - Route section: pad → S4 → S2 → pad with depart/arrive/back times from the timeline; total **209.74 min** (`route.nom_104.total_min`); "show on map" toggle (route stays out of the default view).
+  - Access-cell rule on the map: science point marker, open-circle access cell, dotted walk-in line; station table "Walk-in" column (S2 27.6 m, S4 2.1 m, S1 "no access cell" with WS2's reason); S1 marker dashed.
+  - Station card: access block (access lon/lat, walk-in dist, rise, mean/max slope, steepest terrain, "not modelled", radius 50 m assumed); S1 "No access cell within 50 m: <reason>"; `margin_binding` null → "none: no route to this station"; margin_min; far skyline error tagged **pending D7**, near/mid null explained; skyline_error_scope caption; landmarks with WS3 keys and `landmarks_note` (S2: none, not padded); a card that fails its contract is reported on the page without hiding the rest.
+  - D9 slider: range/step from `config/conditions.yaml leash.d_allow_range_mgy`/`d_allow_step_mgy`; τ at peak and latest from `rad.json leash.table` rows (manifest `rad.leash.table.{i}.*`); browser formula only for a step the table lacks (none now).
+  - Scorecard: O₂ reserve row = `crew.o2_margin.reserve_min_at_effort_cap` 30 min (= 40.5 L at 1.35 L/min, computed and labelled) replacing `o2_reserve_frac`; station-task O₂ rate and access radius rows; **F22 finding** (station frames S1 788 m, S2 280 m, S4 966 m vs gate 10 m from nav.yaml `skyline_fix_gate.tolerance_from`: none pass → station fixes, fixes.json listed); **VO drift table** (rover analogue label, 5 drives); coverage, REMS and clock now proper tables (were generic leaf tables, now manifest-backed); KAT section reads `validation/kats.json` when WS6 publishes it.
+
 ### Doing
 
 - —
 
 ### Next
 
-- G1: real band layer, route and RAD chart as soon as WS2/WS4 write `web/public/data/` via `make web`.
-- Station card polish once WS3 overlays land; HUD-on-card strip if WS7 is not green at G2.
-- About page: licences and SI statement text (needs the team).
+- Re-check on each make web: con_* scenarios (range low end) once V1 lands; S3/S5 when S positions them; siting/pad.json.
+- HUD-on-card strip if WS7 is not green at G2; about page licences/SI text (needs the team).
 
 ### Blocked
 
-- (user) GitHub Pages: repo `LuxKaiwalker/home-line` is private and `gh` is not logged in; Pages needs a paid plan or a public repo by submission. Workflow is ready but cannot deploy yet.
-- (C / WS6) `.github/workflows/` is owned by WS6 + C: please review `pages.yml`, and add `npm test` (vitest) to the `web` job in `ci.yml` (WS5 did not edit ci.yml).
-- (C / WS1) Basemap: contracts v1.0 leave the tile layout, zoom range and bounds of `tiles/basemap/` to WS1, and no schema covers a tilejson. The console shows a placeholder background until C adds the layout (or a tilejson schema) to the contract.
-- (C / WS4) D9 dose slider: `config/conditions.yaml` has the 0.25–1.0 range only as a comment. WS5 reads `leash.d_allow_slider_mgy: {min, max, step}` when it exists; until then the slider is hidden (no invented range).
-- (C / WS6) KAT pass list on the scorecard: no web contract in v1.0 (WS6 has `kats.schema.proposed.json`). Scorecard says so.
+- (user) GitHub Pages: repo private and `gh` not logged in; `pages.yml` ready but cannot deploy yet.
+- (C / WS6) `.github/workflows/`: please review `pages.yml` and add `npm test` (vitest) to the `web` job in `ci.yml`.
+- (WS2) `stations.json value` (S1 0.8683, S2 0.7443, S4 0.475) has no manifest key: the card shows it flagged unbacked. Please record `station_value.{S}` (or say where it comes from). Route leg properties (`t_min`, `length_m`, `o2_L`) also have no keys, so the console shows stop times from the timeline only.
+- (S / WS2, content) Turn-back times (S4 438.55, S2 409.15 min) are after the 390-min EVA (`clock.eva.eva_min`); shown as written (WS2 question 13).
+- (WS6) V1 → con_* range low end and `validation/kats.json`: the console says "pending V1", the scorecard "not available yet".
+- Resolved this session: basemap layout (tilejson v1.1.0), D9 slider range (config), KAT contract (v1.1.0), cell states (v1.1.0), card null binding (v1.1.1).
 
 ### Assumptions added
 
@@ -587,6 +598,8 @@ Branch: `ws5-web`
 - Manifest keys are not fixed by contracts v1.0; `<Num>` resolves a named key first, then an entry with the same file and value.
 - Presentation-only constants (colours, line widths, legend bin step 10 min, label spacing) live in `web/src/theme.ts`, not config/ (WS5 owns no config file).
 - D9 leash off the default allowance: τ is recomputed in the browser with `leash.formula` from config and the manifest-backed rate, labelled "computed in the browser"; at the default allowance the page shows rad.json's own value. KAT: recomputes 85.7 min at 0.5 mGy.
+- Session 2: the console takes access points from the card's access block when present, else `stations.json access[scenario]`; access lon/lat cite `access.{S}.{scenario}.lon/lat` (stations.json) because the card fragment records no lon/lat keys. Walk-in line drawn only when `dist_m` > 0. Station dwell shown from `config/stations.yaml dwell_min` when it matches.
+- Session 2: the F22 table uses each station card's Navcam frame (`navcam.image_id`) and `localisation/{id}.json error_m`; pass = error_m ≤ `skyline_fix.refine_grid_m` (nav.yaml gate, C 11:58).
 
 ## WS6 Provenance
 

@@ -98,14 +98,14 @@ function CardBody({ d }: { d: StationData }) {
             <div class="placeholder-box">Navcam frame: not available yet (WS3)</div>
           )}
           <figcaption>
-            {c.navcam.image_id ? <StatusTag kind="real" /> : null} Curiosity Navcam
+            {c.navcam.image_id ? <StatusTag kind="real" /> : null} {typeof c.navcam.credit === 'string' ? c.navcam.credit : 'Curiosity Navcam'}
             {c.navcam.sol !== null ? (
               <>
                 , sol <Num v={c.navcam.sol} file={cf} k={`navcam_sol.${s.id}`} />
               </>
             ) : null}
             {c.navcam.image_id ? `, ${c.navcam.image_id}` : c.navcam.url_local ? ' (placeholder image, no frame yet)' : ''}
-            {typeof c.navcam.credit === 'string' ? ` (${c.navcam.credit})` : ''} · <StatusTag kind="modelled" /> predicted skyline
+ · <StatusTag kind="modelled" /> predicted skyline
             {c.navcam.overlay_png ? '' : ' (overlay not available yet)'}
             <br />
             Skyline error, far field (&gt; {FAR_KM} km): <Num v={c.skyline_error_deg.far} units="deg" file={cf} k={`skyline_error_deg.${s.id}.far`} />
@@ -199,7 +199,11 @@ function CardBody({ d }: { d: StationData }) {
             </dd>
             <dt>Dwell</dt>
             <dd>
-              <Num v={s.dwell_min} units="min" file="stations.json" k={`dwell_min.${s.id}`} />
+              {s.dwell_min === CITED.dwellMin.value ? (
+                <CfgNum v={s.dwell_min} units="min" source={CITED.dwellMin.source} />
+              ) : (
+                <Num v={s.dwell_min} units="min" file="stations.json" k={`dwell_min.${s.id}`} />
+              )}
             </dd>
             <dt>Binding margin</dt>
             <dd>{card ? marginLabel(c.margin_binding) : <span class="muted">{NO_CARD}</span>}</dd>
@@ -322,7 +326,9 @@ function AccessBlock({ s, a, scenario }: { s: Station; a: AccessView; scenario: 
             <dd>the station coordinate (filled marker)</dd>
             <dt>Access cell</dt>
             <dd>
-              <Num v={a.access!.lon} file={a.file} k={k('lon')} />, <Num v={a.access!.lat} file={a.file} k={k('lat')} />
+              {/* lon/lat are recorded per scenario from stations.json (access.{S}.{scenario}.lon/lat) */}
+              <Num v={a.access!.lon} file="stations.json" k={`access.${s.id}.${scenario}.lon`} />,{' '}
+              <Num v={a.access!.lat} file="stations.json" k={`access.${s.id}.${scenario}.lat`} />
             </dd>
             <dt>Walk-in</dt>
             <dd class="strong">
