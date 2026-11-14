@@ -40,7 +40,9 @@ def test_multipart_rows_and_extremes():
     ext = rems.sol_extremes(parsed, int(CFG["rems"]["pds_min_lmst_coverage_h"]))
     lo, hi = ext[15]
     assert lo == pytest.approx(200.0 - rems.KELVIN_0C) and hi == pytest.approx(223.0 - 273.15)
-    assert ext[7] is None  # all missing (-999): unknown, not zero
+    assert 7 not in ext  # ground temperature dropped (D37)
+    gts = rems.sol_extremes(parsed, 18, {7: ("test column", "degC", True)})
+    assert gts[7] is None  # all missing (-999): unknown, not zero
     assert ext[37] == (800.0, 823.0)
     thin = rems.sol_extremes(parsed[:5], int(CFG["rems"]["pds_min_lmst_coverage_h"]))
     assert thin[15] is None  # too few LMST hours covered
@@ -73,3 +75,26 @@ def test_real_outputs_and_margins():
     m = margins.margin_inputs()
     assert m["tau_dose_min"] == radj["leash"]["tau_min_at_peak"]
     assert m["t_dark_min"] is None or m["t_dark_min"] > 0
+
+
+def test_ground_temperature_dropped_d37():
+    # D37: only air temperature and pressure (plus UV) are kept; no GTS column, no gts feed field
+    assert CFG["rems"]["variables"] == ["air_temperature", "pressure", "uv_abc"]
+    assert "ground_temperature" in CFG["rems"]["dropped"]
+    cols = rems.columns(CFG)
+    assert 7 not in cols and set(cols) == {15, 37, 20}
+    assert all("ground" not in name.lower() for name, _, _ in cols.values())
+    feed = {"soles": [{"sol": "4995", "terrestrial_date": "2026-08-25", "ls": "341",
+                       "min_temp": "-70", "max_gts_temp": "4", "min_gts_temp": "-84"}]}
+    lf = rems.latest_feed(feed, CFG, datetime(2026, 11, 14, 12, tzinfo=UTC))
+    assert not any("gts" in k for k in lf["values"])
+    assert all("gts" not in fk for fk in rems.crosscheck_fields(CFG).values())
+
+
+@pytest.mark.skipif(not (OUT / "rems.json").exists(), reason="make conditions not run")
+def test_real_rems_has_no_ground_temperature():
+    remsj = json.loads((OUT / "rems.json").read_text())
+    rems.validate(remsj)
+    text = json.dumps(remsj).lower()
+    assert "gts" not in text and "ground" not in text
+    assert [v["units"] for v in remsj["variables"]] == ["degC", "Pa", "W/m2"]

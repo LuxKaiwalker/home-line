@@ -7,7 +7,8 @@ evenly over each table with one multi-range HTTP request. Per sol, the daily min
 are the extremes of those rows (missing = -999); a sol counts only if its valid rows cover at
 least ``rems.pds_min_lmst_coverage_h`` distinct LMST hours. Statistics over sols: median, p10, p90.
 Because the extremes come from a row sample, they can understate the 1-Hz extremes slightly.
-Confidence-level columns are not interpreted (not applied).
+Confidence-level columns are not interpreted (not applied). Variables = config
+``rems.variables``; the ground temperature is dropped (D37, config ``rems.dropped``).
 
 Feed: the outreach JSON (``rems.feed_url``) stopped at sol 4995 / 2026-08-25 (config
 ``rems.feed_stale_since``). Its latest sol is shown, marked stale; it is never presented as
@@ -25,7 +26,7 @@ from datetime import date, datetime
 from pathlib import Path
 from typing import Any
 
-from pipeline.conditions.config import INTERIM, RAW, REPO, fmt_utc
+from pipeline.conditions.config import INTERIM, RAW, REPO, fmt_utc, load_conditions
 
 WEB_PATH = "conditions/rems.json"
 DEFAULT_OUT = INTERIM / WEB_PATH
@@ -33,13 +34,30 @@ SCHEMA_PATH = REPO / "contracts" / "rems.schema.json"
 
 MISSING = -999.0
 N_COLUMNS = 40  # LABEL/MODRDR6.FMT (discovery.md §4.2)
-# 0-based column index in a MODRDR row (MODRDR6.FMT order) -> (name shown, units, K->degC?)
-COLUMNS = {
-    15: ("air temperature (REMS AMBIENT_TEMP)", "degC", True),
-    7: ("ground temperature (REMS GTS BRIGHTNESS_TEMP)", "degC", True),
-    37: ("pressure (REMS PRESSURE)", "Pa", False),
-    20: ("UV irradiance A+B+C (REMS UV_ABC)", "W/m2", False),
+# config rems.variables name -> (0-based MODRDR column (MODRDR6.FMT order), name shown, units,
+# K->degC?). The ground temperature (column 7, GTS) is not offered: dropped by D37.
+VARIABLES = {
+    "air_temperature": (15, "air temperature (REMS AMBIENT_TEMP)", "degC", True),
+    "pressure": (37, "pressure (REMS PRESSURE)", "Pa", False),
+    "uv_abc": (20, "UV irradiance A+B+C (REMS UV_ABC)", "W/m2", False),
 }
+# feed field per (variable, 0 = daily min / 1 = daily max), for the cross-check
+_FEED_CROSS = {("air_temperature", 1): "max_temp", ("air_temperature", 0): "min_temp"}
+
+
+def columns(cfg: dict[str, Any] | None = None) -> dict[int, tuple[str, str, bool]]:
+    """{MODRDR column: (name shown, units, K->degC?)} for config ``rems.variables``, in order."""
+    names = (cfg or load_conditions())["rems"]["variables"]
+    unknown = [n for n in names if n not in VARIABLES]
+    if unknown:
+        raise NotImplementedError(f"config rems.variables {unknown} not implemented in rems.py")
+    return {VARIABLES[n][0]: VARIABLES[n][1:] for n in names}
+
+
+def crosscheck_fields(cfg: dict[str, Any] | None = None) -> dict[tuple[int, int], str]:
+    """{(MODRDR column, 0 min / 1 max): feed field} for the configured variables."""
+    names = (cfg or load_conditions())["rems"]["variables"]
+    return {(VARIABLES[n][0], k): f for (n, k), f in _FEED_CROSS.items() if n in names}
 LMST_COL = 1  # "SSSSSMhh:mm:ss.sss"
 KELVIN_0C = 273.15  # definition of the Celsius scale
 
@@ -70,10 +88,12 @@ def _val(s: str) -> float | None:
     return None if x <= MISSING + 0.5 else x
 
 
-def sol_extremes(rows: list[list[str]], min_hours: int) -> dict[int, tuple[float, float] | None]:
+def sol_extremes(rows: list[list[str]], min_hours: int,
+                 cols: dict[int, tuple[str, str, bool]] | None = None,
+                 ) -> dict[int, tuple[float, float] | None]:
     """{column: (daily min, daily max)} for one sol; None when coverage is too thin."""
     out: dict[int, tuple[float, float] | None] = {}
-    for col, (_, _, k2c) in COLUMNS.items():
+    for col, (_, _, k2c) in (cols if cols is not None else columns()).items():
         vals, hours = [], set()
         for r in rows:
             v = _val(r[col])
@@ -105,28 +125,26 @@ def _stats(xs: list[float], nd: int) -> dict[str, float | None]:
             "p90": round(_pct(xs, 90), nd)}
 
 
-# PDS column -> (feed field) for the cross-check of the sampled extremes
-_CROSS = {(15, 1): "max_temp", (15, 0): "min_temp", (7, 1): "max_gts_temp", (7, 0): "min_gts_temp"}
-
-
 def climatology(index: dict[str, Any], cfg: dict[str, Any],
                 feed: dict[str, Any] | None = None) -> dict[str, Any]:
     rc = cfg["rems"]
     min_h = int(rc["pds_min_lmst_coverage_h"])
-    per_col: dict[int, tuple[list[float], list[float]]] = {c: ([], []) for c in COLUMNS}
+    cols = columns(cfg)
+    cross_f = crosscheck_fields(cfg)
+    per_col: dict[int, tuple[list[float], list[float]]] = {c: ([], []) for c in cols}
     sols, used, years = [], set(), set()
     fsol = {int(s["sol"]): s for s in (feed or {}).get("soles", []) if str(s.get("sol")).isdigit()}
-    diffs: dict[str, list[float]] = {v: [] for v in _CROSS.values()}
+    diffs: dict[str, list[float]] = {v: [] for v in cross_f.values()}
     for name, meta in sorted(index.items()):
         if not name.startswith("rems/pds_rmd/"):
             continue
         if meta.get("mars_year") not in rc["pds_mars_years"]:
             continue
         rows = parse_multipart_rows((RAW / name).read_bytes(), int(meta["row_bytes"]))
-        ext = sol_extremes(rows, min_h)
+        ext = sol_extremes(rows, min_h, cols)
         sols.append(meta["sol"])
         f = fsol.get(int(meta["sol"]))
-        for (c, k), fk in _CROSS.items():
+        for (c, k), fk in cross_f.items():
             e = ext.get(c)
             try:
                 fv = float(f[fk]) if f else None
@@ -141,7 +159,7 @@ def climatology(index: dict[str, Any], cfg: dict[str, Any],
                 used.add(meta["sol"])
                 years.add(int(meta["mars_year"]))
     variables = []
-    for c, (name, units, _) in COLUMNS.items():
+    for c, (name, units, _) in cols.items():
         mins, maxs = per_col[c]
         nd = 2 if units == "W/m2" else 1
         variables.append({"name": name, "units": units, "n_sols": len(mins),
@@ -153,8 +171,8 @@ def climatology(index: dict[str, Any], cfg: dict[str, Any],
             "mars_years": sorted(years), "feed_crosscheck": cross}
 
 
+# feed fields shown (air temperature, pressure, Ls); the feed's ground temperature is not (D37)
 _FEED_NUM = {"min_temp": "min_temp_degC", "max_temp": "max_temp_degC", "pressure": "pressure_Pa",
-             "min_gts_temp": "min_gts_temp_degC", "max_gts_temp": "max_gts_temp_degC",
              "ls": "ls_deg"}
 _FEED_STR = ("atmo_opacity", "local_uv_irradiance_index", "sunrise", "sunset", "season")
 

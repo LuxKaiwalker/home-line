@@ -158,7 +158,8 @@ def eva_block(lat: float, lon: float, horizon_deg: float) -> dict[str, Any]:
         by_obs[oid] = _r(sun.t_dark_min(start, lat, lon, profile=prof), 2)
     return {
         "note": ("Simulated EVA (not a real plan): start = config clock.eva_start_lmst_h "
-                 "(assumed) at Gale on the local sol containing clock.eva_sol_ref_utc; "
+                 "(09:00 LMST, decided D31) at Gale on the local sol containing "
+                 "clock.eva_sol_ref_utc (assumed); "
                  "length = crew.yaml eva_h"),
         "start_utc": fmt_utc(start),
         "start_lmst": marstime.format_hms(marstime.lmst_h(start, lon)),
