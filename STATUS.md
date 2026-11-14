@@ -819,16 +819,23 @@ Branch: `ws3-horizon`
   - **For WS5:** draw the compass from `landmarks[]` with `display == "bearing_tick"` (marked "below skyline"). The station table's "(within 5 km, below the skyline)" suffix is now wrong for the 5-80 km hidden ones; use `display`/`above_skyline` instead.
   - Run on the session-4 stations (cards only, 15:49Z): S1, S2, S4 each 0 visible + 8 hidden; overlays without ticks. Superseded by the Part 2 re-run on the D26 stations.
 - 15:55Z **D21 pad observer.** `pad_observer` now takes WS2 `pad.json`'s top-level pad as the official pad when its `source` cites D21 (word match, not "D210") and it is not marked as a proposal; a pre-D21 file still counts only when its pad is `pad_default`; the `proposal` block is never read; anything else falls back to `site.yaml pad_default` with a `source_note`. KAT rewritten.
+- 16:15Z **Part 2 re-run at the D21 official pad and the D26 stations** (cards only, from clean commit 364a92a = main 706b6ee + ws3; WS1 session 4 on main, WS2 session 7 pushed 9c143fd, not merged; data read from WS2's `engine/public/pad.json` and `stations.json`, both 16:57-16:58 CET). Previous outputs in `data/interim/horizon/runs/before_d21_d26/`. Log `cards_d21_d26.log`.
+  - **Pad observer = D21 official pad 137.401783, −4.77748** (WS2 `rank1`, source cites D21; ground −3,742.4 m). `horizons/pad.json` and `public/fp3d/horizon_ring.json` rebuilt there. Ring vs the pad_default ring: mean +0.36°, max |diff| 2.40° (different observer). **WS8: the ring moved, so `skyline_check` / `make fp3d-check` need a refresh at the official pad.**
+  - **Stations (6, all at WS2 access cells):** S1 (137.379249, −4.80832), S2 (137.376083, −4.778391), S4 (137.408931, −4.785832), S6 (137.383549, −4.789172), S7 (137.373323, −4.789762), S8 (137.386021, −4.770783). S3/S5 not in stations.json (D26). S1 now has an access cell (was `science_coordinate_no_access`).
+  - **Card Navcam frames** (same rule: nearest V2-ok frame; frame set unchanged, so V2 is unchanged and was not re-run): S1 NLB_811540240 (stop v118_3156, 64 m; was NLB_826633404), S2 NLB_789347468 (1,270 m), S4 NLB_767161116 (138 m), S6 NLB_800007980 (529 m), S7 NLB_803472163 (867 m), S8 NLB_743544164 (766 m). Card skyline error (median |error| on the card frame, near/mid/far °): S1 —/—/0.136, S2 —/—/3.183, S4 —/—/6.498, S6 —/—/0.043, S7 —/—/0.094, S8 0.333/0.183/0.134. S2 and S4 are north-facing far-fail frames (far class not validated, D7).
+  - **Landmarks (D33):** from every station all 8 gazetteer landmarks are below the computed skyline, so each card has 0 labelled + 8 bearing-only ticks, and no overlay ticks.
+  - Manifest `pipeline__horizon__cards.json`: 120 keys, all at commit 364a92a (no `-dirty`). `navcam_frames.json` station tags rewritten for S1-S8.
 
 ### Doing
 
-- Session 5 Part 2: waiting for WS2 session 7 (D21 pad.json, D26 access cells).
+- —
 
 ### Next
 
 - WS5: read `validation/v2.json far_note` and the `v2.far_note.*`, `v2.n_frames_*` keys (session 4).
 - WS8: rebuild `make fp3d` with `ctx_20m_v2.tif` (far mesh + `skyline_check` from the new horizons), then re-run `make fp3d-check` (expected from the geometry check: pad 0.38°, S2 0.29°, S4 ≤ 0.2°). The pad ring itself did not change in session 4.
-- Session 5 Part 2: re-run pad horizon + ring at the D21 official pad and station horizons/cards at the D26 access cells once WS2 session 7 lands (WS1 session 4 is on main). S3/S5 cards follow only if S picks them by 19:00.
+- C: `make web` to pick up the new cards (S1, S2, S4, S6, S7, S8) and ring. Re-run `python -m pipeline.horizon.cards` if WS2 rewrites stations.json/pad.json again, or if S picks S3/S5 by 19:00.
+- WS8: refresh `skyline_check` for the ring at the official pad.
 - WS5: compass ticks from `display: bearing_tick` (D33).
 - Hand to WS9 (optional add-on, D19): engine API, `sky.detect_skyline`, `navcam_frames.json` with station tags.
 
