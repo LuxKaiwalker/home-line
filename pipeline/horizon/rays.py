@@ -51,6 +51,7 @@ class DemBand:
     y0: float  # top edge of row 0
     dx: float  # > 0
     dy: float  # < 0 (north-up)
+    _vbox: np.ndarray | None = field(default=None, repr=False, compare=False)  # valid_box cache
 
     @classmethod
     def from_transform(cls, source: str, z: np.ndarray, gt, nodata=None) -> DemBand:
@@ -146,7 +147,14 @@ def classify_distance(distance_m) -> np.ndarray:
 
 
 def valid_box(band: DemBand) -> np.ndarray:
-    """(xmin, xmax, ymin, ymax) of the band's valid pixel centres; NaN if it has no data."""
+    """(xmin, xmax, ymin, ymax) of the band's valid pixel centres; NaN if it has no data.
+    Cached on the band (its ``z`` is not modified after the engine is built)."""
+    if band._vbox is None:
+        band._vbox = _valid_box(band)
+    return band._vbox
+
+
+def _valid_box(band: DemBand) -> np.ndarray:
     ok = np.isfinite(band.z)
     rows = np.flatnonzero(ok.any(axis=1))
     cols = np.flatnonzero(ok.any(axis=0))

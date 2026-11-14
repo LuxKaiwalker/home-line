@@ -642,6 +642,114 @@ def test_manual_verdicts_import(tmp_path):
         read_manual_verdicts(p)
 
 
+def _filled_sheet(path, verdicts, *, delimiter=",", encoding="utf-8"):
+    """A synthetic filled manual-check sheet with the real sheet's header (SHEET_FIELDS)."""
+    import csv
+
+    from pipeline.validation.v2_skyline import SHEET_FIELDS
+
+    with open(path, "w", newline="", encoding=encoding) as fh:
+        w = csv.DictWriter(fh, fieldnames=SHEET_FIELDS, delimiter=delimiter)
+        w.writeheader()
+        for iid, (verdict, note) in verdicts.items():
+            w.writerow({**{k: "" for k in SHEET_FIELDS}, "image_id": iid, "why": "far_fail",
+                        "v2_status": "ok", "verdict": verdict, "note": note})
+    return path
+
+
+def test_import_manual_cli_end_to_end(tmp_path, monkeypatch):
+    """D7: ``--import-manual <csv>`` on a filled sheet writes manual_checks.json; the next V2 build
+    leaves the frames judged other than ok out of the summary (reported, not dropped)."""
+    import json
+
+    from pipeline.validation import v2_skyline as v2
+
+    out = tmp_path / "manual_checks.json"
+    monkeypatch.setattr(v2, "MANUAL_CHECKS", out)
+    sheet = _filled_sheet(tmp_path / "filled.csv", {
+        "SYN_000": ("ok", ""), "SYN_001": ("rim_not_visible", "haze, rim hidden"),
+        "SYN_002": ("detector_wrong", "caught a near ridge"), "SYN_003": ("unsure", ""),
+        "SYN_004": ("", "")})
+    assert v2.main(["--import-manual", str(sheet)]) == 0
+    verdicts = json.loads(out.read_text())
+    assert verdicts == {"SYN_000": True, "SYN_001": False, "SYN_002": False}
+    prof = wavy_profile()
+    entries = []
+    for i in range(CFG["v2"]["min_stops"] + 2):
+        rec, m, q = _synthetic_frame(i)
+        entries.append(v2.evaluate_frame(rec, prof, synth_frame(m, q, prof, seed=i)[0]))
+    doc = v2.build_v2(entries, manual=verdicts)
+    by = {f["image_id"]: f for f in doc["frames"]}
+    assert doc["method"] == "automatic+manual_check"
+    assert doc["n_frames_tried"] == len(entries)                      # nothing dropped
+    assert doc["n_frames_ok"] == len(entries) - 2                     # SYN_001, SYN_002 out
+    assert by["SYN_001"]["manual_ok"] is False and by["SYN_000"]["manual_ok"] is True
+    assert by["SYN_003"]["manual_ok"] is None and by["SYN_004"]["manual_ok"] is None
+
+
+def test_import_manual_accepts_spreadsheet_exports(tmp_path, monkeypatch):
+    """A sheet saved by a spreadsheet app: UTF-8 BOM, ';' delimiter, padded / capitalised
+    verdicts. Same verdicts as the plain CSV."""
+    import json
+
+    from pipeline.validation import v2_skyline as v2
+
+    monkeypatch.setattr(v2, "MANUAL_CHECKS", tmp_path / "manual_checks.json")
+    sheet = _filled_sheet(tmp_path / "excel.csv",
+                          {"A": (" OK ", ""), "B": ("Rim_Not_Visible", "x; y"), "C": ("", "")},
+                          delimiter=";", encoding="utf-8-sig")
+    assert v2.main(["--import-manual", str(sheet)]) == 0
+    assert json.loads((tmp_path / "manual_checks.json").read_text()) == {"A": True, "B": False}
+
+
+def test_import_manual_rejects_bad_sheets_without_writing(tmp_path, monkeypatch, capsys):
+    """An unknown verdict, a conflicting duplicate row or a missing column stops the import with
+    a message (exit 2) and leaves any previous manual_checks.json untouched."""
+    from pipeline.validation import v2_skyline as v2
+
+    out = tmp_path / "manual_checks.json"
+    out.write_text('{"OLD": true}')
+    monkeypatch.setattr(v2, "MANUAL_CHECKS", out)
+    bad = _filled_sheet(tmp_path / "bad.csv", {"A": ("ok", ""), "B": ("maybe", "")})
+    assert v2.main(["--import-manual", str(bad)]) == 2
+    assert "maybe" in capsys.readouterr().err
+    dup = tmp_path / "dup.csv"
+    dup.write_text("image_id,verdict,note\nA,ok,\nA,model_wrong,\n")
+    assert v2.main(["--import-manual", str(dup)]) == 2
+    nocol = tmp_path / "nocol.csv"
+    nocol.write_text("image_id,note\nA,\n")
+    assert v2.main(["--import-manual", str(nocol)]) == 2
+    assert out.read_text() == '{"OLD": true}'
+
+
+def test_sheet_rewrite_keeps_filled_verdicts(tmp_path):
+    """Re-running V2 rewrites the sheet; verdicts and notes already filled in are carried over by
+    image_id, and the filled CSV is backed up outside the rewritten folder first."""
+    import csv
+    import json
+
+    from pipeline.validation.v2_skyline import write_manual_check_sheet
+
+    lim = CFG["manual_check_sheet"]["far_fail_abs_deg"]
+    doc = {"frames": [_v2_frame(1, far=-(lim + 1.0)), _v2_frame(3, status="failed")]}
+    frames_json = tmp_path / "navcam_frames.json"
+    frames_json.write_text(json.dumps({"frames": []}))
+    sheet_dir = tmp_path / "manual_check"
+    sheet_dir.mkdir()
+    _filled_sheet(sheet_dir / "manual_check.csv",
+                  {"F1": ("rim_not_visible", "haze"), "F9": ("ok", "gone from the new run")})
+    rows = write_manual_check_sheet(doc, frames_json=frames_json, horizons_dir=tmp_path,
+                                    out_dir=sheet_dir, engine="unused")
+    by = {r["image_id"]: r for r in rows}
+    assert by["F1"]["verdict"] == "rim_not_visible" and by["F1"]["note"] == "haze"
+    assert by["F3"]["verdict"] == ""
+    with (sheet_dir / "manual_check.csv").open(newline="") as fh:
+        assert {r["image_id"]: r["verdict"] for r in csv.DictReader(fh)} == \
+            {"F1": "rim_not_visible", "F3": ""}
+    backups = list((tmp_path / "manual_check_backups").glob("manual_check_*.csv"))
+    assert len(backups) == 1 and "F9" in backups[0].read_text()
+
+
 def test_cut_engine_truncates_sampling_and_cut_error_known_answer():
     from pipeline.horizon.rays import DemBand, HorizonEngine, HorizonProfile
     from pipeline.validation.v2_skyline import best_cut, cut_engine, cut_error
