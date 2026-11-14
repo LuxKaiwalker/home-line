@@ -8,7 +8,7 @@ are the extremes of those rows (missing = -999); a sol counts only if its valid 
 least ``rems.pds_min_lmst_coverage_h`` distinct LMST hours. Statistics over sols: median, p10, p90.
 Because the extremes come from a row sample, they can understate the 1-Hz extremes slightly.
 Confidence-level columns are not interpreted (not applied). Variables = config
-``rems.variables``; the ground temperature is dropped (D37, config ``rems.dropped``).
+``rems.variables``: air temperature and pressure only (D37, config ``rems.dropped``).
 
 Feed: the outreach JSON (``rems.feed_url``) stopped at sol 4995 / 2026-08-25 (config
 ``rems.feed_stale_since``). Its latest sol is shown, marked stale; it is never presented as
@@ -42,11 +42,11 @@ SCHEMA_PATH = REPO / "contracts" / "rems.schema.json"
 MISSING = -999.0
 N_COLUMNS = 40  # LABEL/MODRDR6.FMT (discovery.md §4.2)
 # config rems.variables name -> (0-based MODRDR column (MODRDR6.FMT order), name shown, units,
-# K->degC?). The ground temperature (column 7, GTS) is not offered: dropped by D37.
+# K->degC?). D37: air temperature and pressure only (ground temperature, column 7, and UV,
+# column 20, are not offered).
 VARIABLES = {
     "air_temperature": (15, "air temperature (REMS AMBIENT_TEMP)", "degC", True),
     "pressure": (37, "pressure (REMS PRESSURE)", "Pa", False),
-    "uv_abc": (20, "UV irradiance A+B+C (REMS UV_ABC)", "W/m2", False),
 }
 # feed field per (variable, 0 = daily min / 1 = daily max), for the cross-check
 _FEED_CROSS = {("air_temperature", 1): "max_temp", ("air_temperature", 0): "min_temp"}
@@ -168,7 +168,7 @@ def climatology(index: dict[str, Any], cfg: dict[str, Any],
     variables = []
     for c, (name, units, _) in cols.items():
         mins, maxs = per_col[c]
-        nd = 2 if units == "W/m2" else 1
+        nd = 1
         variables.append({"name": name, "units": units, "n_sols": len(mins),
                           "daily_min": _stats(mins, nd), "daily_max": _stats(maxs, nd)})
     cross = {f"{fk}_degC": {"n_sols": len(x),
@@ -178,10 +178,10 @@ def climatology(index: dict[str, Any], cfg: dict[str, Any],
             "mars_years": sorted(years), "feed_crosscheck": cross}
 
 
-# feed fields shown (air temperature, pressure, Ls); the feed's ground temperature is not (D37)
+# feed fields shown (air temperature, pressure, Ls); its ground temperature and UV are not (D37)
 _FEED_NUM = {"min_temp": "min_temp_degC", "max_temp": "max_temp_degC", "pressure": "pressure_Pa",
              "ls": "ls_deg"}
-_FEED_STR = ("atmo_opacity", "local_uv_irradiance_index", "sunrise", "sunset", "season")
+_FEED_STR = ("atmo_opacity", "sunrise", "sunset", "season")  # feed UV index not shown (D37)
 
 
 def latest_feed(feed: dict[str, Any], cfg: dict[str, Any], build_utc: datetime) -> dict[str, Any]:

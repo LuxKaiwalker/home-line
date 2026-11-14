@@ -30,8 +30,8 @@ leash:
   assumed: [d_allow_step_mgy]      # added by WS4
 rems:
   ls_window_deg: [10, 35]
-  variables: [air_temperature, pressure, uv_abc]   # D37 (user 16:20): ground temperature dropped; temperature = air only
-  dropped: {ground_temperature: "D37: sampled PDS GTS minimum 17 degC colder than the feed; confidence flags not interpreted"}
+  variables: [air_temperature, pressure]   # D37 (user 16:20): "Dropped. Air temperature and pressure only."
+  dropped: {ground_temperature: "D37: sampled PDS GTS minimum 17 degC colder than the feed; confidence flags not interpreted", uv: "D37: air temperature and pressure only (UV A+B+C and the feed UV index not shown)"}
   feed_stale_since: "2026-08-25"   # D0 confirmed: latest feed sol 4995 = 2026-08-25 (discovery.md §4.2)
   feed_url: "https://mars.nasa.gov/rss/api/?feed=weather&category=msl&feedtype=json"   # discovery.md §4.2
   pds_base_url: "https://atmos.nmsu.edu/PDS/data/mslrem_1001/DATA"                    # discovery.md §4.2 (RMD = MODRDR)
