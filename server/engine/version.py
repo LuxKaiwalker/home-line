@@ -1,6 +1,10 @@
 """Engine and code identity for GET /engine/version (F23, F35; D57 parts of the result hash).
 
 - ``commit``: ``git rev-parse HEAD``; ``engine_tree``: ``git rev-parse HEAD:pipeline`` (D57).
+  When ``HL_COMMIT`` and ``HL_ENGINE_TREE`` are set (the Docker image has no .git; server/ops/up.sh
+  bakes them at build time) they are used instead of git. Both must be set and each must be exactly
+  40 lower-case hex characters; anything else is an error (Unavailable -> 503
+  engine_identity_unavailable), never a silent fall-back to git.
 - ``config_hash``: ``tools.make_bundle.config_hash`` over config/*.yaml except backend.yaml (D57).
 - ``terrain_hash``: sha256 of the server data manifest ``$HL_SERVER_DATA/manifest.json`` written
   by tools/make_serverdata.py (contracts/backend/README.md "Result hash"); None while it is absent.
@@ -14,6 +18,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 import subprocess
 from functools import cache
 from pathlib import Path
@@ -25,6 +30,9 @@ CONTRACTS = REPO / "contracts"
 SERVER_DATA_ENV = "HL_SERVER_DATA"
 SERVER_DATA_DEFAULT = "data/server"  # Makefile HL_SERVER_DATA default, relative to the repo
 SERVER_DATA_MANIFEST = "manifest.json"  # written by tools/make_serverdata.py (WS11 task 5)
+COMMIT_ENV = "HL_COMMIT"  # git rev-parse HEAD, baked into the image (server/ops/up.sh)
+ENGINE_TREE_ENV = "HL_ENGINE_TREE"  # git rev-parse HEAD:pipeline, ditto
+_OBJECT_ID = re.compile(r"[0-9a-f]{40}")  # a full SHA-1 git object id
 
 
 class Unavailable(RuntimeError):
@@ -52,6 +60,25 @@ def _git(*args: str) -> str:
     return out.stdout.strip()
 
 
+def git_identity() -> tuple[str, str]:
+    """(commit, engine_tree): from HL_COMMIT / HL_ENGINE_TREE when set, else from git.
+
+    The error messages must not mention the manifest (the routes map that word to
+    server_data_missing)."""
+    env = {k: os.environ.get(k) for k in (COMMIT_ENV, ENGINE_TREE_ENV)}
+    if all(v is None for v in env.values()):
+        return _git("rev-parse", "HEAD"), _git("rev-parse", "HEAD:pipeline")
+    missing = [k for k, v in env.items() if v is None]
+    if missing:
+        raise Unavailable(f"{COMMIT_ENV} and {ENGINE_TREE_ENV} must be set together;"
+                          f" {missing[0]} is not set")
+    bad = [k for k, v in env.items() if not _OBJECT_ID.fullmatch(v)]
+    if bad:
+        raise Unavailable(f"{', '.join(bad)} must be a 40 lower-case hex git object id"
+                          f" (got {', '.join(repr(env[k]) for k in bad)})")
+    return env[COMMIT_ENV], env[ENGINE_TREE_ENV]
+
+
 def _semver(v: str) -> tuple[int, ...]:
     return tuple(int(x) for x in v.split("."))
 
@@ -72,9 +99,10 @@ def code_identity() -> dict:
     """The parts fixed for the life of this process (taken once, at start-up)."""
     from tools.make_bundle import CONTRACT_VERSION, config_hash
 
+    commit, engine_tree = git_identity()
     return {
-        "engine_tree": _git("rev-parse", "HEAD:pipeline"),
-        "commit": _git("rev-parse", "HEAD"),
+        "engine_tree": engine_tree,
+        "commit": commit,
         "config_hash": config_hash(),
         "web_contract_version": web_contract_version(),
         "backend_contract_version": backend_contract_version(),
@@ -84,7 +112,7 @@ def code_identity() -> dict:
 
 def engine_version() -> dict:
     """The /engine/version body (openapi.yaml EngineVersion); raises Unavailable when a required
-    part (git identity, server data manifest) is missing."""
+    part (code identity, server data manifest) is missing."""
     th = terrain_hash()
     if th is None:
         raise Unavailable(f"no server data manifest at {server_data_dir() / SERVER_DATA_MANIFEST}"
