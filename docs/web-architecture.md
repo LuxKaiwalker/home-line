@@ -296,4 +296,28 @@ tiles, add self-hosted glyphs for symbol labels, apply the ×1.876 Mars exaggera
 
 ### Production build sizes (`flock /tmp/hl-heavy.lock npm run build`, real data)
 
-BUILD_SIZES_PLACEHOLDER
+vite 8.3.8, 149 modules, built in 1.68 s. `dist/` without data: **2,604 KiB** (Pages limit 5,120).
+Sizes raw / gzip (kB):
+
+| Chunk | Raw | Gzip | Loaded by |
+| --- | --- | --- | --- |
+| `index.html` | 0.39 | 0.27 | always |
+| `index-*.js` (shell: main, router, env, prov store) | 10.45 | 4.36 | always |
+| `index-*.css` (`style.css`) | 12.75 | 3.74 | always |
+| `consoleMap-*.js` (MapLibre + `map/`) | 1,091.18 | 298.44 | `/`, `/nav` |
+| `consoleMap-*.css` (`maplibre-gl.css`) | 71.33 | 10.25 | `/`, `/nav` |
+| `maplibre-gl-worker-*.mjs` | 519.54 | (not reported) | `/`, `/nav` (worker) |
+| `view-*.js` (Three.js scene, `fp3d/view.ts`) | 558.86 | 142.21 | `/hud3d` after the WebGL2 check |
+| `fp3d-*.js` (`fp3d/index.ts`, pure modules) | 6.46 | 2.84 | `/hud3d` |
+| `hudOverlay-*.js` | 1.90 | 1.09 | `/hud3d` |
+| `loader-*.js` (loader + schemas) | 84.85 | 23.07 | every data view |
+| `hud-*.js` / `hud-*.css` | 42.69 / 5.69 | 16.06 / 1.77 | `/hud`, `/hud3d` |
+| `console-*.js` | 32.30 | 10.77 | `/` |
+| `scorecard-*.js` | 25.78 | 7.99 | `/scorecard` |
+| `nav-*.js` / `nav-*.css` | 20.84 / 1.29 | 8.19 / 0.62 | `/nav` |
+| `common-*.js` (Preact + shared view helpers) | 15.57 | 6.56 | Preact views |
+| `station-*.js`, `conditions-*.js`, `crew-*.js` (config YAML) | 12.81, 12.30, 11.81 | 4.22, 4.28, 5.46 | per route |
+| others (`trade`, `cuff`, `about`, `decisions`, `DecisionNotes`, `load`, `validation`, small helpers) | 0.6–6.1 each | 0.3–2.6 each | per route |
+
+First load of `/` (shell + console + MapLibre + loader + common, gzip, without the worker and data)
+≈ 360 kB. DESIGN §5.4's "≤ 150 kB over today" is measured against these numbers.
