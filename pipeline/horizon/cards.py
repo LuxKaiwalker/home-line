@@ -78,7 +78,15 @@ def observer_from_station(rec: dict) -> dict:
     if acc is not None:
         o.update(lon=float(acc["lon"]), lat=float(acc["lat"]), position="access_cell",
                  provisional=False,
-                 access={k: v for k, v in acc.items() if k not in ("lon", "lat")} or None)
+                 access={k: v for k, v in acc.items()
+                         if k not in ("lon", "lat") and not isinstance(v, dict)} or None)
+    elif "access_lon" in rec or rec.get("access_reason"):
+        # WS2 has published its access cells and this station has none (e.g. no walkable cell
+        # within access_radius_m): the horizon stays at the science coordinate, not provisional
+        o.update(lon=rec["lon"], lat=rec["lat"], position="science_coordinate_no_access",
+                 provisional=False,
+                 note=f"no access cell (WS2: {rec.get('access_reason') or 'none published'}); "
+                      "horizon at the science coordinate")
     else:
         o.update(lon=rec["lon"], lat=rec["lat"], position="science_coordinate",
                  provisional=True,
@@ -313,6 +321,32 @@ def nearest_suitable_frame(xy, frames: list[dict], v2_by_id: dict):
     return best, best_d
 
 
+def tag_station_frames(doc: dict, picks: dict) -> dict:
+    """Set ``station`` on the card frames in navcam_frames.json (C request for WS9 F22).
+
+    ``picks``: station id -> {image_id, dist_m, position}. Tags from an earlier card run
+    (``station_source == "card_frame"``) are cleared first; a station tag from the stop rule
+    (S4 drive end) is kept. A frame chosen by several stations keeps them all in ``stations``
+    and the first (station order) in ``station``."""
+    for f in doc["frames"]:
+        if f.get("station_source") == "card_frame":
+            f["station"] = None
+            for k in ("station_source", "stations", "station_dist_m", "station_observer"):
+                f.pop(k, None)
+    by_id = {f["image_id"]: f for f in doc["frames"]}
+    for sid, pk in picks.items():
+        f = by_id.get(pk["image_id"])
+        if f is None:
+            continue
+        if f.get("station_source") != "card_frame":
+            f.update(station=sid, station_source="card_frame", stations=[],
+                     station_dist_m={}, station_observer={})
+        f["stations"].append(sid)
+        f["station_dist_m"][sid] = None if pk.get("dist_m") is None else round(pk["dist_m"], 1)
+        f["station_observer"][sid] = pk.get("position")
+    return doc
+
+
 def card_fragment(station_id: str, *, observer: dict, frame: dict | None,
                   frame_dist_m: float | None, frame_errors: dict | None, landmarks: list[dict],
                   landmarks_note: str | None, panorama: bool = True) -> dict:
@@ -439,6 +473,7 @@ def run(*, engine=None, stations_json: Path | None = None, public: Path = PUBLIC
     if cards_dir.exists():
         shutil.rmtree(cards_dir)  # own output tree: no stale cards for removed stations
     cards_dir.mkdir(parents=True)
+    picks: dict = {}
     for rec in stations:
         sid = rec["id"]
         obs = observer_from_station(rec)
@@ -461,6 +496,8 @@ def run(*, engine=None, stations_json: Path | None = None, public: Path = PUBLIC
         frame, fdist = nearest_suitable_frame((x, y), frames, v2_by_id)
         errs = None
         if frame is not None:
+            picks[sid] = {"image_id": frame["image_id"], "dist_m": fdist,
+                          "position": obs["position"]}
             _write_overlay(frame, picked, landmarks, engine, sdir)
             errs = {c: v2_by_id[frame["image_id"]]["summary"][c]["median_abs_deg"]
                     for c in CLASSES}
@@ -483,6 +520,13 @@ def run(*, engine=None, stations_json: Path | None = None, public: Path = PUBLIC
         log(f"{sid}: {obs['position']}{' (provisional)' if obs['provisional'] else ''}; frame "
             f"{frame and frame['image_id']} at {fdist and round(fdist)} m; landmarks "
             f"{[p['name'] for p in picked]}")
+    # C request (WS9 F22): tag each card frame with its station in navcam_frames.json
+    fj = HROOT / "navcam_frames.json"
+    nf = tag_station_frames(json.loads(fj.read_text()), picks)
+    validate(nf, "navcam_frames.schema.json")
+    fj.write_text(json.dumps(nf, indent=1))
+    report["station_frames"] = {sid: pk["image_id"] for sid, pk in picks.items()}
+    log(f"navcam_frames.json station tags: {report['station_frames']}")
     (HROOT / "cards_run.json").write_text(json.dumps(report, indent=1))
     return report
 

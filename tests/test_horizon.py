@@ -344,6 +344,13 @@ def test_station_observer_access_cell_rule():
         assert (o["lon"], o["lat"]) == (137.3905, -4.8102)
         assert o["position"] == "access_cell" and o["provisional"] is False
         assert (o["science_lon"], o["science_lat"]) == (137.39, -4.81)
+    # WS2 session 3 format: access_lon/lat null + access_reason = published, no access cell
+    o = observer_from_station({**s, "access_lon": None, "access_lat": None,
+                               "access_reason": "none walkable within 50 m",
+                               "access": {"nom_104": {"lon": None, "lat": None}}})
+    assert (o["lon"], o["lat"]) == (137.39, -4.81)
+    assert o["position"] == "science_coordinate_no_access" and o["provisional"] is False
+    assert "none walkable" in o["note"]
 
 
 def test_pad_observer_prefers_ws2_pad_then_ws1_grid(tmp_path):
@@ -515,3 +522,21 @@ def test_card_fragment_validates_against_card_contract_fields():
     assert none["navcam"] == {"sol": None, "image_id": None, "url_local": None,
                               "overlay_png": None}
     assert none["skyline_error_deg"] == {"near": None, "mid": None, "far": None}
+
+
+def test_tag_station_frames_for_ws9():
+    """C request: the card frame of each station carries station = S in navcam_frames.json;
+    re-runs clear old card tags, keep stop-rule tags, and a shared frame lists all stations."""
+    from pipeline.horizon.cards import tag_station_frames
+
+    doc = {"frames": [{"image_id": "A", "station": None}, {"image_id": "B", "station": "S4"},
+                      {"image_id": "C", "station": None}]}
+    tag_station_frames(doc, {"S1": {"image_id": "A", "dist_m": 522.04, "position": "x"},
+                             "S2": {"image_id": "A", "dist_m": 900.0, "position": "y"}})
+    a = doc["frames"][0]
+    assert a["station"] == "S1" and a["stations"] == ["S1", "S2"]
+    assert a["station_dist_m"] == {"S1": 522.0, "S2": 900.0}
+    assert doc["frames"][1]["station"] == "S4" and "station_source" not in doc["frames"][1]
+    tag_station_frames(doc, {"S2": {"image_id": "C", "dist_m": 10.0, "position": "z"}})
+    assert doc["frames"][0]["station"] is None and "stations" not in doc["frames"][0]
+    assert doc["frames"][2]["station"] == "S2" and doc["frames"][1]["station"] == "S4"
