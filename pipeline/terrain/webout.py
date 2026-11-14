@@ -281,7 +281,7 @@ def terrain_checks(xcheck: dict | None, slope_summary: dict | None,
         sc = {"median_abs_diff_deg": cmp_["median_abs_diff_deg"],
               "definition": cmp_.get("definition")}
         bp = {str(b): row["blocked_pct_of_known"] for b, row in slope_summary["discs"].items()}
-    return {"note": "WS1 terrain checks shown on the scorecard; never used for routing "
-                    "(HiRISE DTMs) or reported from data/interim files",
+    return {"note": "WS1 terrain checks without a web file of their own (manifest keys cite "
+                    "validation/coverage.json); the HiRISE DTMs are never used for routing",
             "hirise_xcheck": xc, "slope_compare": sc, "blocked_pct_of_known": bp,
             "conservative": conservative}
