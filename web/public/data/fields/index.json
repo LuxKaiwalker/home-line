@@ -1,0 +1,140 @@
+{
+ "dummy": false,
+ "bounds": [
+  137.319359,
+  -4.868421,
+  137.444641,
+  -4.743579
+ ],
+ "width": 1480,
+ "height": 1480,
+ "res_m": 5.0,
+ "fields": {
+  "nom_104/home_bearing": {
+   "file": "fields/nom_104/home_bearing.png",
+   "scale": 0.01,
+   "units": "deg",
+   "scenario": "nom_104"
+  },
+  "nom_104/o2_home": {
+   "file": "fields/nom_104/o2_home.png",
+   "scale": 0.01,
+   "units": "L",
+   "scenario": "nom_104"
+  },
+  "nom_104/o2_home_worst_10": {
+   "file": "fields/nom_104/o2_home_worst_10.png",
+   "scale": 0.01,
+   "units": "L",
+   "scenario": "nom_104",
+   "radius_m_effective": 12.0
+  },
+  "nom_104/o2_home_worst_100": {
+   "file": "fields/nom_104/o2_home_worst_100.png",
+   "scale": 0.01,
+   "units": "L",
+   "scenario": "nom_104",
+   "radius_m_effective": 102.0
+  },
+  "nom_104/o2_home_worst_50": {
+   "file": "fields/nom_104/o2_home_worst_50.png",
+   "scale": 0.01,
+   "units": "L",
+   "scenario": "nom_104",
+   "radius_m_effective": 51.0
+  },
+  "nom_104/t_home": {
+   "file": "fields/nom_104/t_home.png",
+   "scale": 0.1,
+   "units": "min",
+   "scenario": "nom_104"
+  },
+  "nom_104/t_home_worst_10": {
+   "file": "fields/nom_104/t_home_worst_10.png",
+   "scale": 0.1,
+   "units": "min",
+   "scenario": "nom_104",
+   "radius_m_effective": 12.0
+  },
+  "nom_104/t_home_worst_100": {
+   "file": "fields/nom_104/t_home_worst_100.png",
+   "scale": 0.1,
+   "units": "min",
+   "scenario": "nom_104",
+   "radius_m_effective": 102.0
+  },
+  "nom_104/t_home_worst_50": {
+   "file": "fields/nom_104/t_home_worst_50.png",
+   "scale": 0.1,
+   "units": "min",
+   "scenario": "nom_104",
+   "radius_m_effective": 51.0
+  },
+  "nom_120/o2_home": {
+   "file": "fields/nom_120/o2_home.png",
+   "scale": 0.01,
+   "units": "L",
+   "scenario": "nom_120"
+  },
+  "nom_120/t_home": {
+   "file": "fields/nom_120/t_home.png",
+   "scale": 0.1,
+   "units": "min",
+   "scenario": "nom_120"
+  },
+  "nom_80/o2_home": {
+   "file": "fields/nom_80/o2_home.png",
+   "scale": 0.01,
+   "units": "L",
+   "scenario": "nom_80"
+  },
+  "nom_80/t_home": {
+   "file": "fields/nom_80/t_home.png",
+   "scale": 0.1,
+   "units": "min",
+   "scenario": "nom_80"
+  },
+  "opt_104/o2_home": {
+   "file": "fields/opt_104/o2_home.png",
+   "scale": 0.01,
+   "units": "L",
+   "scenario": "opt_104"
+  },
+  "opt_104/t_home": {
+   "file": "fields/opt_104/t_home.png",
+   "scale": 0.1,
+   "units": "min",
+   "scenario": "opt_104"
+  },
+  "opt_120/o2_home": {
+   "file": "fields/opt_120/o2_home.png",
+   "scale": 0.01,
+   "units": "L",
+   "scenario": "opt_120"
+  },
+  "opt_120/t_home": {
+   "file": "fields/opt_120/t_home.png",
+   "scale": 0.1,
+   "units": "min",
+   "scenario": "opt_120"
+  },
+  "opt_80/o2_home": {
+   "file": "fields/opt_80/o2_home.png",
+   "scale": 0.01,
+   "units": "L",
+   "scenario": "opt_80"
+  },
+  "opt_80/t_home": {
+   "file": "fields/opt_80/t_home.png",
+   "scale": 0.1,
+   "units": "min",
+   "scenario": "opt_80"
+  },
+  "slope": {
+   "file": "fields/shared/slope.png",
+   "scale": 0.01,
+   "units": "deg",
+   "scenario": null
+  }
+ }
+}

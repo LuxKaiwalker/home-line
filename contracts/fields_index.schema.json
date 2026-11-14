@@ -2,8 +2,8 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "homeline/contracts/fields_index.schema.json",
   "title": "fields/index.json",
-  "description": "Index of HUD field PNGs (F18, F21). Each PNG is 8-bit RGBA, value = (R*256 + G) * scale, B = 0, A = 255 valid / 0 unknown (contracts/README.md). Index file: requires \"dummy\".",
-  "x-contract-version": "1.0.0",
+  "description": "Index of HUD field PNGs (F18, F21). Each PNG is 8-bit RGBA, value = (R*256 + G) * scale, B = 0, A = 255 valid / 0 unknown (contracts/README.md). Index file: requires \"dummy\". v1.1.1: optional per-entry grid (bounds, width, height, res_m) and stencil for fields on their own grid: the way-home pointer fields/{scenario}/pointer.png (WS7 proposal, WS2 pointer on the native 3 m route grid; scale 1, units \"move\").",
+  "x-contract-version": "1.1.1",
   "x-source": "SPEC §6.1, §6.2",
   "type": "object",
   "properties": {
@@ -57,6 +57,43 @@
               "null"
             ],
             "description": "scenario id, or null for shared fields (e.g. slope)"
+          },
+          "bounds": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "minItems": 4,
+            "maxItems": 4,
+            "description": "[w, s, e, n] lon/lat deg of this entry's own grid (outer pixel edges); absent = the index's top-level grid (v1.1.1)"
+          },
+          "width": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "px of this entry's own grid (v1.1.1)"
+          },
+          "height": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "px of this entry's own grid (v1.1.1)"
+          },
+          "res_m": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "description": "m per px of this entry's own grid, e.g. 3 for the pointer (v1.1.1)"
+          },
+          "stencil": {
+            "type": "array",
+            "items": {
+              "type": "array",
+              "items": {
+                "type": "integer"
+              },
+              "minItems": 2,
+              "maxItems": 2
+            },
+            "minItems": 1,
+            "description": "pointer only: move k (the PNG count) -> [drow, dcol]; next pixel = (row + drow, col + dcol), rows grow southwards; A = 0 = no move (pad or unreached). From WS2 engine/pointer_offsets.json (v1.1.1)"
           }
         },
         "required": [

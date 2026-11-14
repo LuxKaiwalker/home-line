@@ -2,8 +2,8 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "homeline/contracts/card.schema.json",
   "title": "cards/{station}.json",
-  "description": "Station card (F12, F15). Landmark names come from config/landmarks.yaml, coordinates verified at H0; never typed by hand.",
-  "x-contract-version": "1.0.0",
+  "description": "Station card (F12, F15). Landmark names come from config/landmarks.yaml, coordinates verified at H0; never typed by hand. make web (C) merges WS3's horizon/public/cards/{S}.json (navcam, skyline_error_deg, panorama_png, landmarks) with WS2's engine/public/cards/{S}.timeline.json (timeline, margin_binding, contingency, access block); a station missing either part gets no card. v1.1.1: margin_binding may be null (no route or no access cell); optional access block and producer extras.",
+  "x-contract-version": "1.1.1",
   "x-source": "SPEC §6",
   "type": "object",
   "properties": {
@@ -33,6 +33,27 @@
             "string",
             "null"
           ]
+        },
+        "stop_id": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "WS3 Navcam stop id (v1.1.1)"
+        },
+        "dist_to_observer_m": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "frame position to the card observer, m (v1.1.1)"
+        },
+        "credit": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "image credit (v1.1.1)"
         }
       },
       "required": [
@@ -90,6 +111,17 @@
           },
           "dist_km": {
             "type": "number"
+          },
+          "kind": {
+            "type": "string",
+            "description": "gazetteer kind, e.g. official (v1.1.1)"
+          },
+          "above_skyline": {
+            "type": [
+              "boolean",
+              "null"
+            ],
+            "description": "centre above the computed skyline (v1.1.1)"
           }
         },
         "required": [
@@ -126,17 +158,200 @@
         "leave",
         "turn_back"
       ],
-      "description": "EVA time, min"
+      "description": "EVA time, min; null when the station is not on the route"
     },
     "margin_binding": {
       "enum": [
         "O2",
         "daylight",
-        "dose"
-      ]
+        "dose",
+        null
+      ],
+      "description": "the margin term that binds at this station; null when the station is not on the route or has no access cell (v1.1.1)"
     },
     "contingency": {
       "type": "string"
+    },
+    "station": {
+      "type": "string",
+      "pattern": "^S[0-9]+$",
+      "description": "station id (v1.1.1)"
+    },
+    "scenario": {
+      "type": "string",
+      "description": "scenario of the timeline part, e.g. nom_104 (v1.1.1)"
+    },
+    "on_route": {
+      "type": "boolean",
+      "description": "station is on the scenario's route (v1.1.1)"
+    },
+    "margin_min": {
+      "type": [
+        "number",
+        "null"
+      ],
+      "description": "binding margin at the station, min; null = not on the route (v1.1.1)"
+    },
+    "t_home_min": {
+      "type": [
+        "number",
+        "null"
+      ],
+      "description": "walk home from the access cell in the scenario, min (v1.1.1)"
+    },
+    "o2_home_L": {
+      "type": [
+        "number",
+        "null"
+      ],
+      "description": "O2 for that walk home, L (v1.1.1)"
+    },
+    "science": {
+      "type": "object",
+      "description": "science point (stations.yaml, never moved) (v1.1.1)",
+      "properties": {
+        "lon": {
+          "type": "number"
+        },
+        "lat": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "lon",
+        "lat"
+      ]
+    },
+    "access": {
+      "type": "object",
+      "properties": {
+        "lon": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "access cell longitude, deg east; null = no access cell"
+        },
+        "lat": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "access cell latitude, deg; null = no access cell"
+        },
+        "dist_m": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "access_dist_m: science point to access cell, m; null = no access cell"
+        },
+        "t_home_min": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "walk home from the access cell, min"
+        },
+        "o2_home_L": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "O2 for the walk home from the access cell, L"
+        },
+        "reason": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "why there is no access cell (null when there is one)"
+        },
+        "walk_in": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "description": "straight-line walk-in from the access cell to the science point; not modelled by the router (null when there is no access cell)",
+          "properties": {
+            "dist_m": {
+              "type": "number",
+              "minimum": 0,
+              "description": "m"
+            },
+            "modelled": {
+              "const": false,
+              "description": "always false: the walk-in leg is not routed"
+            },
+            "rise_m": {
+              "type": [
+                "number",
+                "null"
+              ],
+              "description": "science point minus access cell height, m"
+            },
+            "mean_slope_deg": {
+              "type": [
+                "number",
+                "null"
+              ],
+              "description": "mean along-track slope, deg (3 m samples, bilinear on elev_3m)"
+            },
+            "max_slope_deg": {
+              "type": [
+                "number",
+                "null"
+              ],
+              "description": "max along-track slope, deg"
+            },
+            "max_terrain_slope_deg": {
+              "type": [
+                "number",
+                "null"
+              ],
+              "description": "max WS1 cell max-slope of the cells crossed, deg"
+            }
+          }
+        },
+        "radius_m": {
+          "type": "number",
+          "minimum": 0,
+          "description": "access_radius_m (config/variants.yaml route)"
+        },
+        "rule": {
+          "type": "string",
+          "description": "access-cell rule in words"
+        }
+      },
+      "required": [],
+      "description": "access cell (C/user decision 2026-11-14 11:40): nearest walkable cell within access_radius_m of the science point; the route ends here and the card shows both points and the walk-in (v1.1.1, from WS2)"
+    },
+    "observer": {
+      "type": "object",
+      "description": "WS3 horizon observer (science or access point, position label) (v1.1.1)"
+    },
+    "provisional": {
+      "type": "boolean",
+      "description": "WS3: observer position provisional (v1.1.1)"
+    },
+    "skyline_error_scope": {
+      "type": "string",
+      "description": "what skyline_error_deg measures (v1.1.1)"
+    },
+    "landmarks_note": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "description": "why fewer than 3 landmarks are listed (v1.1.1)"
+    },
+    "parts": {
+      "type": "object",
+      "description": "make web merge record: source file and producer of each part (v1.1.1)"
+    },
+    "dummy": {
+      "type": "boolean",
+      "description": "optional; true only in data-dummy/"
     }
   },
   "required": [

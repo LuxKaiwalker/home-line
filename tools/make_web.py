@@ -20,9 +20,18 @@ AGENTS.md: web-facing files reach web/public/data/ only via `make web` (owner C)
    * WS1 ``cellstate_3m.tif`` -> ``terrain/cellstate.png`` + ``terrain/cellstate.json``
      (contracts/cellstate.schema.json): one pixel per routing cell, RGBA, counts = state
      (0 assessed, 1 blocked), A = 0 unknown.
+   * Station cards (C decision 2026-11-14 11:42): ``cards/{S}.json`` = WS3's
+     ``horizon/public/cards/{S}.json`` (navcam, skyline error, panorama, landmarks) merged with
+     WS2's ``engine/public/cards/{S}.timeline.json`` (timeline, margin, contingency, access).
+     A station lacking either part gets no card (and no card images): it is reported missing
+     under the owner of the absent part. Parts that disagree (station id, science point, access
+     cell) are refused. The ``*.timeline.json`` parts never reach the web tree.
 4. Manifest. ``pipeline.provenance.manifest.merge`` (WS6) of the data/interim/manifest/
    fragments -> web/public/data/manifest.json. Until WS1 records through ``manifest.record``,
    its ``terrain/manifest_pending.json`` (same entry format) is merged as WS1's fragment.
+   Entries citing a web file that this run does not write (a skipped owner's, an output still
+   missing, a card not built) are left out, as are a skipped owner's entries citing its
+   ``data/interim/`` sources; entries citing other pipeline-internal ``data/`` files stay.
 5. Validate. ``tools/validate_contracts.py`` (contracts, dummy flags, 50 MB) and
    ``pipeline.provenance.check_h0`` (no manifest time or file mtime before H0).
 6. Report. Files present and missing, grouped by owner workstream; size per top-level folder.
@@ -37,6 +46,7 @@ import io
 import json
 import math
 import os
+import re
 import shutil
 import sys
 import tempfile
@@ -69,6 +79,12 @@ CELLSTATE_JSON = "terrain/cellstate.json"
 CELLSTATE_PNG = "terrain/cellstate.png"
 CELLSTATE_CODES = {"0": "assessed", "1": "blocked", "2": "unknown"}
 TILE_SUFFIX = {"webp": ".webp", "png": ".png"}
+CARD_PARTS = {"WS3": re.compile(r"^(S[0-9]+)\.json$"),
+              "WS2": re.compile(r"^(S[0-9]+)\.timeline\.json$")}
+CARD_PART_NAME = {"WS3": "horizon part (WS3)", "WS2": "timeline part (WS2)"}
+CARD_PART_SRC = {"WS3": "data/interim/horizon/public/cards/{S}.json",
+                 "WS2": "data/interim/engine/public/cards/{S}.timeline.json"}
+CARD_DROP = {"WS3": ("station", "producer", "built_utc"), "WS2": ("station",)}
 WS1_PENDING = "terrain/manifest_pending.json"
 WS1_FRAGMENT = "pipeline__terrain__build.json"
 
@@ -86,7 +102,7 @@ class Rule:
     root: str
     pattern: str
     to: str | None = None
-    kind: str = "copy"  # copy | tiles | cellstate
+    kind: str = "copy"  # copy | tiles | cellstate | card_part | card_image
 
     @property
     def src(self) -> str:
@@ -96,7 +112,19 @@ class Rule:
     def web(self) -> str:
         if self.kind == "tiles":
             return f"{self.to}/{{z}}/{{x}}/{{y}}"
+        if self.kind == "card_part":
+            return f"cards/{{S}}.json ({CARD_PART_NAME[self.owner]})"
         return self.to or self.pattern
+
+    @property
+    def skip_patterns(self) -> list[str]:
+        """Web paths whose manifest entries are left out when this rule's owner is skipped."""
+        own = f"data/interim/{self.src}"  # entries that cite the interim source itself
+        if self.kind == "tiles":
+            return [f"{self.to}/*", own]
+        if self.kind == "card_part":  # no card can be merged without this part
+            return ["cards/*.json", "cards/*/*", own]
+        return [self.to or self.pattern, own]
 
 
 # contracts/README.md path table -> producer output paths. Only these patterns are copied, never
@@ -121,11 +149,12 @@ RULES: list[Rule] = [
     Rule("WS2", "engine/public", "pad.json"),
     Rule("WS2", "engine/public", "siting.png"),
     Rule("WS2", "engine/public", "siting_png.json"),
+    Rule("WS2", "engine/public", "cards/*.timeline.json", kind="card_part"),
     # WS3 horizon: V2 (pipeline/validation/v2_skyline.py V2_OUT); horizon/public/ mirrors the
-    # web tree for the card images (+ card JSON) and the 3D horizon ring
+    # web tree for the card images (+ card horizon part) and the 3D horizon ring
     Rule("WS3", "horizon/validation", "v2.json", to="validation/v2.json"),
-    Rule("WS3", "horizon/public", "cards/*.json"),
-    Rule("WS3", "horizon/public", "cards/*/*.png"),
+    Rule("WS3", "horizon/public", "cards/*.json", kind="card_part"),
+    Rule("WS3", "horizon/public", "cards/*/*.png", kind="card_image"),
     Rule("WS3", "horizon/public", "fp3d/horizon_ring.json"),
     # WS4 conditions (pipeline/conditions/config.py INTERIM / conditions/)
     *(Rule("WS4", "conditions", f"{n}.json", to=f"conditions/{n}.json")
@@ -177,11 +206,24 @@ class Copy:
 
 
 @dataclass
+class CardMerge:
+    station: str
+    parts: dict[str, Path]  # owner -> source part
+    doc: dict  # the merged card
+
+    @property
+    def dst(self) -> Path:
+        return Path("cards") / f"{self.station}.json"
+
+
+@dataclass
 class Plan:
     copies: list[Copy] = field(default_factory=list)
     missing: list[tuple[str, str, str]] = field(default_factory=list)  # (owner, web, source)
     refused: list[str] = field(default_factory=list)
     skipped: list[str] = field(default_factory=list)
+    cards: list[CardMerge] = field(default_factory=list)
+    unbuilt_cards: list[str] = field(default_factory=list)  # stations with a part but no card
 
     @property
     def tiles(self) -> list[Copy]:
@@ -218,6 +260,7 @@ def plan(interim: Path = INTERIM, rules: list[Rule] = RULES, dummy_tree: Path = 
     seen: dict[Path, Path] = {}
     dummy_root = dummy_tree.resolve()
     h0_ts = h0.timestamp() if h0 is not None else None
+    card_parts: dict[str, dict[str, Path]] = defaultdict(dict)
     for rule in rules:
         matches = sorted(q for q in interim.glob(rule.src) if q.is_file())
         if not matches:
@@ -235,6 +278,14 @@ def plan(interim: Path = INTERIM, rules: list[Rule] = RULES, dummy_tree: Path = 
                 continue
             if h0_ts is not None and src.stat().st_mtime < h0_ts:
                 p.refused.append(f"refused: {src} was written before H0 ({rule.owner})")
+                continue
+            if rule.kind == "card_part":
+                m = CARD_PARTS[rule.owner].match(src.name)
+                if m is None:
+                    p.skipped.append(f"skipped: {src} is not a {CARD_PART_NAME[rule.owner]} "
+                                     f"(name {CARD_PARTS[rule.owner].pattern})")
+                else:
+                    card_parts[m.group(1)][rule.owner] = src
                 continue
             tile = None
             if rule.kind == "tiles":
@@ -259,7 +310,111 @@ def plan(interim: Path = INTERIM, rules: list[Rule] = RULES, dummy_tree: Path = 
         if above:
             p.skipped.append(f"skipped: {above} tiles of data/interim/{rule.src} above maxzoom "
                              f"{settings['maxzoom']} (config/web.yaml)")
+    pair_cards(p, card_parts, {r.owner for r in rules if r.kind == "card_part"}, seen)
     return p
+
+
+# --------------------------------------------------------------------------- station cards
+
+
+class CardMergeError(ValueError):
+    pass
+
+
+def _same(a, b, tol: float = 1e-6) -> bool:
+    if a is None or b is None:
+        return a is None and b is None
+    return abs(float(a) - float(b)) <= tol
+
+
+def merge_card(station: str, horizon: dict, timeline: dict,
+               sources: dict[str, str] | None = None) -> dict:
+    """``cards/{station}.json`` from WS3's horizon part and WS2's timeline part.
+
+    Nothing is computed: every key comes from one part. Refused (CardMergeError) when a part
+    names another station, both parts set the same key, or they disagree on the science point
+    or the access cell (WS3's horizon observer must stand where WS2's route ends)."""
+    for owner, doc in (("WS3", horizon), ("WS2", timeline)):
+        if not isinstance(doc, dict):
+            raise CardMergeError(f"{station}: {CARD_PART_NAME[owner]} is not an object")
+        if doc.get("station", station) != station:
+            raise CardMergeError(f"{station}: {CARD_PART_NAME[owner]} is for station "
+                                 f"{doc.get('station')!r}")
+    h = {k: v for k, v in horizon.items() if k not in CARD_DROP["WS3"]}
+    t = {k: v for k, v in timeline.items() if k not in CARD_DROP["WS2"]}
+    clash = sorted(set(h) & set(t))
+    if clash:
+        raise CardMergeError(f"{station}: both parts set {clash}")
+    obs = h.get("observer") or {}
+    sci = t.get("science") or {}
+    acc = t.get("access") or {}
+    if "science_lon" in obs and sci and not (_same(obs.get("science_lon"), sci.get("lon"))
+                                             and _same(obs.get("science_lat"), sci.get("lat"))):
+        raise CardMergeError(f"{station}: science point differs (WS3 observer "
+                             f"{obs.get('science_lon')}, {obs.get('science_lat')}; WS2 "
+                             f"{sci.get('lon')}, {sci.get('lat')})")
+    if acc:
+        at_access = obs.get("position") == "access_cell"
+        if acc.get("lon") is None and at_access:
+            raise CardMergeError(f"{station}: WS3 horizon is at an access cell but WS2 has none "
+                                 "(re-run the WS3 cards after the engine run)")
+        if acc.get("lon") is not None and obs and not (
+                at_access and _same(obs.get("lon"), acc["lon"])
+                and _same(obs.get("lat"), acc.get("lat"))):
+            raise CardMergeError(f"{station}: WS3 horizon observer ({obs.get('position')}, "
+                                 f"{obs.get('lon')}, {obs.get('lat')}) is not WS2's access cell "
+                                 f"({acc['lon']}, {acc.get('lat')}) (re-run the WS3 cards after "
+                                 "the engine run)")
+    parts = {"WS3": {"producer": horizon.get("producer"), "built_utc": horizon.get("built_utc")},
+             "WS2": {"producer": timeline.get("producer", "WS2 pipeline/engine/cards.py")}}
+    for owner, src in (sources or {}).items():
+        parts[owner] = {"source": src, **parts[owner]}
+    return {"station": station, **t, **h, "parts": {"merged_by": SCRIPT, **parts}}
+
+
+def pair_cards(p: Plan, card_parts: dict[str, dict[str, Path]], owners: set[str],
+               seen: dict[Path, Path]) -> None:
+    """Merge the card parts station by station; a station lacking a part gets no card (missing
+    under the absent part's owner, or a skip note if that owner is skipped) and no images."""
+    for st in sorted(card_parts, key=lambda s: int(s[1:])):
+        parts = card_parts[st]
+        lacking = [o for o in CARD_PARTS if o not in parts]
+        if lacking:
+            p.unbuilt_cards.append(st)
+            for o in lacking:
+                if o in owners:
+                    p.missing.append((o, f"cards/{st}.json ({CARD_PART_NAME[o]})",
+                                      CARD_PART_SRC[o].format(S=st)))
+                else:
+                    p.skipped.append(f"skipped: cards/{st}.json not built ({o} skipped)")
+            continue
+        try:
+            docs = {o: json.loads(parts[o].read_text(encoding="utf-8")) for o in CARD_PARTS}
+            doc = merge_card(st, docs["WS3"], docs["WS2"],
+                             {o: CARD_PART_SRC[o].format(S=st) for o in CARD_PARTS})
+        except (OSError, UnicodeDecodeError, json.JSONDecodeError, CardMergeError) as exc:
+            p.refused.append(f"refused: card {st}: {exc}")
+            continue
+        cm = CardMerge(st, parts, doc)
+        if cm.dst in seen:
+            p.refused.append(f"refused: card {st} and {seen[cm.dst]} both map to {cm.dst}")
+            continue
+        seen[cm.dst] = parts["WS3"]
+        p.cards.append(cm)
+    built = {c.station for c in p.cards}
+    images = [c for c in p.copies if c.kind == "card_image"]
+    for c in images:
+        if c.dst.parts[1] not in built:
+            p.copies.remove(c)
+            p.skipped.append(f"skipped: {c.src} (no card {c.dst.parts[1]})")
+
+
+def write_cards(cards: list[CardMerge], public: Path) -> None:
+    for c in cards:
+        out = public / c.dst
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_text(json.dumps(c.doc, indent=1, ensure_ascii=False) + "\n", encoding="utf-8")
+        keep_mtime(max(q.stat().st_mtime for q in c.parts.values()), out)
 
 
 def clear_public(public: Path) -> int:
@@ -474,10 +629,18 @@ def write_cellstate(c: Copy, public: Path, site: dict, out=print,
 
 
 def manifest_fragments(fragment_dir: Path, interim: Path, tmp: Path, out=print,
-                       skip_files: list[str] = ()) -> list[str]:
+                       skip_files: list[str] = (), written: set[str] | None = None) -> list[str]:
     """Stage the fragments to merge in ``tmp``; returns refusals (dummy-made fragments).
-    Entries whose ``file`` matches a ``skip_files`` pattern (a skipped owner's web paths) are
-    left out, so the manifest never names a file that make web did not write."""
+    Entries whose ``file`` matches a ``skip_files`` pattern (a skipped owner's paths), or names
+    a web path (not ``data/...``) outside ``written`` (an output missing this run), are left
+    out, so the manifest never names a web file that make web did not write."""
+
+    def drop(f: str) -> bool:
+        if any(fnmatchcase(f, pat) for pat in skip_files):
+            return True
+        return written is not None and bool(f) and not f.startswith("data/") \
+            and f not in written
+
     refused = []
     tmp.mkdir(parents=True, exist_ok=True)
     for f in sorted(fragment_dir.glob("*.json")) if fragment_dir.is_dir() else []:
@@ -488,18 +651,23 @@ def manifest_fragments(fragment_dir: Path, interim: Path, tmp: Path, out=print,
         if bad:
             refused.append(f"refused: manifest fragment {f} has dummy entries ({bad[:3]} ...)")
             continue
-        if skip_files:
-            kept = {k: e for k, e in frag.items()
-                    if not any(fnmatchcase(str(e.get("file", "")), pat) for pat in skip_files)}
-            if len(kept) < len(frag):
-                out(f"manifest: {len(frag) - len(kept)} entries of {f.name} left out "
-                    "(owner skipped)")
+        kept = {k: e for k, e in frag.items()
+                if not (isinstance(e, dict) and drop(str(e.get("file") or "")))}
+        if len(kept) < len(frag):
+            out(f"manifest: {len(frag) - len(kept)} entries of {f.name} left out (their file "
+                "is not written this run: owner skipped or output missing)")
             (tmp / f.name).write_text(json.dumps(kept), encoding="utf-8")
             continue
         shutil.copy2(f, tmp / f.name)
     pending = interim / WS1_PENDING
     if pending.is_file() and not (tmp / WS1_FRAGMENT).exists():
-        shutil.copy2(pending, tmp / WS1_FRAGMENT)
+        frag = json.loads(pending.read_text(encoding="utf-8"))
+        kept = {k: e for k, e in frag.items()
+                if not (isinstance(e, dict) and drop(str(e.get("file") or "")))}
+        if len(kept) < len(frag):
+            out(f"manifest: {len(frag) - len(kept)} entries of {WS1_PENDING} left out (their "
+                "file is not written this run)")
+        (tmp / WS1_FRAGMENT).write_text(json.dumps(kept), encoding="utf-8")
         out(f"manifest: merging WS1 data/interim/{WS1_PENDING} as {WS1_FRAGMENT} (bridge until "
             "WS1 records through pipeline.provenance.manifest.record)")
     return refused
@@ -521,6 +689,9 @@ def owner_report(p: Plan, out=print) -> None:
     present: dict[str, int] = defaultdict(int)
     for c in p.copies:
         present[c.owner] += 1
+    for cm in p.cards:
+        for o in cm.parts:
+            present[o] += 1
     missing: dict[str, list] = defaultdict(list)
     for owner, web, src in p.missing:
         missing[owner].append((web, src))
@@ -531,6 +702,9 @@ def owner_report(p: Plan, out=print) -> None:
             "outputs missing")
         for web, src in missing.get(o, []):
             out(f"    missing {web}  <- {src}")
+    if p.cards or p.unbuilt_cards:
+        out(f"cards: built {', '.join(c.station for c in p.cards) or 'none'}; not built "
+            f"{', '.join(p.unbuilt_cards) or 'none'}")
 
 
 def dangling(public: Path) -> list[str]:
@@ -556,6 +730,12 @@ def dangling(public: Path) -> list[str]:
         for s in json.loads(st.read_text()):
             if isinstance(s, dict) and isinstance(s.get("card"), str):
                 need(s["card"], f"stations.json {s.get('id')}")
+    for card in sorted((public / "cards").glob("*.json")) if (public / "cards").is_dir() else []:
+        doc = json.loads(card.read_text())
+        nav = doc.get("navcam") or {}
+        for ref in (nav.get("url_local"), nav.get("overlay_png"), doc.get("panorama_png")):
+            if isinstance(ref, str):
+                need(ref, f"cards/{card.name}")
     for rel, key in (("siting_png.json", "image"), (CELLSTATE_JSON, "image")):
         if (public / rel).is_file():
             need(json.loads((public / rel).read_text())[key], rel)
@@ -597,8 +777,15 @@ def run(interim: Path = INTERIM, public: Path = PUBLIC, *, fragments: Path | Non
     p = plan(interim, [r for r in rules if r.owner not in skip_owners], dummy_tree, settings, h0)
     with tempfile.TemporaryDirectory() as td:
         staged = Path(td) / "fragments"
-        p.refused += manifest_fragments(fragments, interim, staged, out,
-                                        [r.web.replace("{z}/{x}/{y}", "*") for r in skipped])
+        skip_files = [pat for r in skipped for pat in r.skip_patterns]
+        skip_files += [pat for st in p.unbuilt_cards for pat in (f"cards/{st}.json",
+                                                                  f"cards/{st}/*")]
+        written = {c.dst.as_posix() for c in p.copies} | {c.dst.as_posix() for c in p.cards}
+        if any(c.kind == "cellstate" for c in p.copies):
+            written |= {CELLSTATE_PNG, CELLSTATE_JSON}
+        if p.tiles:
+            written.add(TILEJSON)
+        p.refused += manifest_fragments(fragments, interim, staged, out, skip_files, written)
         for line in p.skipped:
             out(line)
         if p.refused:
@@ -609,9 +796,10 @@ def run(interim: Path = INTERIM, public: Path = PUBLIC, *, fragments: Path | Non
 
         removed = clear_public(public)
         for c in p.copies:
-            if c.kind == "copy":
+            if c.kind in ("copy", "card_image"):
                 (public / c.dst).parent.mkdir(parents=True, exist_ok=True)
                 shutil.copy2(c.src, public / c.dst)
+        write_cards(p.cards, public)
         for c in p.copies:
             if c.kind == "cellstate":
                 write_cellstate(c, public, site, out, fragment_dir=record_dir or fragments)
@@ -619,7 +807,9 @@ def run(interim: Path = INTERIM, public: Path = PUBLIC, *, fragments: Path | Non
                 for f in (record_dir or fragments).glob("tools__make_web*.json"):
                     shutil.copy2(f, staged / f.name)
         write_tiles(p.tiles, public, settings, interim, out)
-        out(f"make web: {len(p.copies)} source files ({removed} old files removed)")
+        n_src = len(p.copies) + sum(len(c.parts) for c in p.cards)
+        out(f"make web: {n_src} source files, {len(p.cards)} cards merged ({removed} old files "
+            "removed)")
 
         ok = True
         try:
@@ -671,6 +861,8 @@ def main(argv: list[str] | None = None) -> int:
         for c in p.copies:
             if c.kind != "tiles":
                 print(f"{c.owner:5} {c.kind:9} {c.src} -> {c.dst}")
+        for cm in p.cards:
+            print(f"WS3+2 card      {cm.parts['WS3']} + {cm.parts['WS2']} -> {cm.dst}")
         if p.tiles:
             print(f"WS1   tiles     {len(p.tiles)} basemap tiles -> {BASEMAP_DEST}/")
         for line in p.skipped + p.refused:

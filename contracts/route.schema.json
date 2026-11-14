@@ -2,8 +2,8 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "homeline/contracts/route.schema.json",
   "title": "route_{scenario}.geojson",
-  "description": "Traverse route legs (F9). SPEC §6 says 'legs' and fixes no properties; properties are free until WS2 proposes them to C. v1.1.0: leg properties proposed by WS2 (pipeline/engine/traverse.py); all optional.",
-  "x-contract-version": "1.1.0",
+  "description": "Traverse route legs (F9). SPEC §6 says 'legs' and fixes no properties; properties are free until WS2 proposes them to C. v1.1.0: leg properties proposed by WS2 (pipeline/engine/traverse.py); all optional. v1.1.1: optional to_access_dist_m.",
+  "x-contract-version": "1.1.1",
   "x-source": "SPEC §6",
   "type": "object",
   "properties": {
@@ -88,6 +88,13 @@
                   "type": "number"
                 },
                 "description": "EVA time at every geometry vertex, min (same length as the coordinates)"
+              },
+              "to_access_dist_m": {
+                "type": [
+                  "number",
+                  "null"
+                ],
+                "description": "walk-in from the arrival access cell to the science point, m (not modelled) (v1.1.1)"
               }
             },
             "required": []

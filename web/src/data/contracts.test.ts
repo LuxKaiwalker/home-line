@@ -33,8 +33,8 @@ describe('SCHEMA_MAP mirrors tools/validate_contracts.py', () => {
       expect(SCHEMA_MAP[i][1], pattern).toEqual(JSON.parse(readFileSync(resolve(REPO, 'contracts', file), 'utf8')))
     })
   })
-  it('contracts are v1.x (v1.1.0 is additive; untouched schemas stay 1.0.0)', () => {
-    expect(contractVersions().sort()).toEqual(['1.0.0', '1.1.0'])
+  it('contracts are v1.x (v1.1.x is additive; untouched schemas keep their version)', () => {
+    expect(contractVersions().sort()).toEqual(['1.0.0', '1.1.0', '1.1.1'])
   })
 })
 

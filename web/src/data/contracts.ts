@@ -1,5 +1,5 @@
 // Data path pattern -> contract schema, mirroring SCHEMA_MAP in tools/validate_contracts.py
-// (contracts v1.1.0; contracts.test.ts checks the two tables match row by row). Schemas are
+// (contracts v1.1.1; contracts.test.ts checks the two tables match row by row). Schemas are
 // imported from contracts/ at build time, so the browser checks the frozen contract itself.
 import bandsSchema from '../../../contracts/bands.schema.json'
 import cardSchema from '../../../contracts/card.schema.json'
