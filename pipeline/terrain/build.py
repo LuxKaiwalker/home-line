@@ -4,7 +4,11 @@
     python -m pipeline.terrain.build mask      # source_mask.tif, coverage.json, coverage.png
     python -m pipeline.terrain.build coreg     # coreg.json, drive_ends_coreg.json
     python -m pipeline.terrain.build slope     # slope_1m, slope5_1m, roughness_5m, ridge_index,
-                                               # elev_3m, maxslope_3m, cellstate_3m, dataedge_3m
+                                               # elev_3m, maxslope_3m, dataedge_3m, ridge_3m,
+                                               # then `cells`
+    python -m pipeline.terrain.build cells     # D22/D23: slope_3m, stepguard_3m, cellstate_3m
+                                               # (nominal), _optimistic, _conservative, summary
+                                               # cellstate_3m_variants.json (atomic swap)
     python -m pipeline.terrain.build xcheck    # hirise_xcheck.json (+ HiRISE-vs-merged shift)
     python -m pipeline.terrain.build validation  # coverage.json/.png, coreg.json (contracts),
                                                  # coverage.json terrain_checks = xcheck, slope
@@ -12,10 +16,8 @@
     python -m pipeline.terrain.build grid      # grid.json (grids, lon/lat bounds, height datum)
     python -m pipeline.terrain.build all
     python -m pipeline.terrain.build farfield_v2  # ctx_20m_v2.tif + farfield_v2.json
-    python -m pipeline.terrain.build manifest     # re-record every WS1 manifest key from outputs
+    python -m pipeline.terrain.build manifest     # rebuild the WS1 manifest fragment from outputs
     python -m pipeline.terrain.build validation_staged  # validation files to terrain/staged/
-    python -m pipeline.terrain.build conservative # after V1 (WS6): cellstate_3m_conservative.tif
-                                                  # + .json (skipped while v1.json is missing)
 
 Every displayed number goes to the provenance manifest (``record``).
 """
@@ -452,7 +454,6 @@ def step_slope() -> dict:
         _, rough = S.plane_fit(dem, g1.res, rw)
     rio.write_cog(OUT / "roughness_5m.tif", rough, g1,
                   tags={"method": f"RMS residual of a plane over {rw}x{rw} 1 m cells (m)"})
-    pad = G.pad_xy()
     known1 = (mask == coverage.HIRISE) & np.isfinite(s1) & np.isfinite(s5)
     d = (s5 - s1)[known1]
     nogo = float(site["slope"]["nogo_deg"]["nominal"])
@@ -475,35 +476,110 @@ def step_slope() -> dict:
     r0 = int(round((g1.y0 - g3.y0) / g1.res))
     c0 = int(round((g3.x0 - g1.x0) / g1.res))
     win = (slice(r0, r0 + g3.height * k), slice(c0, c0 + g3.width * k))
-    elev3, max3, st3 = routing.routing_grids(dem[win], s1[win], mask[win], nogo, k=k)
-    edge3 = coverage.data_edge(st3, g3.res, float(site["coverage"]["source_edge_buffer_m"]))
-    rio.write_cog(OUT / "elev_3m.tif", elev3, g3, tags={"method": "mean of 3x3 1 m cells"})
-    rio.write_cog(OUT / "maxslope_3m.tif", max3, g3,
+    cg = routing.cell_grids(dem[win], s1[win], mask[win], res_m=g1.res,
+                            step_guard_deg=float(site["slope"]["step_guard_deg"]), k=k)
+    st_known = np.where(cg.known, routing.ASSESSED, routing.UNKNOWN).astype(np.uint8)
+    edge3 = coverage.data_edge(st_known, g3.res, float(site["coverage"]["source_edge_buffer_m"]))
+    rio.write_cog(OUT / "elev_3m.tif", cg.elev, g3, tags={"method": "mean of 3x3 1 m cells"})
+    rio.write_cog(OUT / "maxslope_3m.tif", cg.maxslope, g3,
                   tags={"method": "max Horn 1 m slope inside the 3 m cell (deg)"})
-    rio.write_cog(OUT / "cellstate_3m.tif", st3, g3, nodata=255,
-                  tags={"codes": f"0 assessed, 1 blocked (max slope > {nogo} deg nominal), "
-                                 "2 unknown"})
     rio.write_cog(OUT / "dataedge_3m.tif", edge3.astype(np.uint8), g3, nodata=255,
                   tags={"codes": "1 = known cell within source_edge_buffer_m of unknown"})
+    del cg
     ridge3 = routing._blocks(ridge[win], k)
     with np.errstate(invalid="ignore"):
         ridge3max = np.where(np.isfinite(ridge3).all(axis=2), ridge3.max(axis=2), np.nan)
     rio.write_cog(OUT / "ridge_3m.tif", (ridge3max > thr).astype(np.uint8), g3, nodata=255,
                   tags={"codes": f"1 = any 1 m cell has ridge_index > {thr} m (haul mask)"})
 
-    out = {"slope_compare": cmp_, "nogo_deg": nogo, "ridge_threshold_m": thr,
-           "ridge_frac_1m": _r(float(np.nanmean(ridge > thr)), 4), "discs": {}}
-    for b, rad in disc_radii_m().items():
-        dsk = coverage.disc(g3, pad, rad)
-        known = dsk & (st3 != routing.UNKNOWN)
-        out["discs"][str(b)] = {
-            "blocked_pct_of_known": _r(100 * float((st3[known] == routing.BLOCKED).mean()), 3),
-            "beyond_tested_pct_of_known": _r(100 * float(
-                ((max3[known] > site["slope"]["flag_beyond_tested_deg"])
-                 & (max3[known] <= nogo)).mean()), 3),
-            "data_edge_cells": int((edge3 & dsk).sum())}
+    out = {"slope_compare": cmp_, "ridge_threshold_m": thr,
+           "ridge_frac_1m": _r(float(np.nanmean(ridge > thr)), 4)}
     _w(OUT / "slope_summary.json", out)
+    del dem, s1, mask, ridge
+    step_cells()  # D22/D23 cell slope, step guard, cell states; adds slope_summary "discs"
     return out  # manifest keys: _record_validation (validation/coverage.json terrain_checks)
+
+
+VARIANT_FILES = {"nominal": "cellstate_3m.tif",  # canonical (make web -> terrain/cellstate)
+                 "optimistic": "cellstate_3m_optimistic.tif",
+                 "conservative": "cellstate_3m_conservative.tif"}  # -> cellstate_conservative
+CELLS_JSON = "cellstate_3m_variants.json"
+
+
+def step_cells() -> dict:
+    """D22/D23 (SPEC 11): 3 m plane-fit slope, step guard and the cell states at the three no-go
+    limits, from dem_1m.tif, slope_1m.tif and source_mask.tif (nothing else is rewritten;
+    maxslope_3m.tif stays the rough-footing overlay). Every raster is written to a tmp_ name
+    first and swapped in only when all are complete (others read data/interim/terrain/)."""
+    site = G.site()
+    sl = site["slope"]
+    nogo = {v: float(sl["nogo_deg"][v]) for v in VARIANT_FILES}
+    sgd = float(sl["step_guard_deg"])
+    dem, g1 = rio.read(OUT / "dem_1m.tif")
+    s1, _ = rio.read(OUT / "slope_1m.tif")
+    mask, _ = rio.read(OUT / "source_mask.tif")
+    g3 = G.route_grid()
+    k = int(round(g3.res / g1.res))
+    r0 = int(round((g1.y0 - g3.y0) / g1.res))
+    c0 = int(round((g3.x0 - g1.x0) / g1.res))
+    win = (slice(r0, r0 + g3.height * k), slice(c0, c0 + g3.width * k))
+    cg = routing.cell_grids(dem[win], s1[win], mask[win], res_m=g1.res, step_guard_deg=sgd, k=k)
+    del dem, s1, mask
+    mx, _ = rio.read(OUT / "maxslope_3m.tif")  # the published rough-footing grid, unchanged
+    if mx.shape != cg.maxslope.shape or not np.array_equal(np.isnan(mx), np.isnan(cg.maxslope)) \
+            or np.nanmax(np.abs(mx - cg.maxslope)) > 0:
+        raise ValueError("maxslope_3m.tif differs from the max 1 m slope of slope_1m.tif: "
+                         "run `build slope`")
+    states = {v: cg.state(d) for v, d in nogo.items()}
+    pending = [("slope_3m.tif", cg.slope, None,
+                {"method": "D22: slope (deg) of the least-squares plane through the cell's nine "
+                           "1 m elevations (dem_1m.tif); NaN = unknown cell"}),
+               ("stepguard_3m.tif", cg.stepguard_u8(), 255,
+                {"codes": f"D22 step guard: 1 = some 1 m Horn slope inside the cell > {sgd:g} "
+                          "deg (blocked at every no-go), 0 = no, 255 = unknown cell"})]
+    for v, f in VARIANT_FILES.items():
+        pending.append((f, states[v], 255,
+                        {"codes": f"0 assessed, 1 blocked (3 m plane-fit slope > {nogo[v]:g} deg "
+                                  f"{v}, or step guard > {sgd:g} deg; D22/D23), 2 unknown",
+                         "variant": v, "nogo_deg": f"{nogo[v]:g}"}))
+    for name, arr, nd, tags in pending:
+        rio.write_cog(OUT / ("tmp_" + name), arr, g3, nodata=nd, tags=tags)
+    for name, *_ in pending:
+        (OUT / ("tmp_" + name)).replace(OUT / name)
+    pad = G.pad_xy()
+    radii = disc_radii_m()
+    doc = webout.cell_state_summary(
+        states, cg.slope, cg.stepguard, cg.known, cg.maxslope, g3, pad, radii, nogo_deg=nogo,
+        step_guard_deg=sgd, rasters={v: f"data/interim/terrain/{f}"
+                                     for v, f in VARIANT_FILES.items()})
+    _w(OUT / CELLS_JSON, doc)
+    old = OUT / "cellstate_3m_conservative.json"  # pre-D23 summary (20 - V1 RMSE): retired
+    if old.exists():
+        old.unlink()
+    # slope_summary.json "discs": blocked share of known cells (nominal) and 17-20 deg share
+    summ_p = OUT / "slope_summary.json"
+    summ = json.loads(summ_p.read_text()) if summ_p.exists() else {}
+    nom = states["nominal"]
+    bt = float(sl["flag_beyond_tested_deg"])
+    summ.update(nogo_deg=nogo["nominal"], step_guard_deg=sgd, discs={})
+    for b, rad in radii.items():
+        dsk = coverage.disc(g3, pad, rad)
+        known = dsk & cg.known
+        with np.errstate(invalid="ignore"):
+            beyond = (cg.slope[known] > bt) & (cg.slope[known] <= nogo["nominal"]) \
+                & ~cg.stepguard[known]
+        summ["discs"][str(b)] = {
+            "blocked_pct_of_known": _r(100 * float((nom[known] == routing.BLOCKED).mean()), 3),
+            "beyond_tested_pct_of_known": _r(100 * float(beyond.mean()), 3),
+            "beyond_tested_definition": f"plane-fit slope in ({bt:g}, {nogo['nominal']:g}] deg "
+                                        "and no step guard",
+            "data_edge_cells": None}
+    edge, _ = rio.read(OUT / "dataedge_3m.tif")
+    for b, rad in radii.items():
+        summ["discs"][str(b)]["data_edge_cells"] = int(((edge == 1)
+                                                        & coverage.disc(g3, pad, rad)).sum())
+    _w(summ_p, summ)
+    return doc
 
 
 # --------------------------------------------------------------------------- far field (WS3)
@@ -1060,14 +1136,23 @@ def _record_validation(doc: dict, cg: dict) -> None:
 
 
 def step_manifest() -> dict:
-    """Re-record every WS1 manifest key from the outputs on disk (no raster is read or written):
-    stations.json, coverage.json (incl. terrain_checks), coreg.json."""
+    """Rebuild WS1's manifest fragment from the outputs on disk (no raster is read or written):
+    the fragment is cleared first, so keys WS1 no longer produces are dropped; then stations.json,
+    coverage.json (incl. terrain_checks) and coreg.json are recorded again."""
+    from pipeline.provenance import manifest as M
+
     def j(name):
         return json.loads((OUT / name).read_text())
 
+    frag = M._fragment_dir(None) / M._fragment_name(M._rel(SCRIPT))
+    before = set(json.loads(frag.read_text())) if frag.exists() else set()
+    if frag.exists():
+        frag.unlink()
     _record_stations(j("stations.json"))
     _record_validation(j("coverage.json"), j("coreg.json"))
-    return {"replayed": True}
+    after = set(json.loads(frag.read_text()))
+    return {"dropped": sorted(before - after), "added": sorted(after - before),
+            "n": len(after)}
 
 
 def step_grid() -> dict:
@@ -1085,60 +1170,16 @@ HEIGHT_DATUM = (
     "R = 3,396,190 m sphere. Horizontal: analysis CRS (config/site.yaml crs.analysis_proj).")
 
 
-# --------------------------------------------------------------------------- conservative limit
-
-
-V1_JSON = G.REPO / "data" / "interim" / "validation" / "v1.json"
-CONS_TIF = "cellstate_3m_conservative.tif"
-CONS_JSON = "cellstate_3m_conservative.json"
-
-
-def _v1_rmse() -> float | None:
-    """WS6's V1 slope RMSE (top-level ``rmse_deg`` of validation/v1.json); None before V1."""
-    if not V1_JSON.exists():
-        return None
-    return json.loads(V1_JSON.read_text())["rmse_deg"]
-
-
-def step_conservative() -> dict:
-    """cellstate_3m_conservative.tif (+ .json summary): the nominal cell states re-drawn at the
-    conservative no-go = 20 deg - V1 RMSE (site.yaml slope.nogo_deg.conservative, WS6
-    data/interim/validation/v1.json rmse_deg). New files only; cellstate_3m.tif is untouched.
-    Skipped (nothing written) while V1 has not run. Run ``validation`` afterwards to publish the
-    summary in validation/coverage.json ``terrain_checks.conservative``."""
-    if not V1_JSON.exists():
-        print(f"conservative: skipped, {V1_JSON} missing (V1, WS6, must run first)")
-        return {"skipped": "no V1"}
-    rmse = _v1_rmse()
-    nogo = routing.conservative_nogo(G.site()["slope"]["nogo_deg"]["conservative"], rmse)
-    st, g3 = rio.read(OUT / "cellstate_3m.tif")
-    mx, _ = rio.read(OUT / "maxslope_3m.tif")
-    out = routing.restate(st, mx, nogo)
-    tmp = OUT / ("tmp_" + CONS_TIF)
-    rio.write_cog(tmp, out, g3, nodata=255,
-                  tags={"codes": f"0 assessed, 1 blocked (max 1 m slope > {nogo:.3f} deg = 20 - "
-                                 f"V1 RMSE {rmse:.3f}), 2 unknown"})
-    tmp.replace(OUT / CONS_TIF)
-    doc = webout.conservative_summary(st, out, g3, G.pad_xy(), disc_radii_m(), nogo_deg=nogo,
-                                      v1_rmse_deg=rmse, v1_source="validation/v1.json rmse_deg")
-    _w(OUT / CONS_JSON, doc)
-    return doc
+# --------------------------------------------------------------------------- terrain checks
 
 
 def _terrain_checks() -> dict:
-    """validation/coverage.json ``terrain_checks`` from WS1's interim summaries (absent -> null).
-    A conservative summary made from another V1 RMSE than v1.json's current one is refused."""
+    """validation/coverage.json ``terrain_checks`` from WS1's interim summaries (absent -> null)."""
     def j(name):
         p = OUT / name
         return json.loads(p.read_text()) if p.exists() else None
 
-    cons = j(CONS_JSON)
-    if cons is not None:
-        rmse = _v1_rmse()
-        if rmse is None or round(float(rmse), 3) != cons["v1_rmse_deg"]:
-            raise ValueError(f"{CONS_JSON} was made with V1 RMSE {cons['v1_rmse_deg']}, v1.json "
-                             f"now has {rmse}: run `build conservative` first")
-    return webout.terrain_checks(j("hirise_xcheck.json"), j("slope_summary.json"), cons)
+    return webout.terrain_checks(j("hirise_xcheck.json"), j("slope_summary.json"), j(CELLS_JSON))
 
 
 def _record_terrain_checks(tc: dict, F: str) -> None:
@@ -1151,16 +1192,20 @@ def _record_terrain_checks(tc: dict, F: str) -> None:
                tc["slope_compare"]["median_abs_diff_deg"], "deg", F, SCRIPT)
     for b, v in (tc.get("blocked_pct_of_known") or {}).items():
         record(f"terrain.blocked_pct.{b}min", v, "%", F, SCRIPT)
-    con = tc.get("conservative")
-    if con:
-        record("terrain.nogo_conservative_deg", con["nogo_deg"], "deg", F, SCRIPT)
-        record("terrain.conservative.v1_rmse_deg", con["v1_rmse_deg"], "deg", F, SCRIPT)
-        for row in con["discs"]:
-            for k in ("assessed_pct", "blocked_pct", "unknown_pct", "nominal_blocked_pct",
-                      "newly_blocked_pct"):
-                if k in row:
-                    record(f"terrain.conservative.disc_{row['budget_min']}.{k}", row[k], "%", F,
-                           SCRIPT)
+    cs = tc.get("cell_states")
+    if cs:  # D22/D23 (replaces the pre-D23 terrain.conservative.* / nogo_conservative_deg keys)
+        record("terrain.step_guard_deg", cs["step_guard_deg"], "deg", F, SCRIPT)
+        for row in cs.get("discs_stepguard") or []:
+            record(f"terrain.stepguard.disc_{row['budget_min']}.pct", row["stepguard_pct"], "%",
+                   F, SCRIPT)
+        for v, vd in cs["variants"].items():
+            record(f"terrain.nogo_deg.{v}", vd["nogo_deg"], "deg", F, SCRIPT)
+            for row in vd["discs"]:
+                for k in ("assessed_pct", "blocked_pct", "unknown_pct", "blocked_slope_pct",
+                          "blocked_stepguard_only_pct", "maxslope_rule_blocked_pct"):
+                    if k in row:
+                        record(f"terrain.cellstates.{v}.disc_{row['budget_min']}.{k}", row[k],
+                               "%", F, SCRIPT)
 
 
 # --------------------------------------------------------------------------- CLI
@@ -1170,7 +1215,7 @@ STEPS = {"dem": step_dem, "mask": step_mask, "coreg": step_coreg, "xcheck": step
          "slope": step_slope, "farfield": step_farfield, "crism": step_crism,
          "stations": step_stations, "validation": step_validation, "grid": step_grid,
          "ortho": step_ortho}
-OPTIONAL = {"conservative": step_conservative,  # after V1 (WS6); not part of "all"
+OPTIONAL = {"cells": step_cells,  # D22/D23 cell states alone (also run at the end of "slope")
             "farfield_v2": step_farfield_v2,  # ctx_20m_v2.tif (C decides the switch)
             "manifest": step_manifest,  # re-record every WS1 key from the outputs on disk
             "validation_staged": lambda: step_validation(OUT / "staged")}  # compare, then swap
@@ -1183,7 +1228,7 @@ def main(argv=None) -> int:
     todo = list(STEPS) if "all" in a.steps else a.steps
     for s in todo:
         r = {**STEPS, **OPTIONAL}[s]()
-        print(s, "->", r if isinstance(r, Path) else "ok")
+        print(s, "->", r if isinstance(r, Path) or s == "manifest" else "ok")
     return 0
 
 

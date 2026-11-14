@@ -23,9 +23,13 @@ coverage:
   pad_check_reading: data_coverage  # decided (user for S/C, 12:37 CET): cells with data (assessed + blocked); state0_only still reported
 coreg: {search_m: 200, step_m: 2, metric: MAD}
 slope:
-  method: horn_3x3
+  method: horn_3x3                # 1 m slope (slope_1m.tif): step guard and the rough-footing overlay
+  cell_slope: plane_fit_3x3       # D22 (user 2026-11-14 16:16 CET): 3 m cell slope = least-squares plane through the cell's nine 1 m elevations (slope_3m.tif)
+  step_guard_deg: 30              # D22: also block a cell if any 1 m slope inside it exceeds this (stepguard_3m.tif); assumed
+  step_guard_assumed: true        # step_guard_deg is assumed (D22: "step guard, config, assumed")
+  rough_footing: maxslope_3m      # D22: the old max-1 m-slope grid is kept only as the "rough footing" overlay
   compare_window_m: 5
-  nogo_deg: {optimistic: 25, nominal: 20, conservative: "20 - v1_rmse_deg"}
+  nogo_deg: {optimistic: 25, nominal: 20, conservative: 17}  # conservative = 17 per D23 (user 2026-11-14 16:16 CET), replaces "20 - v1_rmse_deg"; V1 is a validation, not a margin
   flag_beyond_tested_deg: 17
 ridge: {median_window_m: 15, threshold_m: 0.75, assumed: true}
 roughness_window_m: 5
