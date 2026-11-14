@@ -6,23 +6,30 @@ Rule: contracts/backend/README.md "Result hash":
 canonical_inputs = plan_inputs with every default filled in, `title` and `pad.id` removed
 (team-lead decision 11: the pad is identified by its lon/lat, which stay in the hash), every number
 as a float rounded to 6 decimals (-0.0 -> 0.0), JSON with sorted keys, no spaces, UTF-8.
+`contract_version` stays in the hash (the rule removes only the title; changing that is C's call).
 
 Known answers (derived by hand, independently of server/engine/hashing.py):
-- OFFICIAL_CANONICAL is the official default inputs written out from config:
+- OFFICIAL_CANONICAL_TMPL is the official default inputs written out from config:
   crew.yaml (body 75 kg, suit 104 kg, tools 10 kg, VO2max 36, effort cap 0.5, eva_h 6.5,
   o2_margin.reserve_min_at_effort_cap 30), conditions.yaml (clock.eva_start_lmst_h 9,
-  storm_replay.tripwire_at route_max_t_home), backend.yaml (walkback [30, 60], d_allow 0.5,
-  contract_version 1.0.0), the official pad rank1 of web/public/data/scenarios/pads/index.json
-  (137.401783, -4.77748; its id is not hashed), station mode best, storm 2024-05-20, no user
-  points, and every station of stations.json at its dwell (stations.yaml dwell_min 30).
-- OFFICIAL_HASH_FIXED is that string hashed with the fixed identity FIXED_IDENTITY, derived with
-  coreutils, not Python:
-      printf '%s\\0%s\\0%s\\0%s' "$OFFICIAL_CANONICAL" 0123456789abcdef0123456789abcdef01234567 \\
+  storm_replay.tripwire_at route_max_t_home), backend.yaml (walkback [30, 60], d_allow 0.5), the
+  official pad rank1 of web/public/data/scenarios/pads/index.json (137.401783, -4.77748; its id is
+  not hashed), station mode best, storm 2024-05-20, no user points, and every station of
+  stations.json at its dwell (stations.yaml dwell_min 30). Its contract_version is the
+  placeholder @CV@: the official inputs carry config/backend.yaml contract_version (read from
+  config here, so a contract version bump does not break these tests).
+- OFFICIAL_HASH_PINNED is the template with contract_version PINNED_CV ("1.0.1"), hashed with the
+  fixed identity FIXED_IDENTITY, derived with coreutils, not Python:
+      C=<OFFICIAL_CANONICAL_TMPL with @CV@ replaced by 1.0.1>
+      printf '%s\\0%s\\0%s\\0%s' "$C" 0123456789abcdef0123456789abcdef01234567 \\
         sha256:1fef9c5747acbd487e0a3090f6e9617eba1c8627e25095db683e18ab7589099d \\
         sha256:0000000000000000000000000000000000000000000000000000000000000000 \\
         | sha256sum | cut -c1-16
   (the config hash is the repo/fixture value of tools.make_bundle.config_hash, S2 note).
-  A change to any of those config values or to the official pad changes both pins on purpose.
+  The pinned test passes contract_version PINNED_CV explicitly, so it holds across version bumps;
+  OFFICIAL_HASH (at the config's contract_version) is the same formula over the template, via
+  hashlib. A change to any other config value above or to the official pad changes the pins on
+  purpose: re-derive them with the command above.
 """
 
 import copy
@@ -48,9 +55,9 @@ from server.engine.hashing import (  # noqa: E402
 from server.engine.version import Unavailable  # noqa: E402
 from server.settings import settings  # noqa: E402
 
-OFFICIAL_CANONICAL = (
+OFFICIAL_CANONICAL_TMPL = (
     '{"conditions":{"d_allow_mgy":0.5,"storm":"2024-05-20","tripwire_at":"route_max_t_home"},'
-    '"contract_version":"1.0.0",'
+    '"contract_version":"@CV@",'
     '"crew":{"body_mass_kg":75.0,"effort_cap_frac":0.5,"suit_kg":104.0,"tools_kg":10.0,'
     '"vo2max_ml_kg_min":36.0},'
     '"eva":{"duration_h":6.5,"reserve_min":30.0,"start_lmst_h":9.0,'
@@ -64,10 +71,21 @@ FIXED_IDENTITY = EngineIdentity(
     config_hash="sha256:1fef9c5747acbd487e0a3090f6e9617eba1c8627e25095db683e18ab7589099d",
     terrain_hash="sha256:" + "0" * 64,
 )
-OFFICIAL_HASH_FIXED = "0619e5787b1c1c37"
+PINNED_CV = "1.0.1"
+OFFICIAL_HASH_PINNED = "c81aafcf1a1ef64f"  # coreutils, see the module docstring
 HASH_RE = re.compile(r"^[0-9a-f]{16}$")  # openapi.yaml result hash pattern
 
-MINIMAL = {"contract_version": "1.0.0", "pad": {"lon": 137.401783, "lat": -4.77748}}
+
+def d57(canonical: str, ident: EngineIdentity = FIXED_IDENTITY) -> str:
+    """The README formula written out with hashlib (independent of hashing.py)."""
+    return hashlib.sha256("\0".join([canonical, *ident]).encode("utf-8")).hexdigest()[:16]
+
+
+CV = settings().contract_version  # config/backend.yaml contract_version
+OFFICIAL_CANONICAL = OFFICIAL_CANONICAL_TMPL.replace("@CV@", CV)
+OFFICIAL_HASH = d57(OFFICIAL_CANONICAL)  # official hash under FIXED_IDENTITY at the config version
+
+MINIMAL = {"contract_version": CV, "pad": {"lon": 137.401783, "lat": -4.77748}}
 
 
 def h(inputs, ident=FIXED_IDENTITY):
@@ -76,18 +94,26 @@ def h(inputs, ident=FIXED_IDENTITY):
 
 # ------------------------------------------------------------------ known answers ----
 def test_official_canonical_inputs_known_answer():
+    assert default_inputs()["contract_version"] == CV
     assert canonical_json(default_inputs()) == OFFICIAL_CANONICAL
 
 
+def test_official_hash_known_answer_pinned():
+    """Literal pin, independent of the config's contract version (passed explicitly)."""
+    assert h({**default_inputs(), "contract_version": PINNED_CV}) == OFFICIAL_HASH_PINNED
+    assert h({**MINIMAL, "contract_version": PINNED_CV}) == OFFICIAL_HASH_PINNED
+    assert d57(OFFICIAL_CANONICAL_TMPL.replace("@CV@", PINNED_CV)) == OFFICIAL_HASH_PINNED
+
+
 def test_official_hash_known_answer():
-    assert official_hash(FIXED_IDENTITY) == OFFICIAL_HASH_FIXED
-    assert h(default_inputs()) == OFFICIAL_HASH_FIXED
-    assert h(MINIMAL) == OFFICIAL_HASH_FIXED
+    assert official_hash(FIXED_IDENTITY) == OFFICIAL_HASH
+    assert h(default_inputs()) == OFFICIAL_HASH
+    assert h(MINIMAL) == OFFICIAL_HASH
 
 
-def test_hash_is_the_d57_formula():
-    payload = "\0".join([OFFICIAL_CANONICAL, *FIXED_IDENTITY]).encode("utf-8")
-    assert OFFICIAL_HASH_FIXED == hashlib.sha256(payload).hexdigest()[:16]
+def test_contract_version_is_hashed():
+    """contracts/backend/README.md removes only the title (plus pad.id, decision 11)."""
+    assert h({**MINIMAL, "contract_version": "1.99.0"}) != OFFICIAL_HASH
 
 
 def test_hash_format_from_config():
@@ -113,7 +139,7 @@ def test_key_order_and_whitespace_do_not_matter():
     rev = {k: (dict(reversed(list(v.items()))) if isinstance(v, dict) else v)
            for k, v in reversed(list(full.items()))}
     text_b = json.dumps(rev, separators=(" , ", " :   "))
-    assert h(json.loads(text_a)) == h(json.loads(text_b)) == OFFICIAL_HASH_FIXED
+    assert h(json.loads(text_a)) == h(json.loads(text_b)) == OFFICIAL_HASH
 
 
 @pytest.mark.parametrize("block, field", [
@@ -125,7 +151,7 @@ def test_key_order_and_whitespace_do_not_matter():
 ])
 def test_omitted_default_equals_explicit_default(block, field):
     explicit = {**MINIMAL, block: {field: default_inputs()[block][field]}}
-    assert h(explicit) == h(MINIMAL) == OFFICIAL_HASH_FIXED
+    assert h(explicit) == h(MINIMAL) == OFFICIAL_HASH
 
 
 def test_omitted_station_defaults_equal_explicit():
@@ -133,14 +159,14 @@ def test_omitted_station_defaults_equal_explicit():
     for st in ({"mode": "best"}, {"mode": "best", "custom": []},
                {"mode": "best", "dwell_min": {"S4": 30}},
                {"mode": "best", "dwell_min": dwell, "custom": []}):
-        assert h({**MINIMAL, "stations": st}) == OFFICIAL_HASH_FIXED, st
+        assert h({**MINIMAL, "stations": st}) == OFFICIAL_HASH, st
 
 
 def test_user_point_dwell_default_is_filled():
     pt = {"id": "U1", "lon": 137.4, "lat": -4.78}
     a = {**MINIMAL, "stations": {"mode": "best", "custom": [pt]}}
     b = {**MINIMAL, "stations": {"mode": "best", "custom": [pt], "dwell_min": {"U1": 30}}}
-    assert h(a) == h(b) != OFFICIAL_HASH_FIXED
+    assert h(a) == h(b) != OFFICIAL_HASH
     assert canonical_inputs(a)["stations"]["dwell_min"]["U1"] == 30.0
 
 
@@ -164,11 +190,11 @@ def test_float_noise_below_the_rounding_step():
     noisy = {**MINIMAL, "pad": {"lon": 137.401783 + 3e-10, "lat": -4.77748 - 4e-8},
              "crew": {"effort_cap_frac": 0.1 + 0.2 + 0.2 - 1e-12},  # 0.5 with float noise
              "conditions": {"d_allow_mgy": 0.5000001}}
-    assert h(noisy) == OFFICIAL_HASH_FIXED
+    assert h(noisy) == OFFICIAL_HASH
 
 
 def test_a_step_at_the_sixth_decimal_changes_the_hash():
-    assert h({**MINIMAL, "pad": {"lon": 137.401784, "lat": -4.77748}}) != OFFICIAL_HASH_FIXED
+    assert h({**MINIMAL, "pad": {"lon": 137.401784, "lat": -4.77748}}) != OFFICIAL_HASH
 
 
 def test_title_and_pad_id_are_not_hashed():
@@ -178,7 +204,7 @@ def test_title_and_pad_id_are_not_hashed():
     b = {**MINIMAL, "title": "My other title", "pad": {"id": "custom-x", "lon": 137.401783,
                                                        "lat": -4.77748}}
     c = {**MINIMAL, "pad": {"lon": 137.401783, "lat": -4.77748}}
-    assert h(a) == h(b) == h(c) == OFFICIAL_HASH_FIXED
+    assert h(a) == h(b) == h(c) == OFFICIAL_HASH
     for doc in (a, b):
         canon = canonical_inputs(doc)
         assert "title" not in canon and "id" not in canon["pad"]
@@ -227,7 +253,7 @@ CHANGES = {
 
 def test_every_result_affecting_field_changes_the_hash():
     hashes = {name: h({**MINIMAL, block: value}) for name, (block, value) in CHANGES.items()}
-    assert OFFICIAL_HASH_FIXED not in hashes.values()
+    assert OFFICIAL_HASH not in hashes.values()
     assert len(set(hashes.values())) == len(hashes)  # also pairwise distinct
 
 
@@ -247,7 +273,7 @@ def test_every_canonical_leaf_is_covered_by_a_change():
 @pytest.mark.parametrize("part", EngineIdentity._fields)
 def test_every_identity_part_changes_the_hash(part):
     ident = FIXED_IDENTITY._replace(**{part: getattr(FIXED_IDENTITY, part)[:-1] + "f"})
-    assert h(MINIMAL, ident) != OFFICIAL_HASH_FIXED
+    assert h(MINIMAL, ident) != OFFICIAL_HASH
 
 
 @pytest.mark.parametrize("bad", ["", "a\0b"])
@@ -261,7 +287,7 @@ def test_identity_parts_must_be_plain_strings(bad):
     [],
     {},
     {"pad": {"lon": 137.4, "lat": -4.78}},                                   # no contract_version
-    {"contract_version": "1.0.0"},                                           # no pad
+    {"contract_version": CV},                                              # no pad
     {**MINIMAL, "pad": {"lon": 137.4}},                                      # no lat
     {**MINIMAL, "pad": {"lon": 400, "lat": -4.78}},                          # lon out of range
     {**MINIMAL, "pad": {"lon": "137.4", "lat": -4.78}},                      # string number
