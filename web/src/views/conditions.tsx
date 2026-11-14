@@ -9,7 +9,7 @@ import { linear, log10Scale, logTicks, polyline } from '../chart/scale'
 import { AssumedTag, DummyNote, StatusTag } from '../components/labels'
 import { LooseTable } from '../components/Loose'
 import { CfgNum, DerivedNum, Num } from '../components/Num'
-import { sliderStops, tauMin } from './leash'
+import { leashSteps, tauMin } from './leash'
 import { Page, preactView, Show, useLoad } from './page'
 
 const F = 'conditions/rad.json'
@@ -84,48 +84,56 @@ export function RadChart({ rad }: { rad: Rad }) {
   )
 }
 
-/** D9: dose allowance slider. Off the file's default, tau is recomputed with the config formula. */
+/**
+ * D9: dose allowance slider. Range and step from config/conditions.yaml (build time); tau per step
+ * from rad.json leash.table (manifest keys rad.leash.table.{i}.*). A step the table lacks is
+ * computed in the browser with the config formula and labelled so.
+ */
 export function LeashSlider({ rad }: { rad: Rad }) {
-  const sl = CONFIG.dAllowSliderMgy
+  const steps = leashSteps(CONFIG.dAllowRangeMgy, CONFIG.dAllowStepMgy, rad.leash.table)
   const d0 = rad.leash.D_allow_mGy ?? CONFIG.dAllowMgy
   const [d, setD] = useState(d0)
-  if (!sl) {
-    return (
-      <p class="muted">
-        Dose-allowance slider (D9): waiting for its range in <code>config/conditions.yaml</code> (<code>leash.d_allow_slider_mgy</code>); the page will not
-        invent one.
-      </p>
-    )
-  }
-  const stops = sliderStops(sl.min, sl.max, sl.step)
-  const i = Math.max(0, stops.findIndex((s) => Math.abs(s - d) < 1e-9))
-  const atDefault = Math.abs(d - d0) < 1e-9
+  const i = Math.max(0, steps.findIndex((s) => Math.abs(s.d - d) < 1e-9))
+  const st = steps[i]
   const peak = rad.storm_2024.peak_uGy_day
   const latest = rad.latest.dose_rate_uGy_day
-  const how = (rate: string) => `60 × D_allow / Ḋ (config/conditions.yaml leash.formula), D_allow = ${d} mGy, Ḋ = ${rate} from ${F}`
+  const how = (rate: string) => `60 × D_allow / Ḋ (config/conditions.yaml leash.formula), D_allow = ${st.d} mGy, Ḋ = ${rate} from ${F}`
+  const k = (f: string) => `rad.leash.table.${st.rowIndex}.${f}`
   return (
     <div class="leash-slider">
       <label>
         Dose allowance per EVA{' '}
-        <input type="range" min={0} max={stops.length - 1} step={1} value={i} aria-label="Dose allowance per EVA" onInput={(e) => setD(stops[+(e.target as HTMLInputElement).value])} />{' '}
-        <b>{d} mGy</b> <AssumedTag note="Dose allowance per EVA: our assumption (D9), adjustable" />
+        <input
+          type="range"
+          min={0}
+          max={steps.length - 1}
+          step={1}
+          value={i}
+          aria-label="Dose allowance per EVA"
+          aria-valuetext={`${st.d} mGy`}
+          onInput={(e) => setD(steps[+(e.target as HTMLInputElement).value].d)}
+        />{' '}
+        <b>{st.row ? <Num v={st.row.D_allow_mGy} units="mGy" file={F} k={k('D_allow_mGy')} /> : `${st.d} mGy`}</b>{' '}
+        <AssumedTag note="Dose allowance per EVA: our assumption (D9), adjustable" />
       </label>
       <dl class="leash-out">
         <dt>Time on the allowance at the storm peak</dt>
         <dd class="strong">
-          {atDefault ? (
-            <Num v={rad.leash.tau_min_at_peak} units="min" file={F} k="rad.leash.tau_min_at_peak" />
-          ) : (
-            <DerivedNum v={roundTenth(tauMin(d, peak))} units="min" how={how('storm peak')} />
-          )}
+          {st.row ? <Num v={st.row.tau_min_at_peak} units="min" file={F} k={k('tau_min_at_peak')} /> : <DerivedNum v={roundTenth(tauMin(st.d, peak))} units="min" how={how('storm peak')} />}
         </dd>
         <dt>… at the latest measured rate</dt>
         <dd>
-          <DerivedNum v={roundTenth(tauMin(d, latest))} units="min" how={how('latest rate')} />
+          {st.row ? (
+            <Num v={st.row.tau_min_at_latest} units="min" file={F} k={k('tau_min_at_latest')} />
+          ) : (
+            <DerivedNum v={roundTenth(tauMin(st.d, latest))} units="min" how={how('latest rate')} />
+          )}
         </dd>
       </dl>
       <p class="caption">
-        At the default allowance the value is the pipeline's (rad.json); other allowances are computed in the browser from the same backed rate.
+        Range <CfgNum v={`${CONFIG.dAllowRangeMgy[0]}–${CONFIG.dAllowRangeMgy[1]}`} units="mGy" source="config/conditions.yaml: leash.d_allow_range_mgy" /> in{' '}
+        <CfgNum v={CONFIG.dAllowStepMgy} units="mGy" source="config/conditions.yaml: leash.d_allow_step_mgy" /> steps; each value is the pipeline's (rad.json leash table)
+        {steps.some((s) => !s.row) ? '; steps missing from the table are computed in the browser from the same backed rate and marked so' : ''}.
       </p>
     </div>
   )

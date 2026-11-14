@@ -2,16 +2,18 @@
 // KAT list), the assumptions table, the real / modelled / simulated table and the provenance
 // manifest (every on-screen number links here). Never in the default view (brief WS5 "Don't").
 import { useEffect, useMemo, useState } from 'preact/hooks'
-import { CITED, CONFIG } from '../config'
+import type { ComponentChildren } from 'preact'
+import { CITED, CONFIG, effortRateLMin } from '../config'
 import { data } from '../data/loader'
-import type { Manifest, ManifestEntry } from '../data/types'
+import type { Localisation, Manifest, ManifestEntry } from '../data/types'
 import { contractVersions } from '../data/contracts'
 import { formatValue, isEntry } from '../prov/provenance'
 import { getManifest } from '../prov/store'
 import type { Route } from '../router'
 import { DummyNote, StatusTag } from '../components/labels'
 import { LooseTable } from '../components/Loose'
-import { CfgNum, Num } from '../components/Num'
+import { CfgNum, DerivedNum, Num } from '../components/Num'
+import { f22Rows, f22Verdict, type F22Frame } from './f22'
 import { Page, preactView, Show, useLoad } from './page'
 
 export function manifestEntries(m: Manifest | null): [string, ManifestEntry][] {
@@ -205,7 +207,24 @@ function RadChecks() {
   )
 }
 
-const ASSUMPTIONS: { what: string; c: { value: unknown; source: string }; units?: string; basis: string }[] = [
+/** O2 reserve of the route margin (crew.yaml o2_margin, S review): minutes at the effort cap, and in litres. */
+export function o2Reserve(): { min: number; rateLMin: number; litres: number } {
+  const rateLMin = effortRateLMin({ effortCapFrac: CITED.effortCapFrac.value, vo2max: CITED.vo2maxMlKgMin.value, bodyMassKg: CITED.bodyMassKg.value })
+  const min = CITED.o2ReserveMinAtEffortCap.value
+  return { min, rateLMin: Math.round(rateLMin * 1000) / 1000, litres: Math.round(min * rateLMin * 100) / 100 }
+}
+
+function O2ReserveBasis() {
+  const r = o2Reserve()
+  return (
+    <>
+      Shuttle/EMU 30-min EVA reserve (NTRS 20140009556), S review: <DerivedNum v={r.litres} units="L" how={`${r.min} min × effort rate ${r.rateLMin} L/min (${CITED.o2EffortRateFormula.source}: ${CITED.o2EffortRateFormula.value})`} /> at{' '}
+      <DerivedNum v={r.rateLMin} units="L/min" how={`${CITED.o2EffortRateFormula.source}: ${CITED.o2EffortRateFormula.value}`} />
+    </>
+  )
+}
+
+const ASSUMPTIONS: { what: string; c: { value: unknown; source: string }; units?: string; basis: ComponentChildren }[] = [
   { what: 'Walkback budgets', c: CITED.walkbackBudgetsMin, units: 'min', basis: 'ICES-2026-127, "being considered"; not policy' },
   { what: 'Effort cap (fraction of VO₂max)', c: CITED.effortCapFrac, basis: 'ICES; NASA-STD-3001' },
   { what: 'VO₂max', c: CITED.vo2maxMlKgMin, units: 'mL/kg/min', basis: 'ICES; NASA-STD-3001' },
@@ -214,7 +233,9 @@ const ASSUMPTIONS: { what: string; c: { value: unknown; source: string }; units?
   { what: 'Body mass', c: CITED.bodyMassKg, units: 'kg', basis: 'Our assumption (D10)' },
   { what: 'Suit masses', c: CITED.suitMassesKg, units: 'kg', basis: '80 kg is our sensitivity value' },
   { what: 'Suit O₂ budget planned against (primary)', c: CITED.o2PrimaryL, units: 'L', basis: 'Derived: NASA EVA-EXP-0075, ICES-2026-127; metabolic only' },
-  { what: 'O₂ reserve in the route margin', c: CITED.o2ReserveFrac, basis: 'Our assumption' },
+  { what: 'O₂ reserve in the route margin (minutes at the effort cap)', c: CITED.o2ReserveMinAtEffortCap, units: 'min', basis: <O2ReserveBasis /> },
+  { what: 'O₂ use while working at a station', c: CITED.stationTaskRateLMin, units: 'L/min', basis: '1,000 BTU/hr ISS/EMU average; S review' },
+  { what: 'Access radius around a station', c: CITED.accessRadiusM, units: 'm', basis: 'Assumed (WS2); access-cell rule chosen by the user, 14 Nov 11:40' },
   { what: 'Slope limit, nominal', c: CITED.nogoNominalDeg, units: 'deg', basis: 'Scoville; our assumption' },
   { what: 'Slope limit, optimistic', c: CITED.nogoOptimisticDeg, units: 'deg', basis: 'Our assumption' },
   { what: 'Beyond tested suited data above', c: CITED.flagBeyondTestedDeg, units: 'deg', basis: 'IST-2 tested up to ≈17°' },
@@ -273,10 +294,12 @@ function Scorecard({ focus }: { focus?: string }) {
         <CoverageSection />
         <h3>RAD checks</h3>
         <RadChecks />
+        <h3>F22 · skyline fix on real Navcam frames (validation finding)</h3>
+        <F22Section />
+        <h3>X8 · visual-odometry drift on Curiosity drives (rover analogue)</h3>
+        <VoDriftSection />
         <h3>Known-answer tests</h3>
-        <p class="muted">
-          The KAT pass list has no web contract in contracts v{contractVersions().join(', ')} yet (WS6 proposed one; awaiting C). The full list runs in CI on every PR.
-        </p>
+        <KatSection />
       </section>
       <section>
         <h2>Assumptions</h2>
@@ -315,3 +338,185 @@ function Scorecard({ focus }: { focus?: string }) {
 }
 
 export const view = preactView((route: Route) => <Scorecard focus={route.name === 'scorecard' ? route.key : undefined} />)
+
+function F22Section() {
+  const l = useLoad(async () => {
+    const L = data()
+    const stations = await L.stations()
+    const frames: F22Frame[] = []
+    for (const st of stations) {
+      let id: string | null = null
+      try {
+        id = (await L.optional(() => L.card(st)))?.navcam.image_id ?? null
+      } catch {
+        id = null // card fails its contract: the station page reports it
+      }
+      frames.push({ station: st.id, image_id: id })
+    }
+    const locs: Record<string, Localisation | null> = {}
+    for (const f of frames) if (f.image_id) locs[f.image_id] = await L.optional(() => L.localisation(f.image_id!))
+    const fixes = await L.optional(() => L.fixes())
+    return { frames, locs, fixes }
+  })
+  const g = CONFIG.skylineFixGate
+  return (
+    <Show l={l} what="F22 skyline fix">
+      {({ frames, locs, fixes }) => {
+        const rows = f22Rows(frames, locs, g.toleranceM)
+        const v = f22Verdict(rows)
+        return (
+          <>
+            <p>
+              Each station card's Navcam frame, localised from its skyline alone against the elevation model. Gate: a result becomes a position fix only if it lands
+              within <CfgNum v={g.toleranceM} units="m" source={g.source} /> of where the frame was taken (the F22 known-answer tolerance).
+            </p>
+            <table class="mini">
+              <thead>
+                <tr>
+                  <th>Station</th>
+                  <th>Navcam frame</th>
+                  <th class="r">Position error</th>
+                  <th>Gate</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((r) => (
+                  <tr>
+                    <td>{r.station}</td>
+                    <td>{r.image_id ? <code>{r.image_id}</code> : <span class="muted">no card frame</span>}</td>
+                    <td class="r">
+                      {r.image_id ? <Num v={r.error_m} units="m" file={`localisation/${r.image_id}.json`} k={`nav.skyline.${r.image_id}.error_m`} /> : null}
+                    </td>
+                    <td>{r.pass === null ? <span class="muted">no result</span> : r.pass ? <b class="ok">pass</b> : <b class="bad">fail</b>}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <p>
+              <b>
+                {v.kind === 'none-pass'
+                  ? `No skyline fix passes the gate (${v.evaluated} station frames evaluated). The navigation plan uses station fixes; no skyline result is shown as a position fix.`
+                  : v.kind === 'some-pass'
+                    ? `Skyline fixes pass at ${v.passed.join(', ')}; the other stations keep their station fixes.`
+                    : 'No skyline-fix results in this data tree yet (WS9).'}
+              </b>{' '}
+              The far-field skyline barely constrains position at this site.
+            </p>
+            {fixes && (
+              <p>
+                Fixes used in the plan (nav/fixes.json):{' '}
+                {fixes.map((f, i) => (
+                  <>
+                    {i > 0 ? '; ' : ''}
+                    {f.type === 'station' ? `station fix at ${f.station}` : f.type === 'rover' ? 'rover fix' : `${f.type} fix`} at t ={' '}
+                    <Num v={f.t_eva_min} units="min" file="nav/fixes.json" k={`nav.fixes.${i}.t_eva_min`} />, σ{' '}
+                    <Num v={f.sigma_m} units="m" file="nav/fixes.json" k={`nav.fixes.${i}.sigma_m`} />
+                  </>
+                ))}
+                .
+              </p>
+            )}
+          </>
+        )
+      }}
+    </Show>
+  )
+}
+
+function VoDriftSection() {
+  const l = useLoad(() => data().optional(() => data().voDrift()))
+  const F = 'vo/drift.json'
+  return (
+    <Show l={l} what="Visual-odometry drift">
+      {(rows) =>
+        rows && rows.length ? (
+          <>
+            <p>
+              <span class="tag tag-assumed">{(rows.find((r) => typeof r.label === 'string')?.label as string) ?? 'rover analogue'}</span> Stereo visual odometry on
+              Curiosity's own drive frames, compared with the mission's drive-end positions.
+            </p>
+            <table class="mini">
+              <thead>
+                <tr>
+                  <th>Sol</th>
+                  <th>Drive</th>
+                  <th class="r">Length</th>
+                  <th class="r">End-point error</th>
+                  <th class="r">Drift</th>
+                  <th class="r">Heading drift</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((r, i) => (
+                  <tr>
+                    <td>
+                      <Num v={r.sol} file={F} k={`vo.drift.${i}.sol`} />
+                    </td>
+                    <td>{r.drive}</td>
+                    <td class="r">
+                      <Num v={r.length_m} units="m" file={F} k={`vo.drift.${i}.length_m`} />
+                    </td>
+                    <td class="r">
+                      <Num v={r.endpoint_error_m} units="m" file={F} k={`vo.drift.${i}.endpoint_error_m`} />
+                    </td>
+                    <td class="r">
+                      <Num v={r.drift_pct} units="%" file={F} k={`vo.drift.${i}.drift_pct`} />
+                    </td>
+                    <td class="r">
+                      <Num v={r.heading_drift_deg} units="deg" file={F} k={`vo.drift.${i}.heading_drift_deg`} />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            {typeof rows[0].truth === 'string' && <p class="caption">Reference: {rows[0].truth}.</p>}
+          </>
+        ) : (
+          <p class="muted">vo/drift.json not available yet (WS10).</p>
+        )
+      }
+    </Show>
+  )
+}
+
+interface Kats {
+  generated_utc: string
+  commit: string
+  runner: string
+  summary: { total: number; passed: number; failed: number; skipped: number }
+  tests: { id: string; area: string; features: string[]; outcome: string; reason: string | null }[]
+}
+
+function KatSection() {
+  const l = useLoad(() => data().optional(() => data().json<Kats>('validation/kats.json')))
+  const F = 'validation/kats.json'
+  return (
+    <Show l={l} what="KAT pass list">
+      {(k) =>
+        k ? (
+          <>
+            <p>
+              <Num v={k.summary.passed} file={F} k="kats.summary.passed" /> of <Num v={k.summary.total} file={F} k="kats.summary.total" /> known-answer tests pass
+              (failed <Num v={k.summary.failed} file={F} k="kats.summary.failed" />, skipped <Num v={k.summary.skipped} file={F} k="kats.summary.skipped" />), {k.runner}{' '}
+              at commit <code>{k.commit.slice(0, 10)}</code>, {k.generated_utc}.
+            </p>
+            {k.tests.some((t) => t.outcome !== 'passed') && (
+              <ul>
+                {k.tests
+                  .filter((t) => t.outcome !== 'passed')
+                  .map((t) => (
+                    <li>
+                      <code>{t.id}</code> {t.outcome}
+                      {t.reason ? `: ${t.reason}` : ''}
+                    </li>
+                  ))}
+              </ul>
+            )}
+          </>
+        ) : (
+          <p class="muted">validation/kats.json not available yet (WS6, contracts v{contractVersions().join(', ')}). The full list runs in CI on every PR.</p>
+        )
+      }
+    </Show>
+  )
+}

@@ -182,3 +182,11 @@ input[type='search'] { background: var(--panel-2); color: var(--ink); border: 1p
 .cuff-card tr.cuff-o2 td { font-weight: 600; }
 .loose code { font-size: 0.8rem; }
 .slot-placeholder { opacity: 0.9; }
+/* session 2: real data (access-cell rule, pending values, route stops) */
+.ok { color: var(--ok); }
+.pending { color: var(--warn); font-style: italic; border-bottom: 1px dotted var(--warn); cursor: help; }
+.toggle.inline { display: inline; margin-left: 0.5rem; }
+.sw-ring { width: 10px; height: 10px; border-radius: 50%; border: 2px solid var(--c); background: transparent; display: inline-block; }
+.station-marker.no-access { background: transparent; color: #ffd166; border: 2px dashed #ffd166; }
+.route-stops { margin: 0.25rem 0; padding-left: 1.4rem; }
+.route-stops li { padding: 0.05rem 0; }
