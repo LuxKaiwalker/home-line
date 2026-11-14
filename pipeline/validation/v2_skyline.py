@@ -6,6 +6,7 @@ horizon.yaml ``distance_classes_km``). Only the far-field figure may be quoted i
 
 from __future__ import annotations
 
+import csv
 import hashlib
 import json
 import math
@@ -161,7 +162,7 @@ def station_skyline_error(doc: dict) -> dict:
 
 def write_v2(doc: dict, path=V2_OUT, *, record_manifest: bool = True) -> Path:
     """Write v2.json and record v2.n_stops, v2.{class}.{n,median_deg,median_abs_deg,p90_abs_deg}
-    and skyline_error_deg.{S}.{class} (manifest file = web path validation/v2.json)."""
+    (manifest file = web path validation/v2.json)."""
     from pipeline.provenance.manifest import record  # noqa: PLC0415
 
     path = Path(path)
@@ -174,10 +175,7 @@ def write_v2(doc: dict, path=V2_OUT, *, record_manifest: bool = True) -> Path:
             for k in ("n", "median_deg", "median_abs_deg", "p90_abs_deg"):
                 record(f"v2.{c}.{k}", doc["summary"][c][k], "1" if k == "n" else "deg",
                        file=rel, script=__file__)
-        if doc["available"]:
-            for s, errs in station_skyline_error(doc).items():
-                for c, v in errs.items():
-                    record(f"skyline_error_deg.{s}.{c}", v, "deg", file=rel, script=__file__)
+        # card keys skyline_error_deg.{S}.* are recorded with the card (pipeline/horizon/cards.py)
     return path
 
 
@@ -246,14 +244,258 @@ def write_composites(doc: dict, frames_json=None, horizons_dir=None, out_dir=Non
     return n
 
 
+# --------------------------------------------------------------------------------------------
+# D7 preparation: manual-check sheet (horizon.yaml manual_check_sheet). Does not decide D7.
+# --------------------------------------------------------------------------------------------
+
+MANUAL_SHEET_DIR = hcfg.REPO / "data" / "interim" / "horizon" / "validation" / "manual_check"
+SHEET_FIELDS = ["image_id", "why", "sol", "stop_id", "station", "frame_az_deg", "v2_status",
+                "failure", "near_err_median_deg", "mid_err_median_deg", "far_err_median_deg",
+                "far_n", "far_pred_el_median_deg", "far_det_el_median_deg",
+                "far_dist_km_median", "best_cut_range_km", "far_det_minus_pred_cut_median_deg",
+                "composite", "verdict", "note"]
+
+
+def cut_engine(engine, max_range_m: float):
+    """Horizon engine over the same bands with ``sampling`` truncated at ``max_range_m`` (terrain
+    beyond it ignored): the sheet's visibility-range diagnostic."""
+    from pipeline.horizon.rays import HorizonEngine  # noqa: PLC0415
+
+    cfg = hcfg.load()
+    # segments past the range become empty (start beyond end), so the band order is unchanged
+    seg = [{**s_, "to_m": min(float(s_["to_m"]), float(max_range_m))} for s_ in cfg["sampling"]]
+    return HorizonEngine(engine.bands, cfg={**cfg, "sampling": seg})
+
+
+def best_cut(entry: dict, engine, observer: dict, az_step_deg: float):
+    """(range_km, median error, profile) of the cut range whose skyline best matches the
+    detector over the frame's far columns; (None, None, None) without far columns."""
+    best = (None, None, None)
+    for km in hcfg.load()["manual_check_sheet"]["cut_ranges_km"]:
+        eng = cut_engine(engine, float(km) * 1000.0)
+        prof = eng.horizon(observer["x"], observer["y"], z_obs=observer["z"],
+                           az_step_deg=az_step_deg)
+        e = cut_error(entry, prof)
+        if e is not None and (best[1] is None or abs(e) < abs(best[1])):
+            best = (float(km), e, prof)
+    return best
+
+
+def cut_error(entry: dict, prof_cut: HorizonProfile):
+    """Median (detected - predicted from the cut horizon) over the frame's far-class columns."""
+    c = entry.get("columns") or {}
+    az = [a for a, k in zip(c.get("az_deg", []), c.get("distance_class", []), strict=False)
+          if k == "far"]
+    det = [d for d, k in zip(c.get("el_detected_deg", []), c.get("distance_class", []),
+                             strict=False) if k == "far"]
+    if not az:
+        return None
+    e = np.asarray(det, dtype=float) - prof_cut.elevation_at(np.asarray(az, dtype=float))
+    e = e[np.isfinite(e)]
+    return round(float(np.median(e)), 3) if e.size else None
+
+
+def _median_where(cols: dict, key: str, cls: str):
+    v = [x for x, c in zip(cols.get(key, []), cols.get("distance_class", []), strict=False)
+         if c == cls and x is not None]
+    return round(float(np.median(v)), 3) if v else None
+
+
+def manual_check_rows(doc: dict, frames_by_id: dict | None = None) -> list[dict]:
+    """Rows of the manual-check sheet: the 20 % sample, every ok frame whose far-class median
+    error exceeds ``far_fail_abs_deg``, and (if configured) the failed frames. ``verdict`` and
+    ``note`` are left empty for the human reviewer."""
+    sc = hcfg.load()["manual_check_sheet"]
+    lim = float(sc["far_fail_abs_deg"])
+    frames_by_id = frames_by_id or {}
+    rows = []
+    for f in doc["frames"]:
+        why = []
+        if f.get("manual_check"):
+            why.append("sample_20pct")
+        sm = f.get("summary") or {}
+        far = (sm.get("far") or {}).get("median_deg")
+        if f["status"] == "ok" and far is not None and abs(far) > lim:
+            why.append("far_fail")
+        if f["status"] != "ok" and sc["include_failed_frames"]:
+            why.append("frame_failed")
+        if not why:
+            continue
+        cols = f.get("columns") or {}
+        dist = _median_where(cols, "distance_m", "far")
+        fr = frames_by_id.get(f["image_id"], {})
+        az = (fr.get("pointing_site") or {}).get("az_centre_deg")
+        rows.append({
+            "image_id": f["image_id"], "why": "+".join(why), "sol": f.get("sol"),
+            "stop_id": f.get("stop_id"), "station": f.get("station") or "",
+            "frame_az_deg": az, "v2_status": f["status"], "failure": f.get("failure") or "",
+            **{f"{c}_err_median_deg": None if (sm.get(c) or {}).get("median_deg") is None
+               else round(sm[c]["median_deg"], 3) for c in CLASSES},
+            "far_n": (sm.get("far") or {}).get("n"),
+            "far_pred_el_median_deg": _median_where(cols, "el_predicted_deg", "far"),
+            "far_det_el_median_deg": _median_where(cols, "el_detected_deg", "far"),
+            "far_dist_km_median": None if dist is None else round(dist / 1000.0, 1),
+            "best_cut_range_km": None, "far_det_minus_pred_cut_median_deg": None,
+            "composite": f"{f['image_id']}.jpg", "verdict": "", "note": "",
+        })
+    return rows
+
+
+def read_manual_verdicts(path) -> dict:
+    """image_id -> manual_ok from a filled sheet: ``ok`` -> True, any other listed verdict ->
+    False, empty or ``unsure`` -> not judged. An unknown verdict raises ValueError."""
+    allowed = set(hcfg.load()["manual_check_sheet"]["verdicts"])
+    out = {}
+    with open(path, newline="") as fh:
+        for r in csv.DictReader(fh):
+            v = (r.get("verdict") or "").strip()
+            if not v or v == "unsure":
+                continue
+            if v not in allowed:
+                raise ValueError(f"{r.get('image_id')}: verdict {v!r} not in {sorted(allowed)}")
+            out[r["image_id"]] = v == "ok"
+    return out
+
+
+def write_manual_check_sheet(doc: dict, frames_json=None, horizons_dir=None,
+                             out_dir=MANUAL_SHEET_DIR, engine=None) -> list[dict]:
+    """manual_check.csv + one captioned composite per listed frame + contact sheets. With the
+    canonical bands available, each composite also shows the cut (<= 30 km) skyline."""
+    from PIL import Image, ImageDraw, ImageFont  # noqa: PLC0415
+
+    from pipeline.horizon.overlay import (  # noqa: PLC0415
+        composite,
+        frame_camera,
+        render_overlay,
+        skyline_pixels,
+    )
+
+    root = hcfg.REPO / "data" / "interim" / "horizon"
+    frames = json.loads(Path(frames_json or root / "navcam_frames.json").read_text())["frames"]
+    by_id = {f["image_id"]: f for f in frames}
+    hdir = Path(horizons_dir or root / "horizons")
+    out_dir = Path(out_dir)
+    if out_dir.exists():
+        for old in out_dir.glob("*"):
+            old.unlink()
+    out_dir.mkdir(parents=True, exist_ok=True)
+    rows = manual_check_rows(doc, by_id)
+    det = {f["image_id"]: f for f in doc["frames"]}
+    try:
+        font = ImageFont.load_default(size=16)
+    except TypeError:
+        font = ImageFont.load_default()
+    if engine is None:
+        try:
+            from pipeline.horizon.bands import load_engine  # noqa: PLC0415
+
+            engine = load_engine()
+        except (FileNotFoundError, ValueError, OSError):
+            engine = None
+    sc = hcfg.load()["manual_check_sheet"]
+    ov_cut = {"overlay": {**hcfg.load()["overlay"], "line_rgba": sc["cut_rgba"]}}
+    thumbs = []
+    for r in rows:
+        fr = by_id.get(r["image_id"])
+        ip = hcfg.REPO / fr["local_path"] if fr else None
+        if fr is None or not ip.exists():
+            r["composite"] = ""
+            continue
+        grey = np.asarray(Image.open(ip).convert("L"))
+        size = (grey.shape[1], grey.shape[0])
+        hp = hdir / f"{fr['stop_id']}.json"
+        if hp.exists():
+            model, q = frame_camera(fr)
+            prof = HorizonProfile.read_json(hp)
+            ov = render_overlay(size, skyline_pixels(prof, model, q, size))
+            if engine is not None:
+                km, err, pc = best_cut(det.get(r["image_id"], {}), engine, prof.observer,
+                                       prof.az_step_deg)
+                r["best_cut_range_km"], r["far_det_minus_pred_cut_median_deg"] = km, err
+                if pc is not None:
+                    ov = Image.alpha_composite(
+                        render_overlay(size, skyline_pixels(pc, model, q, size), cfg=ov_cut), ov)
+        else:
+            ov = Image.new("RGBA", size, (0, 0, 0, 0))
+        rows_det = None
+        e = det.get(r["image_id"], {})
+        if e.get("status") == "ok":
+            rows_det = np.full(size[0], np.nan)
+            c = e["columns"]
+            rows_det[np.asarray(c["column"], dtype=int)] = [np.nan if v is None else v
+                                                            for v in c["row_detected"]]
+        img = composite(grey, ov, detected_rows=rows_det)
+        cap = Image.new("RGB", (img.width, 84), (0, 0, 0))
+        d = ImageDraw.Draw(cap)
+        d.text((6, 4), f"{r['image_id']}  sol {r['sol']}  stop {r['stop_id']}  "
+                       f"az {r['frame_az_deg']}  [{r['why']}]", fill=(255, 255, 255), font=font)
+        d.text((6, 24), (f"far: predicted {r['far_pred_el_median_deg']} deg, detected "
+                         f"{r['far_det_el_median_deg']} deg, error {r['far_err_median_deg']} deg "
+                         f"at {r['far_dist_km_median']} km" if r["v2_status"] == "ok"
+                         else f"V2 failed: {r['failure'][:110]}"), fill=(255, 215, 0), font=font)
+        d.text((6, 44), f"best match: terrain <= {r['best_cut_range_km']} km only, detected - "
+                        f"predicted = {r['far_det_minus_pred_cut_median_deg']} deg",
+               fill=(80, 230, 80), font=font)
+        d.text((6, 64), "orange = predicted (all terrain)  green = predicted, best cut range  "
+                        "cyan = detected", fill=(180, 180, 180), font=font)
+        full = Image.new("RGB", (img.width, img.height + cap.height))
+        full.paste(cap, (0, 0))
+        full.paste(img, (0, cap.height))
+        full.save(out_dir / r["composite"], quality=85)
+        t = full.copy()
+        t.thumbnail((400, 400))
+        thumbs.append((r["image_id"], t))
+    with (out_dir / "manual_check.csv").open("w", newline="") as fh:
+        w = csv.DictWriter(fh, fieldnames=SHEET_FIELDS)
+        w.writeheader()
+        w.writerows(rows)
+    per, cols = 12, 4
+    for k in range(0, len(thumbs), per):
+        chunk = thumbs[k:k + per]
+        tw = max(t.width for _, t in chunk)
+        th = max(t.height for _, t in chunk)
+        nrow = math.ceil(len(chunk) / cols)
+        sheet = Image.new("RGB", (cols * tw, nrow * th), (40, 40, 40))
+        for i, (_, t) in enumerate(chunk):
+            sheet.paste(t, ((i % cols) * tw, (i // cols) * th))
+        sheet.save(out_dir / f"contact_{k // per + 1:02d}.jpg", quality=80)
+    (out_dir / "HOW_TO.txt").write_text(
+        "Manual check of the V2 skyline frames (D7 preparation; D7 itself is not decided here).\n"
+        "One composite per frame: orange = predicted skyline from the DEM (all bands), green = "
+        "predicted from terrain within the cut range only (no far rim), cyan = sky detector.\n"
+        "best_cut_range_km: the terrain range (km) whose predicted skyline best matches the "
+        "detector; a short range with a small far_det_minus_pred_cut_median_deg on a far_fail "
+        "frame means only nearby terrain is seen (haze).\n"
+        "Fill the `verdict` column of manual_check.csv with one of: "
+        + ", ".join(hcfg.load()["manual_check_sheet"]["verdicts"]) + ".\n"
+        "  ok              the detected line follows the true skyline in the photo\n"
+        "  rim_not_visible the far rim is hidden by haze; the detector found lower terrain\n"
+        "  detector_wrong  the detector line is not the skyline for another reason\n"
+        "  model_wrong     the detector is right but the predicted line is off\n"
+        "  unsure          not judged\n"
+        "Then: python -m pipeline.validation.v2_skyline --import-manual <csv> (writes "
+        "manual_checks.json; frames judged other than ok leave the V2 summary on the next run).\n")
+    return rows
+
+
 def main(argv=None) -> int:
     import argparse  # noqa: PLC0415
 
     ap = argparse.ArgumentParser(description="V2 skyline validation (F13)")
     ap.add_argument("--no-manifest", action="store_true")
+    ap.add_argument("--import-manual", metavar="CSV",
+                    help="write manual_checks.json from a filled manual-check sheet and stop")
     a = ap.parse_args(argv)
+    if a.import_manual:
+        v = read_manual_verdicts(a.import_manual)
+        MANUAL_CHECKS.parent.mkdir(parents=True, exist_ok=True)
+        MANUAL_CHECKS.write_text(json.dumps(v, indent=1))
+        print(f"{len(v)} verdicts ({sum(v.values())} ok) -> {MANUAL_CHECKS}")
+        return 0
     doc = run_v2(record_manifest=not a.no_manifest)
     n = write_composites(doc)
+    rows = write_manual_check_sheet(doc)
+    print(f"{len(rows)} frames on the manual-check sheet in {MANUAL_SHEET_DIR}")
     print(json.dumps({k: doc[k] for k in ("available", "method", "n_stops", "n_frames_tried",
                                           "n_frames_ok", "summary")}, indent=1))
     print(f"{n} check composites in data/interim/horizon/validation/overlays/")
