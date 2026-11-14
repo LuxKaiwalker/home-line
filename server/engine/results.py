@@ -229,9 +229,9 @@ def _precomputed_run_record(h: str, identity: EngineIdentity, root: Path) -> byt
         "contract_version": cfg.contract_version,
         "hash": h,
         "origin": "precomputed",
-        # labels.live is for computed_live results only; the precomputed tree IS the validated
-        # scorecard, and config/backend.yaml has no label for it (open question for C).
-        "label": "",
+        # labels.live is for computed_live results; the official precomputed tree has its own
+        # label (team lead, Sat 22:40).
+        "label": cfg.labels.precomputed,
         "inputs": canonical_inputs(official_inputs(cfg), cfg),  # what was hashed (D57)
         "engine": {
             "tree": identity.engine_tree,

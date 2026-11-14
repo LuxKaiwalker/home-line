@@ -230,6 +230,7 @@ class Parity(_Strict):
 
 class Labels(_Strict):
     live: str
+    precomputed: str
     offline: str
     user_station: str
 
