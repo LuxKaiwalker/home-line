@@ -112,7 +112,7 @@ def test_curvature_inside_engine_wall_at_20km_reads_zero():
 def test_sampling_steps_follow_config():
     """Samples every 1 m to 2 km, 20 m to 30 km, 200 m beyond (horizon.yaml sampling)."""
     eng = HorizonEngine([plane_band("mola_hrsc_200m", 1000.0, 200.0)])
-    d0, d1, step, _ = eng._seg
+    d0, d1, step, *_ = eng._seg
     want = CFG["sampling"]
     assert [float(s["step_m"]) for s in want] == list(step)
     assert [float(s["to_m"]) for s in want] == list(d1)
@@ -139,6 +139,75 @@ def test_coarse_band_never_used_inside_finer_range_when_finer_has_data():
     # the coarse band (50 m higher) only enters beyond 2 km
     assert np.all(dist[0] > CFG["sampling"][0]["to_m"])
     assert np.all(src[0] == 1)
+
+
+# --- C decision 2026-11-14 12:35 (F20 at S2): dem_1m out to the edge of its coverage ----------
+
+def _strip_engine(fine_wall=None, coarse_wall=None, fine_len=4000.0):
+    """dem_1m strip x 0..fine_len (y -20..20, flat 0) + ctx_20m flat 0 over +/- 8 km.
+    ``*_wall`` = (x_from, x_to, z) raised in that band only."""
+    nx = int(fine_len) + 1
+    fz = np.zeros((41, nx), dtype=np.float32)
+    if fine_wall:
+        fz[:, int(fine_wall[0]):int(fine_wall[1]) + 1] = fine_wall[2]
+    fine = band_from_centers("dem_1m", fz, 0.0, 20.0, 1.0)
+    coarse = plane_band("ctx_20m", 8_000.0, 20.0)
+    if coarse_wall:
+        xs = -8_000.0 + 20.0 * np.arange(coarse.z.shape[1])
+        coarse.z[:, (xs >= coarse_wall[0]) & (xs <= coarse_wall[1])] = coarse_wall[2]
+    return HorizonEngine([fine, coarse])
+
+
+def test_sampling_dem_1m_hands_over_at_its_band_edge():
+    """horizon.yaml: the dem_1m segment extends to the band edge (C decision 12:35)."""
+    seg = CFG["sampling"][0]
+    assert seg["source"] == "dem_1m" and seg["handover"] == "band_edge"
+    assert [s.get("handover") for s in CFG["sampling"][1:]] == [None, None]
+
+
+def test_dem_1m_used_beyond_2km_up_to_its_edge():
+    """A 100 m wall in dem_1m at 3.5 km (inside its coverage) is seen from dem_1m; CTX there is
+    flat and is not consulted (with the old 2 km handover the wall was lost)."""
+    eng = _strip_engine(fine_wall=(3500, 3519, 100.0))
+    prof = eng.horizon(0.0, 0.0, z_obs=EYE)
+    expected = math.degrees(math.atan((100.0 - EYE - curvature_drop(3500.0)) / 3500.0))
+    assert prof.elevation_deg[I_EAST] == pytest.approx(expected, abs=1e-6)
+    assert prof.distance_m[I_EAST] == pytest.approx(3500.0)
+    assert prof.source[I_EAST] == "dem_1m"
+    # handover distance per ray = where the ray leaves dem_1m's valid extent, at least to_m
+    h = eng.handover_m(0.0, 0.0, az_deg=[0.0, 90.0, 270.0])
+    assert h[1] == pytest.approx(4000.0)                       # east: the strip's last centre
+    assert h[0] == h[2] == CFG["sampling"][0]["to_m"]          # leaves at once: the 2 km floor
+
+
+def test_ctx_takes_over_after_the_dem_1m_edge():
+    """Beyond the dem_1m edge (x 4000) the CTX wall at 4.5 km is the horizon, sampled on the
+    20 m grid that starts at the handover."""
+    eng = _strip_engine(fine_wall=(3500, 3519, 100.0), coarse_wall=(4500.0, 4560.0, 300.0))
+    prof = eng.horizon(0.0, 0.0, z_obs=EYE)
+    assert prof.source[I_EAST] == "ctx_20m"
+    assert 4500.0 <= prof.distance_m[I_EAST] <= 4560.0
+    assert (prof.distance_m[I_EAST] - 4000.0) % 20.0 == pytest.approx(0.0, abs=1e-6)
+
+
+def test_dem_1m_wins_over_ctx_inside_its_coverage_beyond_2km():
+    """CTX 50 m higher than dem_1m everywhere: along the east ray dem_1m (to 4 km) is used and
+    the horizon comes from CTX only past dem_1m's edge."""
+    fine = band_from_centers("dem_1m", np.zeros((41, 4001), dtype=np.float32), 0.0, 20.0, 1.0)
+    coarse = plane_band("ctx_20m", 8_000.0, 20.0, z=50.0)
+    eng = HorizonEngine([fine, coarse])
+    el, dist, src = eng.horizons([0.0], [0.0], z_obs=EYE, az_step_deg=90.0)
+    assert dist[0, 1] > 4000.0 and src[0, 1] == 1
+
+
+def test_observer_outside_dem_1m_uses_it_where_the_ray_crosses_it():
+    """From 1 km west of the strip, the east ray crosses dem_1m (1-5 km): its wall 2.5 km from
+    the observer comes from dem_1m."""
+    eng = _strip_engine(fine_wall=(1500, 1519, 100.0))
+    prof = eng.horizon(-1000.0, 0.0, z_obs=EYE)
+    assert prof.source[I_EAST] == "dem_1m"
+    assert prof.distance_m[I_EAST] == pytest.approx(2500.0)
+    assert eng.handover_m(-1000.0, 0.0, az_deg=[90.0])[0] == pytest.approx(5000.0)
 
 
 def test_azimuth_is_clockwise_from_grid_north():
@@ -320,11 +389,12 @@ def test_band_target_grid_centred_on_pad():
 # --------------------------------------------------------------------------------------------
 
 def test_engine_reads_canonical_ws1_far_field_bands():
-    """C decision (STATUS Decision log 11:15): the engine reads WS1's terrain/ bands."""
+    """C decisions (STATUS Decision log 11:15, 14:13): the engine reads WS1's terrain/ bands;
+    the canonical CTX band is ctx_20m_v2.tif (each item co-registered to dem_1m)."""
     from pipeline.horizon.bands import band_paths
 
     p = band_paths()
-    assert p["ctx_20m"] == hcfg.REPO / "data/interim/terrain/ctx_20m.tif"
+    assert p["ctx_20m"] == hcfg.REPO / "data/interim/terrain/ctx_20m_v2.tif"
     assert p["mola_hrsc_200m"] == hcfg.REPO / "data/interim/terrain/mola_hrsc_200m.tif"
     assert p["dem_1m"] == hcfg.REPO / "data/interim/terrain/dem_1m.tif"
 

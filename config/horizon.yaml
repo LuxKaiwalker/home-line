@@ -1,7 +1,12 @@
 az_step_deg: 0.25
 az_step_coarse_deg: 1.0            # F22 coarse search
 sampling:
-  - {to_m: 2000,  step_m: 1,   source: dem_1m}
+  # handover: band_edge = C decision 2026-11-14 12:35 (F20 at S2; STATUS Decision log): use the 1 m DEM
+  # out to the edge of its valid coverage before handing over to CTX. The handover distance on each
+  # ray = max(to_m, distance at which the ray leaves dem_1m's valid extent), capped at the next
+  # band's to_m; a no-data sample inside that range still falls back to the next coarser band
+  # (band_fallback). dem_1m = pad +/- 3.9 km, so from the pad the handover is 3.9-5.5 km (was 2 km).
+  - {to_m: 2000,  step_m: 1,   source: dem_1m, handover: band_edge}
   - {to_m: 30000, step_m: 20,  source: ctx_20m}
   - {to_m: 80000, step_m: 200, source: mola_hrsc_200m}
 curvature: "drop = d^2 / (2 R)"
@@ -52,15 +57,19 @@ navcam_selection:
 sky_detector_params: {grad_ratio: 3.0, ref_top_frac: 0.10, zero_median_guard: one_count,
                       border_px: 2, presmooth_sigma_px: 2.0, assumed: true}
 # DEM bands for the ray engine (pipeline/horizon/bands.py). `path` = the band the engine reads.
-# Canonical far-field bands (C decision, STATUS Decision log 2026-11-14 11:15): WS1's
-# terrain/ctx_20m.tif + mola_hrsc_200m.tif (farfield.json; CTX items levelled to MOLA-HRSC).
+# Canonical far-field bands (C decisions, STATUS Decision log 2026-11-14 11:15 and 14:13): WS1's
+# terrain/ctx_20m_v2.tif (farfield_v2.json; CTX items co-registered to dem_1m) + mola_hrsc_200m.tif.
 # The other keys describe WS3's own reference build (`python -m pipeline.horizon.bands --build`,
 # written to data/interim/horizon/bands/, no longer used by the engine). URLs and assets from
 # docs/discovery.md 2.4/2.5; radii, item counts and resolution choices are WS3 assumptions.
 bands:
   dem_1m: {path: data/interim/terrain/dem_1m.tif}       # WS1 (7,800 x 7,800 at 1 m, pad +/- 3.9 km)
   ctx_20m:
-    path: data/interim/terrain/ctx_20m.tif              # WS1, canonical (C, 11:15)
+    # C decision 2026-11-14 14:13 (STATUS Decision log): canonical CTX = WS1 session 2's
+    # ctx_20m_v2.tif, each CTX item co-registered to dem_1m (v2 - dem_1m +0.16 m in the 1.5-3.9 km
+    # ring, was +19.79 m with ctx_20m.tif; closer to MOLA-HRSC in every ring). ctx_20m.tif is kept
+    # by WS1 for reference only.
+    path: data/interim/terrain/ctx_20m_v2.tif           # WS1, canonical (C, 14:13; was ctx_20m.tif, C 11:15)
     listing: data/raw/discovery/stac_ctx_pad_point_idbbox.json   # D0: first 500 STAC items at the pad
     stac_item_url: "https://stac.astrogeology.usgs.gov/api/collections/mro_ctx_controlled_usgs_dtms/items/{id}"
     asset: geoid_adjusted_dem      # discovery 2.4: plain `dem` is 567 m lower at the pad
