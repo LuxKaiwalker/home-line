@@ -2,8 +2,8 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "homeline/contracts/timeline.schema.json",
   "title": "timeline_{scenario}.json",
-  "description": "Traverse timeline (F9): [{t_min, event, station, o2_left_L, t_home_min, margin_min}]. v1.1.0: optional margin_binding, in_partner_line, o2_tasks_left_L, o2_margin_min_planning_rate (WS2 pipeline/engine/traverse.py); events include turn_back.",
-  "x-contract-version": "1.1.0",
+  "description": "Traverse timeline (F9): [{t_min, event, station, o2_left_L, t_home_min, margin_min}]. v1.1.0: optional margin_binding, in_partner_line, o2_tasks_left_L, o2_margin_min_planning_rate (WS2 pipeline/engine/traverse.py); events include turn_back. v1.1.1: optional access_dist_m on station rows.",
+  "x-contract-version": "1.1.1",
   "x-source": "SPEC §6",
   "type": "array",
   "items": {
@@ -74,6 +74,13 @@
           "null"
         ],
         "description": "O2 margin at the planning O2 rate, min"
+      },
+      "access_dist_m": {
+        "type": [
+          "number",
+          "null"
+        ],
+        "description": "station rows only: walk-in from the access cell to the science point, m (not modelled) (v1.1.1)"
       }
     },
     "required": [

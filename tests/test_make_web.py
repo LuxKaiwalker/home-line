@@ -133,6 +133,9 @@ def tree(tmp_path: Path) -> dict[str, Path]:
         write_tile(interim / "terrain/tiles/basemap/13" / str(x) / f"{y}.png")
     write_tile(interim / "terrain/tiles/basemap/14/0/0.png")
     write_cellstate_tif(interim / "terrain" / "cellstate_3m.tif")
+    (interim / "terrain" / "coreg.json").write_text(json.dumps(
+        {"dx_m": 0.0, "dy_m": 0.0, "residual_median_m": 1.2, "residual_mad_m": 0.4,
+         "residuals": []}))
     (interim / "terrain" / "manifest_pending.json").write_text(
         json.dumps({"coreg.dx_m": entry("validation/coreg.json", 0.0)}))
     frags = interim / "manifest"
@@ -165,7 +168,8 @@ def test_plan_missing_grouped_by_owner(tree):
     owners = {o for o, _, _ in p.missing}
     assert "WS2" in owners and "WS7" in owners and "WS4" in owners  # clock/rems/donki missing
     assert ("WS4", "conditions/clock.json", "data/interim/conditions/clock.json") in p.missing
-    assert {c.dst.as_posix() for c in p.copies if c.kind == "copy"} == {"conditions/rad.json"}
+    assert {c.dst.as_posix() for c in p.copies if c.kind == "copy"} == {
+        "conditions/rad.json", "validation/coreg.json"}
     assert len(p.tiles) == 3 and not p.refused
 
 
@@ -256,13 +260,29 @@ def test_run_ws1_fragment_wins_over_pending(tree):
 def test_run_skip_owner_leaves_files_and_manifest_entries_out(tree):
     (tree["frags"] / "pipeline__conditions__rad.json").write_text(json.dumps({
         "rad.baseline_uGy_day": entry("conditions/rad.json", 152.3),
-        "x.other": entry("vo/probe.json")}))
+        "x.other": entry("terrain/cellstate.json"),
+        "x.interim": entry("data/interim/conditions/rad.json")}))
     rc, lines = run(tree, skip_owners=("WS4",))
     assert rc == 0, "\n".join(lines)
     assert not (tree["public"] / "conditions").exists()
     m = json.loads((tree["public"] / "manifest.json").read_text())
-    assert "rad.baseline_uGy_day" not in m and "x.other" in m
+    assert "rad.baseline_uGy_day" not in m and "x.interim" not in m and "x.other" in m
     assert not any(line.startswith("  WS4:") for line in lines)
+
+
+def test_run_leaves_out_entries_naming_unwritten_web_files(tree):
+    """The manifest never cites a web file that is not in the tree (an owner's output missing
+    this run); entries citing pipeline-internal files (data/...) stay."""
+    (tree["frags"] / "pipeline__navigation__x.json").write_text(json.dumps({
+        "nav.a": entry("nav/fixes.json"), "nav.b": entry("data/interim/navigation/x.tif")}))
+    (tree["interim"] / "terrain" / "manifest_pending.json").write_text(json.dumps({
+        "coreg.dx_m": entry("validation/coreg.json", 0.0),
+        "coverage.pct": entry("validation/coverage.json", 99.0)}))
+    rc, lines = run(tree)
+    assert rc == 0, "\n".join(lines)
+    m = json.loads((tree["public"] / "manifest.json").read_text())
+    assert "nav.a" not in m and "nav.b" in m
+    assert "coreg.dx_m" in m and "coverage.pct" not in m
 
 
 def test_dangling_references(tmp_path):
@@ -275,3 +295,166 @@ def test_dangling_references(tmp_path):
     (pub / "stations.json").write_text(json.dumps([{"id": "S1", "card": "cards/S1.json"}]))
     assert mw.dangling(pub) == ["scenarios/b/partner.geojson (named in scenarios/index.json a)",
                                 "cards/S1.json (named in stations.json S1)"]
+
+
+# --------------------------------------------------------------------------- station cards
+
+
+def horizon_part(st: str = "S2", position: str = "access_cell", lon: float = 137.382736,
+                 lat: float = -4.777025) -> dict:
+    """Shaped like WS3's horizon/public/cards/{S}.json (pipeline/horizon/cards.py)."""
+    return {
+        "station": st, "producer": "WS3 pipeline/horizon/cards.py", "provisional": False,
+        "observer": {"id": st, "science_lon": 137.383058, "science_lat": -4.776687,
+                     "lon": lon, "lat": lat, "position": position, "provisional": False},
+        "navcam": {"sol": 4414, "image_id": "NLB_789347468EDR_F1120798NCAM00279M_",
+                   "url_local": f"cards/{st}/navcam.png", "overlay_png": f"cards/{st}/overlay.png",
+                   "stop_id": "v112_798", "dist_to_observer_m": 924.8, "credit": "NASA/JPL"},
+        "skyline_error_deg": {"near": None, "mid": None, "far": 3.183},
+        "skyline_error_scope": "median |detected - predicted| per class",
+        "panorama_png": f"cards/{st}/panorama.png",
+        "landmarks": [{"name": "Gediz Vallis", "bearing_deg": 134.47, "dist_km": 3.7,
+                       "kind": "official", "above_skyline": False}],
+        "landmarks_note": None, "built_utc": "2026-11-14T11:04:16Z"}
+
+
+def timeline_part(st: str = "S2", access: bool = True) -> dict:
+    """Shaped like WS2's engine/public/cards/{S}.timeline.json (pipeline/engine/cards.py)."""
+    rule = {"radius_m": 50.0, "rule": "nearest assessed cell with a walk home"}
+    if not access:
+        return {"station": st, "scenario": "nom_104", "on_route": False,
+                "timeline": {"arrive": None, "leave": None, "turn_back": None},
+                "margin_binding": None, "margin_min": None,
+                "contingency": "No access cell within 50 m.", "t_home_min": None,
+                "o2_home_L": None, "science": {"lon": 137.383058, "lat": -4.776687},
+                "access": {"lon": None, "lat": None, "dist_m": None, "t_home_min": None,
+                           "o2_home_L": None, "reason": "none with a walk home",
+                           "walk_in": None, **rule}}
+    return {"station": st, "scenario": "nom_104", "on_route": True,
+            "timeline": {"arrive": 108.73, "leave": 138.73, "turn_back": 409.15},
+            "margin_binding": "dose", "margin_min": 14.89, "contingency": "Cart haul 108 min.",
+            "t_home_min": 71.01, "o2_home_L": 95.56,
+            "science": {"lon": 137.383058, "lat": -4.776687},
+            "access": {"lon": 137.382736, "lat": -4.777025, "dist_m": 27.6, "t_home_min": 71.01,
+                       "o2_home_L": 95.56, "reason": None,
+                       "walk_in": {"dist_m": 27.6, "modelled": False, "rise_m": 7.79,
+                                   "mean_slope_deg": 15.77, "max_slope_deg": 21.99,
+                                   "max_terrain_slope_deg": 43.44}, **rule}}
+
+
+def test_merge_card_takes_every_key_from_one_part():
+    h, t = horizon_part(), timeline_part()
+    card = mw.merge_card("S2", h, t, {"WS3": "a.json", "WS2": "b.timeline.json"})
+    assert errors("card.schema.json", card) == []
+    assert card["station"] == "S2"
+    for k in ("navcam", "skyline_error_deg", "panorama_png", "landmarks", "observer"):
+        assert card[k] == h[k]
+    for k in ("timeline", "margin_binding", "contingency", "access", "science", "margin_min"):
+        assert card[k] == t[k]
+    assert "producer" not in card and "built_utc" not in card  # moved into parts
+    assert card["parts"]["WS3"] == {"source": "a.json", "producer": h["producer"],
+                                    "built_utc": h["built_utc"]}
+    assert card["parts"]["WS2"]["source"] == "b.timeline.json"
+
+
+def test_merge_card_no_access_cell_has_null_binding():
+    """S1 (user decision 11:40): no access cell -> null times, null binding; still a valid card."""
+    h = horizon_part("S1", position="science_coordinate_no_access", lon=137.383058,
+                     lat=-4.776687)
+    card = mw.merge_card("S1", h, timeline_part("S1", access=False))
+    assert errors("card.schema.json", card) == []
+    assert card["margin_binding"] is None and card["access"]["dist_m"] is None
+    assert card["timeline"] == {"arrive": None, "leave": None, "turn_back": None}
+
+
+@pytest.mark.parametrize("change, match", [
+    (lambda h, t: t.update(station="S4"), "is for station 'S4'"),
+    (lambda h, t: t.update(navcam={}), r"both parts set \['navcam'\]"),
+    (lambda h, t: h["observer"].update(lon=137.4), "not WS2's access cell"),
+    (lambda h, t: h["observer"].update(science_lat=-4.7), "science point differs"),
+    (lambda h, t: t.update(access={**t["access"], "lon": None, "lat": None}),
+     "WS2 has none"),
+])
+def test_merge_card_refuses_disagreeing_parts(change, match):
+    h, t = horizon_part(), timeline_part()
+    change(h, t)
+    with pytest.raises(mw.CardMergeError, match=match):
+        mw.merge_card("S2", h, t)
+
+
+def write_card_parts(interim: Path, st: str, ws3: bool = True, ws2: bool = True) -> None:
+    hc = interim / "horizon/public/cards"
+    ec = interim / "engine/public/cards"
+    if ws3:
+        (hc / st).mkdir(parents=True, exist_ok=True)
+        (hc / f"{st}.json").write_text(json.dumps(horizon_part(st)))
+        for name in ("navcam", "overlay", "panorama"):
+            Image.new("RGBA", (4, 4)).save(hc / st / f"{name}.png")
+    if ws2:
+        ec.mkdir(parents=True, exist_ok=True)
+        (ec / f"{st}.timeline.json").write_text(json.dumps(timeline_part(st)))
+
+
+def test_plan_pairs_card_parts_and_reports_the_absent_part(tree):
+    write_card_parts(tree["interim"], "S2")
+    write_card_parts(tree["interim"], "S4", ws2=False)  # WS2 part absent
+    write_card_parts(tree["interim"], "S7", ws3=False)  # WS3 part absent
+    p = mw.plan(tree["interim"], settings=SETTINGS, dummy_tree=tree["dummy"], h0=H0)
+    assert not p.refused
+    assert [c.station for c in p.cards] == ["S2"] and p.unbuilt_cards == ["S4", "S7"]
+    assert ("WS2", "cards/S4.json (timeline part (WS2))",
+            "data/interim/engine/public/cards/S4.timeline.json") in p.missing
+    assert ("WS3", "cards/S7.json (horizon part (WS3))",
+            "data/interim/horizon/public/cards/S7.json") in p.missing
+    imgs = sorted(c.dst.as_posix() for c in p.copies if c.kind == "card_image")
+    assert imgs == ["cards/S2/navcam.png", "cards/S2/overlay.png", "cards/S2/panorama.png"]
+    assert not any("timeline" in c.dst.name for c in p.copies)
+
+
+def test_plan_refuses_disagreeing_card_parts(tree):
+    write_card_parts(tree["interim"], "S2")
+    f = tree["interim"] / "engine/public/cards/S2.timeline.json"
+    f.write_text(json.dumps(timeline_part("S2") | {"station": "S3"}))
+    p = mw.plan(tree["interim"], settings=SETTINGS, dummy_tree=tree["dummy"], h0=H0)
+    assert any("card S2" in r for r in p.refused) and not p.cards
+
+
+def test_run_writes_merged_cards_only(tree):
+    write_card_parts(tree["interim"], "S2")
+    write_card_parts(tree["interim"], "S4", ws2=False)
+    (tree["frags"] / "pipeline__horizon__cards.json").write_text(json.dumps({
+        "navcam_sol.S2": entry("cards/S2.json", 4414),
+        "navcam_sol.S4": entry("cards/S4.json", 4164)}))
+    rc, lines = run(tree)
+    assert rc == 0, "\n".join(lines)
+    pub = tree["public"]
+    assert sorted(p.relative_to(pub).as_posix() for p in pub.glob("cards/**/*") if p.is_file()) \
+        == ["cards/S2.json", "cards/S2/navcam.png", "cards/S2/overlay.png",
+            "cards/S2/panorama.png"]
+    card = json.loads((pub / "cards/S2.json").read_text())
+    assert errors("card.schema.json", card) == [] and card["margin_binding"] == "dose"
+    parts = [tree["interim"] / "horizon/public/cards/S2.json",
+             tree["interim"] / "engine/public/cards/S2.timeline.json"]
+    assert (pub / "cards/S2.json").stat().st_mtime == pytest.approx(
+        max(q.stat().st_mtime for q in parts))
+    m = json.loads((pub / "manifest.json").read_text())
+    assert "navcam_sol.S2" in m and "navcam_sol.S4" not in m  # no card S4, so no S4 entries
+    assert "cards: built S2; not built S4" in lines
+    assert not any(line.startswith("DANGLING") for line in lines)
+
+
+def test_run_skip_ws2_builds_no_card(tree):
+    write_card_parts(tree["interim"], "S2")
+    rc, lines = run(tree, skip_owners=("WS2",))
+    assert rc == 0, "\n".join(lines)
+    assert not (tree["public"] / "cards").exists()
+    assert "skipped: cards/S2.json not built (WS2 skipped)" in lines
+    assert not any(line.startswith("  WS2:") for line in lines)
+
+
+def test_dangling_card_images(tmp_path):
+    (tmp_path / "cards" / "S2").mkdir(parents=True)
+    (tmp_path / "cards" / "S2" / "navcam.png").write_bytes(b"x")
+    (tmp_path / "cards" / "S2.json").write_text(json.dumps(horizon_part("S2")))
+    assert mw.dangling(tmp_path) == ["cards/S2/overlay.png (named in cards/S2.json)",
+                                     "cards/S2/panorama.png (named in cards/S2.json)"]
