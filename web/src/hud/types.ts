@@ -7,7 +7,7 @@ export type Bounds = [number, number, number, number] // [w, s, e, n] lon/lat de
 
 /**
  * One fields/index.json entry (contracts/fields_index.schema.json). The optional grid keys and
- * `stencil` exist only on the `{scenario}/pointer` proposal (not in v1.1.0, STATUS WS7).
+ * `stencil` (contracts v1.1.1) exist only on `{scenario}/pointer` (WS2's 3 m route grid).
  */
 export interface FieldMeta {
   file: string
