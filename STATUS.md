@@ -448,6 +448,103 @@ All numbers from today's fresh downloads (`data/raw/terrain/`, cache index `cach
   summary, web-path keys). WS1 KATs 41 pass (test_coverage + test_coreg); full suite 730
   pass; ruff clean.
 
+#### Session 4 (started 15:19Z): D22/D23 cell states + D26/D32 stations
+
+**C / WS2: the files are ready** (`data/interim/terrain/`, all at clean commit 58d678b;
+every raster written as `tmp_*` and swapped in only when all were complete). Same 3 m grid as
+before (`grid.json route_3m`, 2,468 x 2,468, analysis CRS).
+
+| File | dtype / nodata | Semantics |
+| --- | --- | --- |
+| `slope_3m.tif` | float32 / NaN | **D22 cell slope (deg)**: least-squares plane through the cell's nine 1 m elevations (`dem_1m.tif`). NaN = unknown cell |
+| `stepguard_3m.tif` | uint8 / 255 | **D22 step guard**: 1 = some 1 m Horn slope (`slope_1m.tif`) inside the cell > 30 deg (`site.yaml slope.step_guard_deg`, assumed) -> blocked at every no-go; 0 = no; 255 = unknown cell |
+| `cellstate_3m.tif` | uint8 / 255 | **Canonical = nominal 20 deg** (make web -> `terrain/cellstate`). 0 assessed, 1 blocked, 2 unknown |
+| `cellstate_3m_conservative.tif` | uint8 / 255 | **Conservative 17 deg (D23)** (make web -> `terrain/cellstate_conservative`) |
+| `cellstate_3m_optimistic.tif` | uint8 / 255 | Optimistic 25 deg (no make web rule yet; C's call. Note `make_web.cellstate_variant` would label it "nominal") |
+| `maxslope_3m.tif` | float32 / NaN | **Unchanged** (byte-identical, verified against `slope_1m.tif`): max 1 m slope, now only the **"rough footing" overlay** |
+| `cellstate_3m_variants.json` | | per-variant disc summary (table below); replaces `cellstate_3m_conservative.json` (deleted, it was the 20 - V1 RMSE basis) |
+
+Rule (`pipeline/terrain/routing.py`): a cell is **known** iff all nine 1 m cells are HiRISE with a
+finite elevation and 1 m slope (same unknown set as before: 0 cells). At no-go N a known cell is
+**blocked iff `slope_3m > N` or `stepguard == 1`**; unknown stays unknown. **WS2 passability at any
+no-go:** `cellstate_3m != 2 & stepguard_3m == 0 & slope_3m <= nogo` (`routing.passable`); at
+25/20/17 this equals `cellstate_3m_{optimistic,(nominal),conservative} == 0` cell by cell
+(checked on the real rasters). `pipeline/engine/graph.py passable_mask` still uses `maxslope_3m`:
+WS2 switches it. Also unchanged: `elev_3m`, `dataedge_3m` (0 data-edge cells), `ridge_3m`.
+
+**Blocked share (D22), % of all disc cells (unknown = 0 %, so = % of assessed cells, D25):**
+
+| Variant (no-go) | Disc | (a) by 3 m slope | (b) step guard only | **Total blocked** | Old max-slope rule at the same no-go |
+| --- | --- | --- | --- | --- | --- |
+| optimistic 25 deg | 30 min (1,764 m) | 18.75 % | 3.12 % | **21.87 %** | 28.92 % |
+| nominal 20 deg | 30 min | 28.19 % | 1.03 % | **29.22 %** | 41.23 % |
+| conservative 17 deg | 30 min | 35.82 % | 0.48 % | **36.30 %** | 50.29 % (old con 14.55 deg: 58.75 %) |
+| optimistic 25 deg | 60 min (3,528 m) | 15.31 % | 1.78 % | **17.09 %** | 21.81 % |
+| nominal 20 deg | 60 min | 23.21 % | 0.55 % | **23.77 %** | 31.36 % |
+| conservative 17 deg | 60 min | 29.73 % | 0.26 % | **29.99 %** | 38.79 % (old con 14.55 deg: 46.31 %) |
+
+Step guard fires on 19.66 % (30 min) / 14.75 % (60 min) of disc cells; most of them are already
+over the slope limit. Whole 3 m grid blocked: 17.72 / 24.41 / 30.50 % (opt / nom / con).
+"Beyond tested" (plane slope 17-20 deg, no step guard): 7.08 % (30 min), 6.22 % (60 min).
+`validation/coverage.json` `discs` now = D22 nominal (assessed 70.78 / 76.23 %, blocked 29.22 /
+23.77 %); the pad check still passes (data coverage 100 %; state0_only 70.78 %).
+
+**Manifest (86 WS1 keys, all commit 58d678b, 15:34Z; fragment rebuilt, so old keys are gone).**
+- **Removed (12):** `terrain.nogo_conservative_deg`, `terrain.conservative.v1_rmse_deg`,
+  `terrain.conservative.disc_{30,60}.{assessed,blocked,unknown,nominal_blocked,newly_blocked}_pct`.
+- **Added (45), all citing `validation/coverage.json` (`terrain_checks.cell_states`):**
+  `terrain.nogo_deg.{optimistic,nominal,conservative}` (25/20/17), `terrain.step_guard_deg` (30),
+  `terrain.stepguard.disc_{30,60}.pct`, `terrain.cellstates.{optimistic,nominal,conservative}.disc_{30,60}.{assessed,blocked,unknown,blocked_slope,blocked_stepguard_only,maxslope_rule_blocked}_pct`
+  (36), and `stations.{S6,S7,S8}.value` (cite `stations.json`).
+- **Old -> new:** `terrain.nogo_conservative_deg` -> `terrain.nogo_deg.conservative`;
+  `terrain.conservative.disc_B.X` -> `terrain.cellstates.conservative.disc_B.X`;
+  `...nominal_blocked_pct` -> `terrain.cellstates.nominal.disc_B.blocked_pct`; `v1_rmse_deg` and
+  `newly_blocked_pct` dropped (no D23 meaning).
+- **Values changed, same key:** `coverage.disc_{30,60}.*`, `terrain.blocked_pct.{30,60}min`,
+  `validation.coverage.pad_check.readings.state0_only.pct`, `stations.{S1,S2,S4}.value`, `file.*`.
+- **WS5:** `web/src/views/scorecard.tsx` (V1 block) reads `terrain_checks.conservative` and the
+  removed keys; it now finds nothing and omits that clause. Its text "20 - V1 RMSE" is pre-D23.
+  New block: `terrain_checks.cell_states.variants.{v}.discs[]`.
+- **For C (contracts, not WS1 paths):** `contracts/README.md` and `cellstate.schema.json` still
+  describe "blocked = max 1 m slope > 20 - V1 RMSE"; D22/D23 text needed. `config/variants.yaml`
+  (WS2) still has `conservative.nogo_deg: "20 - v1_rmse_deg"`, and WS6 `v1_tilt.py` reads it.
+
+**D26/D32 stations** (`data/interim/terrain/stations.json`; science points only, WS2 computes
+access cells and reachability; a station nobody reaches stays on the map as "not reachable on
+foot", `stations.yaml placement.unreachable_label`). Order S4 -> S1 -> S2 -> extras; each point is
+**walkable** (its 3 m cell is assessed in the D22 nominal `cellstate_3m.tif`), in the focus area,
+and **>= 300 m** from every station placed before it (min pairwise distance: 602.1 m).
+
+| id | lon, lat | name / finding (from the score) | value | 3 m cell (slope; opt/nom/con state) | How placed |
+| --- | --- | --- | --- | --- | --- |
+| S1 | 137.379249, -4.808320 | Boxwork ridge-hollow transect / dense ridge network + high D2300 clay signal | 0.8409 | 17.1 deg; 0/0/**1** | rule: max(ridge density + D2300) 25 m cell in focus area and pad_default 30-min disc, walkable, >= 300 m from S4. Old S1 cell is blocked under D22 (slope 53 deg, step guard) -> moved |
+| S2 | 137.375440, -4.778796 | Fracture-network survey / dense ridge network + high D2300 clay signal | 0.7474 | 18.4 deg; 0/0/**1** | rule: max ridge density 25 m cell, same domain, walkable, >= 300 m from S4, S1. Old S2 cell blocked (30.2 deg, step guard) -> moved |
+| S4 | 137.408931, -4.785832 | Gediz Vallis sulfur field / high SINDEX2 sulfate signal | 0.4744 | 7.9 deg; 0/0/0 | MMGIS drive end 107_2394 (sol 4197): nearest-to-sol-4200 drive end that is walkable; the sol-4200 end 107_2484 is on a blocked cell, 8.4 m away |
+| S6 | 137.383481, -4.788919 | dense ridge network + high SINDEX2 sulfate signal | 0.7128 | 15.6 deg; 0/0/0 | D26 extra 1: highest F7 value 25 m cell (CRISM = max of normalised SINDEX2/D2300, manual 0), focus area, walkable, spaced |
+| S7 | 137.373323, -4.789762 | dense ridge network + high SINDEX2 sulfate signal | 0.6986 | 11.6 deg; 0/0/0 | D26 extra 2 (same rule) |
+| S8 | 137.386021, -4.770783 | dense ridge network + high D2300 clay signal | 0.6878 | 6.9 deg; 0/0/0 | D26 extra 3 (same rule) |
+
+- **S3, S5 dropped** (D26): listed under `dropped` in `stations.json`, not in `stations`; they come
+  back only if S hand-picks them by 19:00 CET (`stations.yaml status`, re-run `build stations`).
+- S1 and S2 are walkable at nominal and optimistic but **blocked at conservative 17 deg**: con
+  scenarios need WS2's access cell (50 m, D27).
+- S6 and S7 have the same name (same finding); the id tells them apart.
+- Names: a component (normalised) >= 0.5 is named, larger first: "high D2300 clay signal", "high
+  SINDEX2 sulfate signal", "dense ridge network" (index words from SPEC F7). `finding_detail` has
+  the numbers. No geological claim beyond SPEC F7's index-to-mineral wording.
+- New record fields: `finding`, `finding_detail`, `placement`, `cell` (slope_3m_deg, stepguard,
+  state per variant), `components.crism_norm_by_index`, S4 `moved_from`; top level `dropped`,
+  `min_spacing_m`, `min_pairwise_m`, `placement`, `extras_rule`.
+- The S1/S2 domain is still pad_default's 30-min disc (stations.yaml rule text). If D21 moves the
+  pad, the S1/S2 rule is unchanged unless C says otherwise.
+
+KATs first: 42 new, 6 pre-D23 max-slope/conservative tests removed; WS1 KATs 77 pass (plane-fit exact plane x 20, = 3x3 plane fit at the centre, NaN, spike step
+guard, strict 30 deg, unknown stays unknown in all variants, blocked iff rule x 3 variants incl.
+WS2's `passable`, nesting, config D22/D23, summary split, manifest keys; station spacing, focus,
+walkable, naming x 6, greedy extras, config D26/D32). Full suite 806 pass; ruff clean;
+`validate_contracts --interim` OK; trial merge of all fragments 1,207 keys, no duplicates.
+`make terrain`: `build all` runs `slope -> cells`; the `conservative` step is gone (no V1 dependency).
+
 ### Answers (WS1)
 
 - WS6 Blocked 2 (coreg sign): confirmed. `coreg.json (dx_m, dy_m)` is **added** to the MMGIS
@@ -456,16 +553,17 @@ All numbers from today's fresh downloads (`data/raw/terrain/`, cache index `cach
 
 ### Doing
 
-- Waiting for G0 sign-off (S).
+- Waiting for G0 sign-off (S). Session 4 done (D22/D23/D26/D32); WS2 can start its re-run.
 
 ### Next
 
-- If V1's RMSE changes: `python -m pipeline.terrain.build conservative validation manifest`
-  (validation refuses a conservative summary made from another RMSE).
+- If S hand-picks S3/S5 by 19:00 CET: add lon/lat to `stations.yaml`, drop `status: dropped`,
+  extend `step_stations`, then `build stations manifest`.
+- V1's RMSE no longer changes any WS1 output (D23).
 
 ### Blocked
 
-- S3, S5 hand picks (S): positions not yet in `stations.yaml`.
+- S3, S5 hand picks (S): dropped per D26 unless picked by 19:00 CET.
 
 ### Assumptions added
 
@@ -479,6 +577,10 @@ All numbers from today's fresh downloads (`data/raw/terrain/`, cache index `cach
 - Session 2: `site.yaml ctx_v2` (reference dem_1m, shift search +/-400 m at 10 m, 20,000 sampled
   overlap cells, min overlap 1,000 cells, else MOLA levelling) `assumed: true`;
   `site.yaml coverage.pad_check_reading: data_coverage` (decision log 12:37, not an assumption).
+- Session 4: `site.yaml slope.step_guard_deg: 30` + `step_guard_assumed: true` (D22);
+  `stations.yaml extras` (`manual_priority: 0` per SPEC F7 "hand picks", `name_min_norm: 0.5`,
+  ids S6-S8) `assumed: true`; `placement.walkable` = nominal 20 deg cell states (assumed reading
+  of D26 "walkable"); `scoring_weights_assumed: true` and `min_spacing_m: 300` (D32, decided).
 
 ## WS2 Engine
 
@@ -973,6 +1075,30 @@ Branch: `ws6-provenance`
   To include vitest: `cd web && npx vitest run --reporter=json --outputFile=<f>` then
   `python -m pipeline.provenance.kats --exit-zero --vitest-json <f>`.
 - `tests/test_provenance.py`: 54 pass; ruff clean.
+- 2026-11-14T15:51Z (session 3, **D23**): **V1 is a validation, not a margin.** `v1.json` no longer
+  derives a conservative no-go: `conservative_nogo` removed; new `role` = "V1 = validation of the
+  slope model, not a safety margin" (for the WS5 scorecard); new `nogo_context` = config citation
+  `{conservative_nogo_deg: 17, source, decision: "D23", derived_from_v1: false, text:
+  "conservative no-go = 17° (D23, config)", note}`. Reads `variants.yaml
+  variants.conservative.nogo_deg` first, `site.yaml slope.nogo_deg.conservative` as fallback;
+  a number or the legacy "20 - v1_rmse_deg" text is accepted and never evaluated; disagreeing
+  numbers or no number give `null` with a note. Manifest key `v1.conservative_nogo.nogo_deg`
+  **retired** (dropped from the v1_tilt fragment by the new `manifest.drop`, own fragment only);
+  `nogo_context` gets no `v1.*` key (it is not a V1 output; WS5 cites config). KATs first (8 new /
+  updated). V1 re-run from clean commit 2ed9594: same numbers (n 290, bias +1.31°, RMSE 5.45°,
+  r 0.50; 10°: 84/55/20/131, 20°: 1/15/2/272); schema-valid.
+- 2026-11-14T15:55Z: **KAT list** re-run at 2ed9594 (pytest+vitest): **1,294 tests: 1,291 passed,
+  1 failed, 2 skipped**. The failure is WS7's real-data check
+  `tests/test_fields_png.py::test_real_pointer_leads_home_downhill_in_t_home`: the shared
+  `data/interim/export/fields/` (15:15) predates WS2's D21–D39 re-run of `data/interim/engine/`
+  (16:47), so pointer and T_home masks differ; it fails identically without the WS6 change and
+  clears when WS7 re-exports fields (C downstream). Skips: fp3d F20 real check, D21 pads index.
+- **D30 (IST-2 pass/miss) and `kats.json`: not mapped, by design.** `kats.json` is one row per
+  pytest/vitest test (contract `kats.schema.json`; `summary.failed` counts failing tests). WS2's
+  `physio.ist2.{variant}.{grade}.pass` is a model-check finding under "no tuning" (D30), where an
+  honest "miss" is a result, not a failing KAT; mapping it would count misses as failed tests.
+  D30 puts them in the manifest; the WS5 scorecard reads `physio.ist2.*` from `manifest.json`
+  directly (with `band_lo`/`band_hi`/`reported`).
 
 ### Audit 1 (2026-11-14T13:20Z): main's `web/public/data/` (C's make web 3fe841a, 846 keys)
 
@@ -1037,8 +1163,14 @@ of today's 20 fragments in `data/interim/manifest/` gives 929 unique keys (no du
 
 ### Next
 
-- C: `make web` to publish `validation/{v1.json,v1.svg,kats.json}` (+ `v1.*`, `kats.summary.*`);
-  WS2 `make engine` for con_* and WS1 `cellstate_3m_conservative.tif` with rmse 5.447°.
+- C: `make web` to publish the D23 `validation/v1.json` (+ `kats.json`). **Consumers to update
+  (not WS6 paths):** WS5 `web/src/views/scorecard.tsx` V1 section still reads
+  `v.conservative_nogo` (renders nothing once it is gone) → show `v.role` and
+  `v.nogo_context.text` (cite 17° from config); WS5 `web/src/data/real.test.ts` "conservative
+  no-go 14.55 deg" will fail on the new public v1.json → assert `role` / `nogo_context`
+  instead. C: `contracts/README.md` line on `cellstate_conservative.json` still says
+  "20° − V1 RMSE". WS2 `scenarios.py v1_from_file` docstring ("the slope RMSE that sets the
+  conservative limit") is out of date.
 - Audit 2 at about 17:20Z (after the next make web): re-run the audit on the public tree.
 - Freeze: `make clean all` from a clean checkout, provenance audit, sign-off.
 

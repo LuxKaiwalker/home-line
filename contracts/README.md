@@ -63,7 +63,7 @@ other workstreams read them. Each schema says where it comes from.
 | `siting_png.json` (v1.1.0) | `siting_png.schema.json` | F8 siting heatmap `siting.png` placement (4 corners, MapLibre order); WS2 |
 | `tiles/basemap/tilejson.json` (v1.1.0) | `tilejson.schema.json` | F17 basemap index (TileJSON 3.0.0 subset); written by `make web` |
 | `terrain/cellstate.json` (v1.1.0) | `cellstate.schema.json` | F1 cell states for hatching unknown terrain; written by `make web` from WS1 |
-| `terrain/cellstate_conservative.json` (v1.1.2) | `cellstate.schema.json` | the same at the conservative no-go (20° − V1 RMSE); written by `make web` from WS1 |
+| `terrain/cellstate_conservative.json` (v1.1.2) | `cellstate.schema.json` | the same at the conservative no-go (17°, D23; cell slope = 3 m plane fit + 30° step guard, D22); written by `make web` from WS1 |
 
 The web paths `validation/coverage.json` and `validation/coreg.json` are B0's choice (WS1's
 brief names the files, not their web path); `make web` copies them there.

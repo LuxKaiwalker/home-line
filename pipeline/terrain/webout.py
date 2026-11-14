@@ -25,8 +25,10 @@ from .coverage import HIRISE, HRSC_MOLA, NODATA, NON_HIRISE
 ASSESSED, BLOCKED, UNKNOWN = 0, 1, 2
 
 LABELS = {
-    "assessed": "assessed (HiRISE 1 m, max slope <= nominal limit)",
-    "blocked": "blocked (HiRISE 1 m, max slope > nominal limit)",
+    "assessed": "assessed (HiRISE 1 m; 3 m plane-fit slope <= nominal 20 deg, no 1 m slope > "
+                "30 deg)",
+    "blocked": "blocked (3 m plane-fit slope > nominal 20 deg, or a 1 m slope > 30 deg: step "
+               "guard; D22)",
     "unknown": "unknown (non-HiRISE or no data)",
     "disc": "flat 30- and 60-min discs",
     "pad": "pad (site.yaml pad_default)",
@@ -212,8 +214,14 @@ def grids_doc() -> dict:
                 "roughness_5m.tif", "ridge_index.tif", "ortho_lrgb_1m.tif", "ortho_grey_1m.tif",
                 "ortho_grey_source_1m.tif"]},
             "route_3m": {**grid_spec(G.route_grid()), "files": [
-                "elev_3m.tif", "maxslope_3m.tif", "cellstate_3m.tif", "dataedge_3m.tif",
-                "ridge_3m.tif"],
+                "elev_3m.tif", "slope_3m.tif", "stepguard_3m.tif", "cellstate_3m.tif",
+                "cellstate_3m_optimistic.tif", "cellstate_3m_conservative.tif",
+                "maxslope_3m.tif", "dataedge_3m.tif", "ridge_3m.tif"],
+                "cell_states": "D22/D23: slope_3m = plane-fit slope of the nine 1 m elevations; "
+                               "stepguard_3m = 1 if any 1 m slope > 30 deg (255 unknown); "
+                               "cellstate_3m (nominal 20 deg), _optimistic (25), _conservative "
+                               "(17): blocked iff slope_3m > nogo or step guard; maxslope_3m = "
+                               "rough-footing overlay only",
                 "note": "WS2 engine rasters (t_home, o2_home, pointer) are on this grid"},
             "fields_5m": {**grid_spec(G.fields_grid()),
                           "note": "the web field-PNG grid (contracts/README.md 'Field PNGs', "
@@ -235,41 +243,57 @@ def _state_pct(s: np.ndarray) -> dict:
             "unknown": _r(100 * np.count_nonzero((s != ASSESSED) & (s != BLOCKED)) / n)}
 
 
-def conservative_summary(nominal: np.ndarray, conservative: np.ndarray, g: G.Grid, pad_xy,
-                         radii: dict, *, nogo_deg: float, v1_rmse_deg: float,
-                         v1_source: str) -> dict:
-    """Shares of the conservative cell states (brief WS1 task 8) in each flat disc and over the
-    whole 3 m grid, with the nominal blocked share and the cells newly blocked by the lower limit
-    (nominal-assessed, conservative-blocked). Percentages of all disc cells, like ``discs``."""
+def cell_state_summary(states: dict, slope3: np.ndarray, stepguard: np.ndarray,
+                       known: np.ndarray, maxslope: np.ndarray, g: G.Grid, pad_xy, radii: dict,
+                       *, nogo_deg: dict, step_guard_deg: float, rasters: dict) -> dict:
+    """D22/D23 cell states per variant in each flat disc: the partition (assessed / blocked /
+    unknown, % of all disc cells, like ``discs``), the blocked share split into "by the 3 m
+    plane-fit slope" and "by the step guard only", and the OLD max-slope rule at the same no-go
+    (``maxslope_rule_blocked_pct``, comparison only). Plus the step-guard share per disc."""
     from .coverage import disc
 
-    rows = []
-    for b, r in radii.items():
-        d = disc(g, pad_xy, r)
+    known = np.asarray(known, bool)
+    sg = np.asarray(stepguard, bool) & known
+    disc_masks = {int(b): (float(r), disc(g, pad_xy, r)) for b, r in radii.items()}
+
+    def pct(m, d, n):
+        return _r(100 * np.count_nonzero(m & d) / n) if n else None
+
+    variants = {}
+    for v, st in states.items():
+        nogo = float(nogo_deg[v])
+        with np.errstate(invalid="ignore"):
+            by_slope = known & (slope3 > nogo)
+            old = known & (maxslope > nogo)
+        rows = []
+        for b, (r, d) in disc_masks.items():
+            n = int(d.sum())
+            rows.append({"budget_min": b, "radius_m": round(r, 1), **disc_state_pct(st, d),
+                         "blocked_slope_pct": pct(by_slope, d, n),
+                         "blocked_stepguard_only_pct": pct(sg & ~by_slope, d, n),
+                         "maxslope_rule_blocked_pct": pct(old, d, n)})
+        variants[v] = {"nogo_deg": nogo, "raster": rasters.get(v), "discs": rows,
+                       "grid_pct": _state_pct(st)}
+    dsg = []
+    for b, (r, d) in disc_masks.items():
         n = int(d.sum())
-        row = {"budget_min": int(b), "radius_m": round(float(r), 1),
-               **disc_state_pct(conservative, d)}
-        if n:
-            nb = np.count_nonzero(nominal[d] == BLOCKED)
-            cb = np.count_nonzero(conservative[d] == BLOCKED)
-            row["nominal_blocked_pct"] = _r(100 * nb / n)
-            row["newly_blocked_pct"] = _r(100 * (cb - nb) / n)
-        else:
-            row["nominal_blocked_pct"] = row["newly_blocked_pct"] = None
-        rows.append(row)
-    return {"nogo_deg": round(float(nogo_deg), 3), "v1_rmse_deg": round(float(v1_rmse_deg), 3),
-            "rule": "3 m cell blocked if its max 1 m slope > nogo_deg = 20 - V1 RMSE "
-                    "(config/site.yaml slope.nogo_deg.conservative); unknown cells unchanged",
-            "v1_source": v1_source, "raster": "data/interim/terrain/cellstate_3m_conservative.tif",
-            "discs": rows, "grid_pct": _state_pct(conservative),
-            "nominal_grid_pct": _state_pct(nominal)}
+        dsg.append({"budget_min": b, "radius_m": round(r, 1), "stepguard_pct": pct(sg, d, n)})
+    return {"rule": "D22/D23 (SPEC 11): a known 3 m cell is blocked iff its plane-fit slope "
+                    "(least-squares plane through its nine 1 m elevations) > nogo_deg, or any "
+                    f"1 m Horn slope inside it > {step_guard_deg:g} deg (step guard, assumed); "
+                    "unknown cells stay unknown. Percentages are of all disc cells "
+                    "(assessed + blocked + unknown = 100); blocked = blocked_slope + "
+                    "blocked_stepguard_only (rounding aside). maxslope_rule_blocked_pct = the old "
+                    "rule (max 1 m slope > nogo), comparison only (rough footing)",
+            "step_guard_deg": float(step_guard_deg), "variants": variants,
+            "discs_stepguard": dsg}
 
 
 def terrain_checks(xcheck: dict | None, slope_summary: dict | None,
-                   conservative: dict | None) -> dict:
+                   cell_states: dict | None) -> dict:
     """``terrain_checks`` block of validation/coverage.json: the WS1 numbers that have no web file
-    of their own (HiRISE cross-check, 1 m vs 5 m slope, blocked share of known cells, the
-    conservative cell states), so their manifest keys cite a published path."""
+    of their own (HiRISE cross-check, 1 m vs 5 m slope, blocked share of known cells, the D22/D23
+    cell states per variant), so their manifest keys cite a published path."""
     xc = None
     if xcheck:
         xc = {"definition": xcheck.get("definition"),
@@ -284,4 +308,4 @@ def terrain_checks(xcheck: dict | None, slope_summary: dict | None,
     return {"note": "WS1 terrain checks without a web file of their own (manifest keys cite "
                     "validation/coverage.json); the HiRISE DTMs are never used for routing",
             "hirise_xcheck": xc, "slope_compare": sc, "blocked_pct_of_known": bp,
-            "conservative": conservative}
+            "cell_states": cell_states}
