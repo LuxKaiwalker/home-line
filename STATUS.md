@@ -199,6 +199,37 @@ Branch: `c-integration` (merged to `main` by the orchestrator)
   **Still `-dirty`: WS7 72 keys (`fields_png.py` 78cb57d), WS9 172 (7908eda).** WS8's 6
   `fp3d.*` keys cite `data/interim/export/fp3d/index.json` (should be `fp3d/index.json`).
 
+- 2026-11-14T16:45Z (session 4): **contracts v1.1.4** (additive; contracts/README.md "Changes",
+  section "Rover parking options"). KATs first (`tests/test_contracts.py` +43, `tests/test_make_web.py` +3).
+  - New `pads_index.schema.json` (`scenarios/pads/index.json`, index: `dummy` required; top-level
+    `official` id; rows `id`, `lon`, `lat`, `elev_m`, `rank`, `score`, `official`, `tiebreak`
+    required, a `picker: true` row is not official and names its `summary`) and
+    `pad_summary.schema.json` (`scenarios/pads/*/summary.json`: `id`, `pad`, `rank`, `score`,
+    `headline` "30"/"60" {`budget_min`, `reachable_pct` (may be null), `range_pct` [con, opt]},
+    `route` (or null)). Written from WS2's real files; extra keys allowed.
+  - "Exactly one official row (= `official`)", "summary id = folder" and "headline key =
+    budget_min" are `SEMANTIC_CHECKS` in `tools/validate_contracts.py` (the browser checker's
+    keyword subset has no `contains`; WS5's `parsePadsIndex` enforces the official count too).
+  - `SCHEMA_MAP` (+ `web/src/data/contracts.ts`, same order): `scenarios/pads/index.json`,
+    `scenarios/pads/*/summary.json`, `scenarios/pads/*/bands_*.geojson` -> bands,
+    `*/edges.geojson` -> edges, `*/partner.geojson` -> partner, `*/route_*.geojson` -> route,
+    `*/timeline_*.json` -> timeline. New pytest: no two patterns of either map overlap (glob
+    intersection per segment); vitest: every `PAD_SCHEMA_PATTERNS` row is mapped to its shape.
+  - `pad.schema.json`: `pad` = D21 official pad; optional WS2 extras (`pad.id/score_kind/
+    tiebreak/f8_score`, alternatives `id/kind/score_basis/d21_rank/tiebreak/picker/f8_score/note`,
+    top-level `d21`). `card.schema.json`: landmark `display` enum `label` / `bearing_tick` (D33).
+  - `make web`: WS2 rules for the seven `scenarios/pads/**` patterns (nothing else under pads/);
+    DANGLING check for index `summary` and summary `files` references.
+  - Dummy: `scenarios/pads/` (rank1 = the dummy pad, options rank2 beside the wall and rank3
+    beside the hole, ranked by the D21 order on the synthetic model; 13 files, 0.36 MB, manifest
+    +123 `pads.*` keys); `make dummy` byte-stable (all other files unchanged), 11 s.
+  - **WS2's real files validate** (index + 4 picker pads x 6 files + pad.json: 26 files, 0 errors,
+    0 warnings); WS3's 48 card landmarks validate with `display`. Not published (`make web` is the
+    orchestrator's, after WS7/WS8).
+  - For WS5: the picker's real-tree KAT can run after the next publish; `parsePadsIndex` /
+    `parsePadSummary` match the final shape (rows under `pads`, `official` on every row,
+    headline object keyed "30"/"60" with `budget_min`).
+
 ### Doing
 
 - —
