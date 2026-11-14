@@ -47,7 +47,7 @@ def test_every_mapped_schema_exists():
 
 
 def test_every_schema_is_mapped():
-    mapped = {name for _, name in vc.SCHEMA_MAP + vc.INTERIM_SCHEMA_MAP}
+    mapped = {name for _, name in vc.SCHEMA_MAP + vc.INTERIM_SCHEMA_MAP} | set(vc.NON_DATA_SCHEMAS)
     assert {p.name for p in SCHEMA_FILES} == mapped
 
 
