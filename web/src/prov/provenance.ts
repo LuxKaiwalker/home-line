@@ -70,10 +70,24 @@ export function resolveProvenance(m: Manifest | null | undefined, q: ProvQuery):
 const UNIT_LABELS: Record<string, string> = { km2: 'km²', 'uGy/day': 'µGy/day', 'uGy/h': 'µGy/h', deg: '°', degC: '°C' }
 const TIGHT_UNITS = new Set(['%', '°', 'deg'])
 
-/** Display formatting only: the value is printed as stored (no rounding), negatives get a true minus. */
-export function formatValue(v: number | string | boolean | null | undefined, units?: string | null): string {
+export interface FormatOptions {
+  /** Fixed decimals for display only (the manifest entry and the tooltip keep the stored value). */
+  dp?: number
+  /** Print a + on positive numbers (e.g. a bias). */
+  signed?: boolean
+}
+
+/**
+ * Display formatting only: the value is printed as stored (no rounding) unless the caller asks for
+ * fixed decimals; negatives get a true minus.
+ */
+export function formatValue(v: number | string | boolean | null | undefined, units?: string | null, opt: FormatOptions = {}): string {
   if (v === null || v === undefined || (typeof v === 'number' && !Number.isFinite(v))) return 'unknown'
-  const s = typeof v === 'number' ? String(v).replace(/^-/, '−') : String(v)
+  let s: string
+  if (typeof v === 'number') {
+    s = (opt.dp !== undefined ? v.toFixed(opt.dp) : String(v)).replace(/^-/, '−')
+    if (opt.signed && v > 0) s = `+${s}`
+  } else s = String(v)
   if (!units || units === '1') return s
   const u = UNIT_LABELS[units] ?? units
   return TIGHT_UNITS.has(units) ? `${s}${u}` : `${s} ${u}`

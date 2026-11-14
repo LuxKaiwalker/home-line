@@ -60,7 +60,7 @@ export const NAV_ITEMS: { route: Route; label: string }[] = [
   { route: { name: 'cuff' }, label: 'Cuff card' },
   { route: { name: 'hud' }, label: 'HUD' },
   { route: { name: 'hud3d' }, label: '3D' },
-  { route: { name: 'nav' }, label: 'Navigation' },
+  { route: { name: 'nav' }, label: 'Navigation (optional)' }, // D19: optional add-on
   { route: { name: 'scorecard' }, label: 'Scorecard' },
   { route: { name: 'about' }, label: 'About' },
 ]

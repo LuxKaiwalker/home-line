@@ -72,6 +72,12 @@ table.mini th, table.mini td { padding: 0.2rem 0.25rem; border-bottom: 1px solid
 .station-marker { background: var(--c, #ffd166); --c: #ffd166; color: #1a120e; border: 2px solid #1a120e; border-radius: 50%; width: 30px; height: 30px; font: 700 11px system-ui, sans-serif; cursor: pointer; padding: 0; }
 .station-marker:hover { transform: scale(1.12); }
 .pad-marker { background: #fff; color: #1a120e; border: 2px solid #1a120e; border-radius: 3px; padding: 1px 5px; font: 700 11px system-ui, sans-serif; }
+.pad-marker.pad-proposal { background: transparent; color: #fff; border: 2px dashed #fff; text-shadow: 0 0 3px #000; }
+.pad-alt { color: #fff; border: 1px dashed #fff; border-radius: 3px; padding: 0 3px; font: 600 10px system-ui, sans-serif; text-shadow: 0 0 3px #000; }
+.drag-note { margin: 4px 0; font-size: 0.92em; }
+.finding { border-left: 3px solid #ef8a4c; padding: 4px 10px; margin: 10px 0; background: rgba(239, 138, 76, 0.08); }
+.optional-addon { display: inline-block; border: 1px dashed currentColor; border-radius: 3px; padding: 0 6px; font-size: 0.85em; opacity: 0.85; }
+.addon-banner { border: 1px dashed #999; padding: 6px 10px; margin: 8px 16px; border-radius: 4px; }
 .edge-label { font: 600 11px system-ui, sans-serif; padding: 1px 5px; border-radius: 3px; background: rgba(20, 14, 12, 0.82); pointer-events: auto; white-space: nowrap; }
 .edge-physiology { color: #6fc3ea; }
 .edge-slope { color: #ff7a6c; }

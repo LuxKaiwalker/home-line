@@ -30,10 +30,15 @@ const modules = import.meta.glob<SlotModule>([
   '../nav/index.tsx',
 ])
 
+/** D19 (user 2026-11-14 14:19): label of the navigation / visual-odometry views. */
+export const ADDON_LABEL = 'Optional add-on (not part of the core plan)'
+
 export const SLOTS = {
-  hud: { dir: 'hud', owner: 'WS7', title: 'Live HUD (F18, F19)' },
-  hud3d: { dir: 'fp3d', owner: 'WS8', title: '3D first-person replay (F20)' },
-  nav: { dir: 'nav', owner: 'WS9', title: 'Navigation (F21, F22)' },
+  hud: { dir: 'hud', owner: 'WS7', title: 'Live HUD (F18, F19)', optional: false },
+  hud3d: { dir: 'fp3d', owner: 'WS8', title: '3D first-person replay (F20)', optional: false },
+  // D19: navigation (F21, F22) is an optional add-on; the core plan uses the F19 drift circle and
+  // fixes at the rover pad and surveyed stations.
+  nav: { dir: 'nav', owner: 'WS9', title: 'Navigation (F21, F22)', optional: true },
 } as const
 export type SlotName = keyof typeof SLOTS
 
@@ -48,6 +53,14 @@ export function slotView(name: SlotName): View {
     const container = document.createElement('div')
     container.className = 'slot'
     container.dataset.slot = name
+    if (slot.optional) {
+      const banner = document.createElement('div')
+      banner.className = 'addon-banner'
+      banner.innerHTML = `<b></b> The core plan uses the F19 drift circle (simulated drift, % of distance walked) and position fixes at the rover pad and
+        the surveyed stations; nothing in the planning console depends on this view.`
+      banner.querySelector('b')!.textContent = ADDON_LABEL + '.'
+      el.append(banner)
+    }
     el.append(container)
     const load = findSlotLoader(name)
     if (!load) {

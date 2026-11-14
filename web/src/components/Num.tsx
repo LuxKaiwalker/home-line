@@ -1,4 +1,4 @@
-// Every on-screen science number goes through <Num>: it prints the stored value (no rounding),
+// Every on-screen science number goes through <Num>: it prints the stored value (no rounding unless the caller asks for display decimals),
 // links it to its manifest.json entry on the scorecard, and flags it when no entry backs it.
 import { href } from '../router'
 import { formatValue } from '../prov/provenance'
@@ -14,10 +14,15 @@ export interface NumProps {
   /** Display formatting for string values (e.g. a UTC timestamp); numbers are never reformatted. */
   fmt?: (v: string) => string
   className?: string
+  /** Display decimals (the link and tooltip keep the stored value). */
+  dp?: number
+  /** Show + on positive values. */
+  signed?: boolean
 }
 
-export function Num({ v, file, k, units, className, fmt }: NumProps) {
-  const text = typeof v === 'string' && fmt ? fmt(v) : formatValue(v, units)
+export function Num({ v, file, k, units, className, fmt, dp, signed }: NumProps) {
+  const text = typeof v === 'string' && fmt ? fmt(v) : formatValue(v, units, { dp, signed })
+  const stored = dp !== undefined && typeof v === 'number' ? `\nstored value: ${v}` : ''
   if (v === null || v === undefined) {
     return (
       <span class={`num num-unknown ${className ?? ''}`} title={`unknown (null in ${file})`}>
@@ -28,7 +33,7 @@ export function Num({ v, file, k, units, className, fmt }: NumProps) {
   const r = lookup({ key: k, file, value: v })
   if (r.status === 'ok' || r.status === 'matched') {
     const e = r.entry
-    const tip = `manifest: ${r.key}\nfile: ${e.file}\nscript: ${e.script}\ncommit: ${e.commit}\nutc: ${e.utc}`
+    const tip = `manifest: ${r.key}${stored}\nfile: ${e.file}\nscript: ${e.script}\ncommit: ${e.commit}\nutc: ${e.utc}`
     return (
       <a class={`num num-ok ${className ?? ''}`} href={href({ name: 'scorecard', key: r.key })} title={tip}>
         {text}
@@ -42,7 +47,7 @@ export function Num({ v, file, k, units, className, fmt }: NumProps) {
         ? 'manifest.json not loaded'
         : `no manifest entry for this value in ${file}${r.expectedKey ? ` (expected key ${r.expectedKey})` : ''}`
   return (
-    <span class={`num num-unbacked ${className ?? ''}`} title={why}>
+    <span class={`num num-unbacked ${className ?? ''}`} title={why + stored}>
       {text}
     </span>
   )

@@ -14,6 +14,9 @@ import { DummyNote, StatusTag } from '../components/labels'
 import { LooseTable } from '../components/Loose'
 import { CfgNum, DerivedNum, Num } from '../components/Num'
 import { f22Rows, f22Verdict, type F22Frame } from './f22'
+import { ADDON_LABEL } from './slot'
+import { confusionThresholds, FAR_NOT_VALIDATED, katAreas, v1Sensitivities, v2Classes, type Confusion, type KatTest } from './validation'
+import { dataUrl } from '../env'
 import { Page, preactView, Show, useLoad } from './page'
 
 export function manifestEntries(m: Manifest | null): [string, ManifestEntry][] {
@@ -82,26 +85,154 @@ function ManifestTable({ focus }: { focus?: string }) {
   )
 }
 
+/** One 2 x 2 confusion matrix (DEM predicts, IMU is the reference; positive = tilt >= threshold). */
+function ConfusionTable({ c, t, keyPrefix, file }: { c: Confusion; t: string; keyPrefix: string; file: string }) {
+  const k = (f: keyof Confusion) => `${keyPrefix}.confusion.${t}.${f}`
+  return (
+    <table class="mini confusion">
+      <thead>
+        <tr>
+          <th>≥ {t}°</th>
+          <th class="r">IMU ≥ {t}°</th>
+          <th class="r">IMU &lt; {t}°</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <th>DEM ≥ {t}°</th>
+          <td class="r" title="true positive">
+            <Num v={c.tp} file={file} k={k('tp')} />
+          </td>
+          <td class="r" title="false positive (false alarm)">
+            <Num v={c.fp} file={file} k={k('fp')} />
+          </td>
+        </tr>
+        <tr>
+          <th>DEM &lt; {t}°</th>
+          <td class="r" title="false negative (missed)">
+            <Num v={c.fn} file={file} k={k('fn')} />
+          </td>
+          <td class="r" title="true negative">
+            <Num v={c.tn} file={file} k={k('tn')} />
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  )
+}
+
 function V1Section() {
-  const l = useLoad(() => data().optional(() => data().v1()))
+  const l = useLoad(async () => {
+    const L = data()
+    const [v, cov] = await Promise.all([L.optional(() => L.v1()), L.optional(() => L.coverage())])
+    return { v, cov }
+  })
   const F = 'validation/v1.json'
   return (
     <Show l={l} what="V1 tilt validation">
-      {(v) =>
-        v ? (
+      {({ v, cov }) => {
+        if (!v) return <p class="muted">validation/v1.json not available yet (WS6).</p>
+        const sens = v1Sensitivities(v)
+        const ts = confusionThresholds(v.confusion)
+        const nogo = (v.conservative_nogo ?? null) as { nogo_deg?: number; rmse_deg?: number; formula?: string } | null
+        const tc = (cov?.terrain_checks as { conservative?: { discs?: { budget_min: number; blocked_pct: number | null; nominal_blocked_pct?: number | null }[] } } | undefined)?.conservative
+        const hi = ts.length ? (v.confusion as Record<string, Confusion>)[ts[ts.length - 1]] : undefined
+        const d30 = tc?.discs?.find((d) => d.budget_min === CONFIG.walkbackBudgetsMin[0])
+        return (
           <>
             <p>
-              DEM slope over the rover footprint vs Curiosity's IMU tilt at <Num v={v.n} file={F} k="v1.n" /> drive ends. Bias{' '}
-              <Num v={v.bias_deg} units="deg" file={F} k="v1.bias_deg" />, RMSE <Num v={v.rmse_deg} units="deg" file={F} k="v1.rmse_deg" />, r{' '}
-              <Num v={v.r} file={F} k="v1.r" />. Confusion at {v.thresholds_deg.join('° / ')}°:
+              DEM slope over the rover footprint (<Num v={(v.footprint_m as number) ?? null} units="m" file={F} k="v1.footprint_m" />) vs Curiosity's IMU tilt at{' '}
+              <Num v={v.n} file={F} k="v1.n" /> drive ends in the focus area. Bias (DEM − IMU) <Num v={v.bias_deg} units="deg" file={F} k="v1.bias_deg" dp={2} signed />, RMSE{' '}
+              <Num v={v.rmse_deg} units="deg" file={F} k="v1.rmse_deg" dp={2} />, r <Num v={v.r} file={F} k="v1.r" dp={2} />.
             </p>
-            <LooseTable value={v.confusion} file={F} />
-            <p class="caption">Caveat: the rover chose gentle ground.</p>
+            <div class="confusion-row">
+              {ts.map((t) => (
+                <ConfusionTable c={(v.confusion as Record<string, Confusion>)[t]} t={t} keyPrefix="v1" file={F} />
+              ))}
+            </div>
+            <figure class="v1-figure">
+              <img src={dataUrl('validation/v1.svg')} alt="V1 scatter: DEM tilt vs IMU tilt per drive end" loading="lazy" />
+              <figcaption>
+                <StatusTag kind="real" /> IMU tilt vs <StatusTag kind="modelled" /> DEM tilt per drive end (validation/v1.svg, WS6).
+              </figcaption>
+            </figure>
+            <p>
+              {hi && hi.fp > hi.fn ? (
+                <>
+                  Reading: at {ts[ts.length - 1]}° the DEM raises more false alarms than it misses, so as a hazard flag it errs on the cautious side.{' '}
+                </>
+              ) : null}
+              <b>Caveat: {typeof v.caveat === 'string' ? v.caveat.replace(/\.$/, '') : 'the rover chose gentle ground'}.</b>
+            </p>
+            {nogo && (
+              <p class="finding">
+                <b>Conservative no-go</b> = <CfgNum v={CITED.nogoNominalDeg.value} units="deg" source={CITED.nogoNominalDeg.source} /> − V1 RMSE = <Num v={nogo.nogo_deg ?? null} units="deg" file={F} k="v1.conservative_nogo.nogo_deg" dp={2} /> (
+                {nogo.formula ?? '20 - v1_rmse_deg'}). The conservative variant blocks every cell steeper than this
+                {d30 ? (
+                  <>
+                    : <Num v={d30.blocked_pct} units="%" file="validation/coverage.json" k={`terrain.conservative.disc_${d30.budget_min}.blocked_pct`} /> of the{' '}
+                    {d30.budget_min}-min flat disc is blocked (nominal{' '}
+                    <Num v={d30.nominal_blocked_pct ?? null} units="%" file="validation/coverage.json" k={`terrain.conservative.disc_${d30.budget_min}.nominal_blocked_pct`} />)
+                  </>
+                ) : null}
+                . It sets the low end of the headline range.
+              </p>
+            )}
+            {sens.length > 0 && (
+              <>
+                <h4>Sensitivities</h4>
+                <table class="mini">
+                  <thead>
+                    <tr>
+                      <th>Run</th>
+                      <th class="r">n</th>
+                      <th class="r">Bias</th>
+                      <th class="r">RMSE</th>
+                      <th class="r">r</th>
+                      {ts.map((t) => (
+                        <th class="r" title="TP / FP / FN / TN">
+                          {t}° TP/FP/FN/TN
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {sens.map((x) => (
+                      <tr>
+                        <td>{x.label}</td>
+                        <td class="r">
+                          <Num v={x.n} file={F} k={`${x.keyPrefix}.n`} />
+                        </td>
+                        <td class="r">
+                          <Num v={x.bias_deg} units="deg" file={F} k={`${x.keyPrefix}.bias_deg`} dp={2} signed />
+                        </td>
+                        <td class="r">
+                          <Num v={x.rmse_deg} units="deg" file={F} k={`${x.keyPrefix}.rmse_deg`} dp={2} />
+                        </td>
+                        <td class="r">
+                          <Num v={x.r} file={F} k={`${x.keyPrefix}.r`} dp={2} />
+                        </td>
+                        {ts.map((t) => {
+                          const c = x.confusion[t]
+                          if (!c) return <td class="r muted">–</td>
+                          const ck = (f: keyof Confusion) => `${x.keyPrefix}.confusion.${t}.${f}`
+                          return (
+                            <td class="r">
+                              <Num v={c.tp} file={F} k={ck('tp')} /> / <Num v={c.fp} file={F} k={ck('fp')} /> / <Num v={c.fn} file={F} k={ck('fn')} /> /{' '}
+                              <Num v={c.tn} file={F} k={ck('tn')} />
+                            </td>
+                          )
+                        })}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                <p class="caption">Sensitivities only; the primary result (3 m footprint, focus area, MMGIS tilt) sets the conservative no-go.</p>
+              </>
+            )}
           </>
-        ) : (
-          <p class="muted">validation/v1.json not available yet (WS6).</p>
         )
-      }
+      }}
     </Show>
   )
 }
@@ -110,22 +241,58 @@ function V2Section() {
   const l = useLoad(() => data().optional(() => data().v2()))
   const F = 'validation/v2.json'
   const [a, b] = CONFIG.distanceClassesKm
+  const range: Record<string, string> = { near: `< ${a} km`, mid: `${a}–${b} km`, far: `> ${b} km` }
   return (
     <Show l={l} what="V2 skyline validation">
-      {(v) =>
-        v ? (
+      {(v) => {
+        if (!v) return <p class="muted">validation/v2.json not available yet (WS3).</p>
+        const rows = v2Classes(v.summary)
+        if (!rows.length) return <LooseTable value={v.summary} file={F} />
+        return (
           <>
             <p>
-              Predicted vs detected skyline elevation angle per image column, median and P90 by distance class (near &lt; {a} km, mid {a}–{b} km, far &gt;{' '}
-              {b} km), over {v.frames.length} frames.
+              Predicted vs detected skyline elevation angle per image column (automatic sky detector, no manual review: D7), by distance class, over{' '}
+              <DerivedNum v={v.frames.length} how="counted in the browser: validation/v2.json frames[]" /> frames listed in validation/v2.json.
             </p>
-            <LooseTable value={v.summary} file={F} />
+            <table class="mini">
+              <thead>
+                <tr>
+                  <th>Class</th>
+                  <th class="r">Columns</th>
+                  <th class="r">Median</th>
+                  <th class="r">Median |error|</th>
+                  <th class="r">P90 |error|</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((r) => (
+                  <tr class={r.validated ? '' : 'not-validated'}>
+                    <td>
+                      {r.cls} <span class="muted">({range[r.cls] ?? ''})</span>
+                    </td>
+                    <td class="r">
+                      <Num v={r.n} file={F} k={`${r.keyPrefix}.n`} />
+                    </td>
+                    <td class="r">
+                      <Num v={r.median_deg} units="deg" file={F} k={`${r.keyPrefix}.median_deg`} dp={2} signed />
+                    </td>
+                    <td class="r">
+                      <Num v={r.median_abs_deg} units="deg" file={F} k={`${r.keyPrefix}.median_abs_deg`} dp={2} />
+                    </td>
+                    <td class="r">
+                      <Num v={r.p90_abs_deg} units="deg" file={F} k={`${r.keyPrefix}.p90_abs_deg`} dp={2} />
+                    </td>
+                    <td>{r.validated ? 'quoted as measured' : <b class="bad">not validated</b>}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <p class="caption">Far class: {FAR_NOT_VALIDATED} The far numbers stay visible for transparency only.</p>
             <p class="caption">The skyline check validates the DEM–camera–pose chain. It is not a hazard validation.</p>
           </>
-        ) : (
-          <p class="muted">validation/v2.json not available yet (WS3).</p>
         )
-      }
+      }}
     </Show>
   )
 }
@@ -143,8 +310,10 @@ function CoverageSection() {
           {coverage ? <CoverageTable c={coverage} /> : <p class="muted">validation/coverage.json not available yet (WS1).</p>}
           {pad && (
             <p>
-              Pad 30-min flat disc assessed: <Num v={pad.pad.checks.assessed_pct_30min} units="%" file="pad.json" k="pad.checks.assessed_pct_30min" /> (rule: at
-              least the site.yaml minimum); max slope at the pad <Num v={pad.pad.checks.max_slope_deg} units="deg" file="pad.json" k="pad.checks.max_slope_deg" />.
+              Pad in use (pad.json = pad_default): {CONFIG.walkbackBudgetsMin[0]}-min flat disc assessed{' '}
+              <Num v={pad.pad.checks.assessed_pct_30min} units="%" file="pad.json" k="pad.checks.assessed_pct_30min" />, steepest slope at the pad{' '}
+              <Num v={pad.pad.checks.max_slope_deg} units="deg" file="pad.json" k="pad.checks.max_slope_deg" />. The F8 siting result is a proposal only (planning
+              console, layer "Pad siting proposal").
             </p>
           )}
           {coreg ? (
@@ -294,12 +463,20 @@ function Scorecard({ focus }: { focus?: string }) {
         <CoverageSection />
         <h3>RAD checks</h3>
         <RadChecks />
+        <h3>Known-answer tests</h3>
+        <KatSection />
+      </section>
+      <section class="addon">
+        <h2>
+          Navigation and visual odometry <span class="optional-addon">{ADDON_LABEL}</span>
+        </h2>
+        <p class="muted">
+          The core plan uses the F19 drift circle and position fixes at the rover pad and the surveyed stations. The results below are kept as findings (D19).
+        </p>
         <h3>F22 · skyline fix on real Navcam frames (validation finding)</h3>
         <F22Section />
         <h3>X8 · visual-odometry drift on Curiosity drives (rover analogue)</h3>
         <VoDriftSection />
-        <h3>Known-answer tests</h3>
-        <KatSection />
       </section>
       <section>
         <h2>Assumptions</h2>
@@ -395,7 +572,7 @@ function F22Section() {
             <p>
               <b>
                 {v.kind === 'none-pass'
-                  ? `No skyline fix passes the gate (${v.evaluated} station frames evaluated). The navigation plan uses station fixes; no skyline result is shown as a position fix.`
+                  ? `No skyline fix passes the gate (${v.evaluated} station frames evaluated). The plan uses station fixes; no skyline result is shown as a position fix.`
                   : v.kind === 'some-pass'
                     ? `Skyline fixes pass at ${v.passed.join(', ')}; the other stations keep their station fixes.`
                     : 'No skyline-fix results in this data tree yet (WS9).'}
@@ -404,7 +581,7 @@ function F22Section() {
             </p>
             {fixes && (
               <p>
-                Fixes used in the plan (nav/fixes.json):{' '}
+                Fixes in the navigation add-on (nav/fixes.json):{' '}
                 {fixes.map((f, i) => (
                   <>
                     {i > 0 ? '; ' : ''}
@@ -484,7 +661,7 @@ interface Kats {
   commit: string
   runner: string
   summary: { total: number; passed: number; failed: number; skipped: number }
-  tests: { id: string; area: string; features: string[]; outcome: string; reason: string | null }[]
+  tests: KatTest[]
 }
 
 function KatSection() {
@@ -492,14 +669,45 @@ function KatSection() {
   const F = 'validation/kats.json'
   return (
     <Show l={l} what="KAT pass list">
-      {(k) =>
-        k ? (
+      {(k) => {
+        if (!k) return <p class="muted">validation/kats.json not available yet (WS6, contracts v{contractVersions().join(', ')}). The full list runs in CI on every PR.</p>
+        const areas = katAreas(k.tests)
+        const how = 'counted in the browser from validation/kats.json tests[]'
+        return (
           <>
             <p>
               <Num v={k.summary.passed} file={F} k="kats.summary.passed" /> of <Num v={k.summary.total} file={F} k="kats.summary.total" /> known-answer tests pass
               (failed <Num v={k.summary.failed} file={F} k="kats.summary.failed" />, skipped <Num v={k.summary.skipped} file={F} k="kats.summary.skipped" />), {k.runner}{' '}
               at commit <code>{k.commit.slice(0, 10)}</code>, {k.generated_utc}.
             </p>
+            <table class="mini">
+              <thead>
+                <tr>
+                  <th>Area (SPEC §9)</th>
+                  <th class="r">Tests</th>
+                  <th class="r">Passed</th>
+                  <th class="r">Failed</th>
+                  <th class="r">Skipped</th>
+                </tr>
+              </thead>
+              <tbody>
+                {areas.map((a) => (
+                  <tr>
+                    <td>{a.area === 'other' ? 'other (contracts, config, data tools, web views)' : a.area}</td>
+                    <td class="r">
+                      <DerivedNum v={a.total} how={how} />
+                    </td>
+                    <td class="r">
+                      <DerivedNum v={a.passed} how={how} />
+                    </td>
+                    <td class="r">{a.failed ? <b class="bad"><DerivedNum v={a.failed} how={how} /></b> : <DerivedNum v={a.failed} how={how} />}</td>
+                    <td class="r">
+                      <DerivedNum v={a.skipped} how={how} />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
             {k.tests.some((t) => t.outcome !== 'passed') && (
               <ul>
                 {k.tests
@@ -512,11 +720,28 @@ function KatSection() {
                   ))}
               </ul>
             )}
+            <details>
+              <summary>Every test, by area</summary>
+              {areas.map((a) => (
+                <>
+                  <h4>{a.area}</h4>
+                  <ul class="kat-list">
+                    {k.tests
+                      .filter((t) => t.area === a.area)
+                      .map((t) => (
+                        <li class={t.outcome === 'passed' ? '' : 'bad'}>
+                          <code>{t.id}</code>
+                          {t.features.length ? <span class="muted"> {t.features.join(', ')}</span> : null}
+                          {t.outcome !== 'passed' ? ` (${t.outcome})` : ''}
+                        </li>
+                      ))}
+                  </ul>
+                </>
+              ))}
+            </details>
           </>
-        ) : (
-          <p class="muted">validation/kats.json not available yet (WS6, contracts v{contractVersions().join(', ')}). The full list runs in CI on every PR.</p>
         )
-      }
+      }}
     </Show>
   )
 }

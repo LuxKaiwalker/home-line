@@ -4,12 +4,15 @@
 import { CITED, CONFIG } from '../config'
 import { accessFor, type AccessView } from '../data/access'
 import { data } from '../data/loader'
-import type { Card, ScenariosIndex, Station, TimelineEvent } from '../data/types'
+import { partnerLabel } from '../data/partner'
+import type { Card, PartnerFC, ScenariosIndex, Station, TimelineEvent } from '../data/types'
 import { dataUrl } from '../env'
 import { href, type Route } from '../router'
 import { AssumedTag, DataProblem, DummyNote, StatusTag } from '../components/labels'
 import { CfgNum, Num } from '../components/Num'
+import { DragNote } from '../components/DragNote'
 import { Page, preactView, Show, useLoad } from './page'
+import { FAR_NOT_VALIDATED, scopeText } from './validation'
 
 export const MARGIN_LABEL: Record<string, string> = { O2: 'oxygen', daylight: 'daylight', dose: 'radiation dose' }
 
@@ -33,6 +36,8 @@ interface StationData {
   idx: ScenariosIndex | null
   timeline: TimelineEvent[] | null
   scenario: string | null
+  /** Partner line of the card's scenario (D20: cart only + drag finding). */
+  partner: { fc: PartnerFC | null; file: string; defaultFile: string | null } | null
 }
 
 async function loadStation(id: string): Promise<StationData> {
@@ -51,7 +56,19 @@ async function loadStation(id: string): Promise<StationData> {
   }
   const scenario = card?.scenario ?? idx?.default ?? null
   const timeline = scenario ? await L.optional(() => L.timeline(scenario)) : null
-  return { station, stations, card, cardError, idx, timeline, scenario }
+  const entry = idx?.scenarios.find((x) => x.id === scenario) ?? null
+  let partner: StationData['partner'] = null
+  if (entry && idx) {
+    const defaultFile = idx.scenarios.find((x) => x.id === idx.default)?.files.partner ?? null
+    let fc: PartnerFC | null = null
+    try {
+      fc = await L.optional(() => L.partner(entry))
+    } catch {
+      fc = null // the console reports a partner file that fails its contract
+    }
+    partner = { fc, file: entry.files.partner, defaultFile }
+  }
+  return { station, stations, card, cardError, idx, timeline, scenario, partner }
 }
 
 function StationCard({ id }: { id: string }) {
@@ -80,7 +97,6 @@ function CardBody({ d }: { d: StationData }) {
   const tk = (i: number, f: string) => `timeline.${d.scenario}.${i}.${f}`
   const tfile = d.scenario ? `timeline_${d.scenario}.json` : ''
   const acc = d.scenario ? accessFor(s, d.scenario, card) : null
-  const farPending = /D7/.test(c.skyline_error_scope ?? '') || c.skyline_error_deg.far !== null
 
   return (
     <div class="card-grid">
@@ -108,25 +124,24 @@ function CardBody({ d }: { d: StationData }) {
  · <StatusTag kind="modelled" /> predicted skyline
             {c.navcam.overlay_png ? '' : ' (overlay not available yet)'}
             <br />
-            Skyline error, far field (&gt; {FAR_KM} km): <Num v={c.skyline_error_deg.far} units="deg" file={cf} k={`skyline_error_deg.${s.id}.far`} />
-            {farPending && (
-              <span class="pending" title="Far-field skyline errors wait for the D7 manual check of the automatic sky detector (decision open)">
-                {' '}
-                pending D7
-              </span>
-            )}{' '}
-            · mid: <Num v={c.skyline_error_deg.mid} units="deg" file={cf} k={`skyline_error_deg.${s.id}.mid`} /> · near:{' '}
-            <Num v={c.skyline_error_deg.near} units="deg" file={cf} k={`skyline_error_deg.${s.id}.near`} />
+            Skyline error, near: <Num v={c.skyline_error_deg.near} units="deg" file={cf} k={`skyline_error_deg.${s.id}.near`} /> · mid:{' '}
+            <Num v={c.skyline_error_deg.mid} units="deg" file={cf} k={`skyline_error_deg.${s.id}.mid`} /> · far (&gt; {FAR_KM} km):{' '}
+            <Num v={c.skyline_error_deg.far} units="deg" file={cf} k={`skyline_error_deg.${s.id}.far`} />{' '}
+            <span class="pending" title={FAR_NOT_VALIDATED}>
+              far: not validated
+            </span>
             {c.skyline_error_deg.near === null && c.skyline_error_deg.mid === null && c.navcam.image_id ? (
               <span class="muted"> (this frame has no near or mid skyline columns)</span>
             ) : null}
             <br />
-            {c.skyline_error_scope && (
+            {scopeText(c.skyline_error_scope) && (
               <>
-                <span class="muted">{c.skyline_error_scope}.</span>
+                <span class="muted">{scopeText(c.skyline_error_scope)}.</span>
                 <br />
               </>
             )}
+            <span class="muted">Far class: {FAR_NOT_VALIDATED}</span>
+            <br />
             <span class="muted">The skyline check validates the DEM–camera–pose chain. It is not a hazard validation.</span>
           </figcaption>
         </figure>
@@ -238,15 +253,16 @@ function CardBody({ d }: { d: StationData }) {
           <h3>Contingency</h3>
           <p>{card ? c.contingency : <span class="muted">{NO_CARD}</span>}</p>
           <p>
-            Partner-haul range: {s.in_partner_line === null ? <span class="num-unknown">unknown</span> : s.in_partner_line ? 'inside' : <b>outside</b>}{' '}
+            {partnerLabel(d.partner?.fc ?? null)}: {s.in_partner_line === null ? <span class="num-unknown">unknown</span> : s.in_partner_line ? 'inside' : <b>outside</b>}{' '}
             <AssumedTag note="Partner line: design question; every haul parameter is an assumed band" />
           </p>
+          <DragNote fc={d.partner?.fc ?? null} file={d.partner?.file ?? null} defaultFile={d.partner?.defaultFile ?? null} note={card?.drag_note} />
         </section>
 
         <section class="kv">
           <h3>Science</h3>
           <p>
-            Value <Num v={s.value} file="stations.json" k={`station_value.${s.id}`} />
+            Value <Num v={s.value} file="stations.json" k={`stations.${s.id}.value`} />
           </p>
           <ul class="tasks">
             {s.tasks.map((t) => (

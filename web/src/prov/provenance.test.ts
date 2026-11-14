@@ -49,4 +49,13 @@ describe('helpers', () => {
     expect(formatValue(null, 'min')).toBe('unknown')
     expect(formatValue(0.42, null)).toBe('0.42')
   })
+  it('formatValue display options: fixed decimals and an explicit sign (the stored value is unchanged)', () => {
+    expect(formatValue(1.3098175914666925, 'deg', { dp: 2, signed: true })).toBe('+1.31°')
+    expect(formatValue(5.447021418084812, 'deg', { dp: 2 })).toBe('5.45°')
+    expect(formatValue(0.5025571598604971, '1', { dp: 2 })).toBe('0.50')
+    expect(formatValue(-0.594, 'deg', { dp: 1, signed: true })).toBe('−0.6°')
+    expect(formatValue(0, null, { signed: true })).toBe('0')
+    expect(formatValue(null, 'deg', { dp: 2 })).toBe('unknown')
+    expect(formatValue('x', null, { dp: 2 })).toBe('x')
+  })
 })

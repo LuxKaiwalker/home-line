@@ -22,6 +22,7 @@ export const THEME = {
   partner: '#d4b3ff',
   station: '#ffd166',
   pad: '#ffffff',
+  sitingOpacity: 0.6, // F8 siting heatmap (grey, white = highest score)
   hatch: { period: 6, lineWidth: 2, line: [225, 225, 225, 190], fill: [70, 70, 70, 90] } as {
     period: number
     lineWidth: number
