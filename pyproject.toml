@@ -36,7 +36,7 @@ addopts = "-q"
 [tool.ruff]
 line-length = 100
 target-version = "py311"
-extend-exclude = ["web", "data"]
+extend-exclude = ["web", "data", "tools/discovery"]  # D0 one-off probe scripts, kept as a provenance record
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "B", "UP"]
