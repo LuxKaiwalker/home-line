@@ -19,7 +19,11 @@ pixel corner). Inputs on other grids are *sampled*, never interpolated:
 * WS1 ``slope_5m.tif`` (5 m-window slope posted at 1 m): the 1 m cell whose 5 × 5 window is the
   5 m pixel (the centre cell, offset 2 of 5). ``sample_centres`` with the 1 m grid.
 * ``home_bearing``: the geometric bearing (clockwise from grid north) from the pixel centre to the
-  pad (``grid.json`` pad), in the analysis CRS; known everywhere on the grid.
+  pad in use, in the analysis CRS; known everywhere on the grid. The pad in use is WS2's
+  ``engine/public/pad.json`` ``pad`` (the D21 official pad; contract pad v1.1.2), projected with
+  the grid's own ``crs``; only without pad.json does it fall back to ``grid.json`` pad
+  (``pad_default``, which only anchors the grid). The run report says which (``rep["pad"]``) and
+  the manifest records ``fields.{sc}/home_bearing.pad_lon`` / ``.pad_lat``.
 * worst-case fields (``pipeline/export/worstcase.py``): the disc max is taken on WS2's native 3 m
   grid (radius rounded up to whole cells) and then sampled with the same rule as the point field,
   so worst ≥ point pixel by pixel.
@@ -200,6 +204,44 @@ def sample_centres(src: np.ndarray, src_nw: Sequence[float], src_res: float,
             seen_known |= k
     out[~seen_known] = np.nan
     return out
+
+
+def _grid_transformers(grid: Mapping[str, Any]):
+    """(lon/lat -> xy, xy -> lon/lat) for the grid's analysis CRS on its own sphere (``+R=``)."""
+    from pyproj import Transformer
+
+    crs = str(grid["crs"])
+    m = re.search(r"\+R=([0-9.eE+-]+)", crs)
+    if not m:
+        raise ValueError(f"grid.json crs has no +R= sphere radius: {crs!r}")
+    geo = f"+proj=longlat +R={m.group(1)} +no_defs"
+    return (Transformer.from_crs(geo, crs, always_xy=True),
+            Transformer.from_crs(crs, geo, always_xy=True))
+
+
+def lonlat_to_grid_xy(grid: Mapping[str, Any], lon: float, lat: float) -> tuple[float, float]:
+    """Analysis-CRS xy (m) of a lon/lat (deg, planetocentric) in the grid.json ``crs``."""
+    x, y = _grid_transformers(grid)[0].transform(lon, lat)
+    return float(x), float(y)
+
+
+def grid_lonlat_of_xy(grid: Mapping[str, Any], x: float, y: float) -> tuple[float, float]:
+    """Inverse of ``lonlat_to_grid_xy``."""
+    lon, lat = _grid_transformers(grid)[1].transform(x, y)
+    return float(lon), float(lat)
+
+
+def pad_in_use(interim: Path, grid: Mapping[str, Any]) -> dict[str, Any]:
+    """The pad home_bearing aims at: WS2's pad.json ``pad`` (D21), else grid.json's pad."""
+    pj = interim / "engine" / "public" / "pad.json"
+    if pj.exists():
+        p = json.loads(pj.read_text())["pad"]
+        lon, lat = float(p["lon"]), float(p["lat"])
+        return {"lon": lon, "lat": lat, "xy": list(lonlat_to_grid_xy(grid, lon, lat)),
+                "source": "engine/public/pad.json pad"}
+    g = grid["pad"]
+    return {"lon": g.get("lon"), "lat": g.get("lat"), "xy": [float(v) for v in g["xy"]],
+            "source": "terrain/grid.json pad"}
 
 
 def home_bearing_deg(nw: Sequence[float], res: float, shape: tuple[int, int],
@@ -396,6 +438,8 @@ def run(*, interim: str | Path = INTERIM, out_root: str | Path | None = None,
         {"path": str(Path("terrain/grid.json")), "owner": "WS1", "present": grid_json.exists()},
         {"path": str(Path("terrain/slope_5m.tif")), "owner": "WS1", "present": slope_tif.exists()},
         {"path": str(NAV_INDEX), "owner": "WS9", "present": (interim / NAV_INDEX).exists()},
+        {"path": str(Path("engine/public/pad.json")), "owner": "WS2",
+         "present": (interim / "engine" / "public" / "pad.json").exists()},
     ]
     if with_pointer:
         inputs.append({"path": str(Path("engine/pointer_offsets.json")), "owner": "WS2",
@@ -420,7 +464,10 @@ def run(*, interim: str | Path = INTERIM, out_root: str | Path | None = None,
         raise ValueError(f"grid.json fields_5m res {res} != hud.yaml field_png.res_m")
     shape = (int(g5["height"]), int(g5["width"]))
     nw5 = (float(g5["nw_xy"][0]), float(g5["nw_xy"][1]))
-    pad_xy = grid["pad"]["xy"]
+    pad = pad_in_use(interim, grid)
+    pad_xy = pad["xy"]
+    rep["pad"] = pad
+    log(f"home_bearing pad: {pad['source']} ({pad['lon']}, {pad['lat']})")
 
     idx_path = out_root / "fields" / "index.json"
     entries: dict[str, dict[str, Any]] = {}
@@ -459,6 +506,12 @@ def run(*, interim: str | Path = INTERIM, out_root: str | Path | None = None,
             rep["skipped"][f"{sc}/o2_home"] = f"missing engine/{sc}/o2_home.tif (WS2)"
         if sc == worst_sc:
             put(f"{sc}/home_bearing", home_bearing_deg(nw5, res, shape, pad_xy), sc)
+            from pipeline.provenance.manifest import record
+
+            for ax in ("lon", "lat"):
+                record(f"fields.{sc}/home_bearing.pad_{ax}", pad[ax], "deg",
+                       f"fields/{sc}/home_bearing.png", SCRIPT,
+                       fragment_dir=manifest_fragment_dir)
             for base, arr in (("t_home", t), ("o2_home", o2)):
                 if arr is None:
                     continue

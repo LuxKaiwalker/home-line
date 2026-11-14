@@ -4,6 +4,7 @@ import { ALARM_TEXT, evaluateAlarm, marginBand, turnBackText, type AlarmInput } 
 import { PlaybackClock } from './clock'
 import { decodeRGBA, FieldGrid } from './fields'
 import { interpSeries, Plan } from './plan'
+import { bindingLabel, turnBackSub } from './panel'
 import { circleCrossesHomeline, computeReadout, insidePolygons, pickWorstRadius, playbackPosition, type HudContext } from './readout'
 import { dummyGrid, loadConfig, readJson } from './testutil'
 import type { PolygonFC, RouteFC, TimelineEvent } from './types'
@@ -275,5 +276,49 @@ describe('partner polygon', () => {
   it('pad inside, far corner outside', () => {
     expect(insidePolygons(partner, 137.382, -4.806)).toBe(true)
     expect(insidePolygons(partner, 137.32, -4.75)).toBe(false)
+  })
+})
+
+describe('D28 turn-back binding (contract v1.1.3: margin_binding may be "EVA duration")', () => {
+  // the dummy timeline with WS2-style bindings: EVA duration binds late in the walk, plus the
+  // turn_back annotation rows (latest leave per station, margin 0)
+  const bound: TimelineEvent[] = [
+    ...timeline.map((e) => ({ ...e, margin_binding: (e.t_min >= 122 ? 'EVA duration' : e.t_min >= 61.1 ? 'O2' : 'dose') as TimelineEvent['margin_binding'] })),
+    { t_min: 378.9, event: 'turn_back', station: 'S1', o2_left_L: 140, t_home_min: 11.1, margin_min: 0, margin_binding: 'EVA duration' },
+    { t_min: 364.1, event: 'turn_back', station: 'S3', o2_left_L: 150, t_home_min: 25.9, margin_min: 0, margin_binding: 'O2' },
+  ]
+  const ctx = ctxFor(bound)
+  it('the binding row reads the term in force, incl. "EVA duration"', () => {
+    expect(ctx.plan.bindingAt(5)).toBe('dose')
+    expect(ctx.plan.bindingAt(70)).toBe('O2')
+    expect(ctx.plan.bindingAt(130)).toBe('EVA duration')
+    expect(computeReadout(playbackPosition(ctx.plan, 130), ctx).binding).toBe('EVA duration')
+    expect(bindingLabel('EVA duration')).toBe('EVA duration')
+    expect(bindingLabel('O2')).toBe('O₂')
+    expect(bindingLabel('dose')).toBe('dose')
+    expect(bindingLabel('daylight')).toBe('daylight')
+    expect(bindingLabel(null)).toBe('unknown')
+    expect(bindingLabel(undefined)).toBe('—')
+  })
+  it('turn_back rows are per-station annotations: latest leave and its binding', () => {
+    expect(ctx.plan.turnBackAt('S1')).toEqual({ station: 'S1', t_min: 378.9, binding: 'EVA duration' })
+    expect(ctx.plan.turnBackAt('S3')).toEqual({ station: 'S3', t_min: 364.1, binding: 'O2' })
+    expect(ctx.plan.turnBackAt('S2')).toBeNull()
+    // still never steps of the walk
+    expect(ctx.plan.tEnd).toBe(177.9)
+  })
+  it('readout: during a dwell the station turn-back row is shown, else none', () => {
+    const atS1 = computeReadout(playbackPosition(ctx.plan, 20), ctx) // S1 dwell 11.1-41.1
+    expect(atS1.latestLeave).toEqual({ station: 'S1', t_min: 378.9, binding: 'EVA duration' })
+    expect(computeReadout(playbackPosition(ctx.plan, 50), ctx).latestLeave).toBeNull() // walking
+    expect(computeReadout(playbackPosition(ctx.plan, 100), ctx).latestLeave).toBeNull() // S2: no row
+  })
+  it('turn-back sub-line names the binding term (D28)', () => {
+    const r = computeReadout(playbackPosition(ctx.plan, 20), ctx)
+    expect(turnBackSub(r)).toBe('bound by dose · S1 latest leave T+6:18:54 (EVA duration)')
+    const w = computeReadout(playbackPosition(ctx.plan, 160), ctx) // walking home after S3
+    expect(turnBackSub(w)).toBe('bound by EVA duration')
+    const none = computeReadout(playbackPosition(ctxFor(timeline).plan, 20), ctxFor(timeline))
+    expect(turnBackSub(none)).toBe('')
   })
 })

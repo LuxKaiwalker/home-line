@@ -3,7 +3,8 @@
 import type { HudConfig } from './config'
 import type { PanelRow, RowSource } from './provenance'
 import type { Readout } from './readout'
-import type { HudPosition, Rad } from './types'
+import type { StormState } from './storm'
+import type { Binding, HudPosition, Rad } from './types'
 
 export interface PanelExtras {
   headingDeg: number | null // direction of travel for the compass ribbon (null = north-up)
@@ -19,14 +20,50 @@ export interface PanelExtras {
   /** F21 position line from WS9 navLine ("Odometry ±N m · next fix due in M m · last fix …") */
   navLine?: string | null
   /** storm switch state (F18): tripwire fired on the EVA clock, minutes since, tau_dose */
-  storm?: { on: boolean; fired: boolean; tauDoseMin: number | null; doseLeftMin: number | null } | null
+  storm?: StormState | null
   /** sun / time-to-dark row (sun.ts sunRowText); null/undefined = no clock.json, row hidden */
   sun?: { value: string; sub: string } | null
   /** way home from the dragged position: drawn on the map; false = no path known from here */
   wayHome?: { reachesPad: boolean; startKnown: boolean } | null
 }
 
-const BINDING_LABEL: Record<string, string> = { O2: 'O₂', daylight: 'daylight', dose: 'dose' }
+const BINDING_LABEL: Record<string, string> = { O2: 'O₂', daylight: 'daylight', dose: 'dose', 'EVA duration': 'EVA duration' }
+
+/** Display text of a binding term (D28: incl. "EVA duration"); undefined = not in the timeline. */
+export function bindingLabel(b: Binding | undefined): string {
+  if (b === undefined) return '—'
+  if (b === null) return 'unknown'
+  return BINDING_LABEL[b] ?? b
+}
+
+/**
+ * Tripwire row (F18, D39): the replayed storm's tripwire fires at t* (the route's largest T_home)
+ * on the EVA clock, shown with rad.json's "± 9 min" (D35); then the dose budget left.
+ */
+export function tripRowText(st: StormState | null, rad: Rad | null): { value: string; sub: string; band: string } {
+  const pm = st?.halfwidthLabel ? ` ${st.halfwidthLabel}` : ''
+  const tau = (v: number | null | undefined) => (v != null ? `τ at 2024 peak ${fmt(v, 0, 'min')}` : '')
+  if (st?.on && st.tFire !== null) {
+    const at = `${fmtEva(st.tFire)}${pm}`
+    if (st.fired) {
+      const left = st.doseLeftMin !== null ? `dose budget left ${fmt(Math.max(0, st.doseLeftMin), 0, 'min')} (${tau(st.tauDoseMin)})` : tau(st.tauDoseMin)
+      return { value: `FIRED ${at}`, sub: left, band: 'red' }
+    }
+    return { value: `armed: fires ${at}`, sub: ["storm replay at the route's largest T_home", tau(st.tauDoseMin)].filter(Boolean).join(' · '), band: '' }
+  }
+  return { value: 'not fired', sub: tau(rad?.leash.tau_min_at_peak), band: '' }
+}
+
+/**
+ * Turn-back sub-line (D28): the binding term of the turn-back, and during a station dwell WS2's
+ * latest leave for that station with its own binding. '' when the timeline has no bindings.
+ */
+export function turnBackSub(r: Readout): string {
+  const parts: string[] = []
+  if (r.binding !== undefined) parts.push(`bound by ${bindingLabel(r.binding)}`)
+  if (r.latestLeave) parts.push(`${r.latestLeave.station} latest leave ${fmtEva(r.latestLeave.t_min)} (${bindingLabel(r.latestLeave.binding)})`)
+  return parts.join(' · ')
+}
 
 export interface HudPanel {
   readonly el: HTMLElement
@@ -183,11 +220,12 @@ export function createHudPanel(host: HTMLElement, cfg: HudConfig): HudPanel {
         binding.v.textContent = DASH
         binding.sub.textContent = 'not in timeline'
       } else {
-        binding.v.textContent = r.binding === null ? 'unknown' : BINDING_LABEL[r.binding] ?? r.binding
+        binding.v.textContent = bindingLabel(r.binding)
         binding.sub.textContent = 'planned, timeline row in force'
       }
       turn.v.textContent = r.turnBackInMin === null ? DASH : r.turnBackInMin < 0 ? 'NOW' : `${Math.floor(r.turnBackInMin)} min`
       turn.row.dataset.band = r.band
+      turn.sub.textContent = turnBackSub(r)
       home.v.textContent = `${fmt(r.bearingDeg, 0, '°')} · ${r.distanceM >= 1000 ? fmt(r.distanceM / 1000, 2, 'km') : fmt(r.distanceM, 0, 'm')}`
       home.sub.textContent = ''
 
@@ -239,16 +277,10 @@ export function createHudPanel(host: HTMLElement, cfg: HudConfig): HudPanel {
         const lat = x.rad?.latest
         dose.v.textContent = lat ? fmt(lat.dose_rate_uGy_day, 0, 'µGy/day') : DASH
         dose.sub.textContent = lat?.lag_days != null ? `RAD, ${fmt(lat.lag_days, 0)} days old` : ''
-        const st = x.storm
-        if (st?.on) {
-          trip.v.textContent = st.fired ? 'FIRED' : 'armed (storm replay)'
-          trip.row.dataset.band = st.fired ? 'red' : ''
-          trip.sub.textContent = st.fired && st.doseLeftMin !== null ? `dose budget left ${fmt(Math.max(0, st.doseLeftMin), 0, 'min')} (τ ${fmt(st.tauDoseMin, 0, 'min')})` : `τ at 2024 peak ${fmt(st.tauDoseMin, 0, 'min')}`
-        } else {
-          trip.v.textContent = 'not fired'
-          trip.row.dataset.band = ''
-          trip.sub.textContent = x.rad?.leash.tau_min_at_peak != null ? `τ at 2024 peak ${fmt(x.rad.leash.tau_min_at_peak, 0, 'min')}` : ''
-        }
+        const tr = tripRowText(x.storm ?? null, x.rad ?? null)
+        trip.v.textContent = tr.value
+        trip.sub.textContent = tr.sub
+        trip.row.dataset.band = tr.band
         if (x.minimap && x.minimap.parentElement !== miniHost) miniHost.append(x.minimap)
       }
     },

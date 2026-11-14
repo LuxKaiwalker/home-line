@@ -233,7 +233,7 @@ export class Plan {
   }
 
   /**
-   * Binding term of the margin (O2 / daylight / dose) from the timeline row in force at t (the
+   * Binding term of the margin (O2 / daylight / dose / EVA duration, D28) from the timeline row in force at t (the
    * last row at or before t; held, never interpolated). undefined = the timeline has no
    * margin_binding at all (optional in v1.1.0; the M0 dummy has none); null = unknown at that row.
    */
@@ -245,6 +245,15 @@ export class Plan {
       b = e.margin_binding ?? null
     }
     return b
+  }
+
+  /**
+   * WS2's turn_back row for a station (D28): the latest time to leave it and the binding term
+   * (incl. "EVA duration", contract v1.1.3); null = no row for that station.
+   */
+  turnBackAt(station: string): { station: string; t_min: number; binding: Binding } | null {
+    const e = this.turnBacks.find((x) => x.station === station)
+    return e ? { station, t_min: e.t_min, binding: e.margin_binding ?? null } : null
   }
 
   /** Next planned station arrival strictly after t. */
