@@ -8,10 +8,15 @@ matrix per threshold (``v1.confusion_thresholds_deg``; positive = tilt >= thresh
 prediction, IMU the reference). Drive ends whose footprint touches nodata or leaves the DEM are
 excluded and counted, never filled. Caveat (SPEC F13): the rover chose gentle ground.
 
-The RMSE goes to WS1 for the conservative no-go limit (``20 - v1_rmse_deg``, config/site.yaml).
+The top-level ``rmse_deg`` (config footprint, MMGIS ``tilt``, focus area) is the one number WS1
+and WS2 use for the conservative no-go limit (``config/variants.yaml`` ``20 - v1_rmse_deg``);
+``conservative_nogo`` in v1.json spells it out. Sensitivities (other footprint candidates, IMU
+tilt from roll/pitch, every drive end on the DEM regardless of the focus area) sit beside it and
+never replace it.
 
-``footprint_m`` is open (config/validation.yaml, STATUS WS6 Blocked): the real run refuses to start
-while it is null. The array API (``dem_tilt_at``, ``compare``) takes it as an argument.
+``footprint_m`` is 3 m (user decision 2026-11-14 12:37, config/validation.yaml); the real run
+refuses to start if it is null. The array API (``dem_tilt_at``, ``compare``) takes it as an
+argument.
 """
 
 from __future__ import annotations
@@ -19,6 +24,7 @@ from __future__ import annotations
 import json
 import math
 import os
+import re
 from functools import lru_cache
 from pathlib import Path
 from typing import Any
@@ -52,6 +58,23 @@ def _v1_config() -> dict[str, Any]:
 @lru_cache(maxsize=1)
 def _site() -> dict[str, Any]:
     return yaml.safe_load((CONFIG_DIR / "site.yaml").read_text())
+
+
+@lru_cache(maxsize=1)
+def _variants() -> dict[str, Any]:
+    return yaml.safe_load((CONFIG_DIR / "variants.yaml").read_text())
+
+
+def conservative_nogo(rmse_deg: float | None) -> dict[str, Any]:
+    """The conservative slope limit from ``config/variants.yaml`` (``"<limit> - v1_rmse_deg"``)
+    evaluated with ``rmse_deg``; ``nogo_deg`` is None when the RMSE is unknown."""
+    spec = str(_variants()["variants"]["conservative"]["nogo_deg"])
+    m = re.fullmatch(r"\s*([\d.]+)\s*-\s*v1_rmse_deg\s*", spec)
+    if m is None:
+        raise ValueError(f"variants.yaml conservative nogo_deg {spec!r} != '<deg> - v1_rmse_deg'")
+    return {"formula": spec, "rmse_deg": rmse_deg,
+            "nogo_deg": None if rmse_deg is None else float(m.group(1)) - float(rmse_deg),
+            "source": "config/variants.yaml variants.conservative.nogo_deg"}
 
 
 def confusion_thresholds() -> tuple[float, ...]:
@@ -283,7 +306,7 @@ def run(
     """V1 on arrays: DEM GeoTIFF in the analysis CRS + drive ends (lon/lat) + IMU tilt (deg).
 
     ``shift_xy_m`` (dx, dy) is added to the drive ends' analysis-CRS x/y to put them in the DEM
-    frame (WS1 co-registration; sign convention to confirm with WS1, STATUS WS6). Drive ends
+    frame (WS1 co-registration; WS1's coreg.json ``sign`` states the same convention). Drive ends
     outside the focus area are dropped before counting."""
     from pipeline.provenance.manifest import _rel
 
@@ -333,6 +356,14 @@ def run_real(
         sensitivity[name] = {k: r[k] for k in ("n", "n_excluded", "bias_deg", "rmse_deg", "r",
                                                "confusion")} | {"footprint_m": f,
                                                                 "imu_source": source}
+    # every drive end whose footprint lies on the DEM, focus area or not
+    xa, ya = lonlat_to_xy(de["lon"], de["lat"])
+    t_all = dem_tilt_at(dem, transform, xa + shift[0], ya + shift[1], fp, nodata=nodata)
+    r_all = compare(t_all, imu_tilt(de, "tilt"), thr)
+    sensitivity["all_in_dem"] = {k: r_all[k] for k in ("n", "n_excluded", "bias_deg", "rmse_deg",
+                                                       "r", "confusion")} | {
+        "footprint_m": fp, "imu_source": "tilt", "n_drive_ends": int(de["lon"].size),
+        "n_on_dem": int(np.sum(np.isfinite(t_all))), "set": "all drive ends, no focus filter"}
     imu = imu_tilt(de, "tilt")
     dem_t = dem_tilt_at(dem, transform, x, y, fp, nodata=nodata)
     ok = np.isfinite(dem_t) & np.isfinite(imu[keep])
@@ -345,11 +376,20 @@ def run_real(
         "coreg_file": _rel(coreg_path),
         "sensitivity": sensitivity,
     }
+    res = compare(dem_t, imu[keep], thr)
+    extra["conservative_nogo"] = conservative_nogo(res["rmse_deg"])
     doc = run(dem_path, de["lon"], de["lat"], imu, out_path, svg_path, footprint_m=fp,
               shift_xy_m=shift, extra=extra)
     for name, sres in sensitivity.items():
-        for key, units in (("bias_deg", "deg"), ("rmse_deg", "deg"), ("r", "1"), ("n", "count")):
+        for key, units in (("bias_deg", "deg"), ("rmse_deg", "deg"), ("r", "1"), ("n", "count"),
+                           ("n_excluded", "count")):
             record(f"v1.sensitivity.{name}.{key}", sres[key], units, WEB_JSON, __file__)
+        for thr_k, cm in sres["confusion"].items():
+            for cell, v in cm.items():
+                record(f"v1.sensitivity.{name}.confusion.{thr_k}.{cell}", v, "count", WEB_JSON,
+                       __file__)
+    cons = doc["conservative_nogo"]
+    record("v1.conservative_nogo.nogo_deg", cons["nogo_deg"], "deg", WEB_JSON, __file__)
     return doc
 
 
