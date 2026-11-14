@@ -983,10 +983,13 @@ def _record_file(web_rel: str, path: Path) -> None:
            SCRIPT)
 
 
-def step_validation() -> dict:
+def step_validation(out_dir: Path | None = None) -> dict:
     """validation/coverage.json + coverage.png and validation/coreg.json in the contract v1.1
     shape (copied by `make web` from data/interim/terrain/), with the canonical manifest keys.
-    Needs cellstate_3m.tif (step slope), source_mask.tif (mask) and coreg.json (coreg)."""
+    Needs cellstate_3m.tif (step slope), source_mask.tif (mask) and coreg.json (coreg).
+    With ``out_dir`` the three files are written there instead and nothing is recorded (staging:
+    other workstreams read data/interim/terrain/ while WS1 rebuilds; compare, then swap)."""
+    dst = OUT if out_dir is None else Path(out_dir)
     from PIL import Image
 
     site = G.site()
@@ -1002,7 +1005,7 @@ def step_validation() -> dict:
     pchk = webout.pad_check(discs, min(radii), min_pct,
                             reading=site["coverage"].get("pad_check_reading"))
     rgba, legend = webout.coverage_map_rgba(st, g3, pad, list(radii.values()))
-    png = OUT / "coverage.png"
+    png = dst / "coverage.png"
     tmp = png.with_name("coverage.tmp.png")
     Image.fromarray(rgba, "RGBA").save(tmp, format="PNG", optimize=True)
     tmp.replace(png)
@@ -1024,13 +1027,14 @@ def step_validation() -> dict:
                                     "mosaic footprints), 'hrsc_mola' (code 3) is never assigned")
     doc["discs_note"] = ("cell states of cellstate_3m.tif inside each flat disc (radius = "
                          "crew.yaml anchor.speed_ms x budget); assessed + blocked + unknown = 100")
-    _w(OUT / "coverage.json", doc)
+    _w(dst / "coverage.json", doc)
     c = site["coreg"]
     cg = webout.coreg_web(json.loads((OUT / "coreg.json").read_text()), search_m=c["search_m"],
                           step_m=c["step_m"])
-    _w(OUT / "coreg.json", cg)
+    _w(dst / "coreg.json", cg)
 
-    _record_validation(doc, cg)
+    if out_dir is None:
+        _record_validation(doc, cg)
     return {"discs": discs, "pad_check": pchk, "source_fractions_pct": src}
 
 
@@ -1048,8 +1052,9 @@ def _record_validation(doc: dict, cg: dict) -> None:
     pchk = doc["pad_check"]
     for k, u in (("budget_min", "min"), ("min_assessed_pct", "%"), ("pass", None),
                  ("reading", None), ("known_pct", "%")):
-        record(f"validation.coverage.pad_check.{k}", pchk[k], u, F, SCRIPT)
-    for name, rd in pchk["readings"].items():
+        if k in pchk:  # "reading" is absent from a coverage.json written before session 2
+            record(f"validation.coverage.pad_check.{k}", pchk[k], u, F, SCRIPT)
+    for name, rd in pchk.get("readings", {}).items():
         record(f"validation.coverage.pad_check.readings.{name}.pct", rd["pct"], "%", F, SCRIPT)
         record(f"validation.coverage.pad_check.readings.{name}.pass", rd["pass"], None, F,
                SCRIPT)
@@ -1124,7 +1129,8 @@ STEPS = {"dem": step_dem, "mask": step_mask, "coreg": step_coreg, "xcheck": step
          "ortho": step_ortho}
 OPTIONAL = {"conservative": step_conservative,  # after V1 (WS6); not part of "all"
             "farfield_v2": step_farfield_v2,  # ctx_20m_v2.tif (C decides the switch)
-            "manifest": step_manifest}  # re-record every WS1 key from the outputs on disk
+            "manifest": step_manifest,  # re-record every WS1 key from the outputs on disk
+            "validation_staged": lambda: step_validation(OUT / "staged")}  # compare, then swap
 
 
 def main(argv=None) -> int:
