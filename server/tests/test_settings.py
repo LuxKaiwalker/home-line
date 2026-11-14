@@ -258,3 +258,10 @@ def test_exclusion_lists_agree():
     from tools import make_bundle as mb
 
     assert set(st.load().compute.hash.exclude_config) == set(mb.NON_ENGINE_CONFIG)
+
+
+def test_precomputed_label_known_answer():
+    """Team lead, Sat 22:40: the label of the official precomputed tree."""
+    labels = st.load().labels
+    assert labels.precomputed == "Precomputed · official plan"
+    assert "scorecard" not in labels.precomputed
