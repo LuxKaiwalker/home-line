@@ -270,7 +270,7 @@ home-line/
 │   ├── ops/                   Dockerfile, compose, Caddyfile, deploy script  (WS12)
 │   └── tests/                 parity, API, security tests
 ├── config/backend.yaml
-├──          plan_inputs, run_record, job, telemetry (sample + state event), openapi.yaml
+├── contracts/backend/         plan_inputs, run_record, job, telemetry (sample + state event), openapi.yaml
 ├── tools/make_serverdata.py   station fields + data sync for the server      (WS11)
 └── web/src/live/              api client, pad tool, crew panel, route editor, library, share, compare, mission control (WS13)
 ```
