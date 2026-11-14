@@ -1054,6 +1054,9 @@ Branch: `ws7-hud`
   exported.
 - KATs: `tests/test_fields_png.py` 51 pass; `web/src/hud/*.test.ts` 93 pass (incl. real-data KATs);
   whole web suite 388 pass, 1 skipped; `tsc --noEmit` clean.
+- 2026-11-14T14:16Z: **Manifest re-recorded clean** (C audit: 72 keys at `78cb57d-dirty`): `make fields`
+  re-run at 1dbbff8 -> 96 `fields.*` keys, all clean, all citing `fields/...`; the 26 previous PNGs are
+  byte-identical, +9 `con_{80,104,120}` fields (WS2's con rasters now exist), index gains only those.
 
 ### Doing
 
