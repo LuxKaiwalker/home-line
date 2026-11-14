@@ -1074,3 +1074,4 @@ Branch: `ws10-vo`
 | 2026-11-14 12:37 | V1 footprint | **3 m** (SPEC); 5 m reported as sensitivity. WS6 sets `config/validation.yaml v1.footprint_m: 3` | User (for S) |
 | 2026-11-14 12:37 | G0 pad check reading | "Assessed" = cells with data (walkable or blocked), not unknown → passes at 100 %; blocked share (41.2 %) shown separately | User (for S/C) |
 | 2026-11-14 12:37 | D7 sky detection | Automatic + manual check (SPEC default); the user reviews the 39-frame sheet in data/interim/horizon/validation/manual_check/; import with `python -m pipeline.validation.v2_skyline --import-manual <csv>` | User |
+| 2026-11-14 12:42 | pages.yml review (WS5) | Approved by C: CI-gated, real-only, dist excludes data-dummy (verified), 150 MB dist; deploy blocked only on repo visibility/plan (user) | C |
