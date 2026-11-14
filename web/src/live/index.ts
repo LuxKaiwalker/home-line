@@ -12,15 +12,22 @@
 //   LIVE_LABEL, OFFLINE_LABEL         labels from config/backend.yaml (config.ts)
 //   padTool(panel, port)              F24 pad tool: validate, instant preview, staged full plan (padmount.tsx)
 //   consoleMapPort(cmap, restore?)    MapPort over the console map (mapPort.ts)
+//   mountPlanRoute(app, opts)         #/plan, #/plan/{hash}[/provenance|/play] (F28, F35); started by mountLive
+//   loadPlan, importPlanFile          permalink load and plan_inputs.json import (plan.ts)
+//   exportPlanInputs, canonicalJson   JSON export (planio.ts)
 //
 // Pad tool mount (owned by WS5/C, not added here), in views/console.tsx after `cmap` exists, behind the
 // same VITE_LIVE guard:
 //   if (import.meta.env.VITE_LIVE === '1') void import('../live').then((m) => m.padTool(panelEl, m.consoleMapPort(cmap)))
 import './live.css'
 import { createApiClient, type ApiClient, type FetchLike } from './client'
+import { dataUrl } from '../env'
+import { SIM_EXPORT_ENABLED } from './config'
 import { bannerFor, watchHealth, type LiveState } from './health'
 import type { MapPort } from './mapPort'
+import { MOCK_OFFICIAL_HASH } from './mock/hashes'
 import { mountPadTool } from './padmount'
+import { mountPlanRoute, resultDataUrl } from './planmount'
 import { mockLiveLoader } from './result'
 
 export { ApiError, createApiClient, type ApiClient, type ApiClientOptions } from './client'
@@ -32,13 +39,22 @@ export { consoleMapPort, type ConsoleMapLike, type MapPort } from './mapPort'
 export { createPadTool, type PadTool, type PadToolState } from './padtool'
 export { mountPadTool } from './padmount'
 export { loadStage, type StageResult } from './stage'
+export { importPlanFile, loadPlan, parsePlanRoute, planUrl, type ImportState, type PlanLoad, type PlanRoute } from './plan'
+export { canonicalJson, checkPlanInputsText, exportPlanInputs } from './planio'
+export { mountPlanRoute, playPlan, type PlanRouteOptions } from './planmount'
+export { simPlanFiles, SimSlot } from './simslot'
 export type * from './types'
 
 // Dev mock: the flag is compared inline so Vite folds it and, when off, drops the mock chunk.
 const USE_MOCK = import.meta.env.VITE_LIVE_MOCK === '1' || import.meta.env.VITE_LIVE_MOCK === 'true'
 let mockFetch: Promise<FetchLike> | undefined
+/** Dev mock: the official hash serves the app's own static data tree (the precomputed official plan). */
+const staticTree = async (path: string): Promise<string | null> => {
+  const res = await fetch(dataUrl(path))
+  return res.ok ? res.text() : null
+}
 const lazyMockFetch: FetchLike = async (input, init) => {
-  const f = await (mockFetch ??= import('./mock/fetch').then((m) => m.createMockFetch()))
+  const f = await (mockFetch ??= import('./mock/fetch').then((m) => m.createMockFetch({ trees: { [MOCK_OFFICIAL_HASH]: staticTree } })))
   return f(input, init)
 }
 
@@ -67,6 +83,9 @@ export function mountLive(anchor: Element, client: ApiClient = liveClient()): ()
   line.setAttribute('role', 'status')
   line.hidden = true
   anchor.after(line)
+  // #/plan routes (F28, F35): only when the app shell's .outlet is next to the anchor.
+  const app = (anchor as Partial<Element>).parentElement
+  const stopPlan = app && typeof window !== 'undefined' ? planRoute(app, client) : () => {}
   const stop = watchHealth(client, (s) => {
     current = s
     const b = bannerFor(s)
@@ -78,8 +97,20 @@ export function mountLive(anchor: Element, client: ApiClient = liveClient()): ()
   })
   return () => {
     stop()
+    stopPlan()
     line.remove()
   }
+}
+
+/** The plan routes on `client`; with VITE_LIVE_MOCK the HUD reads the official tree from the static data. */
+function planRoute(app: HTMLElement, client: ApiClient): () => void {
+  return mountPlanRoute(app, {
+    client,
+    simEnabled: SIM_EXPORT_ENABLED,
+    ...(USE_MOCK
+      ? { loaderFor: mockLiveLoader(lazyMockFetch), hudDataUrl: (l) => (l.hash === MOCK_OFFICIAL_HASH ? (p: string) => dataUrl(p) : resultDataUrl(l.base)) }
+      : {}),
+  })
 }
 
 /**

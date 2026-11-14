@@ -8,8 +8,14 @@ import planInputsSchema from '../../../contracts/backend/plan_inputs.schema.json
 import runRecordSchema from '../../../contracts/backend/run_record.schema.json'
 import telemetrySchema from '../../../contracts/backend/telemetry.schema.json'
 import { checkSchema, SUPPORTED_KEYWORDS, type JsonSchema } from '../data/schema'
+import { validate } from './schemacheck'
 import { createApiClient } from './client'
-import { HEALTH_COLD, HEALTH_NOT_OK, HEALTH_WARM, failedJobScript, jobScript, PLAN_INPUTS_OFFICIAL, RUN_RECORD_LIVE } from './mock/fixtures'
+import { HEALTH_COLD, HEALTH_NOT_OK, HEALTH_WARM, failedJobScript, jobScript, PLAN_INPUTS_OFFICIAL, RUN_RECORD_LIVE, RUN_RECORD_OFFICIAL } from './mock/fixtures'
+import { MOCK_OFFICIAL_HASH } from './mock/hashes'
+import { MOCK_RESULT_SCENARIO, mockFinishedTree, withSimPlan } from './mock/result'
+import customExample from '../../../contracts/backend/examples/plan_inputs.custom.json'
+import runRecordSchemaRaw from '../../../contracts/backend/run_record.schema.json'
+import { RUN_RECORD_SCHEMA, validatePlanInputs, validateRunRecord } from './schemacheck'
 import { createMockFetch } from './mock/fetch'
 import { MOCK_PAD_INVALID, MOCK_PAD_VALID, mockPadScreen, PAD_CHECK_INVALID, PAD_CHECK_VALID } from './mock/pads'
 import { MOCK_RESULT_STAGES, mockResultDocs } from './mock/result'
@@ -18,7 +24,7 @@ import { schemaFor } from '../data/contracts'
 import { MOCK_STAGES } from './mock/fixtures'
 import {
   ENGINE_VERSION_KEYS, ERROR_KEYS, HEALTH_KEYS, IMPORT_RESULT_KEYS, JOB_KEYS, JOB_REQUEST_KEYS, JOB_STATUSES, JOB_TYPES,
-  PAD_CHECK_KEYS, PAD_REASONS, PAD_SCREEN_KEYS,
+  PAD_CHECK_KEYS, PAD_REASONS, PAD_SCREEN_KEYS, RUN_ORIGINS, RUN_RECORD_KEYS, RUN_STATUSES,
 } from './types'
 
 type Doc = Record<string, unknown>
@@ -90,35 +96,6 @@ function responseSchema(method: string, path: string, status: number): JsonSchem
   const op = pointer(openapi as Doc, `/paths/${path.replace(/\//g, '~1')}/${method.toLowerCase()}`) as Doc
   const resp = deref((op.responses as Doc)[String(status)], 'openapi.yaml') as Doc
   return assertKnown(pointer(resp, '/content/application~1json/schema') as JsonSchema, `${method} ${path} ${status}`)
-}
-
-/** checkSchema plus oneOf, uniqueItems and propertyNames, applied wherever they sit in the schema. */
-function validate(v: unknown, s: JsonSchema, path = '$'): string[] {
-  const out = checkSchema(v, s, path).map((e) => `${e.path}: ${e.message}`)
-  return out.length ? out : extras(v, s, path)
-}
-function extras(v: unknown, s: JsonSchema, path: string): string[] {
-  const out: string[] = []
-  if (Array.isArray(s.oneOf)) {
-    const n = (s.oneOf as JsonSchema[]).filter((b) => validate(v, b, path).length === 0).length
-    if (n !== 1) out.push(`${path}: matches ${n} oneOf branches`)
-  }
-  if (Array.isArray(s.allOf)) for (const b of s.allOf as JsonSchema[]) out.push(...extras(v, b, path))
-  if (Array.isArray(v)) {
-    if (s.uniqueItems === true && new Set(v.map((x) => JSON.stringify(x))).size !== v.length) out.push(`${path}: items not unique`)
-    if (s.items && typeof s.items === 'object') v.forEach((x, i) => out.push(...extras(x, s.items as JsonSchema, `${path}[${i}]`)))
-  } else if (v && typeof v === 'object') {
-    const o = v as Doc
-    if (s.propertyNames && typeof s.propertyNames === 'object') {
-      for (const k of Object.keys(o)) out.push(...validate(k, s.propertyNames as JsonSchema, `${path}.<${k}>`))
-    }
-    const props = (s.properties as Record<string, JsonSchema> | undefined) ?? {}
-    for (const [k, x] of Object.entries(o)) {
-      if (k in props) out.push(...extras(x, props[k], `${path}.${k}`))
-      else if (s.additionalProperties && typeof s.additionalProperties === 'object') out.push(...extras(x, s.additionalProperties as JsonSchema, `${path}.${k}`))
-    }
-  }
-  return out
 }
 
 const valid = (v: unknown, s: JsonSchema) => expect(validate(v, s)).toEqual([])
@@ -248,5 +225,62 @@ describe('pad tool mocks (F24) validate against openapi.yaml', () => {
     await client.getJob(job.id) // done
     expect((await get('scenarios/nom_104/partner.geojson')).status).toBe(200)
     expect((await fetch('http://api.test/api/v1/results/ffffffffffffffff/manifest.json')).status).toBe(404)
+  })
+})
+
+describe('permalink, provenance and import mocks (U3: F28, F35, D76) validate', () => {
+  it('RunRecord type matches run_record.schema.json (properties, required, enums)', () => {
+    const rs = runRecordSchemaRaw as { properties: Record<string, { enum?: unknown[] }>; required: string[] }
+    expect(Object.keys(RUN_RECORD_KEYS).sort()).toEqual(Object.keys(rs.properties).sort())
+    expect(Object.entries(RUN_RECORD_KEYS).filter(([, r]) => r === 'required').map(([k]) => k).sort()).toEqual([...rs.required].sort())
+    expect([...RUN_ORIGINS]).toEqual(rs.properties.origin.enum)
+    expect([...RUN_STATUSES]).toEqual(rs.properties.status.enum)
+  })
+  it('both run records (GET /results/{hash}/provenance 200), also with the client-side check', () => {
+    const s = responseSchema('GET', '/results/{hash}/provenance', 200)
+    for (const r of [RUN_RECORD_LIVE, RUN_RECORD_OFFICIAL]) {
+      valid(r, s)
+      expect(validateRunRecord(r)).toEqual([])
+    }
+    assertKnown(RUN_RECORD_SCHEMA, 'run_record (client-side)')
+    expect(validateRunRecord({ ...RUN_RECORD_OFFICIAL, origin: 'guessed' })).not.toEqual([])
+    expect(validateRunRecord({ ...RUN_RECORD_OFFICIAL, inputs: { ...RUN_RECORD_OFFICIAL.inputs, extra: 1 } })).not.toEqual([])
+  })
+  it('provenance 404, import 200 / 422 / 413 answers', async () => {
+    const fetch = createMockFetch()
+    const client = createApiClient({ base: 'http://api.test', fetch })
+    const nf = await fetch('http://api.test/api/v1/results/ffffffffffffffff/provenance')
+    expect(nf.status).toBe(404)
+    valid(await nf.json(), responseSchema('GET', '/results/{hash}/provenance', 404))
+    const known = await client.importPlan(PLAN_INPUTS_OFFICIAL)
+    valid(known, responseSchema('POST', '/plans/import', 200))
+    expect(known).toMatchObject({ hash: MOCK_OFFICIAL_HASH, computed: true })
+    const fresh = await client.importPlan(customExample)
+    valid(fresh, responseSchema('POST', '/plans/import', 200))
+    expect(fresh.computed).toBe(false)
+    valid(fetch.calls[1].body, schemaOf('#/components/schemas/PlanInputs'))
+    const bad = await fetch('http://api.test/api/v1/plans/import', { method: 'POST', body: JSON.stringify({ ...PLAN_INPUTS_OFFICIAL, x: 1 }) })
+    expect(bad.status).toBe(422)
+    valid(await bad.json(), responseSchema('POST', '/plans/import', 422))
+    const big = await fetch('http://api.test/api/v1/plans/import', { method: 'POST', body: JSON.stringify({ ...PLAN_INPUTS_OFFICIAL, title: 'x'.repeat(1_100_000) }) })
+    expect(big.status).toBe(413)
+    valid(await big.json(), responseSchema('POST', '/plans/import', 413))
+  })
+  it('the client-side plan_inputs check agrees with the openapi PlanInputs schema on the examples', () => {
+    const s = schemaOf('#/components/schemas/PlanInputs')
+    for (const x of [PLAN_INPUTS_OFFICIAL, customExample, RUN_RECORD_OFFICIAL.inputs]) {
+      valid(x, s)
+      expect(validatePlanInputs(x)).toEqual([])
+    }
+  })
+  it('result manifest with and without a sim_plan entry validates against manifest.schema.json', () => {
+    const s = schemaFor('manifest.json')!
+    for (const sim of [false, true]) {
+      const m = mockFinishedTree(sim)('manifest.json')
+      expect(checkSchema(m, s)).toEqual([])
+      const kinds = Object.values(m as Record<string, { kind?: string }>).map((e) => e.kind)
+      expect(kinds.includes('sim_plan')).toBe(sim)
+    }
+    expect(Object.keys(withSimPlan({} as never))).toEqual([`sim.${MOCK_RESULT_SCENARIO}.export`])
   })
 })

@@ -1,8 +1,11 @@
 // Fetch stub that answers like the live API from the mock fixtures (no msw, no dependency). Used by
 // the vitest suites and, with VITE_LIVE_MOCK=1, as a tiny in-browser dev mock (index.ts).
-import { API_PREFIX } from '../config'
-import type { ApiErrorBody, Health, Job, LonLat, PadCheck, PadScreen, PlanInputs } from '../types'
-import { HEALTH_WARM, jobScript, RUN_RECORD_LIVE } from './fixtures'
+import { API_PREFIX, UPLOAD_MAX_BYTES } from '../config'
+import { canonicalJson } from '../planio'
+import { validatePlanInputs } from '../schemacheck'
+import type { ApiErrorBody, Health, ImportResult, Job, LonLat, PadCheck, PadScreen, PlanInputs } from '../types'
+import { HEALTH_WARM, jobScript, PLAN_INPUTS_OFFICIAL, RUN_RECORD_LIVE, RUN_RECORD_OFFICIAL } from './fixtures'
+import { MOCK_OFFICIAL_HASH } from './hashes'
 import { mockPadCheck, mockPadScreen } from './pads'
 import { mockResultFile } from './result'
 
@@ -29,6 +32,19 @@ export interface MockOptions {
    * finished, or null (404). Default: the staged mock tree (result.ts).
    */
   resultFile?: (path: string, stagesDone: readonly string[]) => unknown | null
+  /**
+   * GET /results/{hash}/provenance: run record per hash; any other hash answers 404 unknown_result.
+   * Default: the live example's hash and MOCK_OFFICIAL_HASH (RUN_RECORD_OFFICIAL).
+   */
+  provenance?: Record<string, unknown>
+  /**
+   * Complete result trees served by hash (permalinks), ahead of the staged job tree. A file is a
+   * document (sent as JSON), a string (sent as is) or null (404). E.g. the official hash -> the
+   * static data tree.
+   */
+  trees?: Record<string, (path: string) => unknown | null | Promise<unknown | null>>
+  /** POST /plans/import answer for a valid body (default: official inputs -> MOCK_OFFICIAL_HASH computed, else the job hash, not computed). */
+  importAnswer?: (inputs: PlanInputs) => ImportResult
 }
 
 function isLonLat(v: unknown): v is LonLat {
@@ -59,6 +75,7 @@ function hang(signal: AbortSignal | null | undefined): Promise<Response> {
 export function createMockFetch(opts: MockOptions = {}): MockFetch {
   const health = opts.health ?? HEALTH_WARM
   const script = opts.job ?? jobScript()
+  const provenance = opts.provenance ?? { [(RUN_RECORD_LIVE as { hash: string }).hash]: RUN_RECORD_LIVE, [MOCK_OFFICIAL_HASH]: RUN_RECORD_OFFICIAL }
   let healthIdx = 0
   let jobIdx = 0
   const calls: MockCall[] = []
@@ -106,8 +123,26 @@ export function createMockFetch(opts: MockOptions = {}): MockFetch {
       const sc = opts.screen ?? ((inp: PlanInputs) => mockPadScreen(inp.pad as LonLat))
       return json(200, typeof sc === 'function' ? sc(body as PlanInputs) : sc)
     }
-    if (method === 'GET' && /^\/results\/[0-9a-f]{16}\/provenance$/.test(path)) return json(200, RUN_RECORD_LIVE)
+    if (method === 'POST' && path === '/plans/import') {
+      const raw = typeof init.body === 'string' ? init.body : ''
+      if (new TextEncoder().encode(raw).length > UPLOAD_MAX_BYTES) return json(413, { error: 'too_large', detail: `limit ${UPLOAD_MAX_BYTES} bytes` } satisfies ApiErrorBody)
+      const errs = validatePlanInputs(body)
+      if (errs.length) return json(422, { error: 'invalid_input', detail: errs } satisfies ApiErrorBody)
+      const inputs = body as PlanInputs
+      const answer = opts.importAnswer ?? defaultImport(script[0].hash)
+      return json(200, answer(inputs))
+    }
+    const pm = /^\/results\/([^/]+)\/provenance$/.exec(path)
+    if (method === 'GET' && pm) {
+      const rec = provenance[decodeURIComponent(pm[1])]
+      return rec ? json(200, rec) : json(404, { error: 'unknown_result', detail: pm[1] } satisfies ApiErrorBody)
+    }
     const rm = /^\/results\/([0-9a-f]{16})\/(.+)$/.exec(path)
+    if (method === 'GET' && rm && opts.trees?.[rm[1]]) {
+      const doc = await opts.trees[rm[1]](decodeURIComponent(rm[2]))
+      if (doc === null || doc === undefined) return json(404, { error: 'file_not_found', detail: rm[2] } satisfies ApiErrorBody)
+      return typeof doc === 'string' ? new Response(doc, { status: 200 }) : json(200, doc)
+    }
     if (method === 'GET' && rm) {
       const job = script[jobIdx]
       if (rm[1] !== job.hash) return notFound(path)
@@ -117,4 +152,11 @@ export function createMockFetch(opts: MockOptions = {}): MockFetch {
     return notFound(path)
   }
   return Object.assign(fn, { calls })
+}
+
+/** Default import answer: the official inputs (title ignored, as in the hash) are the precomputed official plan; anything else needs a job. */
+function defaultImport(jobHash: string): (inputs: PlanInputs) => ImportResult {
+  const untitled = (p: PlanInputs) => canonicalJson({ ...p, title: undefined })
+  const official = [untitled(RUN_RECORD_OFFICIAL.inputs), untitled(PLAN_INPUTS_OFFICIAL)]
+  return (inputs) => (official.includes(untitled(inputs)) ? { hash: MOCK_OFFICIAL_HASH, inputs, computed: true } : { hash: jobHash, inputs, computed: false })
 }
