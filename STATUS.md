@@ -785,7 +785,38 @@ Branch: `ws8-3d`
 
 ### Done
 
-- —
+- 2026-11-14T11:05Z: **Scene shell on data-dummy** (`web/src/fp3d/`, `/hud3d` slot `mount(el, ctx)`):
+  Three.js (lazy, WebGL2 checked first), chunk loader with loading screen (files, MB of total),
+  camera at `hud.yaml eye_height_m` above the drawn mesh following the route (route v1.1.0
+  `times_min` per vertex, else leg times / timeline), fps meter, fallback to the 2D HUD without
+  WebGL2 or under `fps_3d_fallback_below` for `fallback.fps_window_s`, fixed caption "1 m terrain:
+  ridges under ~3 m are not resolved", "Simulated EVA" label. Ported from the pre-H0 reference and
+  checked against contracts v1.1.0 (index shape = the M0 dummy's `chunk_grid`).
+- 2026-11-14T11:13Z: **Real export** `make fp3d` (`pipeline/export/{terrain_chunks,far_mesh,ortho_chunks}.py`
+  → `data/interim/export/fp3d/`, the make-web source): corridor = WS2 `route_nom_104` + every
+  station buffered 150 m → **41 near chunks** (256² at 1 m from WS1 `dem_1m.tif`, 0 nodata px),
+  41 textures (WS1 `ortho_lrgb_1m.tif`, 256 px = its 1 m pixel; alpha-0 texels = ground colour),
+  **far mesh 1,504² at 8 m** (pad ± 6,016 m: 948,676 cells dem_1m, 1,313,030 ctx_20m, 310 MOLA,
+  0 filled). **Total 9.93 MB** (+ WS3 ring 87 kB; budget 30 MB). `fp3d/index.json` validates; manifest
+  keys `fp3d.download_mb`, `.near_chunks`, `.near_res_m`, `.far_res_m`, `.far_extent_m`,
+  `.corridor_half_width_m`.
+- 2026-11-14T11:15Z: **Sun and sky**: sun direction = WS4's Mars24 series (`conditions/clock.json`
+  `eva.sun_series`, from `pipeline/conditions/sun.py`), interpolated only; KAT: the committed series
+  equals `sun.sun_position(sun.eva_start_utc() + t)` within 0.002°. Sky gradient, sun glow/disc,
+  exp2 haze, curvature drop d²/2R in the vertex shader, WS3's far-skyline ring as a curtain. The
+  dummy tree has no clock.json: labelled "placeholder sun".
+- 2026-11-14T11:20Z: **F20 checks on real data** (`make fp3d-check`; GPU probe
+  `web/src/fp3d/check/skyline_probe.mjs` in headless Chromium):
+  - Eye height on `route_nom_104`: 7,987 points over 6,221 m, max |agl − 1.7 m| = 3 × 10⁻⁶ m.
+  - Camera position = WS7's HUD playback position at every clock time (839 times, max 8 × 10⁻¹⁰ m).
+  - **Rendered skyline vs WS3 horizons (tolerance 0.5°)**, geometry / GPU: **pad 0.44 / 0.45° PASS**,
+    **S4 0.20 / 0.17° PASS**, **S2 0.87 / 0.89° FAIL**, **S1 0.54 / 0.58° FAIL** (Blocked 1, 2).
+    Means 0.02–0.07°. Dummy: all 4 pass (max 0.35° geometry, 0.40° GPU).
+- 2026-11-14T11:25Z: **WS7 HUD panel mounted over the 3D view** (WS7 public API only:
+  `loadHudData`, `playbackPosition`, `hudFrame`, `createHudPanel`, `readoutSources`) and the view
+  runs on **WS7's `PlaybackClock`** (same speeds, 0..eva_h·60 min). Checked in the browser on dummy.
+- KATs: `tests/test_fp3d_export.py` 34 pass; `web/src/fp3d/*.test.ts` 50 pass + 1 data check
+  (`FP3D_REAL_CHECK=1`); full suite 692 pytest, 328 vitest; ruff, tsc, contracts clean.
 
 ### Doing
 
@@ -793,15 +824,40 @@ Branch: `ws8-3d`
 
 ### Next
 
-- —
+- Performance pass on a real GPU (≥ 30 fps): the headless browser here is SwiftShader (0.5 fps),
+  so it measures nothing; R to check on the reference laptop. Far-mesh LOD if needed.
+- Far texture (8 m ortho JPEG over the far mesh; the untextured far mesh is darker than the
+  near chunks). Needs a new web path `fp3d/far_tex.jpg` → C to add to `make web` RULES.
+- Sun morning: one 2 s first-person capture for the video option.
 
 ### Blocked
 
-- —
+1. **F20 at S2 (C / WS3 decide).** WS3's horizon switches from dem_1m to ctx_20m at 2 km
+   (`horizon.yaml sampling`); the 3D mesh uses dem_1m to the window edge. At S2 az 157–160 the
+   ridge 2.0–2.5 km SSE is ~25 m higher in CTX → 0.87°. Re-running WS3's own engine with dem_1m
+   to 3.7 km agrees with the render to 0.29° at S2 (pad 0.21°, S4 0.20°). Options: (a) WS3 uses
+   dem_1m to the edge of its window (pad ± 3.9 km); (b) accept S2 as a documented band difference.
+   I have not changed the mesh to CTX (it would degrade the 1 m terrain to match the reference).
+2. **F20 at S1 (S / C decide).** S1 sits on a 57° cell; its horizon is 12–17 m away at 17–35°.
+   The render is 0.54° above WS3's rays there: 16 cm at 17 m, i.e. the drawn triangles vs WS3's
+   1 m-step bilinear rays over the same DEM (both are discretisations; the triangle max is exact).
+   Decision needed: do near-field azimuths (horizon < ~20 m) count for the 0.5° rule?
+3. **Config (C / R confirm):** new `config/fp3d.yaml` (WS8 owns no config file; every value
+   `assumed: true`).
 
 ### Assumptions added
 
-- —
+- `config/fp3d.yaml` (new): corridor 150 m half-width; texture 256 px/chunk (1 m) JPEG q82;
+  height quantum 1/64 m; far mesh half-width 6 km (`far.half_extent_m`, index `far.origin_xy_m`);
+  ring neighbours always joined (`max_distance_ratio: null`; breaking at distance jumps opened an
+  8.8° hole at S2); view/sky/haze/light values (rendering only); fps window 5 s after 3 s warm-up;
+  look-ahead 15 m; skyline check 1° azimuth step, GPU probe FOV 100°.
+- Every station (visited or not) gets 1 m near chunks (the F20 rule is "at each station").
+- `fp3d/index.json` adds to the dummy's keys: `far.origin_xy_m`, `far.cells_by_source`,
+  `height.quantum_m`, per-chunk `bytes`/`tex_bytes`/`filled_px`/`tex_nodata_px`, `sources`,
+  `download_bytes`, `skyline_check` (WS3 horizons at 1°). The schema is loose; WS8 is the only
+  reader. C may fold the structure into the contract.
+- `make fp3d` is not in `make all` (C's Makefile): run it after `engine` and `horizons`.
 
 ## WS9 Navigation
 
@@ -1012,3 +1068,9 @@ Branch: `ws10-vo`
 | 2026-11-14 12:20 | Fields scope | Ship all scenarios of the contract table (≈ 37 MB with con_*; 28.4 MB now) | C |
 | 2026-11-14 12:20 | HUD sun / time-to-dark | No `sun.json` contract: WS7 reads `conditions/clock.json eva.sun_series` and `eva.t_dark_min` (WS4) | C |
 | 2026-11-14 12:20 | Station card nulls | `margin_binding: null` for a station with no route or no access cell (S1); the card still ships | C |
+| 2026-11-14 12:35 | F20 at S2 (0.87° vs 0.5°) | WS3 uses the 1 m DEM out to the edge of its coverage before handing over to CTX (WS8 showed WS3's engine with dem_1m to 3.7 km agrees within 0.29° at S2). The 3D terrain is not lowered to CTX. WS3 session 3 implements; then re-run the F20 check | C |
+| 2026-11-14 12:35 | F20 at S1 (0.54°) | S1 is not on the route (no access cell), so the camera never stands there: S1 is reported but excluded from the F20 pass rule; the pass rule covers the pad and route stations | C |
+| 2026-11-14 12:35 | `make all` | Adds `fp3d` after `fields`; `config/fp3d.yaml` (all assumed) accepted for now, R to review | C |
+| 2026-11-14 12:37 | V1 footprint | **3 m** (SPEC); 5 m reported as sensitivity. WS6 sets `config/validation.yaml v1.footprint_m: 3` | User (for S) |
+| 2026-11-14 12:37 | G0 pad check reading | "Assessed" = cells with data (walkable or blocked), not unknown → passes at 100 %; blocked share (41.2 %) shown separately | User (for S/C) |
+| 2026-11-14 12:37 | D7 sky detection | Automatic + manual check (SPEC default); the user reviews the 39-frame sheet in data/interim/horizon/validation/manual_check/; import with `python -m pipeline.validation.v2_skyline --import-manual <csv>` | User |
