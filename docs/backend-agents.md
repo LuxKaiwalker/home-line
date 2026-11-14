@@ -43,7 +43,7 @@
 
 | # | Item | Default this kit uses | Owner | Output |
 | --- | --- | --- | --- | --- |
-| K1 | **P4 — two meanings of "plan.json"** | New contract `contracts/plan_inputs.schema.json` v1.0.0 for user inputs (the spec §7 example). The frozen bundle `plan.json` is unchanged and is derived from inputs + result. API, import/export and the library use `plan_inputs` | C | Schema + decision-log row |
+| K1 | **P4 — two meanings of "plan.json"** | New contract `contracts/backend/plan_inputs.schema.json` v1.0.0 for user inputs (the spec §7 example). The frozen bundle `plan.json` is unchanged and is derived from inputs + result. API, import/export and the library use `plan_inputs` | C | Schema + decision-log row |
 | K2 | **P5 — WS14's first three tasks already exist** | Dropped. WS14 imports `tools.make_bundle`; C adds `build_plan_bundle(result_dir) -> bytes`. Golden vectors stay in `pipeline/engine/golden.py`; the fixture stays in `contracts/bundle/fixtures/official_pad_v1/` | C | Folder table below; amended WS14 brief |
 | K3 | **P7 — parity test cannot run in CI** (grids are git-ignored) | Two levels: CI runs batch-vs-server parity on the synthetic world (`pipeline/engine/synthetic.py`); real-data parity runs via `make parity` locally before every merge touching `server/engine`, and inside `deploy.sh` | C, WS6 | CI job + Makefile target |
 | K4 | **P8 — share-code format** | `HL-` + 6 Crockford base32 characters (9 in total) | C | Into `plan_inputs` / plans contract and `config/backend.yaml` |
@@ -77,7 +77,7 @@
 1. Check the readiness checklist: K1–K7 done or explicitly waived by the team lead.
 2. Export the backend spec + SPEC §2.5/§6.3 to `docs/backend.md`, the implementation plan to `docs/backend-plan.md`, this kit to `docs/backend-agents.md`, the four briefs with the amendments below to `briefs/WS11.md … WS14.md`.
 3. `config/backend.yaml` from implementation plan §5, plus a loader with validation (unknown key refused, `*_ref` keys resolve). WS12 owns it afterwards.
-4. Contracts v1.0.0, frozen at P0: `plan_inputs.schema.json` (K1, K4), `run_record.schema.json`, `telemetry.schema.json` (sample + state event), `job.schema.json`, `contracts/openapi.yaml` from spec §5. Every example validates; OpenAPI lints.
+4. Contracts v1.0.0, frozen at P0: `plan_inputs.schema.json` (K1, K4), `run_record.schema.json`, `telemetry.schema.json` (sample + state event), `job.schema.json`, `contracts/backend/openapi.yaml` from spec §5. Every example validates; OpenAPI lints.
 5. Dependencies (K5); Makefile targets `serve`, `serverdata`, `parity`, `server-test`; CI job for synthetic parity (K3).
 6. Start **WS2 support** immediately (it is the critical path): tasks 0.5 → 0.6 → 0.7 of the implementation plan.
 7. Loader base URL `dataUrl(path, mode, base?)` with WS5; static default unchanged (0.8).
@@ -196,7 +196,7 @@ Current time and gate: {time}, next gate {gate}.
 | --- | --- |
 | WS11 — Engine service | Task 4 parity harness = synthetic in CI + `make parity` on real data (K3). Task 5 `make_serverdata` runs on the current grids (core re-run is merged). Task 8 calls `build_plan`; no batch-script logic in `server/`. Add task: measure memory per worker (K10) |
 | WS12 — Accounts, plans and operations | Task 2 (`config/backend.yaml`) is done by C in bootstrap; WS12 takes ownership. Task 1: local Compose by B0′; HTTPS deploy only once K13/K14 are done (needed for B1′). Share codes use `HL-` + 6 Crockford base32 (K4) |
-| WS13 — Live web UI | Task 2 (loader base URL) is done by C/WS5 in bootstrap. Starts after B0′ on mocks from `contracts/openapi.yaml`. Reviewer load per K16 |
+| WS13 — Live web UI | Task 2 (loader base URL) is done by C/WS5 in bootstrap. Starts after B0′ on mocks from `contracts/backend/openapi.yaml`. Reviewer load per K16 |
 | WS14 — Simulator services | **Tasks 1–3 dropped** (K2). New first task: `docs/simulator.md` draft and a bundle from a result tree via `build_plan_bundle`, equal to the committed fixture. Ownership per the folder table above. Fixture path is `contracts/bundle/fixtures/official_pad_v1/` |
 
 ## `STATUS.md` section format (one per workstream)
