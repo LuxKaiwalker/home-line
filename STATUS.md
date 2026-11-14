@@ -169,23 +169,40 @@ Branch: `ws3-horizon`
 
 ### Done
 
-- 2026-11-14T10:05Z: M1 horizon ray engine (`pipeline/horizon/rays.py`, Numba, 1,440 rays, sampling 1 m / 20 m / 200 m from `horizon.yaml`, curvature d²/2R, coarser-band fallback, NaN = unknown) and CAHV/CAHVOR/CAHVORE projection + rover→site attitude chain (`pipeline/horizon/cahvor.py`). Ported from the pre-H0 reference code, checked against fresh contracts v1.0.0 and discovery.md. Synthetic KATs pass (36): curvature drop 58.9 m at 20 km; 100 m wall at 1 km from 1.7 m = 5.61°; flat plane = −dip within 0.01°; projection round trip < 0.5 px; attitude chain round trip. Horizon JSON validates against `horizon.schema.json`.
+- 2026-11-14T10:05Z: M1 horizon ray engine (`pipeline/horizon/rays.py`, Numba, 1,440 rays, sampling 1 m / 20 m / 200 m from `horizon.yaml`, curvature d²/2R, coarser-band fallback, NaN = unknown) and CAHV/CAHVOR/CAHVORE projection + rover→site attitude chain (`pipeline/horizon/cahvor.py`). Ported from the pre-H0 reference code, checked against contracts v1.0.0 and the fresh discovery.md. KATs: curvature drop 58.9 m at 20 km; 100 m wall at 1 km from 1.7 m = 5.61°; flat plane = −dip within 0.01°; projection round trip < 0.5 px; attitude chain round trip.
+- 2026-11-14T10:20Z: Navcam cache (`pipeline/horizon/navcam.py`): raw-image API (full NAV_LEFT_B frames, `extended=full::sample_type::eq`), cache `data/raw/navcam/` with `index.json`; stop order = S4 by its stations.yaml rule (drive end nearest sol 4200 → 107_2484, as discovery 3.2) then farthest-point over the 290 focus-area drive ends at 30 m spacing (116 stops). **Real-frame KATs pass** on 3 fresh API frames from 2 drive ends (107_2484, 125_2490): A-vector az/el vs `mast_az/mast_el` and rover yaw/pitch/roll vs MMGIS within 1°; C height inside the discovery 3.4 range. A cached-frames variant checks 3 more stops.
+- 2026-11-14T10:35Z: sky detector (`pipeline/horizon/sky.py`) = the `horizon.yaml` rule + 2 px border + σ 2 px pre-smoothing (evidence below).
+- 2026-11-14T10:55Z: far-field bands (`pipeline/horizon/bands.py`): MOLA-HRSC 84 km window (GTIFF_DIRECT_IO) and a 3-item CTX `geoid_adjusted_dem` mosaic (34 km disc, 70.8 % footprint), all reprojected to the analysis CRS in `data/interim/horizon/bands/`. One CTX item (P22_009505…P22_009571) is 55 m below MOLA-HRSC and was rejected by the alignment check; the next-best item replaced it. Band offsets (coarse − fine, median): CTX − dem_1m **+15.6 m** (p5/p95 −4.6/+43.1), MOLA − dem_1m +0.5 m, CTX − MOLA +2.9 m.
+- 2026-11-14T11:05Z: WS1 `dem_1m.tif` (7,800² at 1 m, coreg dx = dy = 0) is on disk, so I started the real stop horizons: `horizons/v{site}_{drive}.json` at Navcam height for every stop with candidate frames; frame selection now keeps a frame only where the DEM-predicted skyline is testable (below the detector's reference band, inside the frame) in ≥ 50 % of columns. **Result: 49 frames at 36 stops** (`navcam_frames.json`, validates).
+- 2026-11-14T11:10Z: first **automatic V2** (`pipeline/validation/v2_skyline.py`, `validation/v2.json` validates, manifest keys `v2.*`): 49 frames tried, 35 ok at 27 stops, 14 failed (no clear sky at the top of the frame; reported, not dropped). Median |error| near 0.095° (n 2,016 columns), mid 0.196° (n 951), **far 4.30° (n 26,861, P90 7.89°)**. 49 check composites in `data/interim/horizon/validation/overlays/`. The far figure is not quotable yet: see Blocked 1.
+- `make horizons` wired (bands → navcam fetch with stop horizons → V2). 58 WS3 KATs pass; full suite 197 pass; ruff clean. Downloads: Navcam cache 51.1 MB (API JSON + JPG, from `index.json`); MOLA window ≈ 2.2 MB (discovery's measurement for this window; not re-measured); CTX windows 25 MB on disk (network bytes not measured, other agents share the machine counter).
 
 ### Doing
 
-- Navcam frame cache for focus-area drive ends (`data/raw/navcam/`), real-frame CAHVOR KATs.
+- —
 
 ### Next
 
-- Frame selection and sky detector; real horizons once WS1 `dem_1m.tif` is final.
+- Station and pad horizons, panoramas with the 8 IAU landmarks, `horizon_ring.json` for WS8 and card fragments: waiting for `stations.json` and `pad.json` (WS1/WS2; not on disk yet).
+- Manual check of the 10 sampled frames (`manual_check: true` in v2.json) once C decides Blocked 1.
+- Hand the engine API (`bands.load_engine()`, `HorizonEngine.horizons(xs, ys, az_step_deg=1, min_dist_m=500)`), `sky.detect_skyline` and `navcam_frames.json` to WS9.
 
 ### Blocked
 
-- —
+1. **V2 far class and D7 (C decides).** The chain itself checks out: 13 of 35 ok frames (12 stops) have median error within ±0.5° (e.g. NLB_824771281 at v120_1264: near 0.46°, mid 0.21°). But 21 frames have median error ≤ −2° (−3.2 to −7.6°), and all face north (az 335–30°). There the predicted skyline is the crater rim at 37–54 km (+1 to +1.5°), which is hidden by haze in the image, so the detector finds the lower visible terrain. Options: (a) the 20 % manual check marks such frames `manual_ok: false` ("far rim not visible"), and the far figure is computed over the rest; (b) switch to fully manual (D7); (c) report the far class as is. I have not decided; v2.json is automatic only.
+2. **Duplicate far-field bands (C).** WS1 also built `data/interim/terrain/{ctx_20m,mola_hrsc_200m}.tif` (`farfield.json`) from the same 3 CTX items with the same rejection, and levels CTX to MOLA. I use my own (`data/interim/horizon/bands/`, not levelled), as the session prompt said. Which source is canonical? Switching is a path change in `horizon.yaml bands`.
+3. **Navcam height (C).** Horizons at stops use `navcam_height_m` 1.9 above DEM ground. The per-frame C height above the rover-frame origin is 1.88–1.93 m on the fresh frames; the origin's height above the ground is unknown (discovery 3.4). This is left unchanged.
 
 ### Assumptions added
 
-- `horizon.yaml band_fallback: coarser` (assumed): a sample with no data in its configured band falls back to the next coarser band given.
+All in `config/horizon.yaml`, each with `assumed: true`:
+- `band_fallback: coarser`: a sample with no data in its band falls back to the next coarser band.
+- `navcam_selection`: NAV_LEFT_B full frames only; 30 m stop spacing; up to 4 frames per stop (widest azimuth spread); `stops_wanted` 36 (30 + 20 %); `max_stops_tried` 120 (all 116 stops); drive-end sol + 1; cache budget 150 MB. Geometric pre-test: top-centre pixel ≥ 0° and bottom-centre ≤ −5° in the site frame. It was 10° first, but that kept only 15 of 116 stops and most of those frames had no sky. Then `min_predicted_skyline_col_frac` 0.5 (DEM-predicted skyline testable in ≥ 50 % of columns).
+- `sky_detector_params` (structured copy of the prose rule, 3× / top 10 %): `zero_median_guard` one DN; `border_px` 2 and `presmooth_sigma_px` 2.0. Evidence from fresh frames: row 0 is 235–254 DN, row 1 is ~20 DN above row 2, column 0 is ~25 DN darker and the last row is bright (12 frames). On 6 frames with visible sky, the rule as written (σ 0) fires on sky noise in 94–98 % of columns at about row 30. σ 2 traces the skyline on 4 of 6; on the other 2 the true skyline lies inside the reference band. Known failure: σ 2 can prefer a sharp near ridge over a faint hazy far rim (seen on 2 frames); σ 1 follows the rim but adds noise speckles.
+- `v2_frame_fail.max_in_ref_band_frac` 0.5: a frame whose boundary sits in the reference band in > 50 % of columns is failed and reported.
+- `bands`: CTX listing = D0's 500 STAC items at the pad; greedy footprint gain, max 3 items, ≥ 1 % gain; reject an item whose median offset to MOLA-HRSC is > 20 m; radii 34 km (CTX) and 84 km (MOLA-HRSC); 20 m and 200 m grids.
+- `overlay`, `panorama`: colours and sizes (presentation only).
+- Landmarks: the 8 IAU names verified by D0 (discovery 3.5). The informal names are dropped (no verified coordinate). Not used yet.
 
 ## WS4 Conditions
 
