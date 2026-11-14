@@ -1,0 +1,67 @@
+// Every on-screen science number goes through <Num>: it prints the stored value (no rounding),
+// links it to its manifest.json entry on the scorecard, and flags it when no entry backs it.
+import { href } from '../router'
+import { formatValue } from '../prov/provenance'
+import { lookup } from '../prov/store'
+
+export interface NumProps {
+  v: number | string | boolean | null | undefined
+  /** Data file (under data/) the value was read from. */
+  file: string
+  /** Manifest key the caller expects (optional; falls back to file + value). */
+  k?: string
+  units?: string | null
+  /** Display formatting for string values (e.g. a UTC timestamp); numbers are never reformatted. */
+  fmt?: (v: string) => string
+  className?: string
+}
+
+export function Num({ v, file, k, units, className, fmt }: NumProps) {
+  const text = typeof v === 'string' && fmt ? fmt(v) : formatValue(v, units)
+  if (v === null || v === undefined) {
+    return (
+      <span class={`num num-unknown ${className ?? ''}`} title={`unknown (null in ${file})`}>
+        {text}
+      </span>
+    )
+  }
+  const r = lookup({ key: k, file, value: v })
+  if (r.status === 'ok' || r.status === 'matched') {
+    const e = r.entry
+    const tip = `manifest: ${r.key}\nfile: ${e.file}\nscript: ${e.script}\ncommit: ${e.commit}\nutc: ${e.utc}`
+    return (
+      <a class={`num num-ok ${className ?? ''}`} href={href({ name: 'scorecard', key: r.key })} title={tip}>
+        {text}
+      </a>
+    )
+  }
+  const why =
+    r.status === 'mismatch'
+      ? `manifest key ${r.key} holds a different value`
+      : r.status === 'no-manifest'
+        ? 'manifest.json not loaded'
+        : `no manifest entry for this value in ${file}${r.expectedKey ? ` (expected key ${r.expectedKey})` : ''}`
+  return (
+    <span class={`num num-unbacked ${className ?? ''}`} title={why}>
+      {text}
+    </span>
+  )
+}
+
+/** A number taken from config/*.yaml: cites the config key instead of a manifest key. */
+export function CfgNum({ v, source, units }: { v: number | string; source: string; units?: string | null }) {
+  return (
+    <span class="num num-config" title={`from ${source}`}>
+      {formatValue(v, units)}
+    </span>
+  )
+}
+
+/** A number computed in the browser from backed inputs (e.g. the D9 leash slider): says so. */
+export function DerivedNum({ v, units, how }: { v: number | null; units?: string | null; how: string }) {
+  return (
+    <span class="num num-derived" title={`computed in the browser: ${how}`}>
+      {formatValue(v, units)}
+    </span>
+  )
+}
