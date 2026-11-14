@@ -472,7 +472,9 @@ def run(grid: Grid, st: list[dict], cond: dict, dose_fn, timing_cb=None) -> dict
                          "the grid dropped, 16:16)",
              "scenario": s.scenario, "score_kind": SCORE_KIND, "order": ORDER_TEXT,
              "official_id": pad_id(official), "top_full_runs": s.top_full_runs,
-             "screening": {k: v for k, v in stats.items() if k != "access"},
+             # published (pad.json, scenarios/pads/index.json): no wall-clock screening_s, so
+             # reruns are byte-identical (team lead 20:59); summary.json keeps it via d21 stats
+             "screening": {k: v for k, v in stats.items() if k not in ("access", "screening_s")},
              "screening_top": [{"id": c.id, "lon": c.lon, "lat": c.lat, "elev_m": c.elev_m,
                                 "screen_score": c.screen_score, "tb1": c.tb1,
                                 "screen_rank": c.screen_rank} for c in ranked[:10]],
