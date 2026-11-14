@@ -549,13 +549,54 @@ Branch: `ws2-engine`
   - **Re-run only F8 + pad:** new `python -m pipeline.engine.scenarios --siting-only` (con_104 return field in memory, access cells, siting; no other product touched; patches `summary.json` `siting`). Run from clean 9ae1ca7: `pad.json`, `siting.png`, `siting_png.json`, `siting.tif` rewritten (siting output unchanged).
   - **For C / WS5 (shape differs):** WS5's `web/src/map/pad.ts padProposal()` and `types.ts PadProposalBlock` read `proposal.lon/lat/score/checks/rule`; contract v1.1.2 (and this file) has `proposal.pad.{lon,lat,score,checks}` and `proposal.site_rule_version`. As is, `padProposal()` returns null (no proposal marker; the panel shows its fallback text). The manifest key names WS5 cites (`pad.proposal.{lon,lat,score}`, `pad.proposal.checks.{max_slope_deg,assessed_pct_30min}`, `pad.checks.*`) match. Fix belongs in WS5 (read `b.pad.*`, `b.site_rule_version`; optionally `checks_note`, `tie`).
 
+- 2026-11-14T14:40Z (session 6): **S answers (decision log 15:40) implemented**, KATs first (`tests/test_physio.py`, `pipeline/engine/tests/test_margin.py`; full suite green). Commits 2afd6e5, 8b45ac9, 51e5e92.
+  - **alpha on the IST-2 weight span.** `variants.yaml`: `ist2.delta_mass_kg` removed; `ist2.level_span: weight_span`; `formulas.ist2_span_kg` = (g_frac[1] - g_frac[0]) x g_earth x (system_kg + subject_kg) / crew.g_mars = 0.20 x 9.80665 x 201.7 / 3.71 = **106.63 kg**; `formulas.alpha` = level_increment / (span_kg x anchor.speed) = 1.9 / (106.63 x 0.98) = **0.018182** (was 0.032313). Derived values and the decision are written in `ist2.alpha_encoding` (KAT recomputes both). `physio.ist2_span_mars_kg()`, `physio.alpha_level()`.
+  - **O2 budget via ICES-2026-127.** `crew.yaml o2_budget.formula` = hours x BTU/h / 3.96567 / (4.039 + 1.157 x 0.85) = 5.02245 kcal per L O2; `conversion: o2_margin.conversion`. **Primary 481.99 L (was 504), secondary 150.62 L (was 157)**; the engine computes it (`margin.o2_budget_l`), `primary_L: 482` / `secondary_L: 151` stay in the yaml as rounded documentation (KAT checks them; the web scorecard reads them). `make dummy` re-run (dummy timeline/manifest carry 481.99; C's tree, generated only).
+  - **`O2_station_tasks` confirmed** (task O2 still to do at the current station, 0 while walking): note added in `margin.py` and `crew.yaml o2_margin.formula`; no "S to confirm" left.
+  - **Casualty mass:** no change (haul.yaml 155 / 179 / 195 kg).
+  - **20.1 J/mL still used (not changed, for S):** `crew.yaml o2_energy_j_per_ml` feeds (1) the uphill term k (`physio.k_uphill`, `variants.yaml formulas.uphill_k`, SPEC F3), (2) metabolic heat `physio.heat_w` (SPEC F3 "Heat ~ 20.1 J per mL O2"), (3) the haul power P_avail (`haul.py`, `haul.yaml p_avail_w`, K = m_b x 20.1 / 60). At 5.02245 kcal/L the review conversion is 21.01 J/mL (+4.5 %); if S wanted it in k, k would drop 4.3 %. Left at 20.1 per the decision.
+  - **IST-2 weight-span check with the new alpha.** alpha is now defined per kg of carried mass at Mars g on the IST-2 weight span, so a weight change also moves the model's level term: + alpha x 106.63 kg x v = 1.9 x v / 0.98 = **+1.09 to +1.88** mL/kg/min over 0.56-0.97 m/s (the same in every variant; it equals 1.9 v / 0.98 by construction, so it does not depend on the alpha value). `band` now includes it (the model's prediction, pass rule); `band_vertical_only` is the session-2 band (k only, unchanged).
+    | Variant (eta) | 20 % band (with level term) | 8.7 inside? | 30 % band | 17.0 inside? | vertical-only 20 % / 30 % (session 2) |
+    | --- | --- | --- | --- | --- | --- |
+    | optimistic (0.25) | 7.51-13.02 | yes | 10.50-18.20 | **yes** (was no) | 6.43-11.13 yes / 9.42-16.31 no |
+    | **nominal (0.225)** | 8.23-14.25 | **yes** | 11.55-20.01 | **yes** | 7.14-12.37 yes / 10.47-18.13 yes |
+    | conservative (0.20) | 9.12-15.80 | **no** (was yes; 8.7 < 9.12) | 12.86-22.27 | yes | 8.04-13.92 yes / 11.77-20.39 yes |
+    Nominal passes either way. Reported, not tuned.
+- 2026-11-14T14:46Z: **real run** `make engine` (all 9 scenarios + `--siting`) from clean commit **51e5e92**, 7 min 8 s. Engine manifest fragments archived first (`data/interim/engine/manifest_archive/20261114T1446Z/`); every new engine key is at 51e5e92 (no `-dirty`). WS4 margins unchanged (t_dark 578.63 min, storm tau 85.9 min). All public files validate except the card fragments (not web files, as before).
+  | Quantity | Before (054ced5 / 9ae1ca7) | After (51e5e92) |
+  | --- | --- | --- |
+  | Headline nom_104, 30 min | 12.4 % [4.6, 17.5] (12.39; con 4.62, opt 17.53) | **12.4 % [4.6, 17.5]** (12.37; con 4.61, opt 17.50) |
+  | 60 min nom_104 | 11.2 % [1.7, 20.0] | **11.1 % [1.7, 19.9]** (11.14; 1.73, 19.94) |
+  | 30 min nom_80 / nom_120 | 12.9 / 12.1 % | 12.8 / 12.2 % (12.78 / 12.15) |
+  | 60 min nom_80 / nom_120 | 12.6 / 10.3 % | 12.3 / 10.4 % (12.29 / 10.40) |
+  | 30 min opt_80/104/120; con_80/104/120 | 18.2 / 17.5 / 17.1; 4.8 / 4.6 / 4.5 % | 18.0 / 17.5 / 17.2; 4.7 / 4.6 / 4.5 % |
+  | a(M) nom 80 / 104 / 120 kg suit | 12.296 / 13.071 / 13.588 | 12.720 / 13.156 / 13.447 |
+  | Level VO2 at 0.98 m/s, nom 80 / 104 / 120 | 18.05 / 18.81 / 19.32 | **18.47 / 18.89 / 19.18** mL/kg/min |
+  | Level v*, nom 80 / 104 / 120 | 0.976 / 0.918 / 0.883 m/s | **0.943 / 0.912 / 0.892** m/s |
+  | Route nom_104 | pad -> S4 -> S2 -> pad, 209.74 min; legs 2,357 / 1,741 / 2,122 m | **same stops, 210.10 min**; legs 2,357 / 1,751 / 2,122 m (48.54 / 30.31 / 71.25 min); legs 1-2 geometry moved slightly, leg 3 identical |
+  | Binding / lowest margin nom_104 | dose everywhere; lowest 14.89 min at S2 | **dose everywhere; lowest 14.65 min at S2** (S4 25.78) |
+  | O2 term at S2 arrival (not binding) | 168.3 min | 151.4 min |
+  | O2 at depart / return | 504.0 / 267.65 L | **481.99 / 244.88 L** |
+  | Turn-back (O2) S2 / S4 | 409.2 / 438.6 min | **382.2 / 411.9 min** (S2 now inside the 390-min EVA budget, S4 still after it; Q13) |
+  | T_home S4 nom 80/104/120; con 80/104/120 | 55.93 / 59.93 / 62.66; 71.21 / 76.52 / 80.14 | **56.83 / 60.12 / 62.33; 72.37 / 76.77 / 79.73** min |
+  | T_home S2 nom 80/104/120 (con: no access cell) | 64.75 / 71.01 / 75.23 | **65.89 / 71.25 / 74.83** min |
+  | T_home S2 / S4 opt_104 | 60.73 / 55.55 | 60.93 / 55.72 min |
+  | con_* reachable stations | S4 only (access 4.7 m); S2, S1 none | **unchanged: S4 only** |
+  | Trade science_value | 0.0 in all 6 cells | **0.0 in all 6 cells** (S4 con >= 72.4 min > 60) |
+  | Trade reachable % 30 min 80/104/120 | 12.9 / 12.4 / 12.1 | 12.8 / 12.4 / 12.2 |
+  | Partner area 80/104/120 | 1.3135 / 1.2331 / 1.1933 km2 | 1.3053 / 1.2323 / 1.1948 km2 |
+  | pad.json / F8 | pad_default score 0, proposal 137.402443, -4.769028 (0.475, 5 of 742 tied) | **unchanged** |
+  | Access cells (S2 27.6 m, S4 2.1 m nom) | | **unchanged** (reachability does not depend on speed) |
+  | Public tree | 108.4 MB raw / 16.7 MB gz; largest 9.95 MB | **108.0 MB raw / 16.6 MB gz**; largest 9.80 MB (opt_80 isochrones); all isochrones now <= 1.5 MB gz (opt_80 1.47) |
+  - **Downstream (C to re-run):** WS7 `make fields` (t_home / o2_home / pointer rasters changed in all 9 scenarios; worst-case fields too) and the HUD timeline (O2 starts at 481.99 L); WS3 cards: access cells and observers unchanged, so the WS3 parts need **no** re-run, only `make web` to merge the new WS2 timeline parts (arrive/leave/turn_back changed); WS8: route legs 1-2 geometry moved (leg 3 identical), so re-run `terrain_chunks` (corridor) if it is built from the route; the 3D camera reads route/timeline at runtime; WS9 (suspended, D19): its published Monte Carlo used the old route/timeline and the old t_home (fix-interval map), now stale; re-run only if the add-on resumes, or label it as on the pre-15:40 route.
+
 ### Doing
 
 - Waiting for S (S3/S5 positions, S1 access, pad proposal, questions) and C (make web: lift the `pad.json` withhold, publish siting).
 
 ### Next
 
-- C: drop `pad.json` from `WITHHELD` (writer fixed, 9ae1ca7) and `make web`; WS5 to read `proposal.pad.*`.
+- C (after merging session 6): `make fields` (WS7), `make web` (merges the new WS2 card timeline parts; WS3 parts unchanged), WS8 `terrain_chunks` if its corridor must follow the route (legs 1-2 moved slightly); WS9 Monte Carlo is stale (suspended, D19).
 - Once S3/S5 have positions (or S1 gets an access cell): re-run for a 3-station nom_104 route and F8 with more than one station.
 - WS7/WS9: real rasters are ready in `data/interim/engine/{sid}/`.
 
@@ -564,16 +605,11 @@ Branch: `ws2-engine`
 - **3-station G1 route (S/WS1):** with the access-cell rule only S2 and S4 are routable; S1's 38 assessed cells within 50 m are all sealed off (no walk home in any scenario). S to pick S3/S5 positions, or move S1, or widen the radius (assumed 50 m; not changed by WS2).
 - **F8 pad (S):** with only S4 reachable under con_104 the rule ties 5 blocks at 0.475; proposed pad 137.402443, -4.769028 (not adopted; pad_default unchanged). The pad check is null because the 30-min disc leaves the grid there. Accept, keep the default, or wait for S3/S5?
 - Questions for S (science):
-  1. **alpha encoding (C note, model unchanged).** IST-2's weight span is a gravity change (0.12 -> 0.32 g on 201.7 kg = 395.6 N). At Mars g that weight equals 106.6 kg of carried mass, not `delta_mass_kg` 60.
-     | | alpha (mL/kg/min per kg per m/s) | a(M) nom 80 / 104 / 120 kg suit | level VO2 at 0.98 m/s, nom 80 / 104 / 120 | level v* nom 80 / 104 / 120 (m/s) | headline 30 min nom_80 / nom_120 |
-     | --- | --- | --- | --- | --- | --- |
-     | before (60 kg) | 0.03231 | 12.296 / 13.071 / 13.588 | 18.05 / 18.81 / 19.32 | 0.976 / 0.918 / 0.883 | 12.91 / 12.12 % |
-     | after (106.6 kg, anchor speed) | 0.01818 (x 0.563) | 12.720 / 13.156 / 13.447 | 18.47 / 18.89 / 19.18 | 0.943 / 0.912 / 0.892 | 12.78 / 12.15 % |
-     With IST-2's own per-subject speeds instead of 0.98 m/s, alpha = 0.0184-0.0318. The 80-120 kg level-cost spread shrinks from 1.27 to 0.71 mL/kg/min; 60-min headline nom_80 12.63 -> 12.29 %, nom_120 10.29 -> 10.40 %. Adopt (set `delta_mass_kg` to a weight-span encoding) or keep?
-  2. **O2_station_tasks interpretation (please confirm).** Implemented as the task O2 still to do at the station the crew is working at (0 while walking). The O2 margin on arrival therefore equals the one on leaving. Daylight and dose terms are unchanged (SPEC F4).
+  1. ~~alpha encoding~~: **switched** to the weight-span encoding (decision 15:40, session 6).
+  2. ~~O2_station_tasks~~: **confirmed** (decision 15:40).
   3. **Margin change on the only real route** (opt_104 -> S4, 131.9 min, scratch run, not published). O2 term: start 373.3 -> 343.3 min (-30.0, the 40.5 L reserve); arrive S4 260.5 -> 230.8 (-29.7); return 271.2 -> 230.8 (-40.3). Latest turn-back at S4: 523 min (daylight) -> 447 min (O2). Each 30-min station now costs 11.7 L more (0.84 vs 0.45 L/min) = 8.7 min. On the nom_104 field (no route), the O2 term on the 30- / 60-min contours drops by a median 24.5 / 19.3 min. **The binding margin does not change.** With the storm tau (85.9 min) the dose term (85.9 - T_home) binds everywhere within 60 min; with `--dose latest` (3,771.6 min) the O2 term binds on the S4 route (230.8 min).
-  4. O2 conversion mismatch: `o2_budget` uses 20.1 J/mL (4.80 kcal/L), while the review conversion gives 5.02 kcal/L at RER 0.85. With 5.02 kcal/L, primary_L would be 482 L instead of 504 L. Not changed.
-  5. Earlier open: haul drag case infeasible (old Q3), casualty mass (Q4), flat-disc speed (Q5). Old Q1 and Q2 are answered by the review.
+  4. ~~O2 conversion~~: **ICES-2026-127 adopted** for the budget (482 L, decision 15:40). Open for S: the physiology constant 20.1 J/mL is still used in k, heat and haul power (review conversion = 21.01 J/mL); kept per the decision.
+  5. Earlier open: flat-disc speed (Q5). Drag (D20) and casualty mass (15:40, haul.yaml rule) are decided. Old Q1 and Q2 are answered by the review.
 - Questions for C (code/contracts):
   6. Who writes the web `stations.json`? WS2 writes `data/interim/engine/public/stations.json` with `t_home_min` and `in_partner_line` from WS1's stations.
   7. Proposed for contracts v1.1 (loose schemas accept them now): `partner.geojson` properties `{case, casualty_kg, contour_min, style, default_visible, caption, feasible, area_km2}`; route leg properties `{leg, from, to, t_min, o2_L, length_m, t_start_min, t_end_min, times_min[]}`; timeline rows `margin_binding`, `o2_tasks_left_L`, `o2_margin_min_planning_rate`, optional `in_partner_line`, plus `turn_back` events. `siting_png.json` has no schema.
@@ -582,7 +618,7 @@ Branch: `ws2-engine`
   10. **Sizes / coordinate precision.** Losslessly I merged edge pieces (MultiLineString). Two more cuts need a C decision: (a) 5 decimals (0.59 m on Mars, below the 2 m simplification) saves 9 % raw / 16 % gz (79.5 -> 72.5 MB raw, 12.0 -> 10.1 gz), but SPEC §6 and contracts/README say 6 decimals, so not applied; (b) the same < 100 m2 hole filter on `bands_*` cuts them 13.1 -> 5.8 MB raw (1.84 -> 0.9 gz), but bands are the main F4 layer and edges would still trace the dropped islands, so not applied.
   11. **Card merge.** WS2 writes `engine/public/cards/{S}.timeline.json`; `tools/make_web.py RULES` has no rule for it yet and no merge into `cards/{S}.json`. Note `SCHEMA_MAP` pattern `cards/*.json` also matches `*.timeline.json` if the fragments ever land in the web tree. The card contract's `margin_binding` enum has no null: S1 (no access cell) has null times and a null binding; please allow null (as the timeline schema does) or say what a card without a route should carry.
   12. **stations.json extras (stations schema is open):** `access_radius_m`, `access_lon`, `access_lat`, `access_dist_m`, `access_reason` (default scenario), `access` {scenario: {lon, lat, dist_m, t_home_min, o2_home_L, reason, walk_in {dist_m, rise_m, mean_slope_deg, max_slope_deg, max_terrain_slope_deg, modelled: false}}}. `lon`/`lat` stay the science point; `t_home_min` is at the access cell. Timeline station rows: `access_dist_m`; route legs: `to_access_dist_m`. Optional in a v1.2 note?
-- Question for S: 13. **Turn-back beyond the EVA budget.** The SPEC F4 margin has no EVA-duration term, so the latest turn-back (O2 term) is 409-439 min, after the 6.5 h (390 min) budget. Cap turn_back at `crew.eva_h` - T_home, or keep it as the physical limit?
+- Question for S: 13. **Turn-back beyond the EVA budget.** The SPEC F4 margin has no EVA-duration term, so the latest turn-back (O2 term) was 409-439 min; since session 6 (482 L) it is S2 382.2 min (inside the 6.5 h = 390 min budget) and S4 411.9 min (after it). Cap turn_back at `crew.eva_h` - T_home, or keep it as the physical limit?
 - **For WS5 (answer to Q9, not editing web/):** `web/src/config.ts` line 94 still cites `crew.yaml o2_reserve_frac` (0.2) for the scorecard. The engine does not use it. The route margin's reserve is `crew.yaml o2_margin.reserve_min_at_effort_cap` = 30 min at the effort rate 1.35 L/min = **40.5 L** (S review). Please show that row instead.
 
 ### Assumptions added
