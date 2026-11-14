@@ -7,7 +7,9 @@ static data tree under the same relative path. Resolution and path safety: serve
 
 Responses:
 - 200: the file, with its media type, ``Cache-Control: public, max-age=31536000, immutable``
-  (spec §5: result trees are immutable), a strong content ETag (304 on a matching
+  (spec §5: result trees are immutable) once the tree is complete (precomputed, or its
+  run_record.json exists); ``no-store`` while a job is still publishing its stages; a strong
+  content ETag (304 on a matching
   If-None-Match) and ``X-Content-Type-Options: nosniff``. ``run_record.json`` and ``provenance``
   of the official (precomputed) tree are the synthesised, validated run record.
 - 404 (openapi Error): unknown or malformed hash, invalid path (traversal, hidden, backslash ...),
@@ -56,8 +58,16 @@ def _unavailable(e: version.Unavailable) -> JSONResponse:
     return _error(503, code, msg)
 
 
-def _headers(tag: str) -> dict[str, str]:
-    return {"Cache-Control": IMMUTABLE, "ETag": tag, "X-Content-Type-Options": "nosniff"}
+def _headers(tag: str, complete: bool = True) -> dict[str, str]:
+    return {"Cache-Control": IMMUTABLE if complete else NO_STORE, "ETag": tag,
+            "X-Content-Type-Options": "nosniff"}
+
+
+def complete(tree: results.ResultTree) -> bool:
+    """A tree is immutable once it is complete: the precomputed tree, or a computed tree whose
+    run_record.json exists (the job runner writes it last). Files of a tree still being written
+    (a running plan job publishes stage by stage, D81) are served with no-store."""
+    return tree.precomputed or (tree.root / results.RUN_RECORD).is_file()
 
 
 def _not_modified(request: Request, tag: str) -> bool:
@@ -79,13 +89,14 @@ def _serve(request: Request, h: str, path: str, identity: results.IdentityProvid
             return Response(body, media_type="application/json", headers=_headers(tag))
         f = results.resolve_file(tree, path)
         tag = results.etag(results.file_sha256(f))
+        done = complete(tree)
     except results.ResultNotFound as e:
         return _error(404, e.code, e.detail)
     except version.Unavailable as e:
         return _unavailable(e)
     if _not_modified(request, tag):
-        return Response(status_code=304, headers=_headers(tag))
-    return FileResponse(f, media_type=results.media_type(path), headers=_headers(tag))
+        return Response(status_code=304, headers=_headers(tag, done))
+    return FileResponse(f, media_type=results.media_type(path), headers=_headers(tag, done))
 
 
 @router.get("/results/{hash}/provenance", operation_id="getProvenance")
