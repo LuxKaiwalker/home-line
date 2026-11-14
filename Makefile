@@ -1,6 +1,6 @@
 # HOMELINE pipeline entry points. Stub targets print a message until the owning workstream
 # adds its CLI (ownership: AGENTS.md "Folder ownership"; this file is owned by C).
-.PHONY: all terrain engine horizons conditions nav web dummy test lint validate kats h0 clean
+.PHONY: all terrain engine horizons conditions conditions-fetch nav web dummy test lint validate kats h0 clean
 
 PY := uv run --no-sync python
 
@@ -18,8 +18,10 @@ engine:      ## WS2: return fields, isochrones, bands, edges, partner, stations,
 	$(PY) -m pipeline.engine.scenarios
 horizons:    ## WS3
 	@echo "horizons: stub (WS3 adds pipeline/horizon CLI)"
-conditions:  ## WS4
-	@echo "conditions: stub (WS4 adds pipeline/conditions CLI)"
+conditions:  ## WS4: rad, clock, rems, donki -> data/interim/conditions/ (cache: make conditions-fetch)
+	$(PY) -m pipeline.conditions
+conditions-fetch:  ## WS4: download/refresh data/raw/conditions/ (needs NASA_API_KEY for DONKI)
+	$(PY) -m pipeline.conditions.fetch all
 nav:         ## WS9
 	@echo "nav: stub (WS9 adds pipeline/navigation CLI)"
 web:         ## C: copy data/interim -> web/public/data, validate
