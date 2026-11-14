@@ -137,30 +137,73 @@ Branch: `c-integration` (merged to `main` by the orchestrator)
   Missing: WS3 cards + `fp3d/horizon_ring.json`; WS6 `validation/{v1.json,v1.svg,kats.json}`;
   WS7 fields; WS8 fp3d; WS9 nav/localisation/fix-interval; WS10 `vo/drift.json`.
 
+- 2026-11-14T11:20Z: **Station cards merged by `make web`** (C decision 11:42; KATs
+  `tests/test_make_web.py`, 39 pass): `cards/{S}.json` = WS3 `horizon/public/cards/{S}.json` +
+  WS2 `engine/public/cards/{S}.timeline.json`, key by key, nothing computed; `parts` records both
+  sources. A station lacking a part gets no card and no images (missing under the absent owner);
+  parts that disagree (station, a key set twice, science point, WS3 observer not at WS2's access
+  cell) stop the run. The `*.timeline.json` parts never reach the web tree (`SCHEMA_MAP` unchanged).
+  **Result: S1, S2, S4 built.** S1: no access cell, null times, `margin_binding` null; S2: dose
+  14.89 min, access 27.6 m; S4: dose 25.97 min, access 2.1 m. Far skyline errors 4.24 / 3.18 /
+  6.50 deg (near/mid null; D7 pending).
+- 2026-11-14T11:20Z: `make web` manifest: an entry citing a web file that the run does not write
+  (skipped owner, missing output, card not built) is left out; a skipped owner's entries citing
+  its `data/interim/` source too (WS8's `data/interim/export/fp3d/index.json` keys leaked before).
+- 2026-11-14T11:20Z: **contracts v1.1.1** (additive; contracts/README.md "Changes"):
+  - `card`: `margin_binding` may be null; optional access block (`science`, `access` {lon, lat,
+    dist_m = access_dist_m, t_home_min, o2_home_L, reason, walk_in (not modelled), radius_m,
+    rule}), `scenario`, `on_route`, `margin_min`, `t_home_min`, `o2_home_L`, WS3 extras.
+  - `stations` (WS2 Q12): `access_radius_m`, `access_lon/lat`, `access_dist_m`, `access_reason`,
+    `access` {scenario: record}; `timeline` rows `access_dist_m`; `route` legs `to_access_dist_m`.
+  - `horizon_ring`: WS3's layout (object; observer, az_step_deg, max_range_m, az_deg, elev_deg
+    required; dist_m, z_m, east_m, north_m, source, min_range_m optional). Dummy ring validates
+    unchanged (no `make dummy` needed).
+  - `fields_index`: WS7's pointer proposal, per-entry `bounds`/`width`/`height`/`res_m` +
+    `stencil` (pointer on WS2's 3 m grid; README notes the own grid).
+  - Real WS2 stations/timeline/route and WS3 ring validate. Version assertions in
+    `tests/test_contracts.py` and `web/src/data/contracts.test.ts` accept 1.1.1.
+- 2026-11-14T11:20Z: **Real web data committed (WS8, WS9 skipped):** `make web --skip-owner WS8
+  --skip-owner WS9`: 2,831 files, **146.7 MB** (scenarios 79.5, tiles 33.1, fields 28.4,
+  validation 2.4, cards 2.2, terrain 0.6, rest < 0.3). All validate, no dummy flag, H0 check OK,
+  no dangling reference, largest file 9.95 MB (`scenarios/opt_80/isochrones.geojson`), manifest
+  674 keys. Present: WS1 all, WS2 (scenarios, stations, route/timeline nom_104, trade table,
+  card parts), WS3 (v2, ring, cards + images), WS4 all 4, WS7 fields (20 PNGs + index), WS10
+  probe + drift. Missing: WS2 `pad.json`, `siting.png`, `siting_png.json` (F8 waits on V1); WS6
+  `validation/{v1.json,v1.svg,kats.json}`. Skipped: WS8 (running, unmerged); WS9 (its real run
+  of 12:16 CET is on unmerged code, `7908eda-dirty`; outputs validate, publish after merge).
+
 ### Doing
 
 - —
 
 ### Next
 
-- Re-run `make web` (with WS2) once WS2 cuts the isochrone size (below), then at each gate.
+- Re-run `make web` when WS8 and WS9 merge, and after V1 (con_* scenarios, WS2 F8 pad/siting,
+  WS6 v1/kats).
+- WS7: run `make fields --with-pointer` for nom_104 now that v1.1.1 has the pointer entry.
 
 ### Blocked
 
-- **WS2 web files not committed (size).** WS2's run at 10:30Z validates, but
-  `scenarios/` is **159.5 MB** for 6 scenarios: `isochrones.geojson` 18.8–23.9 MB each
-  (nom_104: 19.3 MB, 2.7 MB gzipped, over `variants.yaml isochrone_size_budget_mb_gz` 1.5),
-  `bands_*` 4.2–4.6 MB, `edges` 2.2–3.1 MB. WS2: please bring each isochrone file within the
-  budget (the 2-min fallback, or coarser simplification/coordinate rounding per config) before C
-  commits WS2's web files. Also: `route_nom_104.geojson` is empty and no `pad.json` /
-  `siting.png` yet (expected while stations are unreachable under nominal; reported only).
+- —
 
 ### Answers to questions for C
 
+- WS2 Q10 (sizes): no further cuts (Decision log 12:20). Every engine file is < 50 MB (largest
+  9.95 MB); the tree is 79.5 MB raw / 12.1 MB gz.
+- WS2 Q11 (card merge): done in `make web` (above); card `margin_binding` may be null (v1.1.1).
+- WS2 Q12 (stations/timeline/route extras): documented optional in v1.1.1.
+- WS3 Blocked 2 (fragment vs card contract): solved by the merge. WS3 ring layout adopted (v1.1.1).
+- **WS7 sun / time-to-dark (no `sun.json`):** WS4's `conditions/clock.json` already has them:
+  `eva.sun_series` (columns `eva.sun_series_columns` = `t_eva_min`, `lmst_h`, `sun_azimuth_deg`,
+  `sun_elevation_deg`; 79 rows at 5 min over the 390-min simulated EVA), `eva.t_dark_min` (578.63,
+  flat horizon at the pad, definition in `eva.t_dark_definition`), `eva.t_dark_min_by_observer`
+  (per WS3 stop horizon), `eva.start_utc`/`start_lmst`. WS7: read them from `clock.json`.
+- WS7 fields scope: ship all scenarios of the contract table (Decision log 12:20).
+- **For WS5 (C does not edit web/ outside contracts.ts):** `web/src/data/types.ts` `Card.margin_binding`
+  should be `'O2' | 'daylight' | 'dose' | null`; station card and cuff should show null as
+  "none (not on the route / no access cell)" and can show `access.dist_m` + the walk-in.
 - WS2 Q6: WS2 writes the web `stations.json` (`data/interim/engine/public/stations.json`);
-  make web copies it. Station cards (`cards/{id}.json`) have no named producer yet: make web takes
-  them from `data/interim/horizon/public/cards/` (WS3 card fragments); C to settle with WS3/WS5
-  before G2.
+  make web copies it. Station cards: settled 11:42 (WS3 + WS2 parts, merged by make web).
 - WS2 Q7: done in v1.1.0 (above). Siting: one grey PNG + `siting_png.json`, no tiles.
 - WS2 Q8 (F11 partner area / reachable % choice) is a science choice: S.
 - WS5 basemap: read `tiles/basemap/tilejson.json` (contract `tilejson.schema.json`; tile URLs are
@@ -912,3 +955,8 @@ Branch: `ws10-vo`
 | 2026-11-14 11:58 | Frame↔station pairing for F22 | WS3 sets `station` in `navcam_frames.json` for each station's overlay frame | C |
 | 2026-11-14 11:58 | Nav playback values provenance | Per-minute ellipse/r95/distance rows are covered by the Monte Carlo file's manifest entry (row-level keys not required); every static number keeps its own key | C |
 | 2026-11-14 11:58 | Fix-interval summary sets | Keep contract v1.1 (one file, default set) for G1; an all-sets bump only if time after G1 | C |
+| 2026-11-14 12:20 | WS2 Q10 web size | No further size cuts: keep 6 decimals (SPEC §6) and do not hole-filter the bands; every file < 50 MB (engine tree 79.5 MB raw / 12.1 MB gz) | C |
+| 2026-11-14 12:20 | Way-home pointer field (WS7 proposal) | Accepted into `fields_index` v1.1.1: `fields/{sc}/pointer.png`, scale 1, units "move", own grid (per-entry bounds/width/height/res_m on WS2's 3 m grid) + `stencil`; optional properties | C |
+| 2026-11-14 12:20 | Fields scope | Ship all scenarios of the contract table (≈ 37 MB with con_*; 28.4 MB now) | C |
+| 2026-11-14 12:20 | HUD sun / time-to-dark | No `sun.json` contract: WS7 reads `conditions/clock.json eva.sun_series` and `eva.t_dark_min` (WS4) | C |
+| 2026-11-14 12:20 | Station card nulls | `margin_binding: null` for a station with no route or no access cell (S1); the card still ships | C |

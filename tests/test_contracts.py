@@ -210,3 +210,20 @@ def test_horizon_ring_ws3_layout_and_dummy():
     assert errs("horizon_ring.schema.json", json.loads(dummy.read_text())) == []
     assert errs("horizon_ring.schema.json", [ws3])  # an array is no longer a ring
     assert errs("horizon_ring.schema.json", {k: v for k, v in ws3.items() if k != "elev_deg"})
+
+
+def test_fields_index_pointer_entry_on_its_own_grid():
+    """v1.1.1 (WS7 proposal): pointer.png on WS2's 3 m grid with its stencil; the 5 m entries
+    keep using the top-level grid."""
+    idx = {"dummy": False, "bounds": [137.319359, -4.868421, 137.444641, -4.743579],
+           "width": 1480, "height": 1480, "res_m": 5.0, "fields": {
+               "nom_104/t_home": {"file": "fields/nom_104/t_home.png", "scale": 0.1,
+                                  "units": "min", "scenario": "nom_104"},
+               "nom_104/pointer": {"file": "fields/nom_104/pointer.png", "scale": 1,
+                                   "units": "move", "scenario": "nom_104",
+                                   "bounds": [137.32, -4.86, 137.44, -4.75], "width": 2468,
+                                   "height": 2468, "res_m": 3.0,
+                                   "stencil": [[-1, 0], [1, 0], [0, -1], [0, 1], [-2, 1]]}}}
+    assert errs("fields_index.schema.json", idx) == []
+    idx["fields"]["nom_104/pointer"]["stencil"] = [[-1, 0, 1]]
+    assert errs("fields_index.schema.json", idx)
