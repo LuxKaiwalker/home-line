@@ -19,7 +19,7 @@ stations:
     name: "Nodule census"
     rule: "hand pick by S on HiRISE ortho before H2; record lon/lat and the image used"
     manual_priority: 0.5
-    status: dropped               # D26 (user 16:20 CET): dropped unless S hand-picks it by Sat 19:00 CET (imagery behind "nodule" not checked)
+    status: dropped               # D26/D44 (user 17:28 CET): dropped, final (imagery behind "nodule" not checked)
   - id: S4
     name: "Gediz Vallis sulfur field"
     rule: "Curiosity drive end nearest sol 4200 from MMGIS"
@@ -29,23 +29,29 @@ stations:
     name: "Debris-flow boulders"
     rule: "hand pick by S on HiRISE ortho before H2"
     manual_priority: 0.5
-    status: dropped               # D26 (user 16:20 CET): dropped unless S hand-picks it by Sat 19:00 CET (imagery behind "boulder" not checked)
+    status: dropped               # D26/D44 (user 17:28 CET): dropped, final (imagery behind "boulder" not checked)
 extra_from_scoring: {max: 3, decide_by: "Sat 23:00 (D8)"}
 # D26 (user 2026-11-14 16:20 CET): placement after D22 on the D22 cell states.
+# D44 (user 17:28 CET, closes D26): the station list is final: S1, S2, S4, S6, S7, S8.
 placement:
   order: [S4, S1, S2, extras]   # each placed station constrains the next by min_spacing_m
-  walkable: "the 3 m cell under the science point is assessed (state 0) in cellstate_3m.tif (D22, nominal 20 deg)"
+  walkable: "the 3 m cell under the science point is assessed (state 0) in cellstate_3m.tif (D22, nominal 20 deg); D44: accepted, assumed"
   s4_rule: "MMGIS drive end nearest sol 4200 (ties: earlier sol) that is walkable and in the focus area"
   unreachable_label: "not reachable on foot"   # D26: a station nobody can reach stays on the map (WS2 decides reachability)
 extras:                         # D26: up to 3 stations from the F7 scoring rule
   max: 3
-  ids: [S6, S7, S8]             # S3/S5 stay reserved for S's hand picks
+  ids: [S6, S7, S8]             # S3/S5 stay dropped (D44)
   domain: "focus area (aoi_focus), walkable, >= min_spacing_m from every station"
   crism_index: max              # larger of the normalised SINDEX2 / D2300 (as for S2)
-  manual_priority: 0            # SPEC F7: manual priority is for hand picks; none here
-  name_min_norm: 0.5            # a component >= this names the station (assumed)
+  manual_priority: 0            # SPEC F7: manual priority is for hand picks; none here. D44: accepted, assumed
+  name_min_norm: 0.5            # a component >= this names the station. D44: accepted, assumed
   index_words: {D2300: clay, SINDEX2: sulfate}   # SPEC F7 "SINDEX2 for sulfates, D2300 for clays"
-  assumed: true
+  same_name_suffix:             # D44 (user 17:28 CET): stations with the same name get a compass suffix
+    pad: "data/interim/engine/public/pad.json top-level pad (rank1, official); site.yaml pad_default only if the file is missing"
+    compass: "8-point compass of the bearing from the pad to the station, e.g. '... (north-east)'"
+    tie: "same compass point too: distance from the pad, '(south-west, nearer)' / '(south-west, farther)'; 3+: nearest, 2nd nearest, ..., farthest; a distance tie falls back to the station id"   # WS1 rule (D44 asks for one); assumed
+    assumed: true
+  assumed: true                 # D44 (user 17:28 CET): walkable at 20 deg, manual priority 0, named after any part >= 0.5 accepted, labelled assumed
 # --- WS1 scoring assumptions (assumed: true; S to confirm before D8, Sat 23:00) ---
 scoring_assumptions:
   crism_normalisation: "linear between the p2 and p98 of valid 18 m cells in the dem window, clipped to [0, 1]"

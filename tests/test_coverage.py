@@ -693,3 +693,112 @@ def test_stations_config_d26_d32():
     assert st["min_spacing_m"] == 300                                            # D32
     assert st["extras"]["max"] == 3 and st["extras"]["manual_priority"] == 0
     assert {s["id"] for s in st["stations"] if s.get("status") == "dropped"} == {"S3", "S5"}
+
+
+# ------------------------------------------- same-name compass suffix (D44, set A, user 17:28)
+
+
+@pytest.mark.parametrize("bearing,expected", [
+    (0.0, "north"), (22.49, "north"), (22.5, "north-east"), (45.0, "north-east"),
+    (67.49, "north-east"), (67.5, "east"), (90.0, "east"), (135.0, "south-east"),
+    (180.0, "south"), (225.0, "south-west"), (237.9, "south-west"), (247.49, "south-west"),
+    (247.5, "west"), (270.0, "west"), (315.0, "north-west"), (337.49, "north-west"),
+    (337.5, "north"), (359.99, "north"), (360.0, "north"), (-45.0, "north-west"),
+])
+def test_compass8_sectors_are_45_deg_centred_on_the_points(bearing, expected):
+    from pipeline.terrain import stations as ST
+
+    assert ST.compass8(bearing) == expected
+
+
+@pytest.mark.parametrize("dx,dy,expected", [
+    (0.0, 100.0, 0.0), (100.0, 0.0, 90.0), (0.0, -100.0, 180.0), (-100.0, 0.0, 270.0),
+    (100.0, 100.0, 45.0), (-100.0, -100.0, 225.0),
+])
+def test_pad_bearing_is_clockwise_from_grid_north(dx, dy, expected):
+    from pipeline.terrain import stations as ST
+
+    pad = (1000.0, -2000.0)
+    assert ST.bearing_deg(pad, pad[0] + dx, pad[1] + dy) == pytest.approx(expected)
+
+
+def _st(sid, name, x, y):
+    return {"id": sid, "name": name, "x": x, "y": y}
+
+
+def test_compass_suffix_only_for_duplicated_names():
+    from pipeline.terrain import stations as ST
+
+    a = "dense ridge network + high SINDEX2 sulfate signal"
+    recs = [_st("S1", "Boxwork ridge-hollow transect", 0.0, -500.0),
+            _st("S6", a, 400.0, 400.0),             # north-east of the pad
+            _st("S7", a, -300.0, 10.0),             # west
+            _st("S8", "dense ridge network + high D2300 clay signal", 0.0, 900.0)]
+    out = ST.add_compass_suffixes(recs, (0.0, 0.0))
+    assert [r["name"] for r in out] == [
+        "Boxwork ridge-hollow transect", f"{a} (north-east)", f"{a} (west)",
+        "dense ridge network + high D2300 clay signal"]
+    assert out[1]["name_base"] == a and out[1]["name_suffix"]["compass"] == "north-east"
+    assert out[1]["name_suffix"]["bearing_deg"] == pytest.approx(45.0)
+    assert "name_suffix" not in out[0] and "name_suffix" not in out[3]
+    # only names and labels change: coordinates and ids untouched, input not mutated
+    assert [(r["id"], r["x"], r["y"]) for r in out] == [(r["id"], r["x"], r["y"]) for r in recs]
+    assert recs[1]["name"] == a
+
+
+def test_compass_suffix_collision_is_broken_by_distance_from_the_pad():
+    from pipeline.terrain import stations as ST
+
+    a = "dense ridge network + high SINDEX2 sulfate signal"
+    # today's S6/S7 geometry (pad rank1): both south-west, S6 ~1.28 km, S7 ~1.83 km
+    two = ST.add_compass_suffixes([_st("S6", a, -1081.0, -678.0), _st("S7", a, -1681.0, -728.0)],
+                                  (0.0, 0.0))
+    assert [r["name"] for r in two] == [f"{a} (south-west, nearer)",
+                                        f"{a} (south-west, farther)"]
+    three = ST.add_compass_suffixes([_st("S6", a, -900.0, -900.0), _st("S7", a, -300.0, -300.0),
+                                     _st("S8", a, -600.0, -600.0)], (0.0, 0.0))
+    assert [r["name"] for r in three] == [f"{a} (south-west, farthest)",
+                                          f"{a} (south-west, nearest)",
+                                          f"{a} (south-west, 2nd nearest)"]
+    assert len({r["name"] for r in three}) == 3
+    # a distance tie falls back to the station id
+    tie = ST.add_compass_suffixes([_st("S7", a, -500.0, -500.0), _st("S6", a, -500.0, -500.0)],
+                                  (0.0, 0.0))
+    assert [r["name"] for r in tie] == [f"{a} (south-west, farther)",
+                                        f"{a} (south-west, nearer)"]
+
+
+def test_compass_suffix_skips_unplaced_stations():
+    from pipeline.terrain import stations as ST
+
+    recs = [_st("S6", "x", None, None), _st("S7", "x", 0.0, 100.0)]
+    out = ST.add_compass_suffixes(recs, (0.0, 0.0))
+    assert out[0]["name"] == "x" and out[1]["name"] == "x"      # no duplicate among placed
+
+
+def test_official_pad_comes_from_pad_json_with_site_fallback(tmp_path):
+    import json
+
+    from pipeline.terrain import stations as ST
+
+    fallback = {"lon": 137.382, "lat": -4.806}
+    p = tmp_path / "pad.json"
+    p.write_text(json.dumps({"pad": {"id": "rank1", "lon": 137.401783, "lat": -4.77748},
+                             "alternatives": [{"id": "rank2", "lon": 1.0, "lat": 2.0}]}))
+    lon, lat, src = ST.official_pad(p, fallback)
+    assert (lon, lat) == (137.401783, -4.77748)
+    assert "pad.json" in src and "rank1" in src
+    lon, lat, src = ST.official_pad(tmp_path / "missing.json", fallback)
+    assert (lon, lat) == (137.382, -4.806) and "pad_default" in src
+
+
+def test_stations_config_d44_final_list_and_assumptions():
+    from pipeline.terrain import grid as G
+
+    st = G.stations_cfg()
+    ex = st["extras"]
+    assert ex["assumed"] is True and ex["manual_priority"] == 0 and ex["name_min_norm"] == 0.5
+    assert "D44" in st["placement"]["walkable"]
+    assert ex["same_name_suffix"]["assumed"] is True
+    text = (G.CONFIG / "stations.yaml").read_text()
+    assert "19:00" not in text and "unless S" not in text

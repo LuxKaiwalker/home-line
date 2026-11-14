@@ -950,8 +950,8 @@ def step_stations() -> dict:
     for s in st["stations"]:
         if s.get("status") == "dropped":
             dropped.append({"id": s["id"], "name": s["name"], "status": "dropped",
-                            "reason": "D26 (user 16:20 CET): dropped unless S hand-picks it by "
-                                      "Sat 19:00 CET; the imagery behind the claim is unchecked"})
+                            "reason": "D26/D44 (user 17:28 CET): dropped, final; the imagery "
+                                      "behind the claim is unchecked"})
     order = ["S1", "S2", "S4"] + [ex["ids"][n] for n in range(len(picks))]
     for sid in order:
         xy, how, moved_from = pos[sid]
@@ -993,6 +993,15 @@ def step_stations() -> dict:
         v = value(cv, dv, manual)
         rec["value"] = _r(v, 4) if v is not None else None
         out.append(rec)
+    # D44: same-name stations get the compass point of the bearing from the official pad
+    pad_lon, pad_lat, pad_src = ST.official_pad(G.REPO / "data/interim/engine/public/pad.json",
+                                                G.site()["pad_default"])
+    pad_off = tuple(float(v) for v in G.xy_of_lonlat(pad_lon, pad_lat))
+    out = ST.add_compass_suffixes(out, pad_off)
+    naming = {"rule": "D44 (user 17:28 CET): " + ex["same_name_suffix"]["compass"],
+              "tie": ex["same_name_suffix"]["tie"],
+              "pad": {"lon": pad_lon, "lat": pad_lat, "source": pad_src},
+              "assumed": bool(ex["same_name_suffix"]["assumed"])}
     # spacing check over the final list (D32)
     pts = [(r_["x"], r_["y"]) for r_ in out if r_.get("x") is not None]
     dmin = min((float(np.hypot(a[0] - b[0], a[1] - b[1])) for i, a in enumerate(pts)
@@ -1008,7 +1017,7 @@ def step_stations() -> dict:
            "placement": st["placement"], "extras_rule": ex,
            "cellstate_source": "data/interim/terrain/cellstate_3m.tif (D22 nominal)",
            "normalisation": {"crism_p2_p98": crism_rng, "ridge_density_p98": _r(p98, 5)},
-           "assumptions": asm, "stations": out, "dropped": dropped}
+           "assumptions": asm, "same_name_suffix": naming, "stations": out, "dropped": dropped}
     _w(OUT / "stations.json", doc)
     _record_stations(doc)
     rio.write_cog(OUT / "ridge_density_5m.tif", dens.astype(np.float32), g5,

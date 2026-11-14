@@ -9,9 +9,19 @@ step_stations`` applies them to the scoring lattice.
   its normalised components only, never by a geological claim.
 * ``place_extras``: greedy, highest F7 value first, every filter and the spacing re-checked
   against all stations placed so far.
+* ``add_compass_suffixes`` (D44, user 17:28): stations that share a name get the 8-point compass
+  point of the bearing from the official pad (``official_pad``: ``engine/public/pad.json`` top-level
+  ``pad``, else ``site.yaml pad_default``), e.g. "... (north-east)". If two of them still share a
+  compass point, the next rule is the distance from the pad: "nearer"/"farther" for two, "nearest",
+  "2nd nearest", ..., "farthest" for more (a distance tie falls back to the station id). Names and
+  labels only; coordinates never move.
 """
 
 from __future__ import annotations
+
+import json
+import math
+from pathlib import Path
 
 import numpy as np
 
@@ -74,4 +84,74 @@ def place_extras(x, y, value, eligible, placed_xy, n_max: int, min_m: float) -> 
         if spacing_ok(x[i:i + 1], y[i:i + 1], placed, min_m)[0]:
             out.append(int(i))
             placed.append((float(x[i]), float(y[i])))
+    return out
+
+
+COMPASS8 = ("north", "north-east", "east", "south-east", "south", "south-west", "west",
+            "north-west")
+
+
+def compass8(bearing_deg: float) -> str:
+    """8-point compass name; 45 deg sectors centred on the points, a boundary goes clockwise
+    (22.5 -> north-east)."""
+    return COMPASS8[int(math.floor((float(bearing_deg) + 22.5) / 45.0)) % 8]
+
+
+def bearing_deg(pad_xy, x: float, y: float) -> float:
+    """Bearing from the pad to (x, y), degrees clockwise from grid north, in [0, 360). The
+    analysis CRS (eqc, lat_ts = -4.8) is true-scale and north-up at the site."""
+    return math.degrees(math.atan2(x - pad_xy[0], y - pad_xy[1])) % 360.0
+
+
+def official_pad(pad_json: Path, fallback: dict) -> tuple[float, float, str]:
+    """(lon, lat, source) of the official pad: top-level ``pad`` of WS2's pad.json (rank 1,
+    D42/D44); ``site.yaml pad_default`` only if that file is missing."""
+    pad_json = Path(pad_json)
+    if pad_json.exists():
+        p = json.loads(pad_json.read_text())["pad"]
+        return (float(p["lon"]), float(p["lat"]),
+                f"{pad_json.name} pad ({p.get('id', 'rank1')})")
+    return float(fallback["lon"]), float(fallback["lat"]), "site.yaml pad_default"
+
+
+def _rank_words(n: int) -> list[str]:
+    if n == 2:
+        return ["nearer", "farther"]
+    words = ["nearest"] + [f"{_ordinal(k)} nearest" for k in range(2, n)] + ["farthest"]
+    return words
+
+
+def _ordinal(k: int) -> str:
+    return f"{k}{'th' if 10 <= k % 100 <= 20 else {1: 'st', 2: 'nd', 3: 'rd'}.get(k % 10, 'th')}"
+
+
+def add_compass_suffixes(records: list[dict], pad_xy) -> list[dict]:
+    """Copies of ``records`` where every name shared by two or more placed stations (``x``/``y``
+    not None) gets " (<compass point>)", plus the distance rank when the compass point is shared
+    too. Adds ``name_base`` and ``name_suffix`` to the renamed ones; nothing else changes."""
+    out = [dict(r) for r in records]
+    placed = [r for r in out if r.get("x") is not None and r.get("y") is not None]
+    by_name: dict[str, list[dict]] = {}
+    for r in placed:
+        by_name.setdefault(r["name"], []).append(r)
+    for name, group in by_name.items():
+        if len(group) < 2:
+            continue
+        for r in group:
+            b = bearing_deg(pad_xy, r["x"], r["y"])
+            r["name_base"] = name
+            r["name_suffix"] = {"compass": compass8(b), "bearing_deg": round(b, 1),
+                                "distance_m": round(math.hypot(r["x"] - pad_xy[0],
+                                                               r["y"] - pad_xy[1]), 1)}
+        by_pt: dict[str, list[dict]] = {}
+        for r in group:
+            by_pt.setdefault(r["name_suffix"]["compass"], []).append(r)
+        for pt, same in by_pt.items():
+            if len(same) == 1:
+                same[0]["name"] = f"{name} ({pt})"
+                continue
+            same.sort(key=lambda r: (r["name_suffix"]["distance_m"], r["id"]))
+            for r, w in zip(same, _rank_words(len(same)), strict=True):
+                r["name_suffix"]["distance_rank"] = w
+                r["name"] = f"{name} ({pt}, {w})"
     return out
