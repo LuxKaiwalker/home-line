@@ -193,7 +193,10 @@ Branch: `c-integration` (merged to `main` by the orchestrator)
 
 Branch: `ws1-terrain`
 
-### G0 report (DRAFT for S sign-off, 2026-11-14T09:58Z)
+### G0 report (DRAFT for S sign-off, 2026-11-14T09:58Z; session 2 update 11:40Z)
+
+Session 2 changes to this report: D3 = A (decided), `pad_default` kept, and the pad check now
+shows **both readings** with no pass/fail picked (below and in `coverage.json pad_check`).
 
 All numbers from today's fresh downloads (`data/raw/terrain/`, cache index `cache_index.json`) and
 `data/interim/terrain/*.json`. Grids: analysis CRS (`site.yaml crs.analysis_proj`), pad = `pad_default`.
@@ -201,7 +204,7 @@ All numbers from today's fresh downloads (`data/raw/terrain/`, cache index `cach
 - **DEM:** merged DEM v3 rows 35993-44194 pulled once as 21 full-width row bands (722 MB on the
   wire), reprojected to `dem_1m.tif` (7,800 x 7,800 at 1 m, pad +/- 3,900 m), 100% valid.
   Pad elevation -3627.74 m (D0 nearest pixel: -3627.68 m).
-- **Source mask (D3 = recommended default applied, AWAITING CONFIRMATION):** union of the STAC
+- **Source mask (D3 = A, decided by the user 11:24 CET):** union of the STAC
   `mro_hirise_socet_dtms` footprint quads of the 4 pairs the merged DEM's Astropedia page lists
   (009149, 019698, 009650, 001488; 040770 is in STAC but not in the list). Quads cover 100% of the
   planning extent: HiRISE 100%, CTX/HRSC 0%, nodata 0%.
@@ -215,9 +218,17 @@ All numbers from today's fresh downloads (`data/raw/terrain/`, cache index `cach
   | --- | --- | --- | --- | --- |
   | 30 min | 1,764 m | 58.77% | 41.23% | 0.00% |
   | 60 min | 3,528 m | 68.64% | 31.36% | 0.00% |
-- **Pad check:** known (assessed + blocked) = 100% of the 30-min disc >= 90%: **pass** under the
-  data-coverage reading. Under a strict "state 0 only" reading it is 58.77%: **fail**. S/C to say
-  which reading SPEC F1 means (see Blocked).
+- **Pad check (SPEC F1: "the pad's 30-min flat disc is >= 90 % assessed"). Reading OPEN, both
+  shown, none picked:**
+  | Reading of "assessed" | Cells counted | 30-min disc | >= 90 %? |
+  | --- | --- | --- | --- |
+  | `data_coverage` | cells with data (state 0 assessed + state 1 blocked) | **100.00 %** | yes |
+  | `state0_only` | state 0 only (walkable under the 20 deg nominal limit) | **58.77 %** | no |
+
+  `validation/coverage.json pad_check`: `readings.{data_coverage,state0_only}.{pct,pass,definition}`,
+  `reading: null`, `pass: null`. When S/C decide, set `config/site.yaml coverage.pad_check_reading`
+  and run `python -m pipeline.terrain.build validation`; `pass` then follows that reading.
+  Manifest keys `validation.coverage.pad_check.readings.*` (and `.pass` = null, `.reading` = null).
 - **Blocked share is high:** 24.2% of 1 m HiRISE cells exceed 20 deg (Horn 3x3); the 5 m plane fit
   gives 23.7%, so it is not only 1 m noise. 17-20 deg ("beyond tested") is 9.1% of the 30-min disc.
   Ridge cells (> 0.75 m above the 15 m median): 1.4% of 1 m cells.
@@ -233,7 +244,7 @@ All numbers from today's fresh downloads (`data/raw/terrain/`, cache index `cach
   a different frame from the merged DEM; the merged DEM agrees with the rover.
 - **pad_default** (137.382, -4.806) is not reproduced by any centroid of the 176 drive ends with
   sol >= 4410 (approx. 2025-01-01): mean 174.8 m away, median 83.1 m, in-focus (148) mean 265.0 m,
-  in-focus median 73.9 m. Not changed (C/user decide).
+  in-focus median 73.9 m. **Kept unchanged (user, 11:24 CET).**
 
 ### Done
 
@@ -260,9 +271,70 @@ All numbers from today's fresh downloads (`data/raw/terrain/`, cache index `cach
 - Downloads total: **1,050 MB** (DEM 722, HiRISE DTMs 178, CTX 71, LRGB 47, CRISM 9, MOLA 2).
 - KATs: 27 pass (`tests/test_coverage.py`, `tests/test_coreg.py`); ruff clean; interim contracts OK.
 
+#### Session 2 (started 11:20Z)
+
+- 2026-11-14T11:36Z: **Provenance switched to WS6 `manifest.record`** (`pipeline/terrain/prov.py`
+  is now a thin wrapper; NaN/inf -> None). All 36 previous keys re-recorded with the same values
+  (new `utc`, commit d8fd99e, clean) into `data/interim/manifest/pipeline__terrain__build.json`, plus
+  5 new pad-check keys (41 keys). Value changes: only `validation.coverage.pad_check.pass`
+  (true -> null, reading open) and `file.validation/coverage.json` (new hash).
+  **`data/interim/terrain/manifest_pending.json` is deleted. C: the make web bridge
+  (`WS1_PENDING` in `tools/make_web.py`) is no longer needed** (it was already skipped because the
+  fragment exists). Test merge of all fragments: 857 keys, no duplicates; `check_h0 --fragments` OK.
+  `python -m pipeline.terrain.build manifest` re-records every WS1 key from the outputs on disk.
+- 2026-11-14T11:36Z: **CTX band step investigated (WS3 Blocked 3); fix written as
+  `data/interim/terrain/ctx_20m_v2.tif`** (+ `farfield_v2.json`). `ctx_20m.tif` is untouched.
+  Numbers are medians on the 20 m lattice (dem_1m block-averaged to 20 m), ring around the pad:
+  - Canonical `ctx_20m.tif` minus dem_1m: **+19.79 m** in the 1.5-3.9 km ring (MAD 8.07 m;
+    WS3 measured +19.75 m), +21.6 m at 0-2 km. **0.57 deg** at the 2 km handover.
+  - **The datum is not the problem:** MOLA-HRSC minus dem_1m = +1.3 m (1.5-3.9 km ring; +0.49 m
+    on 200 m block means). dem_1m, MOLA and the rover (coreg MAD 0.04 m) agree vertically.
+  - **Cause 1, horizontal misregistration of the CTX items:** the item that supplies 99 % of the
+    overlap (P21_009149...K10_057108) sits (-100 m E, +70 m N) from dem_1m. Mount Sharp rises to
+    the south, so the shift reads as height: raw item - dem_1m = +15.74 m (MAD 8.51 m); after the
+    shift, +0.42 m (MAD 3.57 m). Other items: P22_009505...D03_028335 (-20, +50) m, +13.65 -> +6.41
+    m; P15_006855 (-30, +20) m, +7.91 -> +3.42 m.
+  - **Cause 2, one-median levelling to MOLA:** each item was levelled by its median vs MOLA over
+    the whole 34 km disc (P21: -4.19 m, so it was raised 4.19 m). That median is dominated by the
+    outer rings, where CTX lies below MOLA: canonical CTX - MOLA by ring is +20.9 (0-4 km), +13.7
+    (4-8), +9.3 (8-16), +3.6 (16-24), -10.7 (24-30), -17.8 m (30-34 km). So 15.7 + 4.2 = +19.8 m.
+  - **Fix (v2):** each accepted item is co-registered to dem_1m in the overlap: horizontal MAD grid
+    search (+/-400 m, 10 m; same metric as the rover coreg), then the median offset
+    (`site.yaml ctx_v2`, `pipeline/terrain/farfield.py`). Same 3 items and first-pick order.
+  - **Result:** v2 - dem_1m = **+0.16 m** in the 1.5-3.9 km ring (MAD 3.27 m; rings 0-1/1-2/2-3/3-3.9
+    km: +1.04/+0.55/+0.76/-0.61 m): **0.005 deg** at the 2 km handover (was 0.57 deg).
+  - **Independent check against MOLA (not used in the fit):** v2 agrees better with MOLA-HRSC in
+    every ring, MAD v1 -> v2: 13.6 -> 10.7 (0-4 km), 15.6 -> 11.8 (4-8), 16.7 -> 12.4 (8-16),
+    14.6 -> 13.6 (16-24), 15.4 -> 14.6 (24-30), 26.1 -> 23.5 m (30-34). Medians v2 - MOLA: -0.8,
+    -4.8, -4.0, -4.5, -15.2, -21.1 m. At the 30 km CTX -> MOLA handover that is about 0.03 deg (v1
+    about 0.02 deg): negligible.
+  - Alternative considered: level only (no shift) to dem_1m. It removes the median step too, but
+    keeps the misregistration (P21 MAD stays 8.51 m; 120 m is about 2.3 deg of azimuth at 3 km).
+  - Valid share of the 20 m grid: 59.6 % (v1 59.7 %; shifted edges lose a few cells, never filled).
+  - **Recommendation: switch to `ctx_20m_v2.tif`.** C decides; WS3 then points
+    `config/horizon.yaml bands.ctx_20m.path` at `data/interim/terrain/ctx_20m_v2.tif`. Until then
+    `ctx_20m.tif` stays canonical and unchanged.
+- 2026-11-14T11:35Z: **Pad check shows both readings** (above). `coverage.json` was written to
+  `terrain/staged/` first and compared: `coverage.png` and `coreg.json` were byte-identical (not
+  rewritten); `coverage.json` differs only in `pad_check` and the D3 status text, so only that file
+  was swapped in (atomic rename; only `make web` reads it).
+- D3 = A recorded in `site.yaml d3` (`decided: true`); `coverage.json d3.decided` is now true.
+- `make terrain` also runs `build farfield_v2`; KATs added: pad-check readings (3), prov fragment,
+  CTX shift/offset recovery, identical item, no-overlap fallback, block mean. WS1 KATs 35 pass; full
+  suite passes; ruff clean; interim contracts OK.
+- Files changed in `data/interim/terrain/` this session: **new** `ctx_20m_v2.tif`,
+  `farfield_v2.json`; **replaced** `coverage.json` (pad_check + D3 text only); **deleted**
+  `manifest_pending.json`. No raster that WS2/WS3/WS8/WS9 read was rewritten.
+
+### Answers (WS1)
+
+- WS6 Blocked 2 (coreg sign): confirmed. `coreg.json (dx_m, dy_m)` is **added** to the MMGIS
+  positions (analysis-CRS x/y) to put them on the DEM (`pipeline/terrain/coreg.py` docstring).
+  It is (0, 0) here. Paths confirmed: `data/interim/terrain/dem_1m.tif`, `coreg.json`.
+
 ### Doing
 
-- Waiting for G0 sign-off (S) and decisions below.
+- Waiting for G0 sign-off (S) and the decisions below.
 
 ### Next
 
@@ -270,14 +342,11 @@ All numbers from today's fresh downloads (`data/raw/terrain/`, cache index `cach
 
 ### Blocked
 
-- D3 confirmation (user, G0): STAC quads applied; texture evidence above.
-- Pad-check reading (S/C): "assessed" = known data (pass, 100%) or state 0 only (fail, 58.77%)?
-- `pad_default`: keep 137.382, -4.806 or move to a stated centroid (numbers above)? User decides.
+- Pad-check reading (S/C): `data_coverage` (100.00 %, pass) or `state0_only` (58.77 %, fail)?
+  Both are shown; set `site.yaml coverage.pad_check_reading` when decided.
+- CTX band switch (C): `ctx_20m_v2.tif` recommended (above); WS3 changes its band path.
 - S3, S5 hand picks (S): positions not yet in `stations.yaml`.
-- Basemap size (C): 292 MB of PNG tiles is a lot for git/Pages. Options: drop z18 (1,406 tiles),
-  or switch to JPEG/WebP tiles (needs a brief/contract change; brief says PNG).
-- Provenance: WS6 `manifest.py` not on main; entries go to
-  `data/interim/terrain/manifest_pending.json` via `pipeline/terrain/prov.py`; re-run when it lands.
+- `cellstate_3m_conservative.tif`: waits for V1 RMSE (WS6, footprint decision by S).
 
 ### Assumptions added
 
@@ -288,6 +357,9 @@ All numbers from today's fresh downloads (`data/raw/terrain/`, cache index `cach
   `texture_check` (D3 evidence only) - all `assumed: true`; `dem_window_buffer_m` 200 (brief).
 - Non-HiRISE valid cells are coded 2 (CTX and HRSC are not separable without footprints); code 3
   is never assigned.
+- Session 2: `site.yaml ctx_v2` (reference dem_1m, shift search +/-400 m at 10 m, 20,000 sampled
+  overlap cells, min overlap 1,000 cells, else MOLA levelling) `assumed: true`;
+  `site.yaml coverage.pad_check_reading: null` (open, not an assumption: no reading is picked).
 
 ## WS2 Engine
 
