@@ -477,6 +477,40 @@ def test_cli_partial_run_keeps_other_scenarios(tmp_path):
     assert json.loads((out / "fields" / "index.json").read_text()) == first
 
 
+def test_lonlat_to_grid_xy_reproduces_the_grid_pad():
+    """grid.json pad lon/lat -> analysis-CRS xy (the grid's own crs string) = grid.json pad xy."""
+    g = {"crs": CRS, "pad": {"lon": 137.382, "lat": -4.806}}
+    x, y = fp.lonlat_to_grid_xy(g, 137.382, -4.806)
+    assert (x, y) == pytest.approx((-472.5345025279597, -284874.1962970097), abs=1e-6)
+
+
+def test_home_bearing_points_at_the_official_pad(tmp_path):
+    """D21: home_bearing aims at engine/public/pad.json `pad` (the pad in use), not grid.json's
+    pad_default; without pad.json it falls back to grid.json and says so."""
+    interim = tmp_path / "interim"
+    _synthetic_tree(interim)
+    out = tmp_path / "out"
+    rep = fp.run(interim=interim, out_root=out, scenarios=["nom_104"], with_pointer=False,
+                 manifest_fragment_dir=tmp_path / "m0", log=lambda *a: None)
+    assert rep["pad"]["source"] == "terrain/grid.json pad"
+    # official pad 20 m east, 20 m north of the grid pad (lon/lat of that xy in the grid crs)
+    lon, lat = fp.grid_lonlat_of_xy({"crs": CRS}, 20.0, 20.0)
+    pub = interim / "engine" / "public"
+    pub.mkdir(parents=True)
+    (pub / "pad.json").write_text(json.dumps({"pad": {"lon": lon, "lat": lat}}))
+    rep = fp.run(interim=interim, out_root=out, scenarios=["nom_104"], with_pointer=False,
+                 manifest_fragment_dir=tmp_path / "m1", log=lambda *a: None)
+    assert rep["pad"]["source"] == "engine/public/pad.json pad"
+    assert rep["pad"]["xy"] == pytest.approx([20.0, 20.0], abs=1e-6)
+    hb = fp.decode_png(out / "fields/nom_104/home_bearing.png", 0.01)
+    # pixel (row 10, col 13): centre (12.5, 2.5); the pad (20, 20) is at atan2(7.5, 17.5)
+    assert hb[10, 13] == pytest.approx(np.degrees(np.arctan2(7.5, 17.5)) % 360, abs=0.01)
+    assert hb[0, 0] == pytest.approx(np.degrees(np.arctan2(72.5, -32.5)) % 360, abs=0.01)
+    frag = json.loads((tmp_path / "m1" / "pipeline__export__fields_png.json").read_text())
+    assert frag["fields.nom_104/home_bearing.pad_lon"]["value"] == pytest.approx(lon)
+    assert frag["fields.nom_104/home_bearing.pad_lat"]["value"] == pytest.approx(lat)
+
+
 # ---------------------------------------------------------- real data (skipped when absent) ----
 REAL_IDX = INTERIM / "export" / "fields" / "index.json"
 REAL_T = INTERIM / "engine" / "nom_104" / "t_home.tif"
@@ -518,6 +552,36 @@ def test_real_worst_case_ge_point_on_crop():
         a = fp.decode_png(fp.encode_png(t, s), s)
         b = fp.decode_png(fp.encode_png(f, s), s)
         assert np.all(b[both] >= a[both])
+
+
+REAL_PAD = INTERIM / "engine" / "public" / "pad.json"
+
+
+@pytest.mark.skipif(not (REAL_IDX.exists() and REAL_T.exists() and REAL_PAD.exists()),
+                    reason="no real export / WS2 pad.json")
+def test_real_bearing_and_t_home_zero_at_the_official_pad():
+    """The exported home_bearing aims at pad.json's pad, and WS2's T_home = 0 cell is that pad."""
+    import rasterio
+
+    idx = json.loads(REAL_IDX.read_text())
+    sc = VARIANTS["scenarios"]["default"]
+    grid = json.loads((INTERIM / "terrain" / "grid.json").read_text())
+    pad = json.loads(REAL_PAD.read_text())["pad"]
+    px, py = fp.lonlat_to_grid_xy(grid, pad["lon"], pad["lat"])
+    g5 = grid["grids"]["fields_5m"]
+    nw = g5["nw_xy"]
+    hb = fp.decode_png(REAL_IDX.parent.parent / idx["fields"][f"{sc}/home_bearing"]["file"], 0.01)
+    for r, c in ((0, 0), (0, g5["width"] - 1), (g5["height"] - 1, 0), (700, 900)):
+        x = nw[0] + (c + 0.5) * g5["res_m"]
+        y = nw[1] - (r + 0.5) * g5["res_m"]
+        want = np.degrees(np.arctan2(px - x, py - y)) % 360
+        assert hb[r, c] == pytest.approx(want, abs=0.011), (r, c)
+    with rasterio.open(REAL_T) as ds:
+        t = ds.read(1)
+        zr, zc = map(int, np.argwhere(t == 0)[0])
+        cx, cy = ds.transform * (zc + 0.5, zr + 0.5)
+        res = ds.transform.a
+    assert abs(cx - px) <= res and abs(cy - py) <= res  # the pad is a corner of the T_home = 0 cell
 
 
 @pytest.mark.skipif(not REAL_IDX.exists() or not REAL_T.exists(), reason="no real export / WS2")
