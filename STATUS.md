@@ -173,14 +173,42 @@ Branch: `c-integration` (merged to `main` by the orchestrator)
   WS10 probe + drift. Missing: WS2 `pad.json`, `siting.png`, `siting_png.json` (F8 waits on V1);
   WS6 `validation/{v1.json,v1.svg,kats.json}`. Skipped: WS8 (running, unmerged).
 
+- 2026-11-14T14:20Z (session 3): **contracts v1.1.2** (additive; contracts/README.md "Changes"):
+  - `partner` (D20): feature `label`, `drag_note`; top-level `drag_finding` (WS2 `haul.drag_flat`;
+    keys `haul.drag.flat.*`). `card`: `drag_note`.
+  - `cellstate` + `SCHEMA_MAP`/`contracts.ts`: `terrain/cellstate_conservative.json` (+ `.png`).
+  - `pad` (C 14:58): `pad` = pad in use; optional `pad.source`, `proposal` {adopted: false, note,
+    pad, alternatives, hop_options, site_rule_version}. **WS2: write `pad_default` into `pad` and
+    the F8 result into `proposal`; until then make web withholds `pad.json`.**
+  - Format table: `fp3d/far_tex.jpg` (WS8).
+- 2026-11-14T14:20Z: **make web rules**: WS1 `cellstate_3m_conservative.tif` ->
+  `terrain/cellstate_conservative.{png,json}` (keys `terrain.cellstate_conservative.pct.*`); WS8
+  `fp3d/far_tex.jpg`; `WITHHELD` paths (reported, not copied, manifest entries dropped):
+  `pad.json`; dangling check covers `fp3d/index.json` (chunks, textures, far, far_tex, ring).
+  **Fixes:** cell-state keys are now recorded before the tracked public tree is rewritten (they
+  were always `-dirty`, WS6 audit 1); make_web's own fragment is re-staged through the
+  "file not written" filter. KATs first (`tests/test_make_web.py`, `tests/test_contracts.py`).
+- 2026-11-14T14:20Z: **Real web data committed (all owners, after WS8 session 2 merged):**
+  2,981 files, **201.5 MB** (scenarios 108.4, fields 41.9, tiles 33.1, fp3d 11.0, validation 2.7,
+  cards 2.2, terrain 1.3, nav 0.5, rest < 0.5). All validate, no dummy flag, H0 OK, no dangling
+  reference, largest file 9.95 MB. Manifest **1,052 keys**. New: WS2 con_* + cart-only partner
+  (drag_finding, 32 `haul.drag.flat.*` keys), siting.png/.json; WS1 conservative cell states
+  (blocked 45.86 % of the grid) + web-path keys; WS6 v1/v1.svg/kats; WS8 fp3d (85 files incl.
+  far_tex). Withheld: `pad.json` (5 `pad.*` siting keys left out). `FP3D_REAL_CHECK=1` F20 vitest
+  on the public tree: 17/17 pass. Git dir 103 -> 140 MB over the two publishes.
+  **Still `-dirty`: WS7 72 keys (`fields_png.py` 78cb57d), WS9 172 (7908eda).** WS8's 6
+  `fp3d.*` keys cite `data/interim/export/fp3d/index.json` (should be `fp3d/index.json`).
+
 ### Doing
 
 - —
 
 ### Next
 
-- Re-run `make web` when WS8 and WS9 merge, and after V1 (con_* scenarios, WS2 F8 pad/siting,
-  WS6 v1/kats).
+- Re-publish when WS2 writes `pad.json` per v1.1.2 (remove `pad.json` from `WITHHELD`), and when
+  WS7/WS9 re-record from clean commits.
+- WS5: without `pad.json` the console map marks `config/site.yaml pad_default` (label says
+  "pad.json not available yet") and the HUD uses the route start; nothing else reads it.
 - WS7: re-run `make fields --with-pointer`: v1.1.1 has the pointer entry, and WS7's
   `fields/index.json` (12:08 CET) predates WS9's `fields_index_nav.json` (12:16), so the published
   `fields/fix_interval_{set}.png` are not yet named in `fields/index.json` (HUD D_max).
