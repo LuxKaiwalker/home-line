@@ -14,6 +14,7 @@ import { dataUrl } from '../env'
 import { missionBudget, type MissionBudget } from '../mission/budget'
 import { loadMissionData, type MissionData } from '../mission/data'
 import { MissionMap } from '../mission/missionMap'
+import { MapsControl } from '../mission/MapsControl'
 import { boundaryOptions, defaultBoundary, legPairs, moveWaypoint, removeWaypoint, replaceWaypoint, routeLegs, type LonLat, type Waypoint } from '../mission/plan'
 import { LegRouter, type Leg } from '../mission/router'
 import { ensureManifest } from './common'
@@ -26,8 +27,13 @@ export const view: View = async (el) => {
   await ensureManifest()
   const handlers = { onAdd: (_lon: number, _lat: number) => {}, onMove: (_i: number, _lon: number, _lat: number) => {} }
   const mmap = new MissionMap(mapEl, { onAdd: (a, b) => handlers.onAdd(a, b), onMove: (i, a, b) => handlers.onMove(i, a, b) })
-  render(<MissionPanel mmap={mmap} handlers={handlers} />, panelEl)
+  const mapsEl = document.createElement('div')
+  // The switcher sits inside the MapLibre container: keep its clicks from adding waypoints.
+  for (const ev of ['mousedown', 'mouseup', 'click', 'dblclick', 'pointerdown', 'pointerup', 'touchstart', 'touchend', 'wheel']) mapsEl.addEventListener(ev, (e) => e.stopPropagation())
+  mapEl.append(mapsEl)
+  render(<MissionPanel mmap={mmap} handlers={handlers} mapsEl={mapsEl} />, panelEl)
   return () => {
+    render(null, mapsEl)
     render(null, panelEl)
     mmap.destroy()
   }
@@ -39,7 +45,7 @@ const fmtMin = (v: number | null, digits = 1) => (v === null ? '–' : `${v.toFi
 const fmtL = (v: number | null, digits = 1) => (v === null ? '–' : `${v.toFixed(digits)} L`)
 const fmtM = (v: number) => (v >= 1000 ? `${(v / 1000).toFixed(2)} km` : `${Math.round(v)} m`)
 
-function MissionPanel({ mmap, handlers }: { mmap: MissionMap; handlers: Handlers }) {
+function MissionPanel({ mmap, handlers, mapsEl }: { mmap: MissionMap; handlers: Handlers; mapsEl: HTMLElement }) {
   const [d, setD] = useState<MissionData | null>(null)
   const [error, setError] = useState<unknown>(null)
   const [step, setStep] = useState('scenarios and pad')
@@ -64,6 +70,8 @@ function MissionPanel({ mmap, handlers }: { mmap: MissionMap; handlers: Handlers
           setCredit(md.tilejson.attribution ?? BASEMAP_CREDIT)
         }
         await mmap.setBoundaryData(md)
+        // Maps switcher (bottom left of the map): satellite / topography / material.
+        render(<MapsControl mmap={mmap} src={{ grid: md.tHome, elev: md.grid.elev, resM: md.grid.resM, hasBasemap: !!md.tilejson }} />, mapsEl)
         setBoundary(defaultBoundary(boundaryOptions(md.bands, md.isochrones, md.edges), CONFIG.walkbackBudgetsMin[0]))
       },
       (e) => alive && setError(e),

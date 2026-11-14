@@ -18,6 +18,8 @@ setWorkerUrl(workerUrl)
 const EMPTY: AnyFC = { type: 'FeatureCollection', features: [] }
 const NOTHING: FilterSpecification = ['==', ['literal', 1], 0]
 
+export type MapType = 'satellite' | 'topo' | 'material'
+
 export interface MissionMapHandlers {
   onAdd: (lon: number, lat: number) => void
   onMove: (index: number, lon: number, lat: number) => void
@@ -29,6 +31,9 @@ export class MissionMap {
   private markers: Marker[] = []
   private padMarker?: Marker
   private hasBasemap = false
+  private basemapIds: string[] = []
+  private reliefUrl: string | null = null
+  private mapType: MapType = 'satellite'
   private readonly h: MissionMapHandlers
 
   constructor(container: HTMLElement, handlers: MissionMapHandlers) {
@@ -92,6 +97,7 @@ export class MissionMap {
     if (!sources.length || this.hasBasemap) return
     sources.forEach((src, i) => {
       const id = `basemap-${i}`
+      this.basemapIds.push(id)
       this.map.addSource(id, { type: 'raster', tiles: src.tiles, tileSize: src.tileSize, minzoom: src.minzoom, maxzoom: src.maxzoom, bounds: src.bounds, attribution: src.attribution })
       this.map.addLayer(
         { id, type: 'raster', source: id, ...(src.layerMinzoom !== undefined ? { minzoom: src.layerMinzoom } : {}), paint: { 'raster-opacity': THEME.basemapOpacity, 'raster-fade-duration': 0 } },
@@ -99,6 +105,33 @@ export class MissionMap {
       )
     })
     this.hasBasemap = true
+    this.applyMapType()
+  }
+
+  /** Topography / material raster over the routing grid (corners NW, NE, SE, SW); replaces the previous one. */
+  async setRelief(url: string, corners: [LonLat, LonLat, LonLat, LonLat]): Promise<void> {
+    await this.ready
+    const m = this.map
+    if (m.getLayer('relief')) m.removeLayer('relief')
+    if (m.getSource('relief')) m.removeSource('relief')
+    if (this.reliefUrl) URL.revokeObjectURL(this.reliefUrl)
+    this.reliefUrl = url
+    m.addSource('relief', { type: 'image', url, coordinates: corners })
+    m.addLayer({ id: 'relief', type: 'raster', source: 'relief', paint: { 'raster-fade-duration': 0, 'raster-resampling': 'linear' } }, 'band-fill')
+    this.applyMapType()
+  }
+
+  /** Satellite shows the HiRISE basemap; topography / material show the relief raster instead. */
+  async setMapType(t: MapType): Promise<void> {
+    await this.ready
+    this.mapType = t
+    this.applyMapType()
+  }
+
+  private applyMapType(): void {
+    const sat = this.mapType === 'satellite'
+    for (const id of this.basemapIds) if (this.map.getLayer(id)) this.map.setLayoutProperty(id, 'visibility', sat ? 'visible' : 'none')
+    if (this.map.getLayer('relief')) this.map.setLayoutProperty('relief', 'visibility', sat ? 'none' : 'visible')
   }
 
   async setBoundaryData(d: { bands: BandsFC | null; isochrones: IsochroneFC | null; edges: EdgesFC | null }): Promise<void> {
@@ -174,6 +207,7 @@ export class MissionMap {
   destroy(): void {
     this.markers.forEach((mk) => mk.remove())
     this.padMarker?.remove()
+    if (this.reliefUrl) URL.revokeObjectURL(this.reliefUrl)
     this.map.remove()
   }
 }
