@@ -341,20 +341,62 @@ def manual_check_rows(doc: dict, frames_by_id: dict | None = None) -> list[dict]
     return rows
 
 
+def _read_sheet(path) -> list[dict]:
+    """Rows of a manual-check CSV as written by this module or re-saved by a spreadsheet app
+    (UTF-8 with or without BOM; ',', ';' or tab delimiter). Requires image_id and verdict."""
+    text = Path(path).read_text(encoding="utf-8-sig")
+    head = text.splitlines()[0] if text else ""
+    delim = max((",", ";", "\t"), key=head.count)
+    rows = list(csv.DictReader(text.splitlines(), delimiter=delim))
+    cols = {c.strip() for c in (rows[0].keys() if rows else head.split(delim))}
+    missing = {"image_id", "verdict"} - cols
+    if missing:
+        raise ValueError(f"{path}: column(s) {sorted(missing)} missing (header: {head!r})")
+    return [{(k or "").strip(): (v or "").strip() for k, v in r.items()} for r in rows]
+
+
 def read_manual_verdicts(path) -> dict:
     """image_id -> manual_ok from a filled sheet: ``ok`` -> True, any other listed verdict ->
-    False, empty or ``unsure`` -> not judged. An unknown verdict raises ValueError."""
+    False, empty or ``unsure`` -> not judged. Verdicts are matched case-insensitively. An unknown
+    verdict, or one image_id with two different verdicts, raises ValueError."""
     allowed = set(hcfg.load()["manual_check_sheet"]["verdicts"])
-    out = {}
-    with open(path, newline="") as fh:
-        for r in csv.DictReader(fh):
-            v = (r.get("verdict") or "").strip()
-            if not v or v == "unsure":
-                continue
-            if v not in allowed:
-                raise ValueError(f"{r.get('image_id')}: verdict {v!r} not in {sorted(allowed)}")
-            out[r["image_id"]] = v == "ok"
+    out, seen = {}, {}
+    for r in _read_sheet(path):
+        iid, v = r.get("image_id", ""), r.get("verdict", "").lower()
+        if not iid or not v or v == "unsure":
+            continue
+        if v not in allowed:
+            raise ValueError(f"{iid}: verdict {v!r} not in {sorted(allowed)}")
+        if seen.setdefault(iid, v) != v:
+            raise ValueError(f"{iid}: two different verdicts ({seen[iid]!r}, {v!r})")
+        out[iid] = v == "ok"
     return out
+
+
+def _carry_over_sheet(out_dir: Path) -> dict:
+    """Before the sheet is rewritten: image_id -> (verdict, note) already filled in, and a copy
+    of a filled sheet in ``<out_dir>/../manual_check_backups/`` (UTC-stamped)."""
+    import shutil  # noqa: PLC0415
+    from datetime import UTC, datetime  # noqa: PLC0415
+
+    old = out_dir / "manual_check.csv"
+    if not old.exists():
+        return {}
+    try:
+        rows = _read_sheet(old)
+    except (ValueError, OSError, csv.Error, UnicodeDecodeError):
+        rows = []
+    keep = {r["image_id"]: (r.get("verdict", ""), r.get("note", "")) for r in rows
+            if r.get("image_id") and (r.get("verdict") or r.get("note"))}
+    if keep or not rows:  # filled, or unreadable: keep a copy either way
+        bdir = out_dir.parent / "manual_check_backups"
+        bdir.mkdir(parents=True, exist_ok=True)
+        stamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
+        dst, k = bdir / f"manual_check_{stamp}.csv", 1
+        while dst.exists():
+            dst, k = bdir / f"manual_check_{stamp}_{k}.csv", k + 1
+        shutil.copy2(old, dst)
+    return keep
 
 
 def write_manual_check_sheet(doc: dict, frames_json=None, horizons_dir=None,
@@ -375,11 +417,14 @@ def write_manual_check_sheet(doc: dict, frames_json=None, horizons_dir=None,
     by_id = {f["image_id"]: f for f in frames}
     hdir = Path(horizons_dir or root / "horizons")
     out_dir = Path(out_dir)
+    filled = _carry_over_sheet(out_dir)
     if out_dir.exists():
         for old in out_dir.glob("*"):
             old.unlink()
     out_dir.mkdir(parents=True, exist_ok=True)
     rows = manual_check_rows(doc, by_id)
+    for r in rows:
+        r["verdict"], r["note"] = filled.get(r["image_id"], (r["verdict"], r["note"]))
     det = {f["image_id"]: f for f in doc["frames"]}
     try:
         font = ImageFont.load_default(size=16)
@@ -487,7 +532,19 @@ def main(argv=None) -> int:
                     help="write manual_checks.json from a filled manual-check sheet and stop")
     a = ap.parse_args(argv)
     if a.import_manual:
-        v = read_manual_verdicts(a.import_manual)
+        import sys  # noqa: PLC0415
+
+        try:
+            v = read_manual_verdicts(a.import_manual)
+        except (ValueError, OSError, csv.Error, UnicodeDecodeError) as exc:
+            print(f"--import-manual: {exc}; nothing written", file=sys.stderr)
+            return 2
+        if V2_OUT.exists():
+            known = {f["image_id"] for f in json.loads(V2_OUT.read_text())["frames"]}
+            unknown = sorted(set(v) - known)
+            if unknown:
+                print(f"note: {len(unknown)} judged frame(s) not in the current v2.json "
+                      f"(kept, no effect until they return): {unknown}")
         MANUAL_CHECKS.parent.mkdir(parents=True, exist_ok=True)
         MANUAL_CHECKS.write_text(json.dumps(v, indent=1))
         print(f"{len(v)} verdicts ({sum(v.values())} ok) -> {MANUAL_CHECKS}")
