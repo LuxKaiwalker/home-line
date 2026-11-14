@@ -127,3 +127,18 @@ manual_check_sheet: {far_fail_abs_deg: 2.0, include_failed_frames: true,
                      verdicts: [ok, rim_not_visible, detector_wrong, model_wrong, unsure],
                      cut_ranges_km: [2, 5, 10, 20, 30], cut_rgba: [80, 230, 80, 255],
                      assumed: true}
+# D7 decided (user, 2026-11-14 15:01 CET): automatic detector only, no manual review; near/mid V2
+# quoted; far class reported as "not validated: far rim hidden by haze in north-facing frames".
+# The manual-check sheet above stays available but is not required.
+# validation/v2.json far_note carries the evidence numbers, each with a manifest key:
+#   far-fail frame = V2-ok frame whose far-class median error exceeds
+#     manual_check_sheet.far_fail_abs_deg;
+#   north-facing   = frame centre azimuth (site frame) within north_half_width_deg of north;
+#   rim distance   = per frame, the median predicted-skyline distance over its far columns;
+#     min and max over the far-fail frames (km);
+#   "matches terrain within ~2 km" (match_range_km, from the D7 text) = the sheet's best cut
+#     range is <= match_range_km; also counted: those whose median (detected - predicted from
+#     the cut horizon) is within +-match_tol_deg.
+# north_half_width_deg and match_tol_deg are WS3 assumptions.
+d7_far_note: {decision: "D7, user 2026-11-14 15:01 CET", north_half_width_deg: 45,
+              match_range_km: 2, match_tol_deg: 0.3, assumed: true}

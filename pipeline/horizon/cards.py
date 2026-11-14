@@ -370,8 +370,9 @@ def card_fragment(station_id: str, *, observer: dict, frame: dict | None,
         "navcam": navcam,
         "skyline_error_deg": errs,
         "skyline_error_scope": ("median |detected - predicted| skyline elevation per distance "
-                                "class on this card's Navcam frame (automatic sky detector; "
-                                "far class pending the D7 manual check)") if frame else None,
+                                "class on this card's Navcam frame (automatic sky detector, no "
+                                "manual review, D7; far class not validated: the far rim is "
+                                "hidden by haze in north-facing frames)") if frame else None,
         "panorama_png": f"{base}/panorama.png" if panorama else None,
         "landmarks": [{k: lm[k] for k in ("name", "bearing_deg", "dist_km", "kind",
                                           "above_skyline") if k in lm} for lm in landmarks],
