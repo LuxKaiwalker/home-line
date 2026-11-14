@@ -1,6 +1,6 @@
 # Data contracts (pipeline → web)
 
-**Contracts v1.1.2** (2026-11-14, additive; see "Changes" at the end). Only C changes a contract,
+**Contracts v1.1.3** (2026-11-14, additive; see "Changes" at the end). Only C changes a contract,
 by PR with a version bump and a note to every consumer (AGENTS.md rule 4). A schema's
 `x-contract-version` is the version that last changed it (1.0.0, 1.1.0, 1.1.1 or 1.1.2). Every schema carries `"x-contract-version"` and `"x-source"` (the SPEC
 section or brief it comes from).
@@ -303,3 +303,7 @@ the web tree; one there would fail the card schema).
 | `pad.schema.json` | C decision 14:58: `pad` is the pad in use (`config/site.yaml pad_default`, user 11:24), never the siting result; optional `pad.source`; optional `proposal` {`adopted` (const false), `note`, `pad` (required, same shape), `alternatives`, `hop_options`, `site_rule_version`} for the F8 result. Until WS2 writes it that way, `make web` withholds `pad.json` | WS2 (writer), WS5 (marker: pad from `pad`, never from `proposal`) |
 | `cellstate.schema.json` + `SCHEMA_MAP` | new web path `terrain/cellstate_conservative.json` (+ `.png`), same schema; `variant: conservative`; keys `terrain.cellstate_conservative.pct.*` | WS5 (optional conservative hatch) |
 | `fp3d/far_tex.jpg` (format table) | new non-JSON file, WS8 far-mesh texture; `make web` copies `data/interim/export/fp3d/far_tex.jpg` | WS8 |
+
+### v1.1.3 (2026-11-14 16:26, C, for WS2 D28)
+
+- `timeline.schema.json`, `card.schema.json`: `margin_binding` may be `"EVA duration"` (D28: turn-back = min over all constraints incl. EVA budget − T_home). Card: optional `turn_back_binding` (same enum). Consumers: WS5 (labels), WS7 (HUD binding text).
