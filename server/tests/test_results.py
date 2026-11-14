@@ -182,6 +182,7 @@ def test_official_run_record_is_synthesised_and_valid(client):
     assert rec["terrain_hash"] == IDENT.terrain_hash
     assert rec["contract_version"] == settings().contract_version
     assert rec["dummy"] is False and rec["infeasible"] is None
+    assert rec["label"] == settings().labels.precomputed == "Precomputed · official plan"
     assert "title" not in rec["inputs"] and "id" not in rec["inputs"]["pad"]  # what was hashed
     manifest = json.loads((DATA / "manifest.json").read_text())
     times = sorted(v["utc"] for v in manifest.values() if isinstance(v, dict) and "utc" in v)

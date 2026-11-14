@@ -89,6 +89,7 @@ parity:                            # F35, section 13
 
 labels:
   live: "Computed live · not part of the validated scorecard"
+  precomputed: "Precomputed · official plan"   # run_record label for origin=precomputed (team lead 22:40)
   offline: "Live planning is offline · showing precomputed plans"
   user_station: "user station · no science scoring"
 
