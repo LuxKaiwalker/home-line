@@ -14,6 +14,7 @@ import fieldsIndexSchema from '../../../contracts/fields_index.schema.json'
 import fixIntervalSummarySchema from '../../../contracts/fix_interval_summary.schema.json'
 import fixesSchema from '../../../contracts/fixes.schema.json'
 import fp3dIndexSchema from '../../../contracts/fp3d_index.schema.json'
+import goldenSchema from '../../../contracts/golden.schema.json'
 import horizonRingSchema from '../../../contracts/horizon_ring.schema.json'
 import isochronesSchema from '../../../contracts/isochrones.schema.json'
 import localisationSchema from '../../../contracts/localisation.schema.json'
@@ -83,6 +84,8 @@ export const SCHEMA_MAP: [pattern: string, schema: JsonSchema][] = [
   ['scenarios/pads/*/partner.geojson', partnerSchema],
   ['scenarios/pads/*/route_*.geojson', routeSchema],
   ['scenarios/pads/*/timeline_*.json', timelineSchema],
+  // v1.1.5: WS2 physiology golden vectors (D41)
+  ['physio/golden.json', goldenSchema],
 ]
 
 /** fnmatch-style match where `*` does not cross `/` (one glob per path segment, as in Python). */

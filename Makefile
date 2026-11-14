@@ -1,6 +1,6 @@
 # HOMELINE pipeline entry points. Stub targets print a message until the owning workstream
 # adds its CLI (ownership: AGENTS.md "Folder ownership"; this file is owned by C).
-.PHONY: all terrain engine horizons conditions conditions-fetch nav fields fp3d fp3d-check web web-plan dummy test lint validate kats h0 clean
+.PHONY: all terrain engine horizons conditions conditions-fetch nav fields fp3d fp3d-check web web-plan bundle bundle-fixture bundle-check dummy test lint validate kats h0 clean
 
 PY := uv run --no-sync python
 
@@ -39,6 +39,12 @@ web:         ## C: copy/transform data/interim -> web/public/data, merge manifes
 	$(PY) tools/make_web.py
 web-plan:    ## C: what make web would copy, and what is missing per owner (no writes)
 	$(PY) tools/make_web.py --plan
+bundle:      ## C: simulator plan bundle + world pack zips (D41, contracts/bundle/) -> data/bundles/
+	$(PY) tools/make_bundle.py
+bundle-fixture:  ## C: rebuild the committed official-pad fixture (contracts/bundle/fixtures/official_pad_v1/)
+	$(PY) tools/make_bundle.py --fixture
+bundle-check:  ## C: unzip + sha256 + schema check of the committed fixture zips
+	$(PY) tools/make_bundle.py --check contracts/bundle/fixtures/official_pad_v1/*.zip
 dummy:       ## M0: tools/make_dummy.py -> web/public/data-dummy
 	$(PY) tools/make_dummy.py --quiet
 

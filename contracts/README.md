@@ -1,6 +1,7 @@
 # Data contracts (pipeline → web)
 
-**Contracts v1.1.4** (2026-11-14, additive; see "Changes" at the end). Only C changes a contract,
+**Contracts v1.1.5** (2026-11-14, additive; see "Changes" at the end). The simulator bundle family
+(`plan.schema.json`, `bundle.schema.json`, D41) is versioned separately: `contracts/bundle/README.md`, v1.0.0. Only C changes a contract,
 by PR with a version bump and a note to every consumer (AGENTS.md rule 4). A schema's
 `x-contract-version` is the version that last changed it (1.0.0, 1.1.0 … 1.1.4). Every schema carries `"x-contract-version"` and `"x-source"` (the SPEC
 section or brief it comes from).
@@ -71,6 +72,7 @@ other workstreams read them. Each schema says where it comes from.
 | `scenarios/pads/{id}/partner.geojson` (v1.1.4) | `partner.schema.json` | its partner line (cart, D20) |
 | `scenarios/pads/{id}/route_{scenario}.geojson` (v1.1.4) | `route.schema.json` | its route |
 | `scenarios/pads/{id}/timeline_{scenario}.json` (v1.1.4) | `timeline.schema.json` | its timeline |
+| `physio/golden.json` (v1.1.5) | `golden.schema.json` | D41 physiology / margin / alarm test vectors (WS2 `pipeline/engine/golden.py`); any port must reproduce them within the stated tolerances; also in every plan bundle |
 
 The web paths `validation/coverage.json` and `validation/coreg.json` are B0's choice (WS1's
 brief names the files, not their web path); `make web` copies them there.
@@ -273,6 +275,7 @@ its run is in progress), with its manifest entries.
 | WS1 | `terrain/tiles/basemap/{z}/{x}/{y}.png` | `tiles/basemap/{z}/{x}/{y}.webp` + `tilejson.json` (transform) |
 | WS2 | `engine/public/**` (mirror of the web tree: `scenarios/`, `stations.json`, `route_*`, `timeline_*`, `trade_table.json`, `pad.json`, `siting.png`, `siting_png.json`) | same path |
 | WS2 | `engine/public/scenarios/pads/{index.json, */summary.json, */bands_*.geojson, */edges.geojson, */partner.geojson, */route_*.geojson, */timeline_*.json}` (v1.1.4, D21) | same path; nothing else under `pads/` (no isochrones, no rasters) |
+| WS2 | `engine/public/physio/golden.json` (v1.1.5, D41) | `physio/golden.json` |
 | WS3 | `horizon/validation/v2.json` | `validation/v2.json` |
 | WS3 + WS2 | `horizon/public/cards/{S}.json` + `engine/public/cards/{S}.timeline.json` | `cards/{S}.json` (merged, see "Station cards") |
 | WS3 | `horizon/public/cards/{S}/*.png` (built cards only), `horizon/public/fp3d/horizon_ring.json` | same path |
@@ -361,3 +364,15 @@ the web tree; one there would fail the card schema).
 | `card.schema.json` | landmark `display`: `label` (above the computed skyline) or `bearing_tick` (below it, bearing-only compass tick; D33, WS3 session 5) | WS5 (station card compass) |
 | `tools/make_web.py` | WS2 rules for `scenarios/pads/**` (the seven patterns only); DANGLING check for `summary` / `files` references | C |
 | dummy tree | `scenarios/pads/` set (3 rows, 2 options), `make dummy` deterministic | WS5 |
+
+### v1.1.5 (2026-11-14 ~18:15, C, for WS2 session 8 and D41/D43/D45 of set A) — additive; every new property is optional
+
+| Schema / path | Change | Consumers |
+| --- | --- | --- |
+| `golden.schema.json` (new) + `SCHEMA_MAP` `physio/golden.json` + `make web` rule (WS2 `engine/public/physio/golden.json`) | D41 golden vectors: envelope only (`version`, `kind` = `homeline_physio_golden`, `tolerances.{group}` {rel, abs ≥ 0}, `cases.{group}[]` with `id`); the case layout is WS2's, documented in the file. Referenced from every plan bundle | simulator (C# port), WS5 if shown |
+| `scenarios_index.schema.json` | optional per-scenario `headline_60` {`budget_min`, `reachable_pct`, `range_pct` (required), `basis` (e.g. `in_data`), `in_data_pct`, `label`} (D43: share over the in-data part of the 60-min circle, labelled with that part's size) | WS5 |
+| `pads_index.schema.json` (rows), `pad_summary.schema.json` | optional `feasible` {`screen_count`, `full_run_count`, `excluded_by_effort_cap_rule` (all three required in the block), `note`} (D45) | WS5 (picker) |
+| `trade_table.schema.json` | optional per-cell `in_data_pct` (60-min row, D43) | WS5 |
+
+Checked against WS2 session 8's real interim files (`scenarios/index.json`, `scenarios/pads/**`,
+`trade_table.json`, `physio/golden.json`): 0 errors.

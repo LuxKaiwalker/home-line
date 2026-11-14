@@ -87,6 +87,8 @@ SCHEMA_MAP: list[tuple[str, str]] = [
     ("scenarios/pads/*/partner.geojson", "partner.schema.json"),
     ("scenarios/pads/*/route_*.geojson", "route.schema.json"),
     ("scenarios/pads/*/timeline_*.json", "timeline.schema.json"),
+    # v1.1.5: WS2 physiology golden vectors (D41; the simulator's C# port must reproduce them)
+    ("physio/golden.json", "golden.schema.json"),
 ]
 
 # Pipeline-internal JSON (not web-facing), relative to data/interim/. Checked only with
