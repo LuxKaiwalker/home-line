@@ -152,11 +152,22 @@ def _jsonable(value: Any) -> Any:
     return json.loads(text)
 
 
+@lru_cache(maxsize=1)
+def _pytest_fragment_dir() -> Path:
+    return Path(tempfile.mkdtemp(prefix="homeline-manifest-test-"))
+
+
 def _fragment_dir(fragment_dir: str | os.PathLike[str] | None) -> Path:
+    """Explicit argument, else ``$HOMELINE_MANIFEST_DIR``, else the shared default. Under pytest
+    without either, a per-process temp dir, so test records never leak into data/interim/."""
     if fragment_dir is not None:
         return Path(fragment_dir)
     env = os.environ.get(FRAGMENT_DIR_ENV)
-    return Path(env) if env else DEFAULT_FRAGMENT_DIR
+    if env:
+        return Path(env)
+    if os.environ.get("PYTEST_CURRENT_TEST"):
+        return _pytest_fragment_dir()
+    return DEFAULT_FRAGMENT_DIR
 
 
 def _fragment_name(script_rel: str) -> str:

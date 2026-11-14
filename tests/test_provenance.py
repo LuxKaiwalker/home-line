@@ -276,3 +276,238 @@ def test_h0_check_extra_manifest_argument(tmp_path):
         {"k.a": {"value": 1, "units": "m", "file": "f", "script": "s", "commit": "c",
                  "utc": "2026-11-14T07:00:00Z"}}))
     assert check_h0.main(["--data-dir", str(tmp_path / "none"), "--fragments", str(frag)]) == 1
+
+
+# --------------------------------------------------------------------------- V1 tilt (F13)
+# Brief KAT: V1 on a synthetic 10% plane gives bias ~ 0.
+
+import xml.etree.ElementTree as ET  # noqa: E402
+
+from rasterio.transform import Affine  # noqa: E402
+
+from pipeline.validation import figures, v1_tilt  # noqa: E402
+
+SITE = yaml.safe_load((REPO / "config/site.yaml").read_text())
+VCFG = yaml.safe_load((REPO / "config/validation.yaml").read_text())["v1"]
+V1_SCHEMA = json.loads((REPO / "contracts/v1.schema.json").read_text())
+RES = 1.0
+GRADE = 0.10  # 10% plane
+PLANE_TILT = math.degrees(math.atan(GRADE))  # 5.7106 deg
+FP = 3.0  # test footprint (any odd number of 1 m cells works for the plane KATs)
+
+
+def _north_up(west, north, res=RES):
+    return Affine(res, 0.0, west, 0.0, -res, north)
+
+
+def _centres(t, cols, rows):
+    return t.c + t.a * cols, t.f + t.e * rows
+
+
+def _plane_dem(n=60, gx=GRADE, gy=0.0, x0=1000.0, y0=2000.0):
+    """North-up DEM z = gx*x + gy*y on cell centres; returns (dem, transform)."""
+    t = _north_up(x0, y0)
+    cols, rows = np.meshgrid(np.arange(n), np.arange(n))
+    xs, ys = _centres(t, cols + 0.5, rows + 0.5)
+    return (gx * xs + gy * ys).astype(np.float64), t
+
+
+def _drive_ends(t, n=60, k=25, seed=1):
+    rng = np.random.default_rng(seed)
+    x = t.c + rng.uniform(5.0, n * RES - 5.0, k)
+    y = t.f - rng.uniform(5.0, n * RES - 5.0, k)
+    return x, y
+
+
+def test_v1_config_thresholds_from_spec():
+    assert v1_tilt.confusion_thresholds() == (10.0, 20.0)
+    assert VCFG["confusion_thresholds_deg"] == [10, 20]
+
+
+def test_v1_synthetic_10pct_plane_bias_zero():
+    dem, t = _plane_dem()
+    x, y = _drive_ends(t)
+    dem_tilt = v1_tilt.dem_tilt_at(dem, t, x, y, FP)
+    np.testing.assert_allclose(dem_tilt, PLANE_TILT, atol=1e-6)
+    res = v1_tilt.compare(dem_tilt, np.full_like(dem_tilt, PLANE_TILT), (10, 20))
+    assert abs(res["bias_deg"]) < 1e-6
+    assert res["rmse_deg"] < 1e-6
+    assert res["n"] == len(x) and res["n_excluded"] == 0
+    assert res["r"] is None  # zero variance: r undefined, never invented
+
+
+@pytest.mark.parametrize("fp", [3.0, 5.0])
+def test_v1_plane_direction_and_footprint_do_not_matter(fp):
+    g = GRADE / math.sqrt(2)
+    dem, t = _plane_dem(gx=g, gy=-g)
+    x, y = _drive_ends(t)
+    np.testing.assert_allclose(v1_tilt.dem_tilt_at(dem, t, x, y, fp), PLANE_TILT, atol=1e-6)
+
+
+def test_v1_known_imu_offset_gives_bias():
+    dem, t = _plane_dem()
+    x, y = _drive_ends(t)
+    dem_tilt = v1_tilt.dem_tilt_at(dem, t, x, y, FP)
+    res = v1_tilt.compare(dem_tilt, dem_tilt + 1.0, (10, 20))  # bias = DEM - IMU
+    assert res["bias_deg"] == pytest.approx(-1.0)
+    assert res["rmse_deg"] == pytest.approx(1.0)
+
+
+def test_v1_varying_slope_correlates():
+    # z = 0.5*k*x^2: tan(slope) = k*x; a symmetric window plane fit is exact at the centre.
+    n, k = 80, 0.004
+    t = _north_up(0.0, 100.0)
+    cols, rows = np.meshgrid(np.arange(n), np.arange(n))
+    xs, _ = _centres(t, cols + 0.5, rows + 0.5)
+    dem = 0.5 * k * xs**2
+    x = np.arange(5, 75, 3) + 0.5  # cell centres, so the window is symmetric
+    y = np.full_like(x, 50.5)
+    imu = np.degrees(np.arctan(k * x))
+    dem_tilt = v1_tilt.dem_tilt_at(dem, t, x, y, FP)
+    np.testing.assert_allclose(dem_tilt, imu, atol=1e-6)
+    assert v1_tilt.compare(dem_tilt, imu, (10, 20))["r"] == pytest.approx(1.0)
+
+
+def test_v1_nodata_and_outside_are_excluded_not_filled():
+    dem, t = _plane_dem()
+    nodata = -3.4e38
+    dem[30, 30] = nodata
+    dem[10, 10] = np.nan
+    x0, y0 = _centres(t, 30.5, 30.5)
+    x1, y1 = _centres(t, 10.5, 10.5)
+    x = np.array([x0, x0 + 10, t.c - 50.0, x1])  # nodata, valid, outside the DEM, NaN
+    y = np.array([y0, y0, y0, y1])
+    tilt = v1_tilt.dem_tilt_at(dem, t, x, y, FP, nodata=nodata)
+    assert math.isnan(tilt[0]) and math.isnan(tilt[2]) and math.isnan(tilt[3])
+    assert tilt[1] == pytest.approx(PLANE_TILT)
+    res = v1_tilt.compare(tilt, np.full(4, PLANE_TILT), (10, 20))
+    assert res["n"] == 1 and res["n_excluded"] == 3
+
+
+def test_v1_rejects_rotated_transform():
+    dem, _ = _plane_dem()
+    with pytest.raises(ValueError):
+        v1_tilt.dem_tilt_at(dem, Affine(1, 0.1, 0, 0, -1, 0), [5.0], [-5.0], FP)
+
+
+def test_v1_confusion_matrix_known_answer():
+    dem = np.array([5.0, 12.0, 25.0, 8.0, 21.0, 15.0])
+    imu = np.array([4.0, 9.0, 22.0, 11.0, 19.0, 16.0])
+    cm = v1_tilt.compare(dem, imu, (10, 20))["confusion"]
+    # positive = tilt >= threshold; DEM is the prediction, IMU the reference
+    assert cm["10"] == {"tp": 3, "fp": 1, "fn": 1, "tn": 1}
+    assert cm["20"] == {"tp": 1, "fp": 1, "fn": 0, "tn": 4}
+
+
+def test_v1_stats_known_answer():
+    dem = np.array([1.0, 2.0, 3.0, 4.0])
+    imu = np.array([2.0, 2.0, 2.0, 6.0])
+    res = v1_tilt.compare(dem, imu, (10, 20))
+    assert res["bias_deg"] == pytest.approx(-0.5)  # mean(-1, 0, 1, -2)
+    assert res["rmse_deg"] == pytest.approx(math.sqrt(1.5))  # sqrt((1+0+1+4)/4)
+    assert res["r"] == pytest.approx(np.corrcoef(dem, imu)[0, 1])
+
+
+def test_v1_empty_gives_nulls():
+    res = v1_tilt.compare([], [], (10, 20))
+    assert res["n"] == 0 and res["bias_deg"] is None and res["rmse_deg"] is None
+    assert res["r"] is None
+
+
+def test_v1_tilt_from_roll_pitch():
+    assert v1_tilt.tilt_from_roll_pitch(0.0, 0.0) == pytest.approx(0.0)
+    assert v1_tilt.tilt_from_roll_pitch(10.0, 0.0) == pytest.approx(10.0)
+    assert v1_tilt.tilt_from_roll_pitch(0.0, -7.0) == pytest.approx(7.0)
+    # cos(tilt) = cos(roll) cos(pitch): 6 deg and 8 deg combine to about 9.99 deg
+    want = math.degrees(math.acos(math.cos(math.radians(6)) * math.cos(math.radians(8))))
+    assert v1_tilt.tilt_from_roll_pitch(6.0, 8.0) == pytest.approx(want)
+
+
+def test_v1_focus_filter_uses_config_aoi():
+    aoi = SITE["aoi_focus"]
+    lon = np.array([(aoi["west"] + aoi["east"]) / 2, aoi["east"] + 0.01])
+    lat = np.array([(aoi["south"] + aoi["north"]) / 2, aoi["north"]])
+    assert v1_tilt.in_focus(lon, lat).tolist() == [True, False]
+
+
+def test_v1_real_run_refuses_unset_footprint(tmp_path, monkeypatch):
+    monkeypatch.setattr(v1_tilt, "_v1_config", lambda: {**VCFG, "footprint_m": None})
+    with pytest.raises(v1_tilt.V1Blocked, match="footprint"):
+        v1_tilt.footprint_m()
+
+
+def test_v1_write_result_validates_records_and_plots(tmp_path, frag_dir):
+    dem = np.array([5.0, 12.0, 25.0, 8.0])
+    imu = np.array([4.0, 9.0, 22.0, np.nan])
+    res = v1_tilt.compare(dem, imu, (10, 20))
+    out, svg = tmp_path / "v1.json", tmp_path / "v1.svg"
+    doc = v1_tilt.write_result(res, out, svg, footprint_m=FP, dem_file="data/interim/dem.tif")
+    data = json.loads(out.read_text())
+    assert data == doc
+    errors = list(Draft202012Validator(V1_SCHEMA).iter_errors(data))
+    assert not errors, errors
+    assert data["n"] == 3 and data["n_excluded"] == 1 and len(data["points"]) == 3
+    assert data["footprint_m"] == FP
+    merged = manifest.merge(out_path=tmp_path / "manifest.json")
+    for key in ("v1.bias_deg", "v1.rmse_deg", "v1.r", "v1.n", "v1.n_excluded", "v1.footprint_m",
+                "v1.confusion.10.tp", "v1.confusion.20.tn"):
+        assert merged[key]["file"] == "validation/v1.json", key
+        assert merged[key]["script"] == "pipeline/validation/v1_tilt.py"
+    assert merged["v1.n"]["value"] == 3
+    assert merged["v1.bias_deg"]["units"] == "deg"
+    circles = ET.parse(svg).getroot().findall(f".//{{{figures.SVG_NS}}}circle")
+    assert len(circles) == 3
+
+
+def _write_plane_tif(path: Path, xc: float, yc: float, n: int = 200) -> None:
+    import rasterio
+    from rasterio.crs import CRS
+
+    t = _north_up(round(xc) - n / 2, round(yc) + n / 2)
+    cols, rows = np.meshgrid(np.arange(n), np.arange(n))
+    xs, _ = _centres(t, cols + 0.5, rows + 0.5)
+    prof = dict(driver="GTiff", width=n, height=n, count=1, dtype="float32",
+                crs=CRS.from_proj4(SITE["crs"]["analysis_proj"]), transform=t,
+                nodata=float("nan"))
+    with rasterio.open(path, "w", **prof) as dst:
+        dst.write((GRADE * xs).astype(np.float32), 1)
+
+
+def test_v1_run_on_geotiff_plane_bias_zero(tmp_path, frag_dir):
+    a = SITE["aoi_focus"]
+    lon_c, lat_c = (a["west"] + a["east"]) / 2, (a["south"] + a["north"]) / 2
+    lon = lon_c + np.array([0.0, 0.0002, -0.0002, 0.01, 0.0])
+    lat = lat_c + np.array([0.0, 0.0001, -0.0001, 0.0, 0.0])
+    lon[4] = a["east"] + 0.01  # outside the focus area: not counted at all
+    x, y = v1_tilt.lonlat_to_xy(lon, lat)
+    dem = tmp_path / "dem_1m.tif"
+    _write_plane_tif(dem, float(x[0]), float(y[0]))  # point 3 (0.01 deg east) is off the DEM
+    out = tmp_path / "v1.json"
+    doc = v1_tilt.run(dem, lon, lat, np.full(5, PLANE_TILT), out, None, footprint_m=FP)
+    assert doc["n_drive_ends"] == 5 and doc["n_in_focus"] == 4
+    assert doc["n"] == 3 and doc["n_excluded"] == 1
+    assert abs(doc["bias_deg"]) < 1e-4 and doc["rmse_deg"] < 1e-4
+    assert Draft202012Validator(V1_SCHEMA).is_valid(json.loads(out.read_text()))
+
+
+def test_v1_run_refuses_dem_in_wrong_crs(tmp_path, frag_dir):
+    import rasterio
+    from rasterio.crs import CRS
+
+    dem = tmp_path / "wrong.tif"
+    prof = dict(driver="GTiff", width=10, height=10, count=1, dtype="float32",
+                crs=CRS.from_epsg(4326), transform=_north_up(0, 0, 0.001))
+    with rasterio.open(dem, "w", **prof) as dst:
+        dst.write(np.zeros((1, 10, 10), np.float32))
+    with pytest.raises(ValueError, match="CRS"):
+        v1_tilt.run(dem, [137.39], [-4.8], [1.0], tmp_path / "v1.json", None, footprint_m=FP)
+
+
+def test_records_under_pytest_never_reach_shared_fragments(monkeypatch):
+    monkeypatch.delenv(manifest.FRAGMENT_DIR_ENV, raising=False)
+    monkeypatch.setattr(manifest, "_utcnow", lambda: AFTER_H0)
+    d = manifest._fragment_dir(None)
+    assert d != manifest.DEFAULT_FRAGMENT_DIR
+    manifest.record("t.leak", 1, "1", "x.json", "pipeline/leak_probe.py")
+    assert (d / "pipeline__leak_probe.json").exists()
+    assert not (manifest.DEFAULT_FRAGMENT_DIR / "pipeline__leak_probe.json").exists()
