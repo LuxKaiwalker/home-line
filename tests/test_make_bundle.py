@@ -265,3 +265,159 @@ def test_fixture_rebuild_from_inputs_is_byte_identical(fixture_meta, tmp_path):
     for name in fixture_meta["zips"]:
         assert (tmp_path / name).read_bytes() == (FIXTURE / name).read_bytes(), name
     assert (tmp_path / "plan.json").read_bytes() == (FIXTURE / "plan.json").read_bytes()
+
+
+# ------------------------------------------------- result trees: build_plan_bundle (F30, D53) ----
+def _tree(root: Path, files: dict[str, str]) -> Path:
+    for rel, text in files.items():
+        (root / rel).parent.mkdir(parents=True, exist_ok=True)
+        (root / rel).write_text(text)
+    return root
+
+
+def test_layered_sources_prefer_the_result_tree(tmp_path):
+    public = _tree(tmp_path / "public", {"pad.json": '{"static": true}',
+                                         "stations.json": '{"static": true}',
+                                         "clock.json": '{"same": 1}'})
+    base = mb.Sources(tmp_path / "no-interim", public)
+    res = _tree(tmp_path / "results" / "0123456789abcdef",
+                {"pad.json": '{"live": true}', "clock.json": '{"same": 1}'})
+    srcs = mb.LayeredSources(res, base)
+    assert srcs.need("pad.json").json() == {"live": True}
+    assert srcs.need("pad.json").path == "results/0123456789abcdef/pad.json"
+    assert srcs.need("pad.json").web == "pad.json"
+    assert srcs.need("stations.json").json() == {"static": True}
+    # byte-identical to the static file: the static provenance is kept
+    assert srcs.need("clock.json").path == base.need("clock.json").path
+    assert srcs.web("missing.json") is None
+
+
+def test_layered_sources_list_result_files_and_override_the_manifest(tmp_path):
+    public = _tree(tmp_path / "public", {"cards/S1.json": "{}", "cards/S2.json": "{}",
+                                         "manifest.json": json.dumps(
+                                             {"a": {"file": "x", "v": 1},
+                                              "b": {"file": "y", "v": 2}})})
+    base = mb.Sources(tmp_path / "no-interim", public)
+    assert base.web_paths("cards/", ".json") == ["cards/S1.json", "cards/S2.json"]
+    res = _tree(tmp_path / "res", {"cards/S9.json": "{}", "cards/sub/x.json": "{}",
+                                   "route_nom.geojson": "{}",
+                                   "manifest.json": json.dumps({"b": {"file": "y", "v": 3},
+                                                                "version": "1"})})
+    srcs = mb.LayeredSources(res, base)
+    assert srcs.web_paths("cards/", ".json") == ["cards/S1.json", "cards/S2.json",
+                                                 "cards/S9.json"]
+    assert srcs.web_paths("route_", ".geojson") == ["route_nom.geojson"]
+    assert srcs.manifest == {"a": {"file": "x", "v": 1}, "b": {"file": "y", "v": 3}}
+
+
+def test_result_origin_and_default_scenario(tmp_path):
+    assert mb.result_origin(tmp_path) == "precomputed"  # no run record: a static tree
+    (tmp_path / "run_record.json").write_text('{"origin": "computed_live"}')
+    assert mb.result_origin(tmp_path) == "computed_live"
+    (tmp_path / "run_record.json").write_text('{"origin": "live"}')
+    with pytest.raises(ValueError):
+        mb.result_origin(tmp_path)
+    one = mb.Sources(tmp_path / "x", _tree(tmp_path / "p1", {
+        "scenarios/index.json": '{"scenarios": [{"id": "nom"}]}'}))
+    assert mb.default_scenario(one) == "nom"
+    many = mb.Sources(tmp_path / "x", _tree(tmp_path / "p2", {
+        "scenarios/index.json": '{"scenarios": [{"id": "nom"}, {"id": "opt"}]}'}))
+    with pytest.raises(ValueError):
+        mb.default_scenario(many)
+
+
+def _interim_as_recorded(fixture: Path, out: Path) -> Path | None:
+    """data/interim as the fixture recorded it: a symlink farm over data/interim with every
+    stale verbatim-copied source restored from the fixture's copy. None when a stale source
+    cannot be restored (it was transformed, not copied)."""
+    stale = mb.stale_sources(fixture)
+    restore: dict[str, bytes] = {}
+    for name in sorted(fixture.glob("*.zip")):
+        z = zipfile.ZipFile(name)
+        for e in json.loads(z.read("index.json"))["files"]:
+            s = e.get("source")
+            if s and s["path"] in stale and s["transform"] == "copy" \
+                    and hashlib.sha256(data := z.read(e["path"])).hexdigest() == s["sha256"]:
+                restore[s["path"].removeprefix("data/interim/")] = data
+    if len(restore) != len(set(stale)):
+        return None
+
+    def farm(src: Path, dst: Path, rels: set[str]) -> None:
+        dst.mkdir(parents=True)
+        for c in sorted(src.iterdir()):
+            hits = {r for r in rels if r == c.name or r.startswith(c.name + "/")}
+            if not hits:
+                (dst / c.name).symlink_to(c)
+            elif c.name not in hits:
+                farm(c, dst / c.name, {r[len(c.name) + 1:] for r in hits})
+
+    farm(mb.INTERIM, out, set(restore))
+    for rel, data in restore.items():
+        (out / rel).write_bytes(data)
+    return out
+
+
+def _assert_same_zip(got: bytes, want: bytes, zlib_build: str | None) -> None:
+    """README rule: bytes compared when the zlib build matches the fixture's, else entries
+    and CRCs."""
+    if zlib.ZLIB_RUNTIME_VERSION == zlib_build:
+        assert got == want
+        return
+    a, b = zipfile.ZipFile(io.BytesIO(got)), zipfile.ZipFile(io.BytesIO(want))
+    assert a.namelist() == b.namelist()
+    assert [i.CRC for i in a.infolist()] == [i.CRC for i in b.infolist()]
+
+
+def test_build_plan_bundle_official_result_tree_equals_fixture(fixture_meta, tmp_path):
+    """Known answer (kit K2, plan 0.9): the official pad's result tree (web/public/data, a
+    copy of the pipeline's published files) gives the committed fixture's plan_bundle.zip.
+    Local only: the shared files come from data/interim; sources that changed since the
+    fixture was built are restored from the fixture's verbatim copies."""
+    if mb.stale_sources(FIXTURE) is None:
+        pytest.skip("pipeline inputs (data/interim) not present")
+    interim = _interim_as_recorded(FIXTURE, tmp_path / "interim")
+    if interim is None:
+        pytest.skip("inputs changed since the fixture was built: run make bundle-fixture")
+    fixture_pad = json.loads(zipfile.ZipFile(FIXTURE / "plan_bundle.zip").read("planner/pad.json"))
+    public_pad = json.loads((mb.PUBLIC / "pad.json").read_text(encoding="utf-8"))
+    if public_pad != fixture_pad and public_pad == _drop_key(fixture_pad, "screening_s"):
+        pytest.skip("D51 dropped screening_s from the published pad.json; the frozen fixture "
+                    "predates it (C rebuilds it with make bundle-fixture to re-arm this test)")
+    raw = mb.build_plan_bundle(mb.PUBLIC, interim=interim)
+    _assert_same_zip(raw, (FIXTURE / "plan_bundle.zip").read_bytes(),
+                     fixture_meta.get("zlib_runtime"))
+    plan = json.loads(zipfile.ZipFile(io.BytesIO(raw)).read("plan.json"))
+    assert plan["plan_id"] == fixture_meta["plan_id"] and plan["origin"] == "precomputed"
+
+
+# entries that carry data/interim-only inputs: source paths, provenance, D39 t*, grid origins
+INTERIM_DEPENDENT = {"index.json", "plan.json", "manifest_subset.json", "route.json",
+                     "conditions/sun.json", "conditions/storm.json"}
+
+
+def test_build_plan_bundle_without_interim_matches_fixture_data(fixture_meta, tmp_path):
+    """CI half of the known answer: from web/public/data alone (no data/interim) the bundle
+    validates (build_plan_bundle raises otherwise), has the fixture's entries, and every entry
+    but the provenance-bearing ones is byte-identical to the fixture's."""
+    res = mb.PUBLIC
+    raw = mb.build_plan_bundle(res, interim=tmp_path / "no-interim", origin="precomputed")
+    got, want = zipfile.ZipFile(io.BytesIO(raw)), zipfile.ZipFile(FIXTURE / "plan_bundle.zip")
+    assert got.namelist() == want.namelist()
+    diff = [n for n in want.namelist() if got.read(n) != want.read(n)]
+    # D51: screening_s (wall-clock) left the published pad.json; the frozen fixture keeps it.
+    # That is the only allowed difference in planner/pad.json: everything else stays equal.
+    if "planner/pad.json" in diff and _drop_key(json.loads(got.read("planner/pad.json")),
+                                                "screening_s") == _drop_key(
+            json.loads(want.read("planner/pad.json")), "screening_s"):
+        diff.remove("planner/pad.json")
+    assert set(diff) <= INTERIM_DEPENDENT, diff
+    assert json.loads(got.read("plan.json"))["plan_id"] == fixture_meta["plan_id"]
+
+
+def _drop_key(obj, key):
+    """obj with every `key` removed at any depth (D51 fixture comparison)."""
+    if isinstance(obj, dict):
+        return {k: _drop_key(v, key) for k, v in obj.items() if k != key}
+    if isinstance(obj, list):
+        return [_drop_key(v, key) for v in obj]
+    return obj

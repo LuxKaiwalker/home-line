@@ -306,6 +306,22 @@ citing other pipeline-internal `data/...` files stay.
 No file in git may exceed 50 MB (AGENTS.md rule 9). `tools/validate_contracts.py` checks the two
 data trees; CI also checks every tracked file.
 
+## Backend family
+
+The live API's contracts (F23–F36, kit K1/K4, D50–D57) are their own family, **v1.0.1, frozen at
+backend gate P0**, in `contracts/backend/` (see its README): `plan_inputs.schema.json` (user
+inputs, D52), `run_record.schema.json` (`results/{hash}/run_record.json`), `job.schema.json`,
+`telemetry.schema.json` (telemetry sample batch + state event), `openapi.yaml` (API v1, spec §5) and
+`examples/`. They sit in a subfolder, like `contracts/bundle/`, because every top-level
+`*.schema.json` here maps to a web data path. They do not change this README's 1.1.x version.
+
+- **Result hash (D57):** `sha256(canonical_inputs \0 engine_tree \0 engine_config_hash \0 terrain_hash)`,
+  first 16 hex; canonical inputs = defaults filled, `title` removed. Full rule:
+  `contracts/backend/README.md` "Result hash".
+- **Share code (D55):** `HL-` + 6 Crockford base32 characters (`^HL-[0-9A-HJKMNP-TV-Z]{6}$`).
+- **Result tree:** `results/{hash}/` = the web contracts above (same paths) + `run_record.json`.
+- Tests: `tests/test_backend_contracts.py`.
+
 ## Changes
 
 ### v1.1.0 (2026-11-14, C) — additive; every new property is optional unless in a new schema

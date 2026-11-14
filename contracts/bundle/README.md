@@ -148,3 +148,9 @@ of it.
   round-trips (unzip → validate → sha256 match) and repacks byte-identically (bytes compared when
   the zlib build matches the fixture's, else entries and CRCs). A full rebuild from `data/interim`
   is compared byte for byte locally, while the recorded source sha256s still match.
+
+## Clarification (2026-11-14, D57, no schema change)
+
+`config_hash` and `config_snapshot.json` cover `config/*.yaml` **except `backend.yaml`** (server-only
+settings: rate limits, CORS, gates). The fixture is unchanged (byte-identical rebuild). The backend's
+result hash uses the same rule (`contracts/backend/README.md`).

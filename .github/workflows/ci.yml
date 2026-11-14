@@ -1,5 +1,7 @@
 # CI for every PR and push to main (AGENTS.md "CI"). Owned by WS6 jointly with C.
 # The H0 provenance check (pipeline/provenance/check_h0.py, WS6) runs in the python job.
+# Static site only: pages.yml deploys after this workflow succeeds, so nothing backend runs here.
+# Backend tests live in server.yml (S3b, D48: the static fallback never depends on the backend).
 name: ci
 
 on:
