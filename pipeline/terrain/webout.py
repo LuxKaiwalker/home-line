@@ -201,8 +201,8 @@ def grids_doc() -> dict:
         "crs": G.analysis_crs(),
         "geographic": s["crs"]["geographic"],
         "pad": {"lon": plon, "lat": plat, "xy": [px, py],
-                "source": "config/site.yaml pad_default (pad_default is open: if it changes, every "
-                          "grid moves with it and this file is rewritten)"},
+                "source": "config/site.yaml pad_default (kept unchanged by the user, 2026-11-14 "
+                          "11:24 CET; if it ever changes, every grid moves with it)"},
         "lattice": "pixel edges at pad_xy + k * res_m (k integer) for every grid; the pad is a "
                    "pixel corner; rows run north to south, columns west to east",
         "pixel_is": "area (GDAL transform = NW corner of pixel (0, 0))",

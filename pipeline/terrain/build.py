@@ -9,6 +9,10 @@
     python -m pipeline.terrain.build validation  # coverage.json/.png, coreg.json (contracts v1.0.0)
     python -m pipeline.terrain.build grid      # grid.json (grids, lon/lat bounds, height datum)
     python -m pipeline.terrain.build all
+    python -m pipeline.terrain.build farfield_v2  # ctx_20m_v2.tif + farfield_v2.json
+    python -m pipeline.terrain.build manifest     # re-record every WS1 manifest key from outputs
+    python -m pipeline.terrain.build validation_staged  # validation files to terrain/staged/
+    python -m pipeline.terrain.build conservative # after V1 (WS6)
 
 Every displayed number goes to the provenance manifest (``record``).
 """
