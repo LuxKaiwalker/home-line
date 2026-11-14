@@ -226,11 +226,12 @@ def test_pad_check_pass_follows_a_decided_reading(reading, expected):
         webout.pad_check(_PAD_DISCS, budget_min=30, min_pct=90, reading="assessed")
 
 
-def test_pad_check_reading_is_open_in_config():
-    """Nobody has decided the reading: the config must not pick one (session 2 instruction)."""
+def test_pad_check_reading_in_config_is_the_decided_one():
+    """Decision log 2026-11-14 12:37 (user, for S/C): "assessed" = cells with data (walkable or
+    blocked), not unknown -> data_coverage."""
     from pipeline.terrain import grid as G
 
-    assert G.site()["coverage"]["pad_check_reading"] is None
+    assert G.site()["coverage"]["pad_check_reading"] == "data_coverage"
 
 
 def test_prov_record_goes_through_ws6_fragment(tmp_path, monkeypatch):

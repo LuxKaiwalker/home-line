@@ -20,7 +20,7 @@ siting:                            # added 13 Nov (gap found by WS2); F8 rule
 coverage:
   pad_disc_assessed_min_pct: 90  # else move pad by the F8 rule
   source_edge_buffer_m: 20       # edges this close to a source boundary are labelled "data"
-  pad_check_reading: null        # OPEN (S/C): data_coverage (assessed + blocked) | state0_only; null = report both, pass null
+  pad_check_reading: data_coverage  # decided (user for S/C, 12:37 CET): cells with data (assessed + blocked); state0_only still reported
 coreg: {search_m: 200, step_m: 2, metric: MAD}
 slope:
   method: horn_3x3
