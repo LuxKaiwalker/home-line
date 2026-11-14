@@ -1,6 +1,8 @@
 # 🤖 Agent kit — start here
 
 > 🛠️ **Fresh run.** This build restarts from H0 in the repo `home-line` (`LuxKaiwalker/home-line`), which replaces the `nasa-space-app` repo named in the H0 bootstrap below. Agents may read code in `~/coding/homeline` (tag `pre-h0-reference`) as a reference only, but must never copy its data, outputs, figures, numbers or decisions. Decisions from that run are withdrawn. Shared data lives in `~/hl-data` (symlinked as `data/`). Live build progress is tracked in Notion and in `STATUS.md`.
+>
+> ⏸️ **2026-11-14 14:19 (user):** WS9's position work (F21, F22) and WS10 (X8, X9) are **suspended softly (optional add-on)**: no new sessions; merged work stays (SPEC §2.4, D19).
 
 > 📌 **What this is.** Everything a coding agent needs to build HOMELINE from H0, plus the rules that keep ten agent sessions from colliding. The parent page is the spec (SPEC). The subpages are the agent-ready material.
 >

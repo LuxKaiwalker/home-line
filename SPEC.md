@@ -88,13 +88,15 @@ Each feature has an ID used in tickets. Tiers: **MVP** (gate G1, Sat 19:00), **C
 | X3 | Radio line of sight to the rover | Stretch | WS3 | — |
 | X4 | Helmet-display replay | Stretch | WS5 | — |
 | X5 | THEMIS soft-ground penalty | Stretch | WS1 | — |
-| F21 | Dead-reckoning simulation: Monte Carlo error ellipses, fix events, fix-interval map | Core | WS9 | `nav/*.json`, `fields/fix_interval_*.png` |
-| F22 | Skyline-matching navigation fix on real Navcam (promoted from X6) | Core (after V2) | WS9 | `localisation/*.json`, `nav/fixes.json` |
-| X8 | Visual-odometry drift calibration on Curiosity drives | Conditional: go/no-go at H2 after a data probe | WS10 | `vo/*.json` |
-| X9 | MGL-style ground-image matching (stereo panorama → top-down view → HiRISE match) | Stretch, after G2 only | WS10 | `vo/orthomatch_*.json` |
+| F21 | Dead-reckoning simulation: Monte Carlo error ellipses, fix events, fix-interval map | Optional add-on (suspended 2026-11-14 14:19, user) | WS9 | `nav/*.json`, `fields/fix_interval_*.png` |
+| F22 | Skyline-matching navigation fix on real Navcam (promoted from X6) | Optional add-on (suspended 2026-11-14 14:19, user) | WS9 | `localisation/*.json`, `nav/fixes.json` |
+| X8 | Visual-odometry drift calibration on Curiosity drives | Optional add-on (suspended 2026-11-14 14:19, user) | WS10 | `vo/*.json` |
+| X9 | MGL-style ground-image matching (stereo panorama → top-down view → HiRISE match) | Optional add-on (suspended 2026-11-14 14:19, user) | WS10 | `vo/orthomatch_*.json` |
 | X7 | 3D free walk (keyboard or touch, slope-limited speed, O₂ drain) | Stretch, realistically not built | WS8 | — |
 
 **Cut order**, first to last: X9 → X7 → X8 → X4 → X3 → X2 → X1 → F20 (3D falls back to a link to the 2D HUD) → F22 (fixes at rover and stations only) → F21 (fall back to F19's flat drift rule; keep the uncertainty circle) → cuff-card PDF (keep HTML) → suit masses 80/120 (keep 104) → V2 from 30 stops to 10. If F18 itself slips, ship the **HUD-on-card fallback** (§2.3).
+
+> ⏸️ **2026-11-14 14:19 (user):** X9, X8, F22 and F21 are now **out of core** (optional add-ons, see §2.4). The core uses their cut-order fallbacks: F19's flat drift rule with the uncertainty circle, and fixes at the rover pad and surveyed stations only.
 
 **Never cut:** F1 cell states, bands, co-registration, V1, one skyline overlay, F10 at nominal mass, the RAD tripwire, F16.
 
@@ -299,6 +301,9 @@ $$
 
 **Simulated drift** (assumed, labelled; this flat rule is the **fallback**. When F21 lands by G2, its Monte Carlo ellipses replace it, see §2.4):
 
+> ⏸️ **Core plan since 2026-11-14 14:19:** this flat rule and the circle are the default; F21 and F22 are optional add-ons (§2.4). Core fixes are the rover pad and surveyed stations only.
+
+
 - σ grows at **2% of distance walked** since the last fix (`config/hud.yaml`), with a floor of 5 m.
 - Fixes reset σ: at the rover pad → 2 m; at a surveyed station → 5 m; an F22 skyline fix → its measured error.
 - A HUD line shows "Position: dead reckoning · ±N m · last fix M min ago".
@@ -321,6 +326,8 @@ $$
 - **Acceptance:** camera height 1.7 ± 0.1 m above the terrain; the rendered skyline at each station within 0.5° of the computed horizon.
 
 ### F22 — Skyline-matching navigation fix (core; formerly X6, full spec in §2.4)
+
+> ⏸️ **2026-11-14 14:19:** optional add-on, not core (§2.4). The core HUD takes fixes at the rover pad and surveyed stations only.
 
 1. Take a Navcam frame from a known drive end, hiding the true position.
 2. Compute predicted horizons on a 50 m candidate grid over 1 km² around a prior position, then refine at 10 m around the best three.
@@ -356,6 +363,16 @@ If F18 slips past G2: every station card gets a static HUD strip over the Navcam
 | F22 skyline-matching fix (see §2.4) | 3–4 | WS9 |
 
 ## 2.4 Navigation block (F21, F22, X8, X9)
+
+> ⏸️ **Suspended softly, 2026-11-14 14:19 CET (user).** Odometry and position determination (F21, F22, X8, X9) are no longer core; they are **optional add-ons**, done only if time allows. No new jobs start on them. Merged work stays in place and keeps working (WS9 nav outputs, `/nav`, the HUD ellipse, the WS10 VO results, `nav.yaml` `vo:`), labelled as an optional add-on. The core does not depend on it.
+>
+> **Why** (numbers from STATUS.md):
+> 1. **F22 does not constrain position at this site.** 35 frames: median error 657 m, none within 100 m; station frames S1/S2/S4 788/280/966 m, none passes the 10 m gate. The far skyline is not seen (haze) in 21 north-facing far-fail frames (D7 manual check pending).
+> 2. **F21's fix-interval headline (median 50.7 m) is dominated by the fragmented terrain**, not the drift model. N's review of the model conventions is pending (reserve set to 0; does σ_b per hour of rover driving carry over to a walker?).
+> 3. **X8 is a rover analogue only:** it works only at 256²; the reference positions (MMGIS drive ends) are not independent of Curiosity's own VO; the plausibility thresholds were proposed by the agent and are unconfirmed by N.
+> 4. **X9** was always a stretch goal (after G2 only).
+>
+> **Core fallbacks (the default plan):** F19's flat drift rule plus the uncertainty circle instead of F21's ellipses (§2.1 cut order); fixes at the rover pad and surveyed stations only instead of F22.
 
 > 🧭 **The idea.** Rovers already solve "where am I?" without GPS with a two-part loop: continuous odometry that drifts, plus periodic fixes by matching camera views to orbital maps. Perseverance does both on board; Mars Global Localization has been used in operations since Feb 2026 and reaches about 25 cm. HOMELINE adapts the same loop to a walking crew: **suit odometry (concept) + periodic map-matching fixes**. The accuracy of both feeds straight into the homeline, the HUD margins and a new planning number: **how often the crew must take a fix**.
 >
@@ -408,6 +425,8 @@ If F18 slips past G2: every station card gets a static HUD strip over the Navcam
 - **Acceptance:** on a synthetic elevation model with a known observer, the position is recovered within one grid step.
 
 ### HUD integration (extends F18/F19)
+
+> ⏸️ **2026-11-14 14:19:** optional add-on. In the core plan the HUD keeps F19's circle and flat drift rule, with fixes at the rover pad and surveyed stations only.
 
 - **Position panel:** "Odometry ±N m · next fix due in M m · last fix: _type_, K min ago". M = D_max at the estimated position minus distance walked since the last fix.
 - **Take fix:** in playback, a button (or an automatic prompt when a fix is due) applies the next fix event. At stations with an F22 result, the HUD shows the real Navcam photo with the matched skyline and the measured error; the ellipse shrinks and the margins recover.
@@ -839,6 +858,7 @@ Keep the partner line, the storm, the scorecard and any near-field number out of
 > | D14 | HUD default level | Minimal, expanded one click away |
 > | D15 | Dead-reckoning parameter sets | Low / medium / high as in §2.4, medium default |
 > | D18 | Reviewer allocation for WS9 and WS10 | WS9: N (model), C (skyline fix), D (HUD); WS10: N, only on a go |
+> | D19 | Odometry and position determination (F21, F22, X8, X9) | **2026-11-14 14:19 CET, user: suspended softly → optional add-ons** (reasons in §2.4). No new jobs; merged work stays, labelled optional. Core: F19 flat drift rule + uncertainty circle, fixes at the rover pad and surveyed stations only |
 >
 > Decided items are removed from the open table below and written into the plan. **Still open:** D3, D7, D8, D16 and D17 are settled at the event by the rules in their rows.
 >

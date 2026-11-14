@@ -935,6 +935,8 @@ Branch: `ws8-3d`
 
 ## WS9 Navigation
 
+**⏸️ Suspended (optional add-on), 2026-11-14 14:19, user:** F21/F22 out of core (SPEC §2.4, D19); no new jobs; merged work stays. Core: F19 drift rule + station fixes.
+
 Branch: `ws9-nav`
 
 ### Done
@@ -1068,6 +1070,8 @@ Branch: `ws9-nav`
 
 ## WS10 Visual odometry
 
+**⏸️ Suspended (optional add-on), 2026-11-14 14:19, user:** X8/X9 out of core (SPEC §2.4, D19); no new jobs; merged VO results stay.
+
 Branch: `ws10-vo`
 
 ### Done
@@ -1150,3 +1154,4 @@ Branch: `ws10-vo`
 | 2026-11-14 12:37 | D7 sky detection | Automatic + manual check (SPEC default); the user reviews the 39-frame sheet in data/interim/horizon/validation/manual_check/; import with `python -m pipeline.validation.v2_skyline --import-manual <csv>` | User |
 | 2026-11-14 12:42 | pages.yml review (WS5) | Approved by C: CI-gated, real-only, dist excludes data-dummy (verified), 150 MB dist; deploy blocked only on repo visibility/plan (user) | C |
 | 2026-11-14 14:13 | Canonical CTX band | `terrain/ctx_20m_v2.tif` (each CTX item co-registered to dem_1m; v2 − dem_1m +0.16 m vs +19.79 m; better agreement with MOLA–HRSC in every ring). WS3 switches its CTX path; `ctx_20m.tif` kept for reference | C |
+| 2026-11-14 14:19 | Odometry and position determination (WS10 X8/X9, WS9 F21/F22) | **Suspended softly → optional add-on** (SPEC §2.4, D19): no new jobs; merged work stays, labelled optional. Reasons: F22 median 657 m on 35 frames, S1/S2/S4 788/280/966 m, none passes the 10 m gate; F21 fix-interval median 50.7 m dominated by fragmented terrain, N's model review pending; X8 rover analogue only (256², MMGIS not independent, thresholds unconfirmed); X9 stretch. Core: F19 flat drift rule + uncertainty circle, fixes at the rover pad and surveyed stations only | User |

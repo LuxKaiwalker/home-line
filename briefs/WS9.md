@@ -1,5 +1,7 @@
 # 🧭 WS9 brief — Navigation
 
+> ⏸️ **Suspended softly, 2026-11-14 14:19 CET (user): optional add-on.** F21 and F22 are no longer core (SPEC §2.4, D19). No new sessions start on this brief. Merged work stays in place and keeps working (nav outputs, `/nav`, the HUD ellipse, `nav.yaml`), labelled as an optional add-on. The core uses F19's flat drift rule + uncertainty circle and fixes at the rover pad and surveyed stations only.
+
 **Mission:** the navigation layer. Simulated suit dead reckoning with Monte Carlo error ellipses and fix events, the fix-interval map, skyline-matching fixes on Curiosity's real Navcam frames, and the HUD and `/nav` integration.
 
 **Human reviewers:** N (model), C (skyline fix), D (HUD) · **Features:** F21, F22 · **SPEC:** §2.4, §6.2
