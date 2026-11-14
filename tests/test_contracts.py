@@ -435,7 +435,7 @@ def test_pads_index_exactly_one_official(tmp_path, change):
 
 @pytest.mark.parametrize("change, ok", [
     (lambda d: d.pop("dummy"), False),                      # index file
-    (lambda d: d.pop("official"), False),
+    (lambda d: d.pop("official"), True),                     # top-level id optional
     (lambda d: d["pads"][1].pop("summary"), False),          # picker row needs its summary
     (lambda d: d["pads"][1].update(summary="../x.json"), False),
     (lambda d: d["pads"][1].update(official=True), False),   # a picker row is not official
@@ -461,7 +461,8 @@ def test_pad_summary_ws2_shape_validates(tmp_path):
 @pytest.mark.parametrize("change, ok", [
     (lambda d: d["headline"]["30"].update(range_pct=[16.4]), False),     # [con, opt]
     (lambda d: d["headline"]["30"].update(range_pct=[1, 2, 3]), False),
-    (lambda d: d["headline"]["30"].pop("budget_min"), False),
+    (lambda d: d["headline"]["30"].pop("budget_min"), True),  # the key gives the budget
+    (lambda d: d["headline"]["30"].pop("range_pct"), False),
     (lambda d: d["headline"].pop("60"), False),
     (lambda d: d["headline"]["30"].update(reachable_pct=101), False),
     (lambda d: d["pad"].pop("lat"), False),

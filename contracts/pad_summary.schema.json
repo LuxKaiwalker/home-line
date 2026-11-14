@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "homeline/contracts/pad_summary.schema.json",
   "title": "scenarios/pads/{id}/summary.json",
-  "description": "D21 parking option (picker pad) summary (C file layout 2026-11-14 16:17): the pad, its D21 rank and score (feasible-EVA count), tiebreak values, the headline at the 30- and 60-min walkback budgets (reachable % of the assessed flat disc, range [conservative, optimistic]) and the route summary, all for the nominal scenario of scenarios/pads/index.json. The 60-min reachable % may be null (60-min disc leaves the grid); a range end may be null. id equals the folder name, and each headline key equals its budget_min (checked by tools/validate_contracts.py). Producer WS2 (pipeline/engine/padpick.py); manifest keys pads.{id}.*. Added in v1.1.4; extra keys allowed.",
+  "description": "D21 parking option (picker pad) summary (C file layout 2026-11-14 16:17): the pad, its D21 rank and score (feasible-EVA count), tiebreak values, the headline at the 30- and 60-min walkback budgets (reachable % of the assessed flat disc, range [conservative, optimistic]) and the route summary, all for the nominal scenario of scenarios/pads/index.json. The 60-min reachable % may be null (60-min disc leaves the grid); a range end may be null. id equals the folder name, and each headline key equals its budget_min when given (checked by tools/validate_contracts.py). Producer WS2 (pipeline/engine/padpick.py); manifest keys pads.{id}.*. Added in v1.1.4; extra keys allowed.",
   "x-contract-version": "1.1.4",
   "x-source": "SPEC §11 D21; STATUS Decision log 2026-11-14 16:17",
   "type": "object",
@@ -87,7 +87,8 @@
         "properties": {
           "budget_min": {
             "type": "number",
-            "exclusiveMinimum": 0
+            "exclusiveMinimum": 0,
+            "description": "the budget, min (WS2 writes it; when present it must equal the key)"
           },
           "reachable_pct": {
             "type": [
@@ -114,7 +115,6 @@
           }
         },
         "required": [
-          "budget_min",
           "reachable_pct",
           "range_pct"
         ]

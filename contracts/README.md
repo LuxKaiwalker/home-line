@@ -224,16 +224,17 @@ scenario file, the HUD, the 3D view and the station cards) is the candidate with
 EVAs. The picker offers the next candidates (+ `pad_default` when not among them) at the default
 scenario's suit (nominal, 104 kg) only:
 
-- `scenarios/pads/index.json` (**index**, `dummy` required): `official` (id), `scenario`,
-  `score_kind`, `order`, `pads[]` rows {`id`, `lon`, `lat`, `elev_m`, `rank`, `score`
+- `scenarios/pads/index.json` (**index**, `dummy` required): `pads[]` rows {`id`, `lon`, `lat`, `elev_m`, `rank`, `score`
   (feasible-EVA count), `official`, `tiebreak` {name: value}; optional `kind`, `picker`,
-  `summary`, `screen_score`, `screen_rank`, `label`, and on the official row `files` / `route`}.
-  **Exactly one row has `official: true`, and its id equals `official`** (checked by
+  `summary`, `screen_score`, `screen_rank`, `label`, and on the official row `files` / `route`};
+  optional top-level `official` (id), `scenario`, `score_kind`, `order`, `decision`, `screening`.
+  **Exactly one row has `official: true`, and its id equals `official` when given** (checked by
   `validate_contracts.py`); a row with `picker: true` is not official and names its
   `summary` (`scenarios/pads/{id}/summary.json`). Ids are plain file names.
 - `scenarios/pads/{id}/summary.json`: `id` (= folder), `pad` {lon, lat, elev_m}, `rank`, `score`,
-  `headline` {"30": {`budget_min`, `reachable_pct`, `range_pct` [con, opt]}, "60": …} (key =
-  `budget_min`; the 60-min % and either range end may be null), `route` {`stops`, `total_min`, …}
+  `headline` {"30": {`reachable_pct`, `range_pct` [con, opt], `budget_min`}, "60": …} (key =
+  the budget; WS2 also writes `budget_min`, which must then equal the key; the 60-min % and either
+  range end may be null), `route` {`stops`, `total_min`, …}
   or null; optional `kind`, `scenario`, `official`, `score_kind`, `tiebreak`, `files`, `note`.
 - `bands_{suit}.geojson`, `edges.geojson`, `partner.geojson`, `route_{scenario}.geojson`,
   `timeline_{scenario}.json` next to it: the same contracts as the main files. **No isochrones

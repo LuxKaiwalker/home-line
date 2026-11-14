@@ -200,20 +200,23 @@ Branch: `c-integration` (merged to `main` by the orchestrator)
   `fp3d.*` keys cite `data/interim/export/fp3d/index.json` (should be `fp3d/index.json`).
 
 - 2026-11-14T16:45Z (session 4): **contracts v1.1.4** (additive; contracts/README.md "Changes",
-  section "Rover parking options"). KATs first (`tests/test_contracts.py` +43, `tests/test_make_web.py` +3).
-  - New `pads_index.schema.json` (`scenarios/pads/index.json`, index: `dummy` required; top-level
-    `official` id; rows `id`, `lon`, `lat`, `elev_m`, `rank`, `score`, `official`, `tiebreak`
-    required, a `picker: true` row is not official and names its `summary`) and
-    `pad_summary.schema.json` (`scenarios/pads/*/summary.json`: `id`, `pad`, `rank`, `score`,
-    `headline` "30"/"60" {`budget_min`, `reachable_pct` (may be null), `range_pct` [con, opt]},
-    `route` (or null)). Written from WS2's real files; extra keys allowed.
+  section "Rover parking options"). KATs first (`tests/test_contracts.py` +44, `tests/test_make_web.py` +3).
+  - New `pads_index.schema.json` (`scenarios/pads/index.json`, index: `dummy` and `pads`
+    required; rows `id`, `lon`, `lat`, `elev_m`, `rank`, `score`, `official`, `tiebreak`
+    required, a `picker: true` row is not official and names its `summary`; top-level `official`
+    id optional) and `pad_summary.schema.json` (`scenarios/pads/*/summary.json`: `id`, `pad`,
+    `rank`, `score`, `headline` "30"/"60" {`reachable_pct` (may be null), `range_pct` [con, opt],
+    `budget_min` optional = key}, `route` (or null)). Written from WS2's real files; extra keys
+    allowed; required = what WS5's parsers need (WS5's provisional fixture in `pads.test.ts`,
+    without top-level `official` and `budget_min`, validates too).
   - "Exactly one official row (= `official`)", "summary id = folder" and "headline key =
     budget_min" are `SEMANTIC_CHECKS` in `tools/validate_contracts.py` (the browser checker's
     keyword subset has no `contains`; WS5's `parsePadsIndex` enforces the official count too).
   - `SCHEMA_MAP` (+ `web/src/data/contracts.ts`, same order): `scenarios/pads/index.json`,
     `scenarios/pads/*/summary.json`, `scenarios/pads/*/bands_*.geojson` -> bands,
     `*/edges.geojson` -> edges, `*/partner.geojson` -> partner, `*/route_*.geojson` -> route,
-    `*/timeline_*.json` -> timeline. New pytest: no two patterns of either map overlap (glob
+    `*/timeline_*.json` -> timeline. `make web-plan` picks up all 25 WS2 pads files (WS2: 63
+    present, 0 missing). New pytest: no two patterns of either map overlap (glob
     intersection per segment); vitest: every `PAD_SCHEMA_PATTERNS` row is mapped to its shape.
   - `pad.schema.json`: `pad` = D21 official pad; optional WS2 extras (`pad.id/score_kind/
     tiebreak/f8_score`, alternatives `id/kind/score_basis/d21_rank/tiebreak/picker/f8_score/note`,

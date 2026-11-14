@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "homeline/contracts/pads_index.schema.json",
   "title": "scenarios/pads/index.json",
-  "description": "D21 \"Rover parking options\" ranking table (user 2026-11-14 16:14; C file layout 16:17). One row per ranked pad, the official pad included (rank 1, the pad of pad.json and of every main scenario file); the other rows with picker: true have their own files under scenarios/pads/{id}/ (summary.json, bands_{suit}.geojson, edges.geojson, partner.geojson, route_{scenario}.geojson, timeline_{scenario}.json; nominal suit only, no isochrones or fields). Exactly one row has official: true, and its id equals the top-level official (checked by tools/validate_contracts.py; the browser checker's keyword subset cannot count). Index file: requires \"dummy\". Producer WS2 (pipeline/engine/padpick.py). Manifest keys pads.{id}.*. Added in v1.1.4; extra keys allowed.",
+  "description": "D21 \"Rover parking options\" ranking table (user 2026-11-14 16:14; C file layout 16:17). One row per ranked pad, the official pad included (rank 1, the pad of pad.json and of every main scenario file); the other rows with picker: true have their own files under scenarios/pads/{id}/ (summary.json, bands_{suit}.geojson, edges.geojson, partner.geojson, route_{scenario}.geojson, timeline_{scenario}.json; nominal suit only, no isochrones or fields). Exactly one row has official: true, and its id equals the top-level official when that is given (checked by tools/validate_contracts.py; the browser checker's keyword subset cannot count). Index file: requires \"dummy\". Producer WS2 (pipeline/engine/padpick.py). Manifest keys pads.{id}.*. Added in v1.1.4; extra keys allowed.",
   "x-contract-version": "1.1.4",
   "x-source": "SPEC §11 D21; STATUS Decision log 2026-11-14 16:14 and 16:17",
   "type": "object",
@@ -14,7 +14,7 @@
     "official": {
       "type": "string",
       "pattern": "^(?!\\.\\.?$)[A-Za-z0-9_.-]+$",
-      "description": "id of the official pad row (the row with official: true)"
+      "description": "id of the official pad row (optional; WS2 writes it). When present it must equal the id of the row with official: true"
     },
     "scenario": {
       "type": "string",
@@ -187,7 +187,6 @@
   },
   "required": [
     "dummy",
-    "official",
     "pads"
   ]
 }
