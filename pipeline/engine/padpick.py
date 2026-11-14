@@ -192,24 +192,37 @@ def station_access(grid_v: Grid, table, st: dict, cands: list[Candidate], radius
     prc = np.array([c.rc for c in cands], dtype=np.int64).reshape(-1, 2)
     assign = np.full(len(cands), -1, dtype=np.int64)
     runs: list[AccessRun] = []
-    covered = np.zeros(len(cells), bool)  # cell in the SCC of an earlier run
-    crc = np.array([(r, c) for _, r, c in cells], dtype=np.int64).reshape(-1, 2)
     n_runs = 0
-    for k, (dist, r, c) in enumerate(cells):
-        if (assign >= 0).all():
+    it = access_runs(grid_v, table, cells)
+    while not (assign >= 0).all():
+        nxt = next(it, None)
+        if nxt is None:
             break
-        if covered[k] or not grid_v.passable[r, c]:
-            continue
-        fwd_f, rev_f = access_fields(grid_v, table, (r, c))
+        dist, (r, c), fwd_f, rev_f = nxt
         fwd, rev = fwd_f.t_min, rev_f.t_min
         n_runs += 1
-        scc = np.isfinite(fwd[crc[:, 0], crc[:, 1]]) & np.isfinite(rev[crc[:, 0], crc[:, 1]])
-        covered |= scc
         reach = np.isfinite(fwd[prc[:, 0], prc[:, 1]]) & (assign < 0)  # walk home to P exists
         if reach.any():
             assign[reach] = len(runs)
             runs.append(AccessRun((r, c), dist, fwd.astype(np.float32), rev.astype(np.float32)))
     return StationAccess(st["id"], runs, assign, len(cells), n_runs)
+
+
+def access_runs(grid_v: Grid, table, cells: list[tuple]):
+    """The screening's access-run loop (module doc, step 2), shared with ``station_cell``:
+    the access cells (``access_cells``) nearest first; impassable cells and cells in the
+    strongly connected component of an earlier run (same reach) are skipped; for every other
+    cell the station Dijkstra pair is run and (dist_m, (row, col), forward, reverse) yielded.
+    Lazy: a caller that stops iterating runs no further pair."""
+    covered = np.zeros(len(cells), bool)  # cell in the SCC of an earlier run
+    crc = np.array([(r, c) for _, r, c in cells], dtype=np.int64).reshape(-1, 2)
+    for k, (dist, r, c) in enumerate(cells):
+        if covered[k] or not grid_v.passable[r, c]:
+            continue
+        fwd_f, rev_f = access_fields(grid_v, table, (r, c))
+        fwd, rev = fwd_f.t_min, rev_f.t_min
+        covered |= np.isfinite(fwd[crc[:, 0], crc[:, 1]]) & np.isfinite(rev[crc[:, 0], crc[:, 1]])
+        yield dist, (r, c), fwd_f, rev_f
 
 
 def access_fields(grid_v: Grid, table, cell, tmax_min: float | None = None):
@@ -220,14 +233,37 @@ def access_fields(grid_v: Grid, table, cell, tmax_min: float | None = None):
             dijkstra.return_field(grid_v, table, cell, tmax_min=tmax_min))  # fmt: skip
 
 
-def station_cell(grid_v: Grid, station: dict, radius_m: float) -> tuple[float, int, int] | None:
-    """The station's access cell for its own fields: the nearest assessed cell within
-    radius_m that is passable in grid_v (the screening's first run), as (dist_m, row, col);
-    None if there is none."""
-    for dist, r, c in access_cells(grid_v, station["lon"], station["lat"], radius_m):
-        if grid_v.passable[r, c]:
-            return dist, r, c
+def _station_run(grid_v: Grid, table, station: dict, radius_m: float):
+    """The station's access run for its own fields: (dist_m, (row, col), forward, reverse), or
+    None. Rule (W4, E5): the screening's run loop (``access_runs``) with the main terrain as
+    the target. The D21 screening and access.find take the nearest assessed cell within the
+    radius that has a walk home to the pad; station fields have no pad, so the target is the
+    terrain any pad on it reaches: the accepted cell is the first one whose forward field
+    reaches more than half of the passable cells of grid_v. If one strongly connected component
+    holds more than half of the passable cells (the main terrain; 83-94 % on the real grid),
+    that is exactly "a walk to the main terrain exists", so a sealed pocket (a few cells cut
+    off from the rest) is skipped and the cell equals access.find's for any pad on the main
+    terrain (equal distances: row/col here, T_home in access.find)."""
+    n_pass = int(np.count_nonzero(grid_v.passable))
+    cells = access_cells(grid_v, station["lon"], station["lat"], radius_m)
+    for dist, rc, fwd_f, rev_f in access_runs(grid_v, table, cells):
+        if 2 * int(np.count_nonzero(np.isfinite(fwd_f.t_min))) > n_pass:
+            return dist, rc, fwd_f, rev_f
     return None
+
+
+def station_cell(grid_v: Grid, station: dict, radius_m: float, table=None,
+                 ) -> tuple[float, int, int] | None:  # fmt: skip
+    """The station's access cell for its own fields, as (dist_m, row, col); None if no
+    assessed cell within radius_m has a walk to the main terrain (``_station_run``). grid_v:
+    the scenario's passability; table: its physio.GradeTable (default: the D21 scenario's,
+    variants.yaml d21.scenario)."""
+    if table is None:
+        from . import physio
+
+        table = physio.grade_table(physio.scenario_params(settings_from_config().scenario))
+    run = _station_run(grid_v, table, station, radius_m)
+    return None if run is None else (run[0], run[1][0], run[1][1])
 
 
 def station_fields(grid: Grid, station: dict, scenario="nom_104", settings: Settings | None = None,
@@ -236,19 +272,25 @@ def station_fields(grid: Grid, station: dict, scenario="nom_104", settings: Sett
     access cell to every cell, reverse = from every cell to the access cell (T_home-style field
     towards the station). station: lon, lat (WS1 record). scenario: a scenario id (with crew
     overrides, F26) or physio.Params. settings: padpick.Settings (access_radius_m; default from
-    config). The access cell is ``station_cell`` (the D21 screening's first run). Raises
-    physio.MissingInput if the station has no passable assessed cell within the radius."""
+    config). The access cell is ``station_cell`` (the screening's run loop; sealed pockets
+    skipped, W4). The cell is chosen on unbounded fields; tmax_min bounds the returned pair.
+    Raises physio.MissingInput if the station has no such cell within the radius."""
     from . import physio
 
     s = settings or settings_from_config()
     p = scenario if isinstance(scenario, physio.Params) else physio.scenario_params(
         scenario, crew=crew)  # fmt: skip
     gv = grid.with_nogo(p.nogo_deg)
-    cell = station_cell(gv, station, s.access_radius_m)
-    if cell is None:
+    tab = physio.grade_table(p)
+    run = _station_run(gv, tab, station, s.access_radius_m)
+    if run is None:
         raise physio.MissingInput(f"station {station.get('id')}: no passable assessed cell "
-                                  f"within {s.access_radius_m} m")  # fmt: skip
-    return access_fields(gv, physio.grade_table(p), (cell[1], cell[2]), tmax_min)
+                                  f"within {s.access_radius_m} m with a walk to the main "
+                                  "terrain")  # fmt: skip
+    _, cell, fwd, rev = run
+    if tmax_min is None:
+        return fwd, rev
+    return access_fields(gv, tab, cell, tmax_min)
 
 
 def matrices(acc: list[StationAccess], cands: list[Candidate]):
