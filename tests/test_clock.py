@@ -29,7 +29,7 @@ from pipeline.conditions.config import REPO, h0_utc, load_conditions, site_latlo
 CFG = load_conditions()
 CLOCK = CFG["clock"]
 LON = CLOCK["gale_lon_east_deg"]
-LAT, _PAD_LON = site_latlon()
+LAT, PAD_LON = site_latlon()
 
 
 def utc(s: str) -> datetime:
@@ -333,10 +333,75 @@ def test_clock_json(tmp_path):
     assert marstime.lmst_h(start, LON) == pytest.approx(CLOCK["eva_start_lmst_h"], abs=1e-3)
     assert utc(eva["end_utc"]) - start == timedelta(minutes=eva["eva_min"])
     ss = utc(eva["sunset_flat_utc"])
-    assert sun.sun_position(ss, LAT, LON).elevation_deg == pytest.approx(0.0, abs=0.01)
+    assert sun.sun_position(ss, LAT, PAD_LON).elevation_deg == pytest.approx(0.0, abs=0.01)
     assert eva["t_dark_min"] == pytest.approx((ss - start) / timedelta(minutes=1), abs=0.02)
     assert len(eva["sun_series"]) == int(eva["eva_min"] // CLOCK["sun_series_step_min"]) + 1
     sols = [s["msl_sol"] for s in obj["sols"]]
     assert sols == sorted(set(sols)) and len(sols) >= 2
     p = clockfile.write_clock(obj, tmp_path, fragment_dir=tmp_path / "m")
     assert json.loads(p.read_text())["h0"]["lmst"] == h0["lmst"]
+
+
+# ------------------------------------------------------------------ D21: official pad as the site
+
+
+def test_site_reads_official_pad_json(tmp_path):
+    from pipeline.conditions import config
+
+    p = tmp_path / "pad.json"
+    p.write_text(json.dumps({"dummy": False, "pad": {"lon": 137.401783, "lat": -4.77748,
+                                                     "id": "rank1"}}))
+    s = config.pad_site(p)
+    assert (s["lat"], s["lon"]) == (-4.77748, 137.401783)
+    assert s["fallback"] is False and s["id"] == "rank1"
+    assert "pad.json" in s["source"]
+
+
+def test_site_falls_back_to_pad_default_and_says_so(tmp_path):
+    from pipeline.conditions import config
+
+    s = config.pad_site(tmp_path / "missing.json")
+    pd = config.load("site")["pad_default"]
+    assert (s["lat"], s["lon"]) == (float(pd["lat"]), float(pd["lon"]))
+    assert s["fallback"] is True
+    assert "pad_default" in s["source"] and "missing" in s["note"]
+
+
+def test_site_refuses_pad_json_without_pad(tmp_path):
+    from pipeline.conditions import config
+
+    p = tmp_path / "pad.json"
+    p.write_text(json.dumps({"dummy": False}))
+    with pytest.raises(KeyError):
+        config.pad_site(p)  # present but broken: no silent fallback
+
+
+def test_clock_site_is_the_official_pad():
+    from pipeline.conditions import clockfile, config
+
+    obj = clockfile.build_clock()
+    s = config.pad_site()
+    site = obj["site"]
+    assert (site["lat_deg"], site["sun_lon_east_deg"]) == (s["lat"], s["lon"])
+    assert site["lon_east_deg"] == LON  # LMST stays on the MSL label longitude
+    assert site["pad_source"] == s["source"] and site["pad_fallback"] is s["fallback"]
+    if config.PAD_JSON.exists():
+        pad = json.loads(config.PAD_JSON.read_text())["pad"]
+        assert (site["lat_deg"], site["sun_lon_east_deg"]) == (pad["lat"], pad["lon"])
+    # the flat-horizon sunset and the sun series are at the pad
+    eva = obj["eva"]
+    start, ss = utc(eva["start_utc"]), utc(eva["sunset_flat_utc"])
+    assert sun.sun_position(ss, s["lat"], s["lon"]).elevation_deg == pytest.approx(0.0, abs=0.01)
+    t, _, az, el = eva["sun_series"][10]
+    p = sun.sun_position(start + timedelta(minutes=t), s["lat"], s["lon"])
+    assert (az, el) == (pytest.approx(p.azimuth_deg, abs=1e-3),
+                        pytest.approx(p.elevation_deg, abs=1e-3))
+
+
+def test_observer_daylight_at_its_own_position():
+    from pipeline.conditions import clockfile
+
+    prof = {"observer_id": "X", "az_step_deg": 0.25, "elevation_deg": [5.0] * 1440,
+            "meta": {"lon": 137.38, "lat": -4.81}}
+    assert clockfile.observer_latlon(prof, (-4.0, 137.0)) == (-4.81, 137.38)
+    assert clockfile.observer_latlon({"meta": {}}, (-4.0, 137.0)) == (-4.0, 137.0)

@@ -54,7 +54,8 @@ horizons:
 clock:
   algorithm: "Mars24 (Allison and McEwen 2000)"
   gale_lon_east_deg: 137.4085      # WS4: docs/discovery.md §4.5/§7, MSL label LMST = Mars24 at 137.4085 E (137.39 gave a +4.4 s bias); G to review
-  site: "config/site.yaml pad_default"   # WS4: lat/lon for the Gale sun, sunrise and sunset (stations pass their own)
+  site: "data/interim/engine/public/pad.json pad"   # D21: lat/lon of the official pad (WS2) for the sun, sunrise, sunset, t_dark (stations use their own)
+  site_fallback: "config/site.yaml pad_default"     # WS4: used only if pad.json is missing; clock.json site.pad_fallback says so
   sun_horizon_elevation_deg: 0.0   # WS4 (assumed): flat-horizon sunrise/sunset = sun centre at 0 deg; station daylight uses the F12 horizon
   mars_year_epoch_utc: "1955-04-11T00:00:00Z"  # MY 1 starts at Ls 0 on 1955-04-11 (Clancy et al. 2000)
   msl_landing_utc: "2012-08-06T05:17:57Z"   # Curiosity touchdown, spacecraft event time (NASA/JPL); mission sol 0, for msl_sol()
