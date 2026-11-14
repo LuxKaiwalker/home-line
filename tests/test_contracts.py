@@ -32,7 +32,7 @@ def test_schema_is_valid_draft_2020_12(path):
     Draft202012Validator.check_schema(schema)
     assert schema["$schema"] == "https://json-schema.org/draft/2020-12/schema"
     assert schema["$id"] == f"homeline/contracts/{path.name}"
-    assert schema["x-contract-version"] in ("1.0.0", "1.1.0")  # v1.1.0 is additive
+    assert schema["x-contract-version"] in ("1.0.0", "1.1.0", "1.1.1")  # 1.1.x is additive
     for key in ("title", "description", "x-source"):
         assert schema.get(key)
 
@@ -142,3 +142,88 @@ def test_interim_tree_validates(tmp_path):
     _write(tmp_path, "horizon/navcam_frames.json", {"frames": [{"image_id": "x"}]})
     report = vc.run(tmp_path / "d", tmp_path / "dd", interim_dir=tmp_path)
     assert any("navcam_frames.schema.json" in e for e in report.errors)
+
+
+# --------------------------------------------------------------------------- v1.1.1
+
+
+def errs(name: str, doc) -> list[str]:
+    return [e.message for e in Draft202012Validator(load(name)).iter_errors(doc)]
+
+
+def test_card_margin_binding_may_be_null():
+    """v1.1.1: a station with no route or no access cell (S1) has a null binding."""
+    doc = {"navcam": {"sol": None, "image_id": None, "url_local": None, "overlay_png": None},
+           "skyline_error_deg": {"near": None, "mid": None, "far": None}, "panorama_png": None,
+           "landmarks": [], "timeline": {"arrive": None, "leave": None, "turn_back": None},
+           "margin_binding": None, "contingency": "No access cell within 50 m."}
+    assert errs("card.schema.json", doc) == []
+    assert errs("card.schema.json", doc | {"margin_binding": "none"})
+    doc["access"] = {"lon": None, "lat": None, "dist_m": None, "reason": "sealed",
+                     "walk_in": None, "radius_m": 50.0, "rule": "nearest walkable"}
+    assert errs("card.schema.json", doc) == []
+    doc["access"]["walk_in"] = {"dist_m": 2.1, "modelled": True}
+    assert errs("card.schema.json", doc)  # the walk-in is never modelled
+
+
+def test_stations_access_extras_validate():
+    walk = {"dist_m": 2.1, "modelled": False, "rise_m": 0.59, "mean_slope_deg": 15.9,
+            "max_slope_deg": 15.9, "max_terrain_slope_deg": 23.65}
+    st = {"id": "S4", "name": "x", "lon": 137.408864, "lat": -4.785707, "value": 0.5,
+          "objective": "", "tasks": [], "dwell_min": 30, "t_home_min": {"nom_104": 59.93},
+          "in_partner_line": False, "card": "cards/S4.json", "access_radius_m": 50.0,
+          "access_lon": 137.408842, "access_lat": -4.785679, "access_dist_m": 2.1,
+          "access_reason": None,
+          "access": {"nom_104": {"lon": 137.408842, "lat": -4.785679, "dist_m": 2.1,
+                                 "t_home_min": 59.93, "o2_home_L": 77.72, "reason": None,
+                                 "walk_in": walk}}}
+    assert errs("stations.schema.json", [st]) == []
+    st["access"]["nom_104"]["dist_m"] = "far"
+    assert errs("stations.schema.json", [st])
+
+
+def test_timeline_and_route_access_dist():
+    row = {"t_min": 48.44, "event": "arrive", "station": "S4", "o2_left_L": 445.9,
+           "t_home_min": 59.93, "margin_min": 25.97, "access_dist_m": 2.1}
+    assert errs("timeline.schema.json", [row]) == []
+    route = {"type": "FeatureCollection", "features": [{
+        "type": "Feature", "geometry": {"type": "LineString", "coordinates": [[0, 0], [1, 1]]},
+        "properties": {"leg": 1, "from": "pad", "to": "S4", "to_access_dist_m": 2.1}}]}
+    assert errs("route.schema.json", route) == []
+
+
+def test_horizon_ring_ws3_layout_and_dummy():
+    n = 4
+    ws3 = {"observer": {"id": "pad", "lon": 137.382, "lat": -4.806, "x": -472.5, "y": -284874.2,
+                        "eye_height_m": 1.7, "z_ground_m": -3627.7, "z_eye_m": -3626.0,
+                        "source": "WS1 grid.json pad"},
+           "az_step_deg": 90.0, "min_range_m": 3700.0, "max_range_m": 80000.0, "crs": "+proj=eqc",
+           "azimuth_convention": "deg clockwise from grid north", "radius_m": 3396190.0,
+           "notes": "null = unknown", "az_deg": [0.0, 90.0, 180.0, 270.0],
+           "elev_deg": [1.09, None, 0.5, 2.0], "dist_m": [53200.0, None, 9000.0, 41000.0],
+           "z_m": [-2194.1, None, -3500.0, -2200.0], "east_m": [0.0, None, 0.0, -41000.0],
+           "north_m": [53200.0, None, -9000.0, 0.0],
+           "source": ["mola_hrsc_200m", None, "ctx_20m", "mola_hrsc_200m"]}
+    assert errs("horizon_ring.schema.json", ws3) == []
+    assert all(len(ws3[k]) == n for k in ("elev_deg", "dist_m", "z_m", "east_m", "north_m"))
+    dummy = Path(__file__).resolve().parents[1] / "web/public/data-dummy/fp3d/horizon_ring.json"
+    assert errs("horizon_ring.schema.json", json.loads(dummy.read_text())) == []
+    assert errs("horizon_ring.schema.json", [ws3])  # an array is no longer a ring
+    assert errs("horizon_ring.schema.json", {k: v for k, v in ws3.items() if k != "elev_deg"})
+
+
+def test_fields_index_pointer_entry_on_its_own_grid():
+    """v1.1.1 (WS7 proposal): pointer.png on WS2's 3 m grid with its stencil; the 5 m entries
+    keep using the top-level grid."""
+    idx = {"dummy": False, "bounds": [137.319359, -4.868421, 137.444641, -4.743579],
+           "width": 1480, "height": 1480, "res_m": 5.0, "fields": {
+               "nom_104/t_home": {"file": "fields/nom_104/t_home.png", "scale": 0.1,
+                                  "units": "min", "scenario": "nom_104"},
+               "nom_104/pointer": {"file": "fields/nom_104/pointer.png", "scale": 1,
+                                   "units": "move", "scenario": "nom_104",
+                                   "bounds": [137.32, -4.86, 137.44, -4.75], "width": 2468,
+                                   "height": 2468, "res_m": 3.0,
+                                   "stencil": [[-1, 0], [1, 0], [0, -1], [0, 1], [-2, 1]]}}}
+    assert errs("fields_index.schema.json", idx) == []
+    idx["fields"]["nom_104/pointer"]["stencil"] = [[-1, 0, 1]]
+    assert errs("fields_index.schema.json", idx)

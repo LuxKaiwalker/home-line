@@ -59,5 +59,46 @@ real_run_ws9:                      # run.py real (WS2 route + timeline + T_home,
   skyline_prior: standalone        # SPEC F22 standalone prior (true + standalone_prior_offset_m, random direction, monte_carlo.seed)
   unknown_slope: no_slip           # route samples on unknown slope get no slip term (fraction reported)
   field_grid: "pad_default +/- site.yaml planning_radius_m at hud.yaml field_png.res_m"   # fix_interval PNG grid (SPEC §6.1 planning extent); D_max sampled nearest from the T_home grid
-  skyline_bands: {dem_1m: data/interim/terrain/dem_1m.tif, ctx_20m: data/interim/horizon/bands/ctx_20m.tif, mola_hrsc_200m: data/interim/horizon/bands/mola_hrsc_200m.tif}   # WS1 / WS3 bands.py outputs
+  skyline_bands: horizon.yaml       # the horizon engine's bands: horizon.yaml bands.{dem_1m,ctx_20m,mola_hrsc_200m}.path (WS1 canonical, C 11:15)
   assumed: true
+  skyline_fix_gate:                # decided (C, STATUS Decision log 2026-11-14 11:58), not assumed
+    rule: "a station's skyline result becomes a position fix only if error_m <= tolerance; else the surveyed station fix is kept"
+    tolerance_from: skyline_fix.refine_grid_m   # the F22 KAT tolerance: recovered within one grid step
+
+# --- WS10 X8 visual odometry constants (moved verbatim from vo.py PENDING_VO_CONFIG at WS10's
+# request, STATUS WS10 Blocked; read by pipeline/navigation/vo.py load_vo_config). X8-internal:
+# none of these reaches the F21 model. All assumed (WS10), for N to review.
+vo:
+  resolution: downsampled          # D16: the 256 x 256 drive frames
+  sequence_tag: TRAV               # imageid tag of Curiosity's drive (VO) frames
+  pointing_tol_deg: 5.0            # drop pairs whose mast az/el differ from the run's median
+  sift_nfeatures: 0                # 0 = OpenCV default (no cap)
+  ratio_test: 0.8                  # Lowe ratio, L-R and frame-to-frame
+  max_reproj_px: 1.0               # stereo: both CAHVOR reprojections within this
+  min_range_m: 0.5
+  max_range_m: 25.0                # 256^2 depth error ~ Z^2/(f b) * 0.25 px = 0.8 m at 25 m
+  pnp_reproj_px: 1.5               # RANSAC threshold on the linearised left(k+1) pixels
+  pnp_iterations: 2000
+  pnp_confidence: 0.999
+  min_inliers: 15
+  max_step_m: 3.0                  # a VO step longer than this is rejected (poses ~1 m apart)
+  max_step_deg: 45.0               # a VO step rotating more than this is rejected
+  plausible:                       # D16 stop-rule per-drive checks, proposal for N
+    max_drift_pct: 10.0            # MER/MSL VO design requirement: 10 % of distance
+    max_heading_drift_deg: 10.0
+    min_vo_step_fraction: 0.8      # at least 80 % of the steps measured by VO, not bridged
+  assumed: true
+
+# --- Optional F21 parameter sets: recorded, NOT run by `make nav` and NOT a default -----------
+optional_sets:
+  curiosity_vo_256:
+    label: "rover analogue: a rover is not an astronaut"
+    status: "pending N review (WS10 STATUS: N to confirm sigma_b per hour of rover driving)"
+    source: "WS10 X8 stereo VO at 256^2, data/interim/vo/vo_report.json calibrated_set (5 drives, sols 5041-5073)"
+    sigma_s: 0.00638               # RMS along-track scale error over 5 drives
+    sigma_b_deg_h: 1.248           # RMS heading drift / drive duration, per hour of ROVER driving (~1 m/min), not walking
+    psi0_deg: null                 # not measured by VO
+    psi_rw_deg_sqrt_min: null      # not measured by VO
+    slip: null                     # not measured by VO
+    missing_terms_from: medium     # WS10: "WS9 keeps its assumed values" for the unmeasured terms
+    assumed: true

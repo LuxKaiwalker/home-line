@@ -1,8 +1,8 @@
 # Data contracts (pipeline → web)
 
-**Contracts v1.1.0** (2026-11-14, additive; see "Changes" at the end). Only C changes a contract,
+**Contracts v1.1.1** (2026-11-14, additive; see "Changes" at the end). Only C changes a contract,
 by PR with a version bump and a note to every consumer (AGENTS.md rule 4). A schema's
-`x-contract-version` is the version that last changed it (1.0.0 or 1.1.0). Every schema carries `"x-contract-version"` and `"x-source"` (the SPEC
+`x-contract-version` is the version that last changed it (1.0.0, 1.1.0 or 1.1.1). Every schema carries `"x-contract-version"` and `"x-source"` (the SPEC
 section or brief it comes from).
 
 Source of truth: SPEC.md §6, §6.1, §6.2. Schemas are JSON Schema draft 2020-12.
@@ -10,7 +10,7 @@ Validate with `uv run python tools/validate_contracts.py` (CI runs it on every P
 `--interim data/interim` for the pipeline-internal files).
 
 Where SPEC fixes a structure, the schema follows it key for key. Where SPEC names a file but not
-its structure, the schema is deliberately loose (`partner`, `route`, `horizon_ring`, `coverage`,
+its structure, the schema is deliberately loose (`partner`, `route`, `coverage`,
 `rems`, `clock`, and the open parts of `v1`, `v2`, `donki`, `fp3d_index`); the producing workstream
 proposes the structure to C by PR, and C bumps the version.
 
@@ -110,6 +110,14 @@ object-shaped files may carry an optional `"dummy"`. CI fails if any file under
 
 - Every field PNG is listed in `fields/index.json` (`bounds [w, s, e, n]`, `width`, `height`,
   `res_m`, `fields.{name}: {file, scale, units, scenario}`).
+- **`pointer` uses its own grid (v1.1.1).** `fields/{scenario}/pointer.png` is WS2's way-home
+  pointer (`engine/{scenario}/pointer.tif`) on WS2's native 3 m route grid (`grid.json route_3m`),
+  not the 5 m fields grid: a move index cannot be resampled. Its entry carries its own `bounds`,
+  `width`, `height`, `res_m` (3) and a `stencil` ([drow, dcol] per move, from WS2
+  `pointer_offsets.json`); `scale` 1, `units` "move"; counts = move index k, next pixel =
+  (row + drow[k], col + dcol[k]), rows north to south; A = 0 = no move (pad or unreached).
+  Writer: WS7 `pipeline/export/fields_png.py --with-pointer`. An entry without its own grid keys
+  uses the top-level grid.
 
 ### 3D files — `fp3d/` (SPEC §6.1, F20; brief WS8)
 
@@ -124,10 +132,40 @@ object-shaped files may carry an optional `"dummy"`. CI fails if any file under
 Byte order, row order and the height-scale/offset convention are not fixed by SPEC; WS8 records
 them in `fp3d/index.json`. Total 3D download ≤ `config/hud.yaml` `performance.budget_3d_mb`.
 
-### Station images — `cards/{station}/panorama.png`, `overlay.png` (brief WS3)
+### Station images — `cards/{station}/panorama.png`, `overlay.png`, `navcam.png` (brief WS3)
 
 PNG. `panorama.png` is the predicted panorama strip; `overlay.png` is a transparent skyline overlay
-on the Navcam frame. Paths are referenced from `cards/{station}.json`.
+on the Navcam frame (`navcam.png`). Paths are referenced from `cards/{station}.json`.
+
+### Station cards — `cards/{station}.json` (v1.1.1, merged by `make web`)
+
+C decision 2026-11-14 11:42: two producers, one file. WS3 writes
+`horizon/public/cards/{S}.json` (`navcam`, `skyline_error_deg`, `panorama_png`, `landmarks`, plus
+`observer`, `provisional`, `skyline_error_scope`, `landmarks_note`); WS2 writes
+`engine/public/cards/{S}.timeline.json` (`timeline`, `margin_binding`, `contingency`, plus
+`scenario`, `on_route`, `margin_min`, `t_home_min`, `o2_home_L`, `science`, `access`). `make web`
+merges them key by key (nothing computed) and records the parts in `parts`. A station lacking
+either part gets **no card** (reported missing under the absent part's owner; its images are not
+copied). Parts that disagree (station id, a key set by both, science point, or WS3's observer not
+at WS2's access cell) stop the run. The `*.timeline.json` parts never reach the web tree.
+
+Access block (`access`, user decision 11:40, access-cell rule): `lon`/`lat` of the access cell
+(null = none within `radius_m`), `dist_m` (= `access_dist_m`, science point to access cell),
+`t_home_min`/`o2_home_L` from the access cell, `reason` when there is none, `walk_in` (straight
+line, **not modelled**: `dist_m`, `rise_m`, `mean_slope_deg`, `max_slope_deg`,
+`max_terrain_slope_deg`), `radius_m`, `rule`. `science` is the unmoved science point. A station
+with no access cell or not on the route has null `timeline` times and `margin_binding: null`.
+
+### Horizon ring — `fp3d/horizon_ring.json` (v1.1.1, WS3 layout)
+
+One object: `observer` {`lon`, `lat`, `eye_height_m` required; `id`, `x`, `y`, `z_ground_m`,
+`z_eye_m`, `source`}, `az_step_deg`, `max_range_m`, `az_deg[]`, `elev_deg[]` (required), and
+optional parallel arrays `dist_m[]`, `z_m[]` (areoid height of the horizon point), `east_m[]`,
+`north_m[]` (offsets from the observer, analysis CRS), `source[]` (band), plus `min_range_m`
+(only terrain beyond it counts; the near mesh covers the rest), `crs`, `azimuth_convention`
+(deg clockwise from grid north), `radius_m`, `notes`. Every array has one value per azimuth;
+null = unknown. `elev_deg` includes the curvature drop d²/2R. The M0 dummy ring (no distances) is
+the minimal form; WS8's `ring.ts` reads both.
 
 ### Basemap tiles — `tiles/basemap/{z}/{x}/{y}.webp` + `tiles/basemap/tilejson.json` (v1.1.0)
 
@@ -188,7 +226,8 @@ its run is in progress), with its manifest entries.
 | WS1 | `terrain/tiles/basemap/{z}/{x}/{y}.png` | `tiles/basemap/{z}/{x}/{y}.webp` + `tilejson.json` (transform) |
 | WS2 | `engine/public/**` (mirror of the web tree: `scenarios/`, `stations.json`, `route_*`, `timeline_*`, `trade_table.json`, `pad.json`, `siting.png`, `siting_png.json`) | same path |
 | WS3 | `horizon/validation/v2.json` | `validation/v2.json` |
-| WS3 | `horizon/public/cards/{station}.json`, `horizon/public/cards/{station}/*.png`, `horizon/public/fp3d/horizon_ring.json` | same path |
+| WS3 + WS2 | `horizon/public/cards/{S}.json` + `engine/public/cards/{S}.timeline.json` | `cards/{S}.json` (merged, see "Station cards") |
+| WS3 | `horizon/public/cards/{S}/*.png` (built cards only), `horizon/public/fp3d/horizon_ring.json` | same path |
 | WS4 | `conditions/{rad,clock,rems,donki}.json` | `conditions/…` |
 | WS6 | `validation/v1.json`, `v1.svg`, `kats.json` | `validation/…` |
 | WS7 | `export/fields/index.json`, `export/fields/{scenario}/*.png` | `fields/…` |
@@ -198,7 +237,10 @@ its run is in progress), with its manifest entries.
 
 Manifest: every fragment in `data/interim/manifest/` is merged (WS6 `manifest.merge`); WS1's
 `terrain/manifest_pending.json` is merged as WS1's fragment until WS1 records through
-`pipeline.provenance.manifest.record`. Fragments made by the dummy generator are refused.
+`pipeline.provenance.manifest.record`. Fragments made by the dummy generator are refused. An entry
+whose `file` is a web path that this run does not write (a skipped owner, a missing output, a card
+not built) is left out, as is a skipped owner's entry citing its `data/interim/` source; entries
+citing other pipeline-internal `data/...` files stay.
 
 ### Size
 
@@ -224,3 +266,16 @@ D9 slider: the range and step are config values (`config/conditions.yaml leash.d
 that range (its first and last `D_allow_mGy` are the range). There is no
 `leash.d_allow_slider_mgy` key.
 
+### v1.1.1 (2026-11-14, C) — additive; every new property is optional
+
+| Schema | Change | Consumers |
+| --- | --- | --- |
+| `card.schema.json` | `margin_binding` may be **null** (no route or no access cell, e.g. S1); optional `station`, `scenario`, `on_route`, `margin_min`, `t_home_min`, `o2_home_L`, `science` {lon, lat}, `access` {lon, lat, dist_m, t_home_min, o2_home_L, reason, walk_in, radius_m, rule}, `observer`, `provisional`, `skyline_error_scope`, `landmarks_note`, `parts`, `dummy`; navcam `stop_id`, `dist_to_observer_m`, `credit`; landmark `kind`, `above_skyline`. Merged by `make web` (above) | WS5 (station card, cuff: render a null binding as "none"), WS7 |
+| `stations.schema.json` | `access_radius_m`, `access_lon`, `access_lat`, `access_dist_m`, `access_reason` (default scenario), `access` {scenario: access record} (WS2 Q12). `lon`/`lat` stay the science point; `t_home_min` is from the access cell | WS5, WS8, WS9 |
+| `timeline.schema.json` | station rows: `access_dist_m` | WS5, WS7, WS9 |
+| `route.schema.json` | leg property `to_access_dist_m` | WS5, WS8, WS9 |
+| `horizon_ring.schema.json` | WS3's layout (above); now an object only | WS8 |
+| `fields_index.schema.json` | optional per-entry `bounds`, `width`, `height`, `res_m`, `stencil` (pointer on its own 3 m grid; WS7 proposal) | WS7, WS5 |
+
+`SCHEMA_MAP` is unchanged (`cards/*.json` is safe: the `*.timeline.json` parts are never copied to
+the web tree; one there would fail the card schema).

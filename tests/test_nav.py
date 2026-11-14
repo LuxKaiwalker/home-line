@@ -851,8 +851,8 @@ def test_real_run_uses_skyline_report_for_paired_stations(real_tree, tmp_path):
     out = real_tree / "navigation"
     out.mkdir(parents=True)
     rows = [
-        {"image_id": "NLB_A", "station": "S1", "status": "ok", "error_m": 42.0, "rms_deg": 0.4},
-        {"image_id": "NLB_B", "station": "S1", "status": "ok", "error_m": 9.0, "rms_deg": 0.9},
+        {"image_id": "NLB_A", "station": "S1", "status": "ok", "error_m": 8.0, "rms_deg": 0.4},
+        {"image_id": "NLB_B", "station": "S1", "status": "ok", "error_m": 3.0, "rms_deg": 0.9},
         {"image_id": "NLB_C", "station": None, "status": "ok", "error_m": 30.0, "rms_deg": 0.2},
         {"image_id": "NLB_D", "station": "S1", "status": "failed", "error_m": None,
          "reason": "no sky"},
@@ -865,5 +865,78 @@ def test_real_run_uses_skyline_report_for_paired_stations(real_tree, tmp_path):
     _validate(fx, "fixes.schema.json")
     sky = [f for f in fx if f["type"] == "skyline"]
     assert len(sky) == 1 and sky[0]["image_id"] == "NLB_A"  # lowest RMS, never lowest error
-    assert sky[0]["sigma_m"] == 42.0 and sky[0]["station"] == "S1"
+    assert sky[0]["sigma_m"] == 8.0 and sky[0]["station"] == "S1"  # passes the F22 gate
     assert rep["skyline"]["used"] == {"S1": "NLB_A"} and rep["skyline"]["n_frames"] == 4
+
+
+# --------------------------------------------------------------------------------------------
+# Session 2: F22 gate (C decision 2026-11-14 11:58), canonical bands, nav.yaml vo block
+# --------------------------------------------------------------------------------------------
+
+def test_skyline_gate_tolerance_is_the_f22_kat_tolerance():
+    # the KAT above: "recovered within one grid step" = skyline_fix.refine_grid_m
+    assert nav_real.skyline_gate_tolerance_m() == NAV["skyline_fix"]["refine_grid_m"]
+
+
+def test_skyline_gate_passes_only_within_kat_tolerance():
+    tol = NAV["skyline_fix"]["refine_grid_m"]
+    best = {"S1": {"image_id": "a", "station": "S1", "status": "ok", "error_m": tol,
+                   "rms_deg": 0.2},
+            "S2": {"image_id": "b", "station": "S2", "status": "ok", "error_m": tol + 0.01,
+                   "rms_deg": 0.1},
+            "S4": {"image_id": "c", "station": "S4", "status": "ok", "error_m": 617.0,
+                   "rms_deg": 0.05}}
+    passed, rejected = nav_real.gate_skyline_fixes(best)
+    assert set(passed) == {"S1"}
+    assert set(rejected) == {"S2", "S4"}
+    assert "station fix kept" in rejected["S4"]["reason"]
+    assert rejected["S4"]["image_id"] == "c" and rejected["S4"]["error_m"] == 617.0
+
+
+def test_real_run_rejected_skyline_frame_keeps_station_fix(real_tree):
+    """A paired frame that misses the KAT tolerance does not become a fix: the surveyed station
+    fix stays (C 11:58), and the run report says why."""
+    out = real_tree / "navigation"
+    out.mkdir(parents=True)
+    rows = [{"image_id": "NLB_FAR", "station": "S1", "status": "ok", "error_m": 523.0,
+             "rms_deg": 0.1}]
+    (out / nav_real.SKYLINE_REPORT).write_text(json.dumps(
+        {"n_frames": 1, "n_ok": 1, "rows": rows}))
+    rep = nav_real.run("nom_104", out=out, interim=real_tree, sets=["medium"], runs=20,
+                       skyline=True, record=False, log=lambda *a: None, engine=object())
+    fx = json.loads((out / "nav" / "fixes.json").read_text())
+    assert [f["type"] for f in fx] == ["rover", "station", "rover"]
+    assert fx[1]["sigma_m"] == NAV["fix_sigma_m"]["station"]
+    assert rep["skyline"]["used"] == {}
+    assert rep["skyline"]["rejected"]["S1"]["image_id"] == "NLB_FAR"
+
+
+def test_skyline_bands_are_the_canonical_horizon_bands():
+    """nav.yaml defers to horizon.yaml bands.{source}.path (WS1 canonical, C 11:15)."""
+    hb = dr._yaml("horizon")["bands"]
+    paths = nav_real.skyline_band_paths(dr.REPO)
+    assert set(paths) == {"dem_1m", "ctx_20m", "mola_hrsc_200m"}
+    for src, p in paths.items():
+        assert p == dr.REPO / hb[src]["path"]
+    ins = {i.name: i for i in nav_real.inputs("nom_104")}
+    assert ins["ctx_20m"].path == dr.REPO / hb["ctx_20m"]["path"]
+
+
+def test_nav_yaml_vo_block_matches_ws10_keys():
+    """WS10 reads nav.yaml vo (vo.load_vo_config): every key of its pending block, same values,
+    flagged assumed."""
+    from pipeline.navigation import vo
+    cfg, src = vo.load_vo_config()
+    assert src == "config/nav.yaml vo"
+    assert cfg["assumed"] is True
+    for k, v in vo.PENDING_VO_CONFIG.items():
+        assert cfg[k] == v, k
+
+
+def test_curiosity_set_is_optional_labelled_and_not_default():
+    opt = NAV["optional_sets"]["curiosity_vo_256"]
+    assert "curiosity_vo_256" not in NAV["sets"] and NAV["default_set"] != "curiosity_vo_256"
+    assert opt["label"] == "rover analogue: a rover is not an astronaut"
+    assert opt["status"].startswith("pending N")
+    assert opt["sigma_s"] > 0 and opt["sigma_b_deg_h"] > 0
+    assert opt["psi0_deg"] is None and opt["slip"] is None  # not measured by VO

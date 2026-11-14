@@ -1,4 +1,964 @@
 {
+  "access.S2.nom_104.dist_m": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "stations.json",
+    "script": "pipeline/engine/scenarios.py",
+    "units": "m",
+    "utc": "2026-11-14T11:01:29Z",
+    "value": 27.6
+  },
+  "access.S2.nom_104.lat": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "stations.json",
+    "script": "pipeline/engine/scenarios.py",
+    "units": "deg",
+    "utc": "2026-11-14T11:01:29Z",
+    "value": -4.777025
+  },
+  "access.S2.nom_104.lon": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "stations.json",
+    "script": "pipeline/engine/scenarios.py",
+    "units": "deg",
+    "utc": "2026-11-14T11:01:29Z",
+    "value": 137.382736
+  },
+  "access.S2.nom_104.o2_home_L": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "stations.json",
+    "script": "pipeline/engine/scenarios.py",
+    "units": "L",
+    "utc": "2026-11-14T11:01:29Z",
+    "value": 95.56
+  },
+  "access.S2.nom_104.walk_in.max_slope_deg": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "stations.json",
+    "script": "pipeline/engine/scenarios.py",
+    "units": "deg",
+    "utc": "2026-11-14T11:01:29Z",
+    "value": 21.99
+  },
+  "access.S2.nom_104.walk_in.max_terrain_slope_deg": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "stations.json",
+    "script": "pipeline/engine/scenarios.py",
+    "units": "deg",
+    "utc": "2026-11-14T11:01:29Z",
+    "value": 43.44
+  },
+  "access.S2.nom_104.walk_in.mean_slope_deg": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "stations.json",
+    "script": "pipeline/engine/scenarios.py",
+    "units": "deg",
+    "utc": "2026-11-14T11:01:29Z",
+    "value": 15.77
+  },
+  "access.S2.nom_104.walk_in.rise_m": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "stations.json",
+    "script": "pipeline/engine/scenarios.py",
+    "units": "m",
+    "utc": "2026-11-14T11:01:29Z",
+    "value": 7.79
+  },
+  "access.S2.nom_120.dist_m": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "stations.json",
+    "script": "pipeline/engine/scenarios.py",
+    "units": "m",
+    "utc": "2026-11-14T11:01:29Z",
+    "value": 27.6
+  },
+  "access.S2.nom_120.lat": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "stations.json",
+    "script": "pipeline/engine/scenarios.py",
+    "units": "deg",
+    "utc": "2026-11-14T11:01:29Z",
+    "value": -4.777025
+  },
+  "access.S2.nom_120.lon": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "stations.json",
+    "script": "pipeline/engine/scenarios.py",
+    "units": "deg",
+    "utc": "2026-11-14T11:01:29Z",
+    "value": 137.382736
+  },
+  "access.S2.nom_120.o2_home_L": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "stations.json",
+    "script": "pipeline/engine/scenarios.py",
+    "units": "L",
+    "utc": "2026-11-14T11:01:29Z",
+    "value": 101.3
+  },
+  "access.S2.nom_120.walk_in.max_slope_deg": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "stations.json",
+    "script": "pipeline/engine/scenarios.py",
+    "units": "deg",
+    "utc": "2026-11-14T11:01:29Z",
+    "value": 21.99
+  },
+  "access.S2.nom_120.walk_in.max_terrain_slope_deg": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "stations.json",
+    "script": "pipeline/engine/scenarios.py",
+    "units": "deg",
+    "utc": "2026-11-14T11:01:29Z",
+    "value": 43.44
+  },
+  "access.S2.nom_120.walk_in.mean_slope_deg": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "stations.json",
+    "script": "pipeline/engine/scenarios.py",
+    "units": "deg",
+    "utc": "2026-11-14T11:01:29Z",
+    "value": 15.77
+  },
+  "access.S2.nom_120.walk_in.rise_m": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "stations.json",
+    "script": "pipeline/engine/scenarios.py",
+    "units": "m",
+    "utc": "2026-11-14T11:01:29Z",
+    "value": 7.79
+  },
+  "access.S2.nom_80.dist_m": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "stations.json",
+    "script": "pipeline/engine/scenarios.py",
+    "units": "m",
+    "utc": "2026-11-14T11:01:29Z",
+    "value": 27.6
+  },
+  "access.S2.nom_80.lat": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "stations.json",
+    "script": "pipeline/engine/scenarios.py",
+    "units": "deg",
+    "utc": "2026-11-14T11:01:29Z",
+    "value": -4.777025
+  },
+  "access.S2.nom_80.lon": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "stations.json",
+    "script": "pipeline/engine/scenarios.py",
+    "units": "deg",
+    "utc": "2026-11-14T11:01:29Z",
+    "value": 137.382736
+  },
+  "access.S2.nom_80.o2_home_L": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "stations.json",
+    "script": "pipeline/engine/scenarios.py",
+    "units": "L",
+    "utc": "2026-11-14T11:01:29Z",
+    "value": 86.99
+  },
+  "access.S2.nom_80.walk_in.max_slope_deg": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "stations.json",
+    "script": "pipeline/engine/scenarios.py",
+    "units": "deg",
+    "utc": "2026-11-14T11:01:29Z",
+    "value": 21.99
+  },
+  "access.S2.nom_80.walk_in.max_terrain_slope_deg": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "stations.json",
+    "script": "pipeline/engine/scenarios.py",
+    "units": "deg",
+    "utc": "2026-11-14T11:01:29Z",
+    "value": 43.44
+  },
+  "access.S2.nom_80.walk_in.mean_slope_deg": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "stations.json",
+    "script": "pipeline/engine/scenarios.py",
+    "units": "deg",
+    "utc": "2026-11-14T11:01:29Z",
+    "value": 15.77
+  },
+  "access.S2.nom_80.walk_in.rise_m": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "stations.json",
+    "script": "pipeline/engine/scenarios.py",
+    "units": "m",
+    "utc": "2026-11-14T11:01:29Z",
+    "value": 7.79
+  },
+  "access.S2.opt_104.dist_m": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "stations.json",
+    "script": "pipeline/engine/scenarios.py",
+    "units": "m",
+    "utc": "2026-11-14T11:01:29Z",
+    "value": 24.1
+  },
+  "access.S2.opt_104.lat": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "stations.json",
+    "script": "pipeline/engine/scenarios.py",
+    "units": "deg",
+    "utc": "2026-11-14T11:01:29Z",
+    "value": -4.777075
+  },
+  "access.S2.opt_104.lon": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "stations.json",
+    "script": "pipeline/engine/scenarios.py",
+    "units": "deg",
+    "utc": "2026-11-14T11:01:29Z",
+    "value": 137.38294
+  },
+  "access.S2.opt_104.o2_home_L": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "stations.json",
+    "script": "pipeline/engine/scenarios.py",
+    "units": "L",
+    "utc": "2026-11-14T11:01:29Z",
+    "value": 81.69
+  },
+  "access.S2.opt_104.walk_in.max_slope_deg": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "stations.json",
+    "script": "pipeline/engine/scenarios.py",
+    "units": "deg",
+    "utc": "2026-11-14T11:01:29Z",
+    "value": 26.71
+  },
+  "access.S2.opt_104.walk_in.max_terrain_slope_deg": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "stations.json",
+    "script": "pipeline/engine/scenarios.py",
+    "units": "deg",
+    "utc": "2026-11-14T11:01:29Z",
+    "value": 47.55
+  },
+  "access.S2.opt_104.walk_in.mean_slope_deg": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "stations.json",
+    "script": "pipeline/engine/scenarios.py",
+    "units": "deg",
+    "utc": "2026-11-14T11:01:29Z",
+    "value": 11.59
+  },
+  "access.S2.opt_104.walk_in.rise_m": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "stations.json",
+    "script": "pipeline/engine/scenarios.py",
+    "units": "m",
+    "utc": "2026-11-14T11:01:29Z",
+    "value": 4.93
+  },
+  "access.S2.opt_120.dist_m": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "stations.json",
+    "script": "pipeline/engine/scenarios.py",
+    "units": "m",
+    "utc": "2026-11-14T11:01:29Z",
+    "value": 24.1
+  },
+  "access.S2.opt_120.lat": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "stations.json",
+    "script": "pipeline/engine/scenarios.py",
+    "units": "deg",
+    "utc": "2026-11-14T11:01:29Z",
+    "value": -4.777075
+  },
+  "access.S2.opt_120.lon": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "stations.json",
+    "script": "pipeline/engine/scenarios.py",
+    "units": "deg",
+    "utc": "2026-11-14T11:01:29Z",
+    "value": 137.38294
+  },
+  "access.S2.opt_120.o2_home_L": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "stations.json",
+    "script": "pipeline/engine/scenarios.py",
+    "units": "L",
+    "utc": "2026-11-14T11:01:29Z",
+    "value": 86.39
+  },
+  "access.S2.opt_120.walk_in.max_slope_deg": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "stations.json",
+    "script": "pipeline/engine/scenarios.py",
+    "units": "deg",
+    "utc": "2026-11-14T11:01:29Z",
+    "value": 26.71
+  },
+  "access.S2.opt_120.walk_in.max_terrain_slope_deg": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "stations.json",
+    "script": "pipeline/engine/scenarios.py",
+    "units": "deg",
+    "utc": "2026-11-14T11:01:29Z",
+    "value": 47.55
+  },
+  "access.S2.opt_120.walk_in.mean_slope_deg": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "stations.json",
+    "script": "pipeline/engine/scenarios.py",
+    "units": "deg",
+    "utc": "2026-11-14T11:01:29Z",
+    "value": 11.59
+  },
+  "access.S2.opt_120.walk_in.rise_m": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "stations.json",
+    "script": "pipeline/engine/scenarios.py",
+    "units": "m",
+    "utc": "2026-11-14T11:01:29Z",
+    "value": 4.93
+  },
+  "access.S2.opt_80.dist_m": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "stations.json",
+    "script": "pipeline/engine/scenarios.py",
+    "units": "m",
+    "utc": "2026-11-14T11:01:29Z",
+    "value": 24.1
+  },
+  "access.S2.opt_80.lat": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "stations.json",
+    "script": "pipeline/engine/scenarios.py",
+    "units": "deg",
+    "utc": "2026-11-14T11:01:29Z",
+    "value": -4.777075
+  },
+  "access.S2.opt_80.lon": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "stations.json",
+    "script": "pipeline/engine/scenarios.py",
+    "units": "deg",
+    "utc": "2026-11-14T11:01:29Z",
+    "value": 137.38294
+  },
+  "access.S2.opt_80.o2_home_L": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "stations.json",
+    "script": "pipeline/engine/scenarios.py",
+    "units": "L",
+    "utc": "2026-11-14T11:01:29Z",
+    "value": 74.59
+  },
+  "access.S2.opt_80.walk_in.max_slope_deg": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "stations.json",
+    "script": "pipeline/engine/scenarios.py",
+    "units": "deg",
+    "utc": "2026-11-14T11:01:29Z",
+    "value": 26.71
+  },
+  "access.S2.opt_80.walk_in.max_terrain_slope_deg": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "stations.json",
+    "script": "pipeline/engine/scenarios.py",
+    "units": "deg",
+    "utc": "2026-11-14T11:01:29Z",
+    "value": 47.55
+  },
+  "access.S2.opt_80.walk_in.mean_slope_deg": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "stations.json",
+    "script": "pipeline/engine/scenarios.py",
+    "units": "deg",
+    "utc": "2026-11-14T11:01:29Z",
+    "value": 11.59
+  },
+  "access.S2.opt_80.walk_in.rise_m": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "stations.json",
+    "script": "pipeline/engine/scenarios.py",
+    "units": "m",
+    "utc": "2026-11-14T11:01:29Z",
+    "value": 4.93
+  },
+  "access.S4.nom_104.dist_m": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "stations.json",
+    "script": "pipeline/engine/scenarios.py",
+    "units": "m",
+    "utc": "2026-11-14T11:01:29Z",
+    "value": 2.1
+  },
+  "access.S4.nom_104.lat": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "stations.json",
+    "script": "pipeline/engine/scenarios.py",
+    "units": "deg",
+    "utc": "2026-11-14T11:01:29Z",
+    "value": -4.785679
+  },
+  "access.S4.nom_104.lon": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "stations.json",
+    "script": "pipeline/engine/scenarios.py",
+    "units": "deg",
+    "utc": "2026-11-14T11:01:29Z",
+    "value": 137.408842
+  },
+  "access.S4.nom_104.o2_home_L": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "stations.json",
+    "script": "pipeline/engine/scenarios.py",
+    "units": "L",
+    "utc": "2026-11-14T11:01:29Z",
+    "value": 77.72
+  },
+  "access.S4.nom_104.walk_in.max_slope_deg": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "stations.json",
+    "script": "pipeline/engine/scenarios.py",
+    "units": "deg",
+    "utc": "2026-11-14T11:01:29Z",
+    "value": 15.9
+  },
+  "access.S4.nom_104.walk_in.max_terrain_slope_deg": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "stations.json",
+    "script": "pipeline/engine/scenarios.py",
+    "units": "deg",
+    "utc": "2026-11-14T11:01:29Z",
+    "value": 23.65
+  },
+  "access.S4.nom_104.walk_in.mean_slope_deg": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "stations.json",
+    "script": "pipeline/engine/scenarios.py",
+    "units": "deg",
+    "utc": "2026-11-14T11:01:29Z",
+    "value": 15.9
+  },
+  "access.S4.nom_104.walk_in.rise_m": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "stations.json",
+    "script": "pipeline/engine/scenarios.py",
+    "units": "m",
+    "utc": "2026-11-14T11:01:29Z",
+    "value": 0.59
+  },
+  "access.S4.nom_120.dist_m": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "stations.json",
+    "script": "pipeline/engine/scenarios.py",
+    "units": "m",
+    "utc": "2026-11-14T11:01:29Z",
+    "value": 2.1
+  },
+  "access.S4.nom_120.lat": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "stations.json",
+    "script": "pipeline/engine/scenarios.py",
+    "units": "deg",
+    "utc": "2026-11-14T11:01:29Z",
+    "value": -4.785679
+  },
+  "access.S4.nom_120.lon": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "stations.json",
+    "script": "pipeline/engine/scenarios.py",
+    "units": "deg",
+    "utc": "2026-11-14T11:01:29Z",
+    "value": 137.408842
+  },
+  "access.S4.nom_120.o2_home_L": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "stations.json",
+    "script": "pipeline/engine/scenarios.py",
+    "units": "L",
+    "utc": "2026-11-14T11:01:29Z",
+    "value": 81.69
+  },
+  "access.S4.nom_120.walk_in.max_slope_deg": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "stations.json",
+    "script": "pipeline/engine/scenarios.py",
+    "units": "deg",
+    "utc": "2026-11-14T11:01:29Z",
+    "value": 15.9
+  },
+  "access.S4.nom_120.walk_in.max_terrain_slope_deg": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "stations.json",
+    "script": "pipeline/engine/scenarios.py",
+    "units": "deg",
+    "utc": "2026-11-14T11:01:29Z",
+    "value": 23.65
+  },
+  "access.S4.nom_120.walk_in.mean_slope_deg": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "stations.json",
+    "script": "pipeline/engine/scenarios.py",
+    "units": "deg",
+    "utc": "2026-11-14T11:01:29Z",
+    "value": 15.9
+  },
+  "access.S4.nom_120.walk_in.rise_m": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "stations.json",
+    "script": "pipeline/engine/scenarios.py",
+    "units": "m",
+    "utc": "2026-11-14T11:01:29Z",
+    "value": 0.59
+  },
+  "access.S4.nom_80.dist_m": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "stations.json",
+    "script": "pipeline/engine/scenarios.py",
+    "units": "m",
+    "utc": "2026-11-14T11:01:29Z",
+    "value": 2.1
+  },
+  "access.S4.nom_80.lat": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "stations.json",
+    "script": "pipeline/engine/scenarios.py",
+    "units": "deg",
+    "utc": "2026-11-14T11:01:29Z",
+    "value": -4.785679
+  },
+  "access.S4.nom_80.lon": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "stations.json",
+    "script": "pipeline/engine/scenarios.py",
+    "units": "deg",
+    "utc": "2026-11-14T11:01:29Z",
+    "value": 137.408842
+  },
+  "access.S4.nom_80.o2_home_L": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "stations.json",
+    "script": "pipeline/engine/scenarios.py",
+    "units": "L",
+    "utc": "2026-11-14T11:01:29Z",
+    "value": 71.83
+  },
+  "access.S4.nom_80.walk_in.max_slope_deg": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "stations.json",
+    "script": "pipeline/engine/scenarios.py",
+    "units": "deg",
+    "utc": "2026-11-14T11:01:29Z",
+    "value": 15.9
+  },
+  "access.S4.nom_80.walk_in.max_terrain_slope_deg": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "stations.json",
+    "script": "pipeline/engine/scenarios.py",
+    "units": "deg",
+    "utc": "2026-11-14T11:01:29Z",
+    "value": 23.65
+  },
+  "access.S4.nom_80.walk_in.mean_slope_deg": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "stations.json",
+    "script": "pipeline/engine/scenarios.py",
+    "units": "deg",
+    "utc": "2026-11-14T11:01:29Z",
+    "value": 15.9
+  },
+  "access.S4.nom_80.walk_in.rise_m": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "stations.json",
+    "script": "pipeline/engine/scenarios.py",
+    "units": "m",
+    "utc": "2026-11-14T11:01:29Z",
+    "value": 0.59
+  },
+  "access.S4.opt_104.dist_m": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "stations.json",
+    "script": "pipeline/engine/scenarios.py",
+    "units": "m",
+    "utc": "2026-11-14T11:01:29Z",
+    "value": 2.1
+  },
+  "access.S4.opt_104.lat": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "stations.json",
+    "script": "pipeline/engine/scenarios.py",
+    "units": "deg",
+    "utc": "2026-11-14T11:01:29Z",
+    "value": -4.785679
+  },
+  "access.S4.opt_104.lon": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "stations.json",
+    "script": "pipeline/engine/scenarios.py",
+    "units": "deg",
+    "utc": "2026-11-14T11:01:29Z",
+    "value": 137.408842
+  },
+  "access.S4.opt_104.o2_home_L": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "stations.json",
+    "script": "pipeline/engine/scenarios.py",
+    "units": "L",
+    "utc": "2026-11-14T11:01:29Z",
+    "value": 71.97
+  },
+  "access.S4.opt_104.walk_in.max_slope_deg": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "stations.json",
+    "script": "pipeline/engine/scenarios.py",
+    "units": "deg",
+    "utc": "2026-11-14T11:01:29Z",
+    "value": 15.9
+  },
+  "access.S4.opt_104.walk_in.max_terrain_slope_deg": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "stations.json",
+    "script": "pipeline/engine/scenarios.py",
+    "units": "deg",
+    "utc": "2026-11-14T11:01:29Z",
+    "value": 23.65
+  },
+  "access.S4.opt_104.walk_in.mean_slope_deg": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "stations.json",
+    "script": "pipeline/engine/scenarios.py",
+    "units": "deg",
+    "utc": "2026-11-14T11:01:29Z",
+    "value": 15.9
+  },
+  "access.S4.opt_104.walk_in.rise_m": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "stations.json",
+    "script": "pipeline/engine/scenarios.py",
+    "units": "m",
+    "utc": "2026-11-14T11:01:29Z",
+    "value": 0.59
+  },
+  "access.S4.opt_120.dist_m": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "stations.json",
+    "script": "pipeline/engine/scenarios.py",
+    "units": "m",
+    "utc": "2026-11-14T11:01:29Z",
+    "value": 2.1
+  },
+  "access.S4.opt_120.lat": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "stations.json",
+    "script": "pipeline/engine/scenarios.py",
+    "units": "deg",
+    "utc": "2026-11-14T11:01:29Z",
+    "value": -4.785679
+  },
+  "access.S4.opt_120.lon": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "stations.json",
+    "script": "pipeline/engine/scenarios.py",
+    "units": "deg",
+    "utc": "2026-11-14T11:01:29Z",
+    "value": 137.408842
+  },
+  "access.S4.opt_120.o2_home_L": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "stations.json",
+    "script": "pipeline/engine/scenarios.py",
+    "units": "L",
+    "utc": "2026-11-14T11:01:29Z",
+    "value": 75.36
+  },
+  "access.S4.opt_120.walk_in.max_slope_deg": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "stations.json",
+    "script": "pipeline/engine/scenarios.py",
+    "units": "deg",
+    "utc": "2026-11-14T11:01:29Z",
+    "value": 15.9
+  },
+  "access.S4.opt_120.walk_in.max_terrain_slope_deg": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "stations.json",
+    "script": "pipeline/engine/scenarios.py",
+    "units": "deg",
+    "utc": "2026-11-14T11:01:29Z",
+    "value": 23.65
+  },
+  "access.S4.opt_120.walk_in.mean_slope_deg": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "stations.json",
+    "script": "pipeline/engine/scenarios.py",
+    "units": "deg",
+    "utc": "2026-11-14T11:01:29Z",
+    "value": 15.9
+  },
+  "access.S4.opt_120.walk_in.rise_m": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "stations.json",
+    "script": "pipeline/engine/scenarios.py",
+    "units": "m",
+    "utc": "2026-11-14T11:01:29Z",
+    "value": 0.59
+  },
+  "access.S4.opt_80.dist_m": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "stations.json",
+    "script": "pipeline/engine/scenarios.py",
+    "units": "m",
+    "utc": "2026-11-14T11:01:29Z",
+    "value": 2.1
+  },
+  "access.S4.opt_80.lat": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "stations.json",
+    "script": "pipeline/engine/scenarios.py",
+    "units": "deg",
+    "utc": "2026-11-14T11:01:29Z",
+    "value": -4.785679
+  },
+  "access.S4.opt_80.lon": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "stations.json",
+    "script": "pipeline/engine/scenarios.py",
+    "units": "deg",
+    "utc": "2026-11-14T11:01:29Z",
+    "value": 137.408842
+  },
+  "access.S4.opt_80.o2_home_L": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "stations.json",
+    "script": "pipeline/engine/scenarios.py",
+    "units": "L",
+    "utc": "2026-11-14T11:01:29Z",
+    "value": 66.88
+  },
+  "access.S4.opt_80.walk_in.max_slope_deg": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "stations.json",
+    "script": "pipeline/engine/scenarios.py",
+    "units": "deg",
+    "utc": "2026-11-14T11:01:29Z",
+    "value": 15.9
+  },
+  "access.S4.opt_80.walk_in.max_terrain_slope_deg": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "stations.json",
+    "script": "pipeline/engine/scenarios.py",
+    "units": "deg",
+    "utc": "2026-11-14T11:01:29Z",
+    "value": 23.65
+  },
+  "access.S4.opt_80.walk_in.mean_slope_deg": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "stations.json",
+    "script": "pipeline/engine/scenarios.py",
+    "units": "deg",
+    "utc": "2026-11-14T11:01:29Z",
+    "value": 15.9
+  },
+  "access.S4.opt_80.walk_in.rise_m": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "stations.json",
+    "script": "pipeline/engine/scenarios.py",
+    "units": "m",
+    "utc": "2026-11-14T11:01:29Z",
+    "value": 0.59
+  },
+  "card.S2.access.dist_m": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "cards/S2.json",
+    "script": "pipeline/engine/cards.py",
+    "units": "m",
+    "utc": "2026-11-14T11:01:38Z",
+    "value": 27.6
+  },
+  "card.S2.access.walk_in.max_slope_deg": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "cards/S2.json",
+    "script": "pipeline/engine/cards.py",
+    "units": "deg",
+    "utc": "2026-11-14T11:01:38Z",
+    "value": 21.99
+  },
+  "card.S2.access.walk_in.max_terrain_slope_deg": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "cards/S2.json",
+    "script": "pipeline/engine/cards.py",
+    "units": "deg",
+    "utc": "2026-11-14T11:01:38Z",
+    "value": 43.44
+  },
+  "card.S2.access.walk_in.mean_slope_deg": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "cards/S2.json",
+    "script": "pipeline/engine/cards.py",
+    "units": "deg",
+    "utc": "2026-11-14T11:01:38Z",
+    "value": 15.77
+  },
+  "card.S2.access.walk_in.rise_m": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "cards/S2.json",
+    "script": "pipeline/engine/cards.py",
+    "units": "m",
+    "utc": "2026-11-14T11:01:38Z",
+    "value": 7.79
+  },
+  "card.S2.margin_binding": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "cards/S2.json",
+    "script": "pipeline/engine/cards.py",
+    "units": null,
+    "utc": "2026-11-14T11:01:38Z",
+    "value": "dose"
+  },
+  "card.S2.margin_min": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "cards/S2.json",
+    "script": "pipeline/engine/cards.py",
+    "units": "min",
+    "utc": "2026-11-14T11:01:38Z",
+    "value": 14.89
+  },
+  "card.S2.o2_home_L": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "cards/S2.json",
+    "script": "pipeline/engine/cards.py",
+    "units": "L",
+    "utc": "2026-11-14T11:01:38Z",
+    "value": 95.56
+  },
+  "card.S2.t_home_min": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "cards/S2.json",
+    "script": "pipeline/engine/cards.py",
+    "units": "min",
+    "utc": "2026-11-14T11:01:38Z",
+    "value": 71.01
+  },
+  "card.S2.timeline.arrive": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "cards/S2.json",
+    "script": "pipeline/engine/cards.py",
+    "units": "min",
+    "utc": "2026-11-14T11:01:38Z",
+    "value": 108.73
+  },
+  "card.S2.timeline.leave": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "cards/S2.json",
+    "script": "pipeline/engine/cards.py",
+    "units": "min",
+    "utc": "2026-11-14T11:01:38Z",
+    "value": 138.73
+  },
+  "card.S2.timeline.turn_back": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "cards/S2.json",
+    "script": "pipeline/engine/cards.py",
+    "units": "min",
+    "utc": "2026-11-14T11:01:38Z",
+    "value": 409.15
+  },
+  "card.S4.access.dist_m": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "cards/S4.json",
+    "script": "pipeline/engine/cards.py",
+    "units": "m",
+    "utc": "2026-11-14T11:01:38Z",
+    "value": 2.1
+  },
+  "card.S4.access.walk_in.max_slope_deg": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "cards/S4.json",
+    "script": "pipeline/engine/cards.py",
+    "units": "deg",
+    "utc": "2026-11-14T11:01:38Z",
+    "value": 15.9
+  },
+  "card.S4.access.walk_in.max_terrain_slope_deg": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "cards/S4.json",
+    "script": "pipeline/engine/cards.py",
+    "units": "deg",
+    "utc": "2026-11-14T11:01:38Z",
+    "value": 23.65
+  },
+  "card.S4.access.walk_in.mean_slope_deg": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "cards/S4.json",
+    "script": "pipeline/engine/cards.py",
+    "units": "deg",
+    "utc": "2026-11-14T11:01:38Z",
+    "value": 15.9
+  },
+  "card.S4.access.walk_in.rise_m": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "cards/S4.json",
+    "script": "pipeline/engine/cards.py",
+    "units": "m",
+    "utc": "2026-11-14T11:01:38Z",
+    "value": 0.59
+  },
+  "card.S4.margin_binding": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "cards/S4.json",
+    "script": "pipeline/engine/cards.py",
+    "units": null,
+    "utc": "2026-11-14T11:01:38Z",
+    "value": "dose"
+  },
+  "card.S4.margin_min": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "cards/S4.json",
+    "script": "pipeline/engine/cards.py",
+    "units": "min",
+    "utc": "2026-11-14T11:01:38Z",
+    "value": 25.97
+  },
+  "card.S4.o2_home_L": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "cards/S4.json",
+    "script": "pipeline/engine/cards.py",
+    "units": "L",
+    "utc": "2026-11-14T11:01:38Z",
+    "value": 77.72
+  },
+  "card.S4.t_home_min": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "cards/S4.json",
+    "script": "pipeline/engine/cards.py",
+    "units": "min",
+    "utc": "2026-11-14T11:01:38Z",
+    "value": 59.93
+  },
+  "card.S4.timeline.arrive": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "cards/S4.json",
+    "script": "pipeline/engine/cards.py",
+    "units": "min",
+    "utc": "2026-11-14T11:01:38Z",
+    "value": 48.44
+  },
+  "card.S4.timeline.leave": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "cards/S4.json",
+    "script": "pipeline/engine/cards.py",
+    "units": "min",
+    "utc": "2026-11-14T11:01:38Z",
+    "value": 78.44
+  },
+  "card.S4.timeline.turn_back": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "cards/S4.json",
+    "script": "pipeline/engine/cards.py",
+    "units": "min",
+    "utc": "2026-11-14T11:01:38Z",
+    "value": 438.55
+  },
   "clock.eva.end_utc": {
     "commit": "1a98e90f274acdbc021c057bcc5f3b2b47a7de34",
     "file": "conditions/clock.json",
@@ -1715,6 +2675,670 @@
     "value": 60
   },
   "dummy": false,
+  "fields.nom_104/home_bearing.known_pct": {
+    "commit": "edbcd3c7ea42c6a3af95e2d2f3ba5e6c5f115546",
+    "file": "fields/nom_104/home_bearing.png",
+    "script": "pipeline/export/fields_png.py",
+    "units": "%",
+    "utc": "2026-11-14T11:07:18Z",
+    "value": 100.0
+  },
+  "fields.nom_104/home_bearing.max": {
+    "commit": "edbcd3c7ea42c6a3af95e2d2f3ba5e6c5f115546",
+    "file": "fields/nom_104/home_bearing.png",
+    "script": "pipeline/export/fields_png.py",
+    "units": "deg",
+    "utc": "2026-11-14T11:07:18Z",
+    "value": 359.96
+  },
+  "fields.nom_104/home_bearing.sha256": {
+    "commit": "edbcd3c7ea42c6a3af95e2d2f3ba5e6c5f115546",
+    "file": "fields/nom_104/home_bearing.png",
+    "script": "pipeline/export/fields_png.py",
+    "units": "sha256",
+    "utc": "2026-11-14T11:07:18Z",
+    "value": "e2ddba5b00a46f924fe84a2d727c41c00c5890fad7fced2757d511ab8998bef8"
+  },
+  "fields.nom_104/o2_home.known_pct": {
+    "commit": "edbcd3c7ea42c6a3af95e2d2f3ba5e6c5f115546",
+    "file": "fields/nom_104/o2_home.png",
+    "script": "pipeline/export/fields_png.py",
+    "units": "%",
+    "utc": "2026-11-14T11:07:16Z",
+    "value": 58.95
+  },
+  "fields.nom_104/o2_home.max": {
+    "commit": "edbcd3c7ea42c6a3af95e2d2f3ba5e6c5f115546",
+    "file": "fields/nom_104/o2_home.png",
+    "script": "pipeline/export/fields_png.py",
+    "units": "L",
+    "utc": "2026-11-14T11:07:16Z",
+    "value": 382.38
+  },
+  "fields.nom_104/o2_home.sha256": {
+    "commit": "edbcd3c7ea42c6a3af95e2d2f3ba5e6c5f115546",
+    "file": "fields/nom_104/o2_home.png",
+    "script": "pipeline/export/fields_png.py",
+    "units": "sha256",
+    "utc": "2026-11-14T11:07:16Z",
+    "value": "de8ab6c4dbcfa3437434f45cb7bd19584164da0118e5c1fe05cb4d316c0d91cd"
+  },
+  "fields.nom_104/o2_home_worst_10.known_pct": {
+    "commit": "edbcd3c7ea42c6a3af95e2d2f3ba5e6c5f115546",
+    "file": "fields/nom_104/o2_home_worst_10.png",
+    "script": "pipeline/export/fields_png.py",
+    "units": "%",
+    "utc": "2026-11-14T11:07:47Z",
+    "value": 70.73
+  },
+  "fields.nom_104/o2_home_worst_10.max": {
+    "commit": "edbcd3c7ea42c6a3af95e2d2f3ba5e6c5f115546",
+    "file": "fields/nom_104/o2_home_worst_10.png",
+    "script": "pipeline/export/fields_png.py",
+    "units": "L",
+    "utc": "2026-11-14T11:07:47Z",
+    "value": 382.41
+  },
+  "fields.nom_104/o2_home_worst_10.sha256": {
+    "commit": "edbcd3c7ea42c6a3af95e2d2f3ba5e6c5f115546",
+    "file": "fields/nom_104/o2_home_worst_10.png",
+    "script": "pipeline/export/fields_png.py",
+    "units": "sha256",
+    "utc": "2026-11-14T11:07:47Z",
+    "value": "56e9cd5d2e94473cceb5e6b1c796984cbafc46a98629822b5ea9fdd97a83d2ea"
+  },
+  "fields.nom_104/o2_home_worst_100.known_pct": {
+    "commit": "edbcd3c7ea42c6a3af95e2d2f3ba5e6c5f115546",
+    "file": "fields/nom_104/o2_home_worst_100.png",
+    "script": "pipeline/export/fields_png.py",
+    "units": "%",
+    "utc": "2026-11-14T11:07:57Z",
+    "value": 87.74
+  },
+  "fields.nom_104/o2_home_worst_100.max": {
+    "commit": "edbcd3c7ea42c6a3af95e2d2f3ba5e6c5f115546",
+    "file": "fields/nom_104/o2_home_worst_100.png",
+    "script": "pipeline/export/fields_png.py",
+    "units": "L",
+    "utc": "2026-11-14T11:07:57Z",
+    "value": 382.41
+  },
+  "fields.nom_104/o2_home_worst_100.sha256": {
+    "commit": "edbcd3c7ea42c6a3af95e2d2f3ba5e6c5f115546",
+    "file": "fields/nom_104/o2_home_worst_100.png",
+    "script": "pipeline/export/fields_png.py",
+    "units": "sha256",
+    "utc": "2026-11-14T11:07:57Z",
+    "value": "e1f7373ead35eddfa8c6e486d887d829779be27839630ecf993deb4a5964f6e2"
+  },
+  "fields.nom_104/o2_home_worst_50.known_pct": {
+    "commit": "edbcd3c7ea42c6a3af95e2d2f3ba5e6c5f115546",
+    "file": "fields/nom_104/o2_home_worst_50.png",
+    "script": "pipeline/export/fields_png.py",
+    "units": "%",
+    "utc": "2026-11-14T11:07:52Z",
+    "value": 81.2
+  },
+  "fields.nom_104/o2_home_worst_50.max": {
+    "commit": "edbcd3c7ea42c6a3af95e2d2f3ba5e6c5f115546",
+    "file": "fields/nom_104/o2_home_worst_50.png",
+    "script": "pipeline/export/fields_png.py",
+    "units": "L",
+    "utc": "2026-11-14T11:07:52Z",
+    "value": 382.41
+  },
+  "fields.nom_104/o2_home_worst_50.sha256": {
+    "commit": "edbcd3c7ea42c6a3af95e2d2f3ba5e6c5f115546",
+    "file": "fields/nom_104/o2_home_worst_50.png",
+    "script": "pipeline/export/fields_png.py",
+    "units": "sha256",
+    "utc": "2026-11-14T11:07:52Z",
+    "value": "b0ddffef0324a848cbfcbe72153e6e1db74e0e1d8a56b0af3d04210145d606b2"
+  },
+  "fields.nom_104/t_home.known_pct": {
+    "commit": "edbcd3c7ea42c6a3af95e2d2f3ba5e6c5f115546",
+    "file": "fields/nom_104/t_home.png",
+    "script": "pipeline/export/fields_png.py",
+    "units": "%",
+    "utc": "2026-11-14T11:07:11Z",
+    "value": 58.95
+  },
+  "fields.nom_104/t_home.max": {
+    "commit": "edbcd3c7ea42c6a3af95e2d2f3ba5e6c5f115546",
+    "file": "fields/nom_104/t_home.png",
+    "script": "pipeline/export/fields_png.py",
+    "units": "min",
+    "utc": "2026-11-14T11:07:11Z",
+    "value": 296.7
+  },
+  "fields.nom_104/t_home.sha256": {
+    "commit": "edbcd3c7ea42c6a3af95e2d2f3ba5e6c5f115546",
+    "file": "fields/nom_104/t_home.png",
+    "script": "pipeline/export/fields_png.py",
+    "units": "sha256",
+    "utc": "2026-11-14T11:07:11Z",
+    "value": "5140a11011e2627eb83d6199b6ca526090c90b00bc3e5791aa49f29ff9964b98"
+  },
+  "fields.nom_104/t_home_worst_10.known_pct": {
+    "commit": "edbcd3c7ea42c6a3af95e2d2f3ba5e6c5f115546",
+    "file": "fields/nom_104/t_home_worst_10.png",
+    "script": "pipeline/export/fields_png.py",
+    "units": "%",
+    "utc": "2026-11-14T11:07:28Z",
+    "value": 70.73
+  },
+  "fields.nom_104/t_home_worst_10.max": {
+    "commit": "edbcd3c7ea42c6a3af95e2d2f3ba5e6c5f115546",
+    "file": "fields/nom_104/t_home_worst_10.png",
+    "script": "pipeline/export/fields_png.py",
+    "units": "min",
+    "utc": "2026-11-14T11:07:28Z",
+    "value": 296.7
+  },
+  "fields.nom_104/t_home_worst_10.sha256": {
+    "commit": "edbcd3c7ea42c6a3af95e2d2f3ba5e6c5f115546",
+    "file": "fields/nom_104/t_home_worst_10.png",
+    "script": "pipeline/export/fields_png.py",
+    "units": "sha256",
+    "utc": "2026-11-14T11:07:28Z",
+    "value": "e599682708d08a7f2655c5b32732e96179607413b81232809288178b0a81db94"
+  },
+  "fields.nom_104/t_home_worst_100.known_pct": {
+    "commit": "edbcd3c7ea42c6a3af95e2d2f3ba5e6c5f115546",
+    "file": "fields/nom_104/t_home_worst_100.png",
+    "script": "pipeline/export/fields_png.py",
+    "units": "%",
+    "utc": "2026-11-14T11:07:36Z",
+    "value": 87.74
+  },
+  "fields.nom_104/t_home_worst_100.max": {
+    "commit": "edbcd3c7ea42c6a3af95e2d2f3ba5e6c5f115546",
+    "file": "fields/nom_104/t_home_worst_100.png",
+    "script": "pipeline/export/fields_png.py",
+    "units": "min",
+    "utc": "2026-11-14T11:07:36Z",
+    "value": 296.7
+  },
+  "fields.nom_104/t_home_worst_100.sha256": {
+    "commit": "edbcd3c7ea42c6a3af95e2d2f3ba5e6c5f115546",
+    "file": "fields/nom_104/t_home_worst_100.png",
+    "script": "pipeline/export/fields_png.py",
+    "units": "sha256",
+    "utc": "2026-11-14T11:07:36Z",
+    "value": "13bae7868bf5b508f3e890760890b0e0f65e073887e316867407b9fc94296f25"
+  },
+  "fields.nom_104/t_home_worst_50.known_pct": {
+    "commit": "edbcd3c7ea42c6a3af95e2d2f3ba5e6c5f115546",
+    "file": "fields/nom_104/t_home_worst_50.png",
+    "script": "pipeline/export/fields_png.py",
+    "units": "%",
+    "utc": "2026-11-14T11:07:32Z",
+    "value": 81.2
+  },
+  "fields.nom_104/t_home_worst_50.max": {
+    "commit": "edbcd3c7ea42c6a3af95e2d2f3ba5e6c5f115546",
+    "file": "fields/nom_104/t_home_worst_50.png",
+    "script": "pipeline/export/fields_png.py",
+    "units": "min",
+    "utc": "2026-11-14T11:07:32Z",
+    "value": 296.7
+  },
+  "fields.nom_104/t_home_worst_50.sha256": {
+    "commit": "edbcd3c7ea42c6a3af95e2d2f3ba5e6c5f115546",
+    "file": "fields/nom_104/t_home_worst_50.png",
+    "script": "pipeline/export/fields_png.py",
+    "units": "sha256",
+    "utc": "2026-11-14T11:07:32Z",
+    "value": "4081548484250d511fd65fc85a5d6884d0a264f493ee4789321bb55d91df5a5a"
+  },
+  "fields.nom_120/o2_home.known_pct": {
+    "commit": "edbcd3c7ea42c6a3af95e2d2f3ba5e6c5f115546",
+    "file": "fields/nom_120/o2_home.png",
+    "script": "pipeline/export/fields_png.py",
+    "units": "%",
+    "utc": "2026-11-14T11:08:05Z",
+    "value": 58.95
+  },
+  "fields.nom_120/o2_home.max": {
+    "commit": "edbcd3c7ea42c6a3af95e2d2f3ba5e6c5f115546",
+    "file": "fields/nom_120/o2_home.png",
+    "script": "pipeline/export/fields_png.py",
+    "units": "L",
+    "utc": "2026-11-14T11:08:05Z",
+    "value": 402.23
+  },
+  "fields.nom_120/o2_home.sha256": {
+    "commit": "edbcd3c7ea42c6a3af95e2d2f3ba5e6c5f115546",
+    "file": "fields/nom_120/o2_home.png",
+    "script": "pipeline/export/fields_png.py",
+    "units": "sha256",
+    "utc": "2026-11-14T11:08:05Z",
+    "value": "3cded87c9969b473ecf1557c0ba59aa89abbffda1b33f28ba6688cb9d5690d26"
+  },
+  "fields.nom_120/t_home.known_pct": {
+    "commit": "edbcd3c7ea42c6a3af95e2d2f3ba5e6c5f115546",
+    "file": "fields/nom_120/t_home.png",
+    "script": "pipeline/export/fields_png.py",
+    "units": "%",
+    "utc": "2026-11-14T11:08:01Z",
+    "value": 58.95
+  },
+  "fields.nom_120/t_home.max": {
+    "commit": "edbcd3c7ea42c6a3af95e2d2f3ba5e6c5f115546",
+    "file": "fields/nom_120/t_home.png",
+    "script": "pipeline/export/fields_png.py",
+    "units": "min",
+    "utc": "2026-11-14T11:08:01Z",
+    "value": 309.1
+  },
+  "fields.nom_120/t_home.sha256": {
+    "commit": "edbcd3c7ea42c6a3af95e2d2f3ba5e6c5f115546",
+    "file": "fields/nom_120/t_home.png",
+    "script": "pipeline/export/fields_png.py",
+    "units": "sha256",
+    "utc": "2026-11-14T11:08:01Z",
+    "value": "68ee98f67e58d029a0e945af98994e630473dc9481d72dffc30c3e3bf5518415"
+  },
+  "fields.nom_80/o2_home.known_pct": {
+    "commit": "edbcd3c7ea42c6a3af95e2d2f3ba5e6c5f115546",
+    "file": "fields/nom_80/o2_home.png",
+    "script": "pipeline/export/fields_png.py",
+    "units": "%",
+    "utc": "2026-11-14T11:07:08Z",
+    "value": 58.95
+  },
+  "fields.nom_80/o2_home.max": {
+    "commit": "edbcd3c7ea42c6a3af95e2d2f3ba5e6c5f115546",
+    "file": "fields/nom_80/o2_home.png",
+    "script": "pipeline/export/fields_png.py",
+    "units": "L",
+    "utc": "2026-11-14T11:07:08Z",
+    "value": 352.94
+  },
+  "fields.nom_80/o2_home.sha256": {
+    "commit": "edbcd3c7ea42c6a3af95e2d2f3ba5e6c5f115546",
+    "file": "fields/nom_80/o2_home.png",
+    "script": "pipeline/export/fields_png.py",
+    "units": "sha256",
+    "utc": "2026-11-14T11:07:07Z",
+    "value": "d8fb0316ca90811aa472877756a9bbc34991a8ec22e25ea609d5ba5e454fb24a"
+  },
+  "fields.nom_80/t_home.known_pct": {
+    "commit": "edbcd3c7ea42c6a3af95e2d2f3ba5e6c5f115546",
+    "file": "fields/nom_80/t_home.png",
+    "script": "pipeline/export/fields_png.py",
+    "units": "%",
+    "utc": "2026-11-14T11:07:03Z",
+    "value": 58.95
+  },
+  "fields.nom_80/t_home.max": {
+    "commit": "edbcd3c7ea42c6a3af95e2d2f3ba5e6c5f115546",
+    "file": "fields/nom_80/t_home.png",
+    "script": "pipeline/export/fields_png.py",
+    "units": "min",
+    "utc": "2026-11-14T11:07:03Z",
+    "value": 278.4
+  },
+  "fields.nom_80/t_home.sha256": {
+    "commit": "edbcd3c7ea42c6a3af95e2d2f3ba5e6c5f115546",
+    "file": "fields/nom_80/t_home.png",
+    "script": "pipeline/export/fields_png.py",
+    "units": "sha256",
+    "utc": "2026-11-14T11:07:03Z",
+    "value": "4f242c2924b0c70763e42fd29d4fe6b8d8cf9be97004f0c8f5c92ac8a706c852"
+  },
+  "fields.opt_104/o2_home.known_pct": {
+    "commit": "edbcd3c7ea42c6a3af95e2d2f3ba5e6c5f115546",
+    "file": "fields/opt_104/o2_home.png",
+    "script": "pipeline/export/fields_png.py",
+    "units": "%",
+    "utc": "2026-11-14T11:06:49Z",
+    "value": 71.26
+  },
+  "fields.opt_104/o2_home.max": {
+    "commit": "edbcd3c7ea42c6a3af95e2d2f3ba5e6c5f115546",
+    "file": "fields/opt_104/o2_home.png",
+    "script": "pipeline/export/fields_png.py",
+    "units": "L",
+    "utc": "2026-11-14T11:06:49Z",
+    "value": 285.32
+  },
+  "fields.opt_104/o2_home.sha256": {
+    "commit": "edbcd3c7ea42c6a3af95e2d2f3ba5e6c5f115546",
+    "file": "fields/opt_104/o2_home.png",
+    "script": "pipeline/export/fields_png.py",
+    "units": "sha256",
+    "utc": "2026-11-14T11:06:49Z",
+    "value": "65d3e9fd49ab52f5b246e4fb789e1d5c73688e4e8251e8de77c5eedbb537076b"
+  },
+  "fields.opt_104/t_home.known_pct": {
+    "commit": "edbcd3c7ea42c6a3af95e2d2f3ba5e6c5f115546",
+    "file": "fields/opt_104/t_home.png",
+    "script": "pipeline/export/fields_png.py",
+    "units": "%",
+    "utc": "2026-11-14T11:06:44Z",
+    "value": 71.26
+  },
+  "fields.opt_104/t_home.max": {
+    "commit": "edbcd3c7ea42c6a3af95e2d2f3ba5e6c5f115546",
+    "file": "fields/opt_104/t_home.png",
+    "script": "pipeline/export/fields_png.py",
+    "units": "min",
+    "utc": "2026-11-14T11:06:44Z",
+    "value": 212.0
+  },
+  "fields.opt_104/t_home.sha256": {
+    "commit": "edbcd3c7ea42c6a3af95e2d2f3ba5e6c5f115546",
+    "file": "fields/opt_104/t_home.png",
+    "script": "pipeline/export/fields_png.py",
+    "units": "sha256",
+    "utc": "2026-11-14T11:06:43Z",
+    "value": "50f5e6653cfe515cf0386d890b249f010ba841a9eebd7019530e25b95235b57c"
+  },
+  "fields.opt_120/o2_home.known_pct": {
+    "commit": "edbcd3c7ea42c6a3af95e2d2f3ba5e6c5f115546",
+    "file": "fields/opt_120/o2_home.png",
+    "script": "pipeline/export/fields_png.py",
+    "units": "%",
+    "utc": "2026-11-14T11:06:59Z",
+    "value": 71.26
+  },
+  "fields.opt_120/o2_home.max": {
+    "commit": "edbcd3c7ea42c6a3af95e2d2f3ba5e6c5f115546",
+    "file": "fields/opt_120/o2_home.png",
+    "script": "pipeline/export/fields_png.py",
+    "units": "L",
+    "utc": "2026-11-14T11:06:59Z",
+    "value": 301.78
+  },
+  "fields.opt_120/o2_home.sha256": {
+    "commit": "edbcd3c7ea42c6a3af95e2d2f3ba5e6c5f115546",
+    "file": "fields/opt_120/o2_home.png",
+    "script": "pipeline/export/fields_png.py",
+    "units": "sha256",
+    "utc": "2026-11-14T11:06:59Z",
+    "value": "26c0d458a0e36c5c26a74fdf68577feb2b5b18aaffce39e8d641ed7daec3615e"
+  },
+  "fields.opt_120/t_home.known_pct": {
+    "commit": "edbcd3c7ea42c6a3af95e2d2f3ba5e6c5f115546",
+    "file": "fields/opt_120/t_home.png",
+    "script": "pipeline/export/fields_png.py",
+    "units": "%",
+    "utc": "2026-11-14T11:06:53Z",
+    "value": 71.26
+  },
+  "fields.opt_120/t_home.max": {
+    "commit": "edbcd3c7ea42c6a3af95e2d2f3ba5e6c5f115546",
+    "file": "fields/opt_120/t_home.png",
+    "script": "pipeline/export/fields_png.py",
+    "units": "min",
+    "utc": "2026-11-14T11:06:53Z",
+    "value": 224.0
+  },
+  "fields.opt_120/t_home.sha256": {
+    "commit": "edbcd3c7ea42c6a3af95e2d2f3ba5e6c5f115546",
+    "file": "fields/opt_120/t_home.png",
+    "script": "pipeline/export/fields_png.py",
+    "units": "sha256",
+    "utc": "2026-11-14T11:06:53Z",
+    "value": "7bc9d4a3f310784a926670a4d8dd20a1875f6d5c59f6692d0f839fa79c390d06"
+  },
+  "fields.opt_80/o2_home.known_pct": {
+    "commit": "edbcd3c7ea42c6a3af95e2d2f3ba5e6c5f115546",
+    "file": "fields/opt_80/o2_home.png",
+    "script": "pipeline/export/fields_png.py",
+    "units": "%",
+    "utc": "2026-11-14T11:06:39Z",
+    "value": 71.26
+  },
+  "fields.opt_80/o2_home.max": {
+    "commit": "edbcd3c7ea42c6a3af95e2d2f3ba5e6c5f115546",
+    "file": "fields/opt_80/o2_home.png",
+    "script": "pipeline/export/fields_png.py",
+    "units": "L",
+    "utc": "2026-11-14T11:06:39Z",
+    "value": 260.74
+  },
+  "fields.opt_80/o2_home.sha256": {
+    "commit": "edbcd3c7ea42c6a3af95e2d2f3ba5e6c5f115546",
+    "file": "fields/opt_80/o2_home.png",
+    "script": "pipeline/export/fields_png.py",
+    "units": "sha256",
+    "utc": "2026-11-14T11:06:39Z",
+    "value": "129453f0b3f6b872fed6206cbeace8581d6f9fbd3061a68f14a044ae7b77ec04"
+  },
+  "fields.opt_80/t_home.known_pct": {
+    "commit": "edbcd3c7ea42c6a3af95e2d2f3ba5e6c5f115546",
+    "file": "fields/opt_80/t_home.png",
+    "script": "pipeline/export/fields_png.py",
+    "units": "%",
+    "utc": "2026-11-14T11:06:34Z",
+    "value": 71.26
+  },
+  "fields.opt_80/t_home.max": {
+    "commit": "edbcd3c7ea42c6a3af95e2d2f3ba5e6c5f115546",
+    "file": "fields/opt_80/t_home.png",
+    "script": "pipeline/export/fields_png.py",
+    "units": "min",
+    "utc": "2026-11-14T11:06:34Z",
+    "value": 194.0
+  },
+  "fields.opt_80/t_home.sha256": {
+    "commit": "edbcd3c7ea42c6a3af95e2d2f3ba5e6c5f115546",
+    "file": "fields/opt_80/t_home.png",
+    "script": "pipeline/export/fields_png.py",
+    "units": "sha256",
+    "utc": "2026-11-14T11:06:33Z",
+    "value": "b7912c2b6018f8f6def152d92ff93f49a8ef3c06f03faf2145b03fc1dd5fe8f1"
+  },
+  "fields.slope.known_pct": {
+    "commit": "edbcd3c7ea42c6a3af95e2d2f3ba5e6c5f115546",
+    "file": "fields/shared/slope.png",
+    "script": "pipeline/export/fields_png.py",
+    "units": "%",
+    "utc": "2026-11-14T11:06:29Z",
+    "value": 100.0
+  },
+  "fields.slope.max": {
+    "commit": "edbcd3c7ea42c6a3af95e2d2f3ba5e6c5f115546",
+    "file": "fields/shared/slope.png",
+    "script": "pipeline/export/fields_png.py",
+    "units": "deg",
+    "utc": "2026-11-14T11:06:29Z",
+    "value": 83.78
+  },
+  "fields.slope.sha256": {
+    "commit": "edbcd3c7ea42c6a3af95e2d2f3ba5e6c5f115546",
+    "file": "fields/shared/slope.png",
+    "script": "pipeline/export/fields_png.py",
+    "units": "sha256",
+    "utc": "2026-11-14T11:06:29Z",
+    "value": "b53e99b483834d6d729a7aa3b9020bcae1d303352e3b0714b6ff0424a63203f9"
+  },
+  "file.route_nom_104.geojson": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "route_nom_104.geojson",
+    "script": "pipeline/engine/traverse.py",
+    "units": "sha256",
+    "utc": "2026-11-14T11:01:38Z",
+    "value": "139566beeecb089921c3c1c730d879b5c30c1f391fc0b7ace077f6863b90fa31"
+  },
+  "file.scenarios/bands_104.geojson": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "scenarios/bands_104.geojson",
+    "script": "pipeline/engine/scenarios.py",
+    "units": "sha256",
+    "utc": "2026-11-14T11:00:50Z",
+    "value": "2be8487813fd362d1f2d3a2fe692527389c4f9f068bb6bf38541a378c9e4e82e"
+  },
+  "file.scenarios/bands_120.geojson": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "scenarios/bands_120.geojson",
+    "script": "pipeline/engine/scenarios.py",
+    "units": "sha256",
+    "utc": "2026-11-14T11:00:57Z",
+    "value": "83d7ddddc5dbede52d2d41fb92489149fb7f67b5d13474f9dffb888ec14ff1d2"
+  },
+  "file.scenarios/bands_80.geojson": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "scenarios/bands_80.geojson",
+    "script": "pipeline/engine/scenarios.py",
+    "units": "sha256",
+    "utc": "2026-11-14T11:00:42Z",
+    "value": "20af010c5953d15bda4206b2da950c455c83e9663ef02de6dd420b9f0449f5a3"
+  },
+  "file.scenarios/index.json": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "scenarios/index.json",
+    "script": "pipeline/engine/scenarios.py",
+    "units": "sha256",
+    "utc": "2026-11-14T11:00:58Z",
+    "value": "8db6e7e98eeba86a45159e65b085c4a0ab993d7fa86e7fc2c5f44c3f0e9bfc42"
+  },
+  "file.scenarios/nom_104/edges.geojson": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "scenarios/nom_104/edges.geojson",
+    "script": "pipeline/engine/scenarios.py",
+    "units": "sha256",
+    "utc": "2026-11-14T10:59:57Z",
+    "value": "5965dea74edf2c3a108665d3b1f460a68761d620301f83e48f6675dac847b02c"
+  },
+  "file.scenarios/nom_104/isochrones.geojson": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "scenarios/nom_104/isochrones.geojson",
+    "script": "pipeline/engine/scenarios.py",
+    "units": "sha256",
+    "utc": "2026-11-14T10:59:56Z",
+    "value": "28d40ef2499780eb07e0cae2ae2ff058f62e5a14ea91ae8027c7248692ec01b9"
+  },
+  "file.scenarios/nom_104/partner.geojson": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "scenarios/nom_104/partner.geojson",
+    "script": "pipeline/engine/scenarios.py",
+    "units": "sha256",
+    "utc": "2026-11-14T11:01:21Z",
+    "value": "2cf503e0259dd600d16105387057ee3c84f8a28c5f59ba2402b7138f24cb1412"
+  },
+  "file.scenarios/nom_120/edges.geojson": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "scenarios/nom_120/edges.geojson",
+    "script": "pipeline/engine/scenarios.py",
+    "units": "sha256",
+    "utc": "2026-11-14T11:00:34Z",
+    "value": "bb74f32e34cd770b6f843bdb7ff4accb183b1c403d005b9b37dc4f9b6d5e0e63"
+  },
+  "file.scenarios/nom_120/isochrones.geojson": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "scenarios/nom_120/isochrones.geojson",
+    "script": "pipeline/engine/scenarios.py",
+    "units": "sha256",
+    "utc": "2026-11-14T11:00:32Z",
+    "value": "48870979b036a7ea865015f9271cb991e1215e09a0a813f37f737124acfb2ade"
+  },
+  "file.scenarios/nom_120/partner.geojson": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "scenarios/nom_120/partner.geojson",
+    "script": "pipeline/engine/scenarios.py",
+    "units": "sha256",
+    "utc": "2026-11-14T11:01:28Z",
+    "value": "225d99f540b26655e25ad7cb160cb355a9b6329694fed11e4faab00edcb6e3bf"
+  },
+  "file.scenarios/nom_80/edges.geojson": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "scenarios/nom_80/edges.geojson",
+    "script": "pipeline/engine/scenarios.py",
+    "units": "sha256",
+    "utc": "2026-11-14T10:59:21Z",
+    "value": "6967ecb092b72985b1d34f9bc8a3e921db859a4f285d8ebde822d10ddc954247"
+  },
+  "file.scenarios/nom_80/isochrones.geojson": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "scenarios/nom_80/isochrones.geojson",
+    "script": "pipeline/engine/scenarios.py",
+    "units": "sha256",
+    "utc": "2026-11-14T10:59:19Z",
+    "value": "c02d9dde6abeb9f87e8df053f81fcc430bc3074c010657caf2c386cf55cdb1f7"
+  },
+  "file.scenarios/nom_80/partner.geojson": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "scenarios/nom_80/partner.geojson",
+    "script": "pipeline/engine/scenarios.py",
+    "units": "sha256",
+    "utc": "2026-11-14T11:01:15Z",
+    "value": "bb30ebd5d37b5a0843470c42d7b745a0024b87a1361b5cc29c20ca6aaafd4fd6"
+  },
+  "file.scenarios/opt_104/edges.geojson": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "scenarios/opt_104/edges.geojson",
+    "script": "pipeline/engine/scenarios.py",
+    "units": "sha256",
+    "utc": "2026-11-14T10:57:53Z",
+    "value": "bc81c9b2181ae8c09f0e5fdbdc36ea769642d0e6207add4bc4d34f6a308db31d"
+  },
+  "file.scenarios/opt_104/isochrones.geojson": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "scenarios/opt_104/isochrones.geojson",
+    "script": "pipeline/engine/scenarios.py",
+    "units": "sha256",
+    "utc": "2026-11-14T10:57:51Z",
+    "value": "44fa51d188a3883e8e0d13ed3db3f4fc7da43ebf187438a53d02de6f5b3d9f0b"
+  },
+  "file.scenarios/opt_120/edges.geojson": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "scenarios/opt_120/edges.geojson",
+    "script": "pipeline/engine/scenarios.py",
+    "units": "sha256",
+    "utc": "2026-11-14T10:58:44Z",
+    "value": "3a1accb6279274532a0718115c0177313fce94d1aca261c1e324cf05e1108e2e"
+  },
+  "file.scenarios/opt_120/isochrones.geojson": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "scenarios/opt_120/isochrones.geojson",
+    "script": "pipeline/engine/scenarios.py",
+    "units": "sha256",
+    "utc": "2026-11-14T10:58:43Z",
+    "value": "88b9061aca82040d7f38d5281ddfb020239195bff808e6abe7904085d4692fc6"
+  },
+  "file.scenarios/opt_80/edges.geojson": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "scenarios/opt_80/edges.geojson",
+    "script": "pipeline/engine/scenarios.py",
+    "units": "sha256",
+    "utc": "2026-11-14T10:56:58Z",
+    "value": "879ab9bfffc1d3df7f3272838320eb84261c13dfcfc266e24ad0d7712254a08e"
+  },
+  "file.scenarios/opt_80/isochrones.geojson": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "scenarios/opt_80/isochrones.geojson",
+    "script": "pipeline/engine/scenarios.py",
+    "units": "sha256",
+    "utc": "2026-11-14T10:56:55Z",
+    "value": "624f5c1fb10652c75f846f4af5a937b65029a56f8f122ba2da1d1ecb4e62fa16"
+  },
+  "file.stations.json": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "stations.json",
+    "script": "pipeline/engine/scenarios.py",
+    "units": "sha256",
+    "utc": "2026-11-14T11:01:28Z",
+    "value": "a77e8a73ed5ff61f58f2d94b18f8074c2c3c60c8a13bf033f25514a7caa0622e"
+  },
+  "file.timeline_nom_104.json": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "timeline_nom_104.json",
+    "script": "pipeline/engine/traverse.py",
+    "units": "sha256",
+    "utc": "2026-11-14T11:01:38Z",
+    "value": "3952c2ed7094165d9aa039eb077365d693d7257236631c3fd71a7984eb13f8e5"
+  },
+  "file.trade_table.json": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "trade_table.json",
+    "script": "pipeline/engine/scenarios.py",
+    "units": "sha256",
+    "utc": "2026-11-14T11:01:39Z",
+    "value": "f783aff8fc71e916ca839788a554764b19d57d6bcac3a70d34fa215db381e43d"
+  },
   "file.validation/coreg.json": {
     "commit": "4ff8b1bd4f760e2a74921db6998fe129b42213c8-dirty",
     "file": "validation/coreg.json",
@@ -1738,6 +3362,14 @@
     "units": "sha256",
     "utc": "2026-11-14T09:57:31Z",
     "value": "db4368c0a754ceb1dbd9f6d1f6922d616e9f593d0e45dc62e51fb75b5f012d95"
+  },
+  "file.vo/drift.json": {
+    "commit": "11ac526063eb6040dc09d2c7db48efd8e9b92faa",
+    "file": "vo/drift.json",
+    "script": "pipeline/navigation/vo.py",
+    "units": "sha256",
+    "utc": "2026-11-14T10:47:18Z",
+    "value": "14d0d3e111b7a4cef7680c76849c465bc35ac65cce3658c8a5091136d5da4d4a"
   },
   "file_sha256.conditions/clock.json": {
     "commit": "1a98e90f274acdbc021c057bcc5f3b2b47a7de34",
@@ -1770,6 +3402,1478 @@
     "units": null,
     "utc": "2026-11-14T10:09:11Z",
     "value": "17cdb50ecdd7e2a95e319f2a2f77709a5b7e763bea3a5fdc47e33a8df6700f6c"
+  },
+  "in_partner_line.S2": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "stations.json",
+    "script": "pipeline/engine/scenarios.py",
+    "units": null,
+    "utc": "2026-11-14T11:01:29Z",
+    "value": false
+  },
+  "in_partner_line.S4": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "stations.json",
+    "script": "pipeline/engine/scenarios.py",
+    "units": null,
+    "utc": "2026-11-14T11:01:29Z",
+    "value": false
+  },
+  "isochrone_step_min.nom_104": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "scenarios/nom_104/isochrones.geojson",
+    "script": "pipeline/engine/scenarios.py",
+    "units": "min",
+    "utc": "2026-11-14T10:59:56Z",
+    "value": 2
+  },
+  "isochrone_step_min.nom_120": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "scenarios/nom_120/isochrones.geojson",
+    "script": "pipeline/engine/scenarios.py",
+    "units": "min",
+    "utc": "2026-11-14T11:00:32Z",
+    "value": 2
+  },
+  "isochrone_step_min.nom_80": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "scenarios/nom_80/isochrones.geojson",
+    "script": "pipeline/engine/scenarios.py",
+    "units": "min",
+    "utc": "2026-11-14T10:59:19Z",
+    "value": 2
+  },
+  "isochrone_step_min.opt_104": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "scenarios/opt_104/isochrones.geojson",
+    "script": "pipeline/engine/scenarios.py",
+    "units": "min",
+    "utc": "2026-11-14T10:57:51Z",
+    "value": 2
+  },
+  "isochrone_step_min.opt_120": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "scenarios/opt_120/isochrones.geojson",
+    "script": "pipeline/engine/scenarios.py",
+    "units": "min",
+    "utc": "2026-11-14T10:58:43Z",
+    "value": 2
+  },
+  "isochrone_step_min.opt_80": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "scenarios/opt_80/isochrones.geojson",
+    "script": "pipeline/engine/scenarios.py",
+    "units": "min",
+    "utc": "2026-11-14T10:56:55Z",
+    "value": 2
+  },
+  "landmark.S1.Gediz_Vallis.bearing_deg": {
+    "commit": "9268d3417d7ae38a4aa4c1e6efed5245bfdd6318",
+    "file": "cards/S1.json",
+    "script": "pipeline/horizon/cards.py",
+    "units": "deg",
+    "utc": "2026-11-14T11:04:16Z",
+    "value": 134.47
+  },
+  "landmark.S1.Gediz_Vallis.dist_km": {
+    "commit": "9268d3417d7ae38a4aa4c1e6efed5245bfdd6318",
+    "file": "cards/S1.json",
+    "script": "pipeline/horizon/cards.py",
+    "units": "km",
+    "utc": "2026-11-14T11:04:16Z",
+    "value": 3.7
+  },
+  "landmark.S4.Gediz_Vallis.bearing_deg": {
+    "commit": "9268d3417d7ae38a4aa4c1e6efed5245bfdd6318",
+    "file": "cards/S4.json",
+    "script": "pipeline/horizon/cards.py",
+    "units": "deg",
+    "utc": "2026-11-14T11:04:16Z",
+    "value": 158.16
+  },
+  "landmark.S4.Gediz_Vallis.dist_km": {
+    "commit": "9268d3417d7ae38a4aa4c1e6efed5245bfdd6318",
+    "file": "cards/S4.json",
+    "script": "pipeline/horizon/cards.py",
+    "units": "km",
+    "utc": "2026-11-14T11:04:16Z",
+    "value": 4.34
+  },
+  "nav.fix_interval.medium.class_area_pct.100-300": {
+    "commit": "7908eda021218284df27d6bd3082367e037f3e53-dirty",
+    "file": "nav/fix_interval_summary.json",
+    "script": "pipeline/navigation/fixinterval.py",
+    "units": "%",
+    "utc": "2026-11-14T11:16:41Z",
+    "value": 20.072
+  },
+  "nav.fix_interval.medium.class_area_pct.300-1000": {
+    "commit": "7908eda021218284df27d6bd3082367e037f3e53-dirty",
+    "file": "nav/fix_interval_summary.json",
+    "script": "pipeline/navigation/fixinterval.py",
+    "units": "%",
+    "utc": "2026-11-14T11:16:41Z",
+    "value": 2.991
+  },
+  "nav.fix_interval.medium.class_area_pct.<100": {
+    "commit": "7908eda021218284df27d6bd3082367e037f3e53-dirty",
+    "file": "nav/fix_interval_summary.json",
+    "script": "pipeline/navigation/fixinterval.py",
+    "units": "%",
+    "utc": "2026-11-14T11:16:41Z",
+    "value": 76.937
+  },
+  "nav.fix_interval.medium.class_area_pct.>1000": {
+    "commit": "7908eda021218284df27d6bd3082367e037f3e53-dirty",
+    "file": "nav/fix_interval_summary.json",
+    "script": "pipeline/navigation/fixinterval.py",
+    "units": "%",
+    "utc": "2026-11-14T11:16:41Z",
+    "value": 0.0
+  },
+  "nav.fix_interval.medium.edge_p10_m": {
+    "commit": "7908eda021218284df27d6bd3082367e037f3e53-dirty",
+    "file": "nav/fix_interval_summary.json",
+    "script": "pipeline/navigation/fixinterval.py",
+    "units": "m",
+    "utc": "2026-11-14T11:16:41Z",
+    "value": 22.7
+  },
+  "nav.fix_interval.medium.median_m": {
+    "commit": "7908eda021218284df27d6bd3082367e037f3e53-dirty",
+    "file": "nav/fix_interval_summary.json",
+    "script": "pipeline/navigation/fixinterval.py",
+    "units": "m",
+    "utc": "2026-11-14T11:16:41Z",
+    "value": 50.7
+  },
+  "nav.fixes.0.sigma_m": {
+    "commit": "7908eda021218284df27d6bd3082367e037f3e53-dirty",
+    "file": "nav/fixes.json",
+    "script": "pipeline/navigation/montecarlo.py",
+    "units": "m",
+    "utc": "2026-11-14T11:16:38Z",
+    "value": 2.0
+  },
+  "nav.fixes.0.t_eva_min": {
+    "commit": "7908eda021218284df27d6bd3082367e037f3e53-dirty",
+    "file": "nav/fixes.json",
+    "script": "pipeline/navigation/montecarlo.py",
+    "units": "min",
+    "utc": "2026-11-14T11:16:38Z",
+    "value": 0.0
+  },
+  "nav.fixes.1.sigma_m": {
+    "commit": "7908eda021218284df27d6bd3082367e037f3e53-dirty",
+    "file": "nav/fixes.json",
+    "script": "pipeline/navigation/montecarlo.py",
+    "units": "m",
+    "utc": "2026-11-14T11:16:38Z",
+    "value": 5.0
+  },
+  "nav.fixes.1.t_eva_min": {
+    "commit": "7908eda021218284df27d6bd3082367e037f3e53-dirty",
+    "file": "nav/fixes.json",
+    "script": "pipeline/navigation/montecarlo.py",
+    "units": "min",
+    "utc": "2026-11-14T11:16:38Z",
+    "value": 48.44
+  },
+  "nav.fixes.2.sigma_m": {
+    "commit": "7908eda021218284df27d6bd3082367e037f3e53-dirty",
+    "file": "nav/fixes.json",
+    "script": "pipeline/navigation/montecarlo.py",
+    "units": "m",
+    "utc": "2026-11-14T11:16:38Z",
+    "value": 5.0
+  },
+  "nav.fixes.2.t_eva_min": {
+    "commit": "7908eda021218284df27d6bd3082367e037f3e53-dirty",
+    "file": "nav/fixes.json",
+    "script": "pipeline/navigation/montecarlo.py",
+    "units": "min",
+    "utc": "2026-11-14T11:16:38Z",
+    "value": 108.73
+  },
+  "nav.fixes.3.sigma_m": {
+    "commit": "7908eda021218284df27d6bd3082367e037f3e53-dirty",
+    "file": "nav/fixes.json",
+    "script": "pipeline/navigation/montecarlo.py",
+    "units": "m",
+    "utc": "2026-11-14T11:16:38Z",
+    "value": 2.0
+  },
+  "nav.fixes.3.t_eva_min": {
+    "commit": "7908eda021218284df27d6bd3082367e037f3e53-dirty",
+    "file": "nav/fixes.json",
+    "script": "pipeline/navigation/montecarlo.py",
+    "units": "min",
+    "utc": "2026-11-14T11:16:38Z",
+    "value": 209.74
+  },
+  "nav.montecarlo.high.final.a_m": {
+    "commit": "7908eda021218284df27d6bd3082367e037f3e53-dirty",
+    "file": "nav/montecarlo_high.json",
+    "script": "pipeline/navigation/montecarlo.py",
+    "units": "m",
+    "utc": "2026-11-14T11:16:43Z",
+    "value": 1464.648
+  },
+  "nav.montecarlo.high.final.r95_m": {
+    "commit": "7908eda021218284df27d6bd3082367e037f3e53-dirty",
+    "file": "nav/montecarlo_high.json",
+    "script": "pipeline/navigation/montecarlo.py",
+    "units": "m",
+    "utc": "2026-11-14T11:16:43Z",
+    "value": 1200.859
+  },
+  "nav.montecarlo.high.final.t_eva_min": {
+    "commit": "7908eda021218284df27d6bd3082367e037f3e53-dirty",
+    "file": "nav/montecarlo_high.json",
+    "script": "pipeline/navigation/montecarlo.py",
+    "units": "min",
+    "utc": "2026-11-14T11:16:43Z",
+    "value": 209.0
+  },
+  "nav.montecarlo.high.runs": {
+    "commit": "7908eda021218284df27d6bd3082367e037f3e53-dirty",
+    "file": "nav/montecarlo_high.json",
+    "script": "pipeline/navigation/montecarlo.py",
+    "units": "1",
+    "utc": "2026-11-14T11:16:43Z",
+    "value": 500
+  },
+  "nav.montecarlo.low.final.a_m": {
+    "commit": "7908eda021218284df27d6bd3082367e037f3e53-dirty",
+    "file": "nav/montecarlo_low.json",
+    "script": "pipeline/navigation/montecarlo.py",
+    "units": "m",
+    "utc": "2026-11-14T11:16:39Z",
+    "value": 106.012
+  },
+  "nav.montecarlo.low.final.r95_m": {
+    "commit": "7908eda021218284df27d6bd3082367e037f3e53-dirty",
+    "file": "nav/montecarlo_low.json",
+    "script": "pipeline/navigation/montecarlo.py",
+    "units": "m",
+    "utc": "2026-11-14T11:16:39Z",
+    "value": 88.15
+  },
+  "nav.montecarlo.low.final.t_eva_min": {
+    "commit": "7908eda021218284df27d6bd3082367e037f3e53-dirty",
+    "file": "nav/montecarlo_low.json",
+    "script": "pipeline/navigation/montecarlo.py",
+    "units": "min",
+    "utc": "2026-11-14T11:16:39Z",
+    "value": 209.0
+  },
+  "nav.montecarlo.low.runs": {
+    "commit": "7908eda021218284df27d6bd3082367e037f3e53-dirty",
+    "file": "nav/montecarlo_low.json",
+    "script": "pipeline/navigation/montecarlo.py",
+    "units": "1",
+    "utc": "2026-11-14T11:16:39Z",
+    "value": 500
+  },
+  "nav.montecarlo.medium.final.a_m": {
+    "commit": "7908eda021218284df27d6bd3082367e037f3e53-dirty",
+    "file": "nav/montecarlo_medium.json",
+    "script": "pipeline/navigation/montecarlo.py",
+    "units": "m",
+    "utc": "2026-11-14T11:16:41Z",
+    "value": 435.099
+  },
+  "nav.montecarlo.medium.final.r95_m": {
+    "commit": "7908eda021218284df27d6bd3082367e037f3e53-dirty",
+    "file": "nav/montecarlo_medium.json",
+    "script": "pipeline/navigation/montecarlo.py",
+    "units": "m",
+    "utc": "2026-11-14T11:16:41Z",
+    "value": 358.402
+  },
+  "nav.montecarlo.medium.final.t_eva_min": {
+    "commit": "7908eda021218284df27d6bd3082367e037f3e53-dirty",
+    "file": "nav/montecarlo_medium.json",
+    "script": "pipeline/navigation/montecarlo.py",
+    "units": "min",
+    "utc": "2026-11-14T11:16:41Z",
+    "value": 209.0
+  },
+  "nav.montecarlo.medium.runs": {
+    "commit": "7908eda021218284df27d6bd3082367e037f3e53-dirty",
+    "file": "nav/montecarlo_medium.json",
+    "script": "pipeline/navigation/montecarlo.py",
+    "units": "1",
+    "utc": "2026-11-14T11:16:41Z",
+    "value": 500
+  },
+  "nav.r95_fit.high.a": {
+    "commit": "7908eda021218284df27d6bd3082367e037f3e53-dirty",
+    "file": "nav/montecarlo_high.json",
+    "script": "pipeline/navigation/montecarlo.py",
+    "units": "1",
+    "utc": "2026-11-14T11:16:43Z",
+    "value": 0.36969843140929426
+  },
+  "nav.r95_fit.high.b": {
+    "commit": "7908eda021218284df27d6bd3082367e037f3e53-dirty",
+    "file": "nav/montecarlo_high.json",
+    "script": "pipeline/navigation/montecarlo.py",
+    "units": "1/m",
+    "utc": "2026-11-14T11:16:43Z",
+    "value": 0.0
+  },
+  "nav.r95_fit.low.a": {
+    "commit": "7908eda021218284df27d6bd3082367e037f3e53-dirty",
+    "file": "nav/montecarlo_low.json",
+    "script": "pipeline/navigation/montecarlo.py",
+    "units": "1",
+    "utc": "2026-11-14T11:16:39Z",
+    "value": 0.037587341237418866
+  },
+  "nav.r95_fit.low.b": {
+    "commit": "7908eda021218284df27d6bd3082367e037f3e53-dirty",
+    "file": "nav/montecarlo_low.json",
+    "script": "pipeline/navigation/montecarlo.py",
+    "units": "1/m",
+    "utc": "2026-11-14T11:16:39Z",
+    "value": 0.0
+  },
+  "nav.r95_fit.medium.a": {
+    "commit": "7908eda021218284df27d6bd3082367e037f3e53-dirty",
+    "file": "nav/montecarlo_medium.json",
+    "script": "pipeline/navigation/montecarlo.py",
+    "units": "1",
+    "utc": "2026-11-14T11:16:41Z",
+    "value": 0.13232002853967245
+  },
+  "nav.r95_fit.medium.b": {
+    "commit": "7908eda021218284df27d6bd3082367e037f3e53-dirty",
+    "file": "nav/montecarlo_medium.json",
+    "script": "pipeline/navigation/montecarlo.py",
+    "units": "1/m",
+    "utc": "2026-11-14T11:16:41Z",
+    "value": 0.0
+  },
+  "nav.skyline.NLB_743544164EDR_F1022164NCAM00269M_.candidates_evaluated": {
+    "commit": "7908eda021218284df27d6bd3082367e037f3e53-dirty",
+    "file": "localisation/NLB_743544164EDR_F1022164NCAM00269M_.json",
+    "script": "pipeline/navigation/skylinefix.py",
+    "units": "1",
+    "utc": "2026-11-14T11:16:38Z",
+    "value": 516
+  },
+  "nav.skyline.NLB_743544164EDR_F1022164NCAM00269M_.error_m": {
+    "commit": "7908eda021218284df27d6bd3082367e037f3e53-dirty",
+    "file": "localisation/NLB_743544164EDR_F1022164NCAM00269M_.json",
+    "script": "pipeline/navigation/skylinefix.py",
+    "units": "m",
+    "utc": "2026-11-14T11:16:38Z",
+    "value": 390.31
+  },
+  "nav.skyline.NLB_743544164EDR_F1022164NCAM00269M_.rms_deg": {
+    "commit": "7908eda021218284df27d6bd3082367e037f3e53-dirty",
+    "file": "localisation/NLB_743544164EDR_F1022164NCAM00269M_.json",
+    "script": "pipeline/navigation/skylinefix.py",
+    "units": "deg",
+    "utc": "2026-11-14T11:16:38Z",
+    "value": 1.3984
+  },
+  "nav.skyline.NLB_743544164EDR_F1022164NCAM00269M_.sigma_m": {
+    "commit": "7908eda021218284df27d6bd3082367e037f3e53-dirty",
+    "file": "localisation/NLB_743544164EDR_F1022164NCAM00269M_.json",
+    "script": "pipeline/navigation/skylinefix.py",
+    "units": "m",
+    "utc": "2026-11-14T11:16:38Z",
+    "value": 47.54
+  },
+  "nav.skyline.NLB_744965221EDR_F1030994NCAM00296M_.candidates_evaluated": {
+    "commit": "7908eda021218284df27d6bd3082367e037f3e53-dirty",
+    "file": "localisation/NLB_744965221EDR_F1030994NCAM00296M_.json",
+    "script": "pipeline/navigation/skylinefix.py",
+    "units": "1",
+    "utc": "2026-11-14T11:16:38Z",
+    "value": 516
+  },
+  "nav.skyline.NLB_744965221EDR_F1030994NCAM00296M_.error_m": {
+    "commit": "7908eda021218284df27d6bd3082367e037f3e53-dirty",
+    "file": "localisation/NLB_744965221EDR_F1030994NCAM00296M_.json",
+    "script": "pipeline/navigation/skylinefix.py",
+    "units": "m",
+    "utc": "2026-11-14T11:16:38Z",
+    "value": 493.65
+  },
+  "nav.skyline.NLB_744965221EDR_F1030994NCAM00296M_.rms_deg": {
+    "commit": "7908eda021218284df27d6bd3082367e037f3e53-dirty",
+    "file": "localisation/NLB_744965221EDR_F1030994NCAM00296M_.json",
+    "script": "pipeline/navigation/skylinefix.py",
+    "units": "deg",
+    "utc": "2026-11-14T11:16:38Z",
+    "value": 4.2623
+  },
+  "nav.skyline.NLB_744965221EDR_F1030994NCAM00296M_.sigma_m": {
+    "commit": "7908eda021218284df27d6bd3082367e037f3e53-dirty",
+    "file": "localisation/NLB_744965221EDR_F1030994NCAM00296M_.json",
+    "script": "pipeline/navigation/skylinefix.py",
+    "units": "m",
+    "utc": "2026-11-14T11:16:38Z",
+    "value": 11.28
+  },
+  "nav.skyline.NLB_747986152EDR_F1040652NCAM00288M_.candidates_evaluated": {
+    "commit": "7908eda021218284df27d6bd3082367e037f3e53-dirty",
+    "file": "localisation/NLB_747986152EDR_F1040652NCAM00288M_.json",
+    "script": "pipeline/navigation/skylinefix.py",
+    "units": "1",
+    "utc": "2026-11-14T11:16:38Z",
+    "value": 516
+  },
+  "nav.skyline.NLB_747986152EDR_F1040652NCAM00288M_.error_m": {
+    "commit": "7908eda021218284df27d6bd3082367e037f3e53-dirty",
+    "file": "localisation/NLB_747986152EDR_F1040652NCAM00288M_.json",
+    "script": "pipeline/navigation/skylinefix.py",
+    "units": "m",
+    "utc": "2026-11-14T11:16:38Z",
+    "value": 523.2
+  },
+  "nav.skyline.NLB_747986152EDR_F1040652NCAM00288M_.rms_deg": {
+    "commit": "7908eda021218284df27d6bd3082367e037f3e53-dirty",
+    "file": "localisation/NLB_747986152EDR_F1040652NCAM00288M_.json",
+    "script": "pipeline/navigation/skylinefix.py",
+    "units": "deg",
+    "utc": "2026-11-14T11:16:38Z",
+    "value": 1.654
+  },
+  "nav.skyline.NLB_747986152EDR_F1040652NCAM00288M_.sigma_m": {
+    "commit": "7908eda021218284df27d6bd3082367e037f3e53-dirty",
+    "file": "localisation/NLB_747986152EDR_F1040652NCAM00288M_.json",
+    "script": "pipeline/navigation/skylinefix.py",
+    "units": "m",
+    "utc": "2026-11-14T11:16:38Z",
+    "value": 48.53
+  },
+  "nav.skyline.NLB_761648210EDR_F1060660NCAM00258M_.candidates_evaluated": {
+    "commit": "7908eda021218284df27d6bd3082367e037f3e53-dirty",
+    "file": "localisation/NLB_761648210EDR_F1060660NCAM00258M_.json",
+    "script": "pipeline/navigation/skylinefix.py",
+    "units": "1",
+    "utc": "2026-11-14T11:16:38Z",
+    "value": 516
+  },
+  "nav.skyline.NLB_761648210EDR_F1060660NCAM00258M_.error_m": {
+    "commit": "7908eda021218284df27d6bd3082367e037f3e53-dirty",
+    "file": "localisation/NLB_761648210EDR_F1060660NCAM00258M_.json",
+    "script": "pipeline/navigation/skylinefix.py",
+    "units": "m",
+    "utc": "2026-11-14T11:16:38Z",
+    "value": 729.23
+  },
+  "nav.skyline.NLB_761648210EDR_F1060660NCAM00258M_.rms_deg": {
+    "commit": "7908eda021218284df27d6bd3082367e037f3e53-dirty",
+    "file": "localisation/NLB_761648210EDR_F1060660NCAM00258M_.json",
+    "script": "pipeline/navigation/skylinefix.py",
+    "units": "deg",
+    "utc": "2026-11-14T11:16:38Z",
+    "value": 5.9683
+  },
+  "nav.skyline.NLB_761648210EDR_F1060660NCAM00258M_.sigma_m": {
+    "commit": "7908eda021218284df27d6bd3082367e037f3e53-dirty",
+    "file": "localisation/NLB_761648210EDR_F1060660NCAM00258M_.json",
+    "script": "pipeline/navigation/skylinefix.py",
+    "units": "m",
+    "utc": "2026-11-14T11:16:38Z",
+    "value": 48.86
+  },
+  "nav.skyline.NLB_767161116EDR_F1062950NCAM00263M_.candidates_evaluated": {
+    "commit": "7908eda021218284df27d6bd3082367e037f3e53-dirty",
+    "file": "localisation/NLB_767161116EDR_F1062950NCAM00263M_.json",
+    "script": "pipeline/navigation/skylinefix.py",
+    "units": "1",
+    "utc": "2026-11-14T11:16:38Z",
+    "value": 516
+  },
+  "nav.skyline.NLB_767161116EDR_F1062950NCAM00263M_.error_m": {
+    "commit": "7908eda021218284df27d6bd3082367e037f3e53-dirty",
+    "file": "localisation/NLB_767161116EDR_F1062950NCAM00263M_.json",
+    "script": "pipeline/navigation/skylinefix.py",
+    "units": "m",
+    "utc": "2026-11-14T11:16:38Z",
+    "value": 965.79
+  },
+  "nav.skyline.NLB_767161116EDR_F1062950NCAM00263M_.rms_deg": {
+    "commit": "7908eda021218284df27d6bd3082367e037f3e53-dirty",
+    "file": "localisation/NLB_767161116EDR_F1062950NCAM00263M_.json",
+    "script": "pipeline/navigation/skylinefix.py",
+    "units": "deg",
+    "utc": "2026-11-14T11:16:38Z",
+    "value": 6.0425
+  },
+  "nav.skyline.NLB_767161116EDR_F1062950NCAM00263M_.sigma_m": {
+    "commit": "7908eda021218284df27d6bd3082367e037f3e53-dirty",
+    "file": "localisation/NLB_767161116EDR_F1062950NCAM00263M_.json",
+    "script": "pipeline/navigation/skylinefix.py",
+    "units": "m",
+    "utc": "2026-11-14T11:16:38Z",
+    "value": 48.53
+  },
+  "nav.skyline.NLB_786516662EDR_F1112124NCAM00253M_.candidates_evaluated": {
+    "commit": "7908eda021218284df27d6bd3082367e037f3e53-dirty",
+    "file": "localisation/NLB_786516662EDR_F1112124NCAM00253M_.json",
+    "script": "pipeline/navigation/skylinefix.py",
+    "units": "1",
+    "utc": "2026-11-14T11:16:38Z",
+    "value": 516
+  },
+  "nav.skyline.NLB_786516662EDR_F1112124NCAM00253M_.error_m": {
+    "commit": "7908eda021218284df27d6bd3082367e037f3e53-dirty",
+    "file": "localisation/NLB_786516662EDR_F1112124NCAM00253M_.json",
+    "script": "pipeline/navigation/skylinefix.py",
+    "units": "m",
+    "utc": "2026-11-14T11:16:38Z",
+    "value": 819.04
+  },
+  "nav.skyline.NLB_786516662EDR_F1112124NCAM00253M_.rms_deg": {
+    "commit": "7908eda021218284df27d6bd3082367e037f3e53-dirty",
+    "file": "localisation/NLB_786516662EDR_F1112124NCAM00253M_.json",
+    "script": "pipeline/navigation/skylinefix.py",
+    "units": "deg",
+    "utc": "2026-11-14T11:16:38Z",
+    "value": 3.0815
+  },
+  "nav.skyline.NLB_786516662EDR_F1112124NCAM00253M_.sigma_m": {
+    "commit": "7908eda021218284df27d6bd3082367e037f3e53-dirty",
+    "file": "localisation/NLB_786516662EDR_F1112124NCAM00253M_.json",
+    "script": "pipeline/navigation/skylinefix.py",
+    "units": "m",
+    "utc": "2026-11-14T11:16:38Z",
+    "value": 46.18
+  },
+  "nav.skyline.NLB_787577730EDR_F1120228NCAM00270M_.candidates_evaluated": {
+    "commit": "7908eda021218284df27d6bd3082367e037f3e53-dirty",
+    "file": "localisation/NLB_787577730EDR_F1120228NCAM00270M_.json",
+    "script": "pipeline/navigation/skylinefix.py",
+    "units": "1",
+    "utc": "2026-11-14T11:16:38Z",
+    "value": 516
+  },
+  "nav.skyline.NLB_787577730EDR_F1120228NCAM00270M_.error_m": {
+    "commit": "7908eda021218284df27d6bd3082367e037f3e53-dirty",
+    "file": "localisation/NLB_787577730EDR_F1120228NCAM00270M_.json",
+    "script": "pipeline/navigation/skylinefix.py",
+    "units": "m",
+    "utc": "2026-11-14T11:16:38Z",
+    "value": 257.3
+  },
+  "nav.skyline.NLB_787577730EDR_F1120228NCAM00270M_.rms_deg": {
+    "commit": "7908eda021218284df27d6bd3082367e037f3e53-dirty",
+    "file": "localisation/NLB_787577730EDR_F1120228NCAM00270M_.json",
+    "script": "pipeline/navigation/skylinefix.py",
+    "units": "deg",
+    "utc": "2026-11-14T11:16:38Z",
+    "value": 2.2406
+  },
+  "nav.skyline.NLB_787577730EDR_F1120228NCAM00270M_.sigma_m": {
+    "commit": "7908eda021218284df27d6bd3082367e037f3e53-dirty",
+    "file": "localisation/NLB_787577730EDR_F1120228NCAM00270M_.json",
+    "script": "pipeline/navigation/skylinefix.py",
+    "units": "m",
+    "utc": "2026-11-14T11:16:38Z",
+    "value": 48.86
+  },
+  "nav.skyline.NLB_789347468EDR_F1120798NCAM00279M_.candidates_evaluated": {
+    "commit": "7908eda021218284df27d6bd3082367e037f3e53-dirty",
+    "file": "localisation/NLB_789347468EDR_F1120798NCAM00279M_.json",
+    "script": "pipeline/navigation/skylinefix.py",
+    "units": "1",
+    "utc": "2026-11-14T11:16:38Z",
+    "value": 516
+  },
+  "nav.skyline.NLB_789347468EDR_F1120798NCAM00279M_.error_m": {
+    "commit": "7908eda021218284df27d6bd3082367e037f3e53-dirty",
+    "file": "localisation/NLB_789347468EDR_F1120798NCAM00279M_.json",
+    "script": "pipeline/navigation/skylinefix.py",
+    "units": "m",
+    "utc": "2026-11-14T11:16:38Z",
+    "value": 280.48
+  },
+  "nav.skyline.NLB_789347468EDR_F1120798NCAM00279M_.rms_deg": {
+    "commit": "7908eda021218284df27d6bd3082367e037f3e53-dirty",
+    "file": "localisation/NLB_789347468EDR_F1120798NCAM00279M_.json",
+    "script": "pipeline/navigation/skylinefix.py",
+    "units": "deg",
+    "utc": "2026-11-14T11:16:38Z",
+    "value": 2.8413
+  },
+  "nav.skyline.NLB_789347468EDR_F1120798NCAM00279M_.sigma_m": {
+    "commit": "7908eda021218284df27d6bd3082367e037f3e53-dirty",
+    "file": "localisation/NLB_789347468EDR_F1120798NCAM00279M_.json",
+    "script": "pipeline/navigation/skylinefix.py",
+    "units": "m",
+    "utc": "2026-11-14T11:16:38Z",
+    "value": 48.86
+  },
+  "nav.skyline.NLB_800007980EDR_F1160000NCAM00280M_.candidates_evaluated": {
+    "commit": "7908eda021218284df27d6bd3082367e037f3e53-dirty",
+    "file": "localisation/NLB_800007980EDR_F1160000NCAM00280M_.json",
+    "script": "pipeline/navigation/skylinefix.py",
+    "units": "1",
+    "utc": "2026-11-14T11:16:38Z",
+    "value": 516
+  },
+  "nav.skyline.NLB_800007980EDR_F1160000NCAM00280M_.error_m": {
+    "commit": "7908eda021218284df27d6bd3082367e037f3e53-dirty",
+    "file": "localisation/NLB_800007980EDR_F1160000NCAM00280M_.json",
+    "script": "pipeline/navigation/skylinefix.py",
+    "units": "m",
+    "utc": "2026-11-14T11:16:38Z",
+    "value": 824.0
+  },
+  "nav.skyline.NLB_800007980EDR_F1160000NCAM00280M_.rms_deg": {
+    "commit": "7908eda021218284df27d6bd3082367e037f3e53-dirty",
+    "file": "localisation/NLB_800007980EDR_F1160000NCAM00280M_.json",
+    "script": "pipeline/navigation/skylinefix.py",
+    "units": "deg",
+    "utc": "2026-11-14T11:16:38Z",
+    "value": 1.6702
+  },
+  "nav.skyline.NLB_800007980EDR_F1160000NCAM00280M_.sigma_m": {
+    "commit": "7908eda021218284df27d6bd3082367e037f3e53-dirty",
+    "file": "localisation/NLB_800007980EDR_F1160000NCAM00280M_.json",
+    "script": "pipeline/navigation/skylinefix.py",
+    "units": "m",
+    "utc": "2026-11-14T11:16:38Z",
+    "value": 28.21
+  },
+  "nav.skyline.NLB_803472163EDR_F1162562NCAM00271M_.candidates_evaluated": {
+    "commit": "7908eda021218284df27d6bd3082367e037f3e53-dirty",
+    "file": "localisation/NLB_803472163EDR_F1162562NCAM00271M_.json",
+    "script": "pipeline/navigation/skylinefix.py",
+    "units": "1",
+    "utc": "2026-11-14T11:16:38Z",
+    "value": 516
+  },
+  "nav.skyline.NLB_803472163EDR_F1162562NCAM00271M_.error_m": {
+    "commit": "7908eda021218284df27d6bd3082367e037f3e53-dirty",
+    "file": "localisation/NLB_803472163EDR_F1162562NCAM00271M_.json",
+    "script": "pipeline/navigation/skylinefix.py",
+    "units": "m",
+    "utc": "2026-11-14T11:16:38Z",
+    "value": 439.67
+  },
+  "nav.skyline.NLB_803472163EDR_F1162562NCAM00271M_.rms_deg": {
+    "commit": "7908eda021218284df27d6bd3082367e037f3e53-dirty",
+    "file": "localisation/NLB_803472163EDR_F1162562NCAM00271M_.json",
+    "script": "pipeline/navigation/skylinefix.py",
+    "units": "deg",
+    "utc": "2026-11-14T11:16:38Z",
+    "value": 0.0952
+  },
+  "nav.skyline.NLB_803472163EDR_F1162562NCAM00271M_.sigma_m": {
+    "commit": "7908eda021218284df27d6bd3082367e037f3e53-dirty",
+    "file": "localisation/NLB_803472163EDR_F1162562NCAM00271M_.json",
+    "script": "pipeline/navigation/skylinefix.py",
+    "units": "m",
+    "utc": "2026-11-14T11:16:38Z",
+    "value": 48.86
+  },
+  "nav.skyline.NLB_805508126EDR_F1171890NCAM00251M_.candidates_evaluated": {
+    "commit": "7908eda021218284df27d6bd3082367e037f3e53-dirty",
+    "file": "localisation/NLB_805508126EDR_F1171890NCAM00251M_.json",
+    "script": "pipeline/navigation/skylinefix.py",
+    "units": "1",
+    "utc": "2026-11-14T11:16:38Z",
+    "value": 516
+  },
+  "nav.skyline.NLB_805508126EDR_F1171890NCAM00251M_.error_m": {
+    "commit": "7908eda021218284df27d6bd3082367e037f3e53-dirty",
+    "file": "localisation/NLB_805508126EDR_F1171890NCAM00251M_.json",
+    "script": "pipeline/navigation/skylinefix.py",
+    "units": "m",
+    "utc": "2026-11-14T11:16:38Z",
+    "value": 987.25
+  },
+  "nav.skyline.NLB_805508126EDR_F1171890NCAM00251M_.rms_deg": {
+    "commit": "7908eda021218284df27d6bd3082367e037f3e53-dirty",
+    "file": "localisation/NLB_805508126EDR_F1171890NCAM00251M_.json",
+    "script": "pipeline/navigation/skylinefix.py",
+    "units": "deg",
+    "utc": "2026-11-14T11:16:38Z",
+    "value": 0.9671
+  },
+  "nav.skyline.NLB_805508126EDR_F1171890NCAM00251M_.sigma_m": {
+    "commit": "7908eda021218284df27d6bd3082367e037f3e53-dirty",
+    "file": "localisation/NLB_805508126EDR_F1171890NCAM00251M_.json",
+    "script": "pipeline/navigation/skylinefix.py",
+    "units": "m",
+    "utc": "2026-11-14T11:16:38Z",
+    "value": 45.49
+  },
+  "nav.skyline.NLB_805508157EDR_F1171890NCAM00251M_.candidates_evaluated": {
+    "commit": "7908eda021218284df27d6bd3082367e037f3e53-dirty",
+    "file": "localisation/NLB_805508157EDR_F1171890NCAM00251M_.json",
+    "script": "pipeline/navigation/skylinefix.py",
+    "units": "1",
+    "utc": "2026-11-14T11:16:38Z",
+    "value": 516
+  },
+  "nav.skyline.NLB_805508157EDR_F1171890NCAM00251M_.error_m": {
+    "commit": "7908eda021218284df27d6bd3082367e037f3e53-dirty",
+    "file": "localisation/NLB_805508157EDR_F1171890NCAM00251M_.json",
+    "script": "pipeline/navigation/skylinefix.py",
+    "units": "m",
+    "utc": "2026-11-14T11:16:38Z",
+    "value": 420.8
+  },
+  "nav.skyline.NLB_805508157EDR_F1171890NCAM00251M_.rms_deg": {
+    "commit": "7908eda021218284df27d6bd3082367e037f3e53-dirty",
+    "file": "localisation/NLB_805508157EDR_F1171890NCAM00251M_.json",
+    "script": "pipeline/navigation/skylinefix.py",
+    "units": "deg",
+    "utc": "2026-11-14T11:16:38Z",
+    "value": 1.6436
+  },
+  "nav.skyline.NLB_805508157EDR_F1171890NCAM00251M_.sigma_m": {
+    "commit": "7908eda021218284df27d6bd3082367e037f3e53-dirty",
+    "file": "localisation/NLB_805508157EDR_F1171890NCAM00251M_.json",
+    "script": "pipeline/navigation/skylinefix.py",
+    "units": "m",
+    "utc": "2026-11-14T11:16:38Z",
+    "value": 48.53
+  },
+  "nav.skyline.NLB_806042735EDR_F1172490NCAM00261M_.candidates_evaluated": {
+    "commit": "7908eda021218284df27d6bd3082367e037f3e53-dirty",
+    "file": "localisation/NLB_806042735EDR_F1172490NCAM00261M_.json",
+    "script": "pipeline/navigation/skylinefix.py",
+    "units": "1",
+    "utc": "2026-11-14T11:16:38Z",
+    "value": 516
+  },
+  "nav.skyline.NLB_806042735EDR_F1172490NCAM00261M_.error_m": {
+    "commit": "7908eda021218284df27d6bd3082367e037f3e53-dirty",
+    "file": "localisation/NLB_806042735EDR_F1172490NCAM00261M_.json",
+    "script": "pipeline/navigation/skylinefix.py",
+    "units": "m",
+    "utc": "2026-11-14T11:16:38Z",
+    "value": 464.39
+  },
+  "nav.skyline.NLB_806042735EDR_F1172490NCAM00261M_.rms_deg": {
+    "commit": "7908eda021218284df27d6bd3082367e037f3e53-dirty",
+    "file": "localisation/NLB_806042735EDR_F1172490NCAM00261M_.json",
+    "script": "pipeline/navigation/skylinefix.py",
+    "units": "deg",
+    "utc": "2026-11-14T11:16:38Z",
+    "value": 0.7768
+  },
+  "nav.skyline.NLB_806042735EDR_F1172490NCAM00261M_.sigma_m": {
+    "commit": "7908eda021218284df27d6bd3082367e037f3e53-dirty",
+    "file": "localisation/NLB_806042735EDR_F1172490NCAM00261M_.json",
+    "script": "pipeline/navigation/skylinefix.py",
+    "units": "m",
+    "utc": "2026-11-14T11:16:38Z",
+    "value": 28.21
+  },
+  "nav.skyline.NLB_807111784EDR_F1180000NCAM00273M_.candidates_evaluated": {
+    "commit": "7908eda021218284df27d6bd3082367e037f3e53-dirty",
+    "file": "localisation/NLB_807111784EDR_F1180000NCAM00273M_.json",
+    "script": "pipeline/navigation/skylinefix.py",
+    "units": "1",
+    "utc": "2026-11-14T11:16:38Z",
+    "value": 516
+  },
+  "nav.skyline.NLB_807111784EDR_F1180000NCAM00273M_.error_m": {
+    "commit": "7908eda021218284df27d6bd3082367e037f3e53-dirty",
+    "file": "localisation/NLB_807111784EDR_F1180000NCAM00273M_.json",
+    "script": "pipeline/navigation/skylinefix.py",
+    "units": "m",
+    "utc": "2026-11-14T11:16:38Z",
+    "value": 401.04
+  },
+  "nav.skyline.NLB_807111784EDR_F1180000NCAM00273M_.rms_deg": {
+    "commit": "7908eda021218284df27d6bd3082367e037f3e53-dirty",
+    "file": "localisation/NLB_807111784EDR_F1180000NCAM00273M_.json",
+    "script": "pipeline/navigation/skylinefix.py",
+    "units": "deg",
+    "utc": "2026-11-14T11:16:38Z",
+    "value": 0.0412
+  },
+  "nav.skyline.NLB_807111784EDR_F1180000NCAM00273M_.sigma_m": {
+    "commit": "7908eda021218284df27d6bd3082367e037f3e53-dirty",
+    "file": "localisation/NLB_807111784EDR_F1180000NCAM00273M_.json",
+    "script": "pipeline/navigation/skylinefix.py",
+    "units": "m",
+    "utc": "2026-11-14T11:16:38Z",
+    "value": 47.2
+  },
+  "nav.skyline.NLB_811540209EDR_F1183156NCAM00286M_.candidates_evaluated": {
+    "commit": "7908eda021218284df27d6bd3082367e037f3e53-dirty",
+    "file": "localisation/NLB_811540209EDR_F1183156NCAM00286M_.json",
+    "script": "pipeline/navigation/skylinefix.py",
+    "units": "1",
+    "utc": "2026-11-14T11:16:38Z",
+    "value": 516
+  },
+  "nav.skyline.NLB_811540209EDR_F1183156NCAM00286M_.error_m": {
+    "commit": "7908eda021218284df27d6bd3082367e037f3e53-dirty",
+    "file": "localisation/NLB_811540209EDR_F1183156NCAM00286M_.json",
+    "script": "pipeline/navigation/skylinefix.py",
+    "units": "m",
+    "utc": "2026-11-14T11:16:38Z",
+    "value": 951.41
+  },
+  "nav.skyline.NLB_811540209EDR_F1183156NCAM00286M_.rms_deg": {
+    "commit": "7908eda021218284df27d6bd3082367e037f3e53-dirty",
+    "file": "localisation/NLB_811540209EDR_F1183156NCAM00286M_.json",
+    "script": "pipeline/navigation/skylinefix.py",
+    "units": "deg",
+    "utc": "2026-11-14T11:16:38Z",
+    "value": 0.6386
+  },
+  "nav.skyline.NLB_811540209EDR_F1183156NCAM00286M_.sigma_m": {
+    "commit": "7908eda021218284df27d6bd3082367e037f3e53-dirty",
+    "file": "localisation/NLB_811540209EDR_F1183156NCAM00286M_.json",
+    "script": "pipeline/navigation/skylinefix.py",
+    "units": "m",
+    "utc": "2026-11-14T11:16:38Z",
+    "value": 9.77
+  },
+  "nav.skyline.NLB_811540240EDR_F1183156NCAM00286M_.candidates_evaluated": {
+    "commit": "7908eda021218284df27d6bd3082367e037f3e53-dirty",
+    "file": "localisation/NLB_811540240EDR_F1183156NCAM00286M_.json",
+    "script": "pipeline/navigation/skylinefix.py",
+    "units": "1",
+    "utc": "2026-11-14T11:16:38Z",
+    "value": 516
+  },
+  "nav.skyline.NLB_811540240EDR_F1183156NCAM00286M_.error_m": {
+    "commit": "7908eda021218284df27d6bd3082367e037f3e53-dirty",
+    "file": "localisation/NLB_811540240EDR_F1183156NCAM00286M_.json",
+    "script": "pipeline/navigation/skylinefix.py",
+    "units": "m",
+    "utc": "2026-11-14T11:16:38Z",
+    "value": 264.68
+  },
+  "nav.skyline.NLB_811540240EDR_F1183156NCAM00286M_.rms_deg": {
+    "commit": "7908eda021218284df27d6bd3082367e037f3e53-dirty",
+    "file": "localisation/NLB_811540240EDR_F1183156NCAM00286M_.json",
+    "script": "pipeline/navigation/skylinefix.py",
+    "units": "deg",
+    "utc": "2026-11-14T11:16:38Z",
+    "value": 2.4048
+  },
+  "nav.skyline.NLB_811540240EDR_F1183156NCAM00286M_.sigma_m": {
+    "commit": "7908eda021218284df27d6bd3082367e037f3e53-dirty",
+    "file": "localisation/NLB_811540240EDR_F1183156NCAM00286M_.json",
+    "script": "pipeline/navigation/skylinefix.py",
+    "units": "m",
+    "utc": "2026-11-14T11:16:38Z",
+    "value": 39.89
+  },
+  "nav.skyline.NLB_824771219EDR_F1201264NCAM00290M_.candidates_evaluated": {
+    "commit": "7908eda021218284df27d6bd3082367e037f3e53-dirty",
+    "file": "localisation/NLB_824771219EDR_F1201264NCAM00290M_.json",
+    "script": "pipeline/navigation/skylinefix.py",
+    "units": "1",
+    "utc": "2026-11-14T11:16:38Z",
+    "value": 516
+  },
+  "nav.skyline.NLB_824771219EDR_F1201264NCAM00290M_.error_m": {
+    "commit": "7908eda021218284df27d6bd3082367e037f3e53-dirty",
+    "file": "localisation/NLB_824771219EDR_F1201264NCAM00290M_.json",
+    "script": "pipeline/navigation/skylinefix.py",
+    "units": "m",
+    "utc": "2026-11-14T11:16:38Z",
+    "value": 897.12
+  },
+  "nav.skyline.NLB_824771219EDR_F1201264NCAM00290M_.rms_deg": {
+    "commit": "7908eda021218284df27d6bd3082367e037f3e53-dirty",
+    "file": "localisation/NLB_824771219EDR_F1201264NCAM00290M_.json",
+    "script": "pipeline/navigation/skylinefix.py",
+    "units": "deg",
+    "utc": "2026-11-14T11:16:38Z",
+    "value": 3.8459
+  },
+  "nav.skyline.NLB_824771219EDR_F1201264NCAM00290M_.sigma_m": {
+    "commit": "7908eda021218284df27d6bd3082367e037f3e53-dirty",
+    "file": "localisation/NLB_824771219EDR_F1201264NCAM00290M_.json",
+    "script": "pipeline/navigation/skylinefix.py",
+    "units": "m",
+    "utc": "2026-11-14T11:16:38Z",
+    "value": 45.49
+  },
+  "nav.skyline.NLB_824771250EDR_F1201264NCAM00290M_.candidates_evaluated": {
+    "commit": "7908eda021218284df27d6bd3082367e037f3e53-dirty",
+    "file": "localisation/NLB_824771250EDR_F1201264NCAM00290M_.json",
+    "script": "pipeline/navigation/skylinefix.py",
+    "units": "1",
+    "utc": "2026-11-14T11:16:38Z",
+    "value": 516
+  },
+  "nav.skyline.NLB_824771250EDR_F1201264NCAM00290M_.error_m": {
+    "commit": "7908eda021218284df27d6bd3082367e037f3e53-dirty",
+    "file": "localisation/NLB_824771250EDR_F1201264NCAM00290M_.json",
+    "script": "pipeline/navigation/skylinefix.py",
+    "units": "m",
+    "utc": "2026-11-14T11:16:38Z",
+    "value": 656.86
+  },
+  "nav.skyline.NLB_824771250EDR_F1201264NCAM00290M_.rms_deg": {
+    "commit": "7908eda021218284df27d6bd3082367e037f3e53-dirty",
+    "file": "localisation/NLB_824771250EDR_F1201264NCAM00290M_.json",
+    "script": "pipeline/navigation/skylinefix.py",
+    "units": "deg",
+    "utc": "2026-11-14T11:16:38Z",
+    "value": 3.1175
+  },
+  "nav.skyline.NLB_824771250EDR_F1201264NCAM00290M_.sigma_m": {
+    "commit": "7908eda021218284df27d6bd3082367e037f3e53-dirty",
+    "file": "localisation/NLB_824771250EDR_F1201264NCAM00290M_.json",
+    "script": "pipeline/navigation/skylinefix.py",
+    "units": "m",
+    "utc": "2026-11-14T11:16:38Z",
+    "value": 28.77
+  },
+  "nav.skyline.NLB_824771281EDR_F1201264NCAM00290M_.candidates_evaluated": {
+    "commit": "7908eda021218284df27d6bd3082367e037f3e53-dirty",
+    "file": "localisation/NLB_824771281EDR_F1201264NCAM00290M_.json",
+    "script": "pipeline/navigation/skylinefix.py",
+    "units": "1",
+    "utc": "2026-11-14T11:16:38Z",
+    "value": 516
+  },
+  "nav.skyline.NLB_824771281EDR_F1201264NCAM00290M_.error_m": {
+    "commit": "7908eda021218284df27d6bd3082367e037f3e53-dirty",
+    "file": "localisation/NLB_824771281EDR_F1201264NCAM00290M_.json",
+    "script": "pipeline/navigation/skylinefix.py",
+    "units": "m",
+    "utc": "2026-11-14T11:16:38Z",
+    "value": 696.04
+  },
+  "nav.skyline.NLB_824771281EDR_F1201264NCAM00290M_.rms_deg": {
+    "commit": "7908eda021218284df27d6bd3082367e037f3e53-dirty",
+    "file": "localisation/NLB_824771281EDR_F1201264NCAM00290M_.json",
+    "script": "pipeline/navigation/skylinefix.py",
+    "units": "deg",
+    "utc": "2026-11-14T11:16:38Z",
+    "value": 0.8174
+  },
+  "nav.skyline.NLB_824771281EDR_F1201264NCAM00290M_.sigma_m": {
+    "commit": "7908eda021218284df27d6bd3082367e037f3e53-dirty",
+    "file": "localisation/NLB_824771281EDR_F1201264NCAM00290M_.json",
+    "script": "pipeline/navigation/skylinefix.py",
+    "units": "m",
+    "utc": "2026-11-14T11:16:38Z",
+    "value": 36.13
+  },
+  "nav.skyline.NLB_826010313EDR_F1202366NCAM00255M_.candidates_evaluated": {
+    "commit": "7908eda021218284df27d6bd3082367e037f3e53-dirty",
+    "file": "localisation/NLB_826010313EDR_F1202366NCAM00255M_.json",
+    "script": "pipeline/navigation/skylinefix.py",
+    "units": "1",
+    "utc": "2026-11-14T11:16:38Z",
+    "value": 516
+  },
+  "nav.skyline.NLB_826010313EDR_F1202366NCAM00255M_.error_m": {
+    "commit": "7908eda021218284df27d6bd3082367e037f3e53-dirty",
+    "file": "localisation/NLB_826010313EDR_F1202366NCAM00255M_.json",
+    "script": "pipeline/navigation/skylinefix.py",
+    "units": "m",
+    "utc": "2026-11-14T11:16:38Z",
+    "value": 951.82
+  },
+  "nav.skyline.NLB_826010313EDR_F1202366NCAM00255M_.rms_deg": {
+    "commit": "7908eda021218284df27d6bd3082367e037f3e53-dirty",
+    "file": "localisation/NLB_826010313EDR_F1202366NCAM00255M_.json",
+    "script": "pipeline/navigation/skylinefix.py",
+    "units": "deg",
+    "utc": "2026-11-14T11:16:38Z",
+    "value": 6.5339
+  },
+  "nav.skyline.NLB_826010313EDR_F1202366NCAM00255M_.sigma_m": {
+    "commit": "7908eda021218284df27d6bd3082367e037f3e53-dirty",
+    "file": "localisation/NLB_826010313EDR_F1202366NCAM00255M_.json",
+    "script": "pipeline/navigation/skylinefix.py",
+    "units": "m",
+    "utc": "2026-11-14T11:16:38Z",
+    "value": 42.97
+  },
+  "nav.skyline.NLB_826010344EDR_F1202366NCAM00255M_.candidates_evaluated": {
+    "commit": "7908eda021218284df27d6bd3082367e037f3e53-dirty",
+    "file": "localisation/NLB_826010344EDR_F1202366NCAM00255M_.json",
+    "script": "pipeline/navigation/skylinefix.py",
+    "units": "1",
+    "utc": "2026-11-14T11:16:38Z",
+    "value": 516
+  },
+  "nav.skyline.NLB_826010344EDR_F1202366NCAM00255M_.error_m": {
+    "commit": "7908eda021218284df27d6bd3082367e037f3e53-dirty",
+    "file": "localisation/NLB_826010344EDR_F1202366NCAM00255M_.json",
+    "script": "pipeline/navigation/skylinefix.py",
+    "units": "m",
+    "utc": "2026-11-14T11:16:38Z",
+    "value": 881.82
+  },
+  "nav.skyline.NLB_826010344EDR_F1202366NCAM00255M_.rms_deg": {
+    "commit": "7908eda021218284df27d6bd3082367e037f3e53-dirty",
+    "file": "localisation/NLB_826010344EDR_F1202366NCAM00255M_.json",
+    "script": "pipeline/navigation/skylinefix.py",
+    "units": "deg",
+    "utc": "2026-11-14T11:16:38Z",
+    "value": 4.6368
+  },
+  "nav.skyline.NLB_826010344EDR_F1202366NCAM00255M_.sigma_m": {
+    "commit": "7908eda021218284df27d6bd3082367e037f3e53-dirty",
+    "file": "localisation/NLB_826010344EDR_F1202366NCAM00255M_.json",
+    "script": "pipeline/navigation/skylinefix.py",
+    "units": "m",
+    "utc": "2026-11-14T11:16:38Z",
+    "value": 48.86
+  },
+  "nav.skyline.NLB_826633404EDR_F1210000NCAM00262M_.candidates_evaluated": {
+    "commit": "7908eda021218284df27d6bd3082367e037f3e53-dirty",
+    "file": "localisation/NLB_826633404EDR_F1210000NCAM00262M_.json",
+    "script": "pipeline/navigation/skylinefix.py",
+    "units": "1",
+    "utc": "2026-11-14T11:16:38Z",
+    "value": 516
+  },
+  "nav.skyline.NLB_826633404EDR_F1210000NCAM00262M_.error_m": {
+    "commit": "7908eda021218284df27d6bd3082367e037f3e53-dirty",
+    "file": "localisation/NLB_826633404EDR_F1210000NCAM00262M_.json",
+    "script": "pipeline/navigation/skylinefix.py",
+    "units": "m",
+    "utc": "2026-11-14T11:16:38Z",
+    "value": 788.19
+  },
+  "nav.skyline.NLB_826633404EDR_F1210000NCAM00262M_.rms_deg": {
+    "commit": "7908eda021218284df27d6bd3082367e037f3e53-dirty",
+    "file": "localisation/NLB_826633404EDR_F1210000NCAM00262M_.json",
+    "script": "pipeline/navigation/skylinefix.py",
+    "units": "deg",
+    "utc": "2026-11-14T11:16:38Z",
+    "value": 4.022
+  },
+  "nav.skyline.NLB_826633404EDR_F1210000NCAM00262M_.sigma_m": {
+    "commit": "7908eda021218284df27d6bd3082367e037f3e53-dirty",
+    "file": "localisation/NLB_826633404EDR_F1210000NCAM00262M_.json",
+    "script": "pipeline/navigation/skylinefix.py",
+    "units": "m",
+    "utc": "2026-11-14T11:16:38Z",
+    "value": 48.86
+  },
+  "nav.skyline.NLB_827253838EDR_F1210762NCAM00271M_.candidates_evaluated": {
+    "commit": "7908eda021218284df27d6bd3082367e037f3e53-dirty",
+    "file": "localisation/NLB_827253838EDR_F1210762NCAM00271M_.json",
+    "script": "pipeline/navigation/skylinefix.py",
+    "units": "1",
+    "utc": "2026-11-14T11:16:38Z",
+    "value": 516
+  },
+  "nav.skyline.NLB_827253838EDR_F1210762NCAM00271M_.error_m": {
+    "commit": "7908eda021218284df27d6bd3082367e037f3e53-dirty",
+    "file": "localisation/NLB_827253838EDR_F1210762NCAM00271M_.json",
+    "script": "pipeline/navigation/skylinefix.py",
+    "units": "m",
+    "utc": "2026-11-14T11:16:38Z",
+    "value": 810.17
+  },
+  "nav.skyline.NLB_827253838EDR_F1210762NCAM00271M_.rms_deg": {
+    "commit": "7908eda021218284df27d6bd3082367e037f3e53-dirty",
+    "file": "localisation/NLB_827253838EDR_F1210762NCAM00271M_.json",
+    "script": "pipeline/navigation/skylinefix.py",
+    "units": "deg",
+    "utc": "2026-11-14T11:16:38Z",
+    "value": 4.6543
+  },
+  "nav.skyline.NLB_827253838EDR_F1210762NCAM00271M_.sigma_m": {
+    "commit": "7908eda021218284df27d6bd3082367e037f3e53-dirty",
+    "file": "localisation/NLB_827253838EDR_F1210762NCAM00271M_.json",
+    "script": "pipeline/navigation/skylinefix.py",
+    "units": "m",
+    "utc": "2026-11-14T11:16:38Z",
+    "value": 48.86
+  },
+  "nav.skyline.NLB_827875872EDR_F1211446NCAM00279M_.candidates_evaluated": {
+    "commit": "7908eda021218284df27d6bd3082367e037f3e53-dirty",
+    "file": "localisation/NLB_827875872EDR_F1211446NCAM00279M_.json",
+    "script": "pipeline/navigation/skylinefix.py",
+    "units": "1",
+    "utc": "2026-11-14T11:16:38Z",
+    "value": 516
+  },
+  "nav.skyline.NLB_827875872EDR_F1211446NCAM00279M_.error_m": {
+    "commit": "7908eda021218284df27d6bd3082367e037f3e53-dirty",
+    "file": "localisation/NLB_827875872EDR_F1211446NCAM00279M_.json",
+    "script": "pipeline/navigation/skylinefix.py",
+    "units": "m",
+    "utc": "2026-11-14T11:16:38Z",
+    "value": 738.99
+  },
+  "nav.skyline.NLB_827875872EDR_F1211446NCAM00279M_.rms_deg": {
+    "commit": "7908eda021218284df27d6bd3082367e037f3e53-dirty",
+    "file": "localisation/NLB_827875872EDR_F1211446NCAM00279M_.json",
+    "script": "pipeline/navigation/skylinefix.py",
+    "units": "deg",
+    "utc": "2026-11-14T11:16:38Z",
+    "value": 7.2992
+  },
+  "nav.skyline.NLB_827875872EDR_F1211446NCAM00279M_.sigma_m": {
+    "commit": "7908eda021218284df27d6bd3082367e037f3e53-dirty",
+    "file": "localisation/NLB_827875872EDR_F1211446NCAM00279M_.json",
+    "script": "pipeline/navigation/skylinefix.py",
+    "units": "m",
+    "utc": "2026-11-14T11:16:38Z",
+    "value": 47.2
+  },
+  "nav.skyline.NLB_828494644EDR_F1212004NCAM00285M_.candidates_evaluated": {
+    "commit": "7908eda021218284df27d6bd3082367e037f3e53-dirty",
+    "file": "localisation/NLB_828494644EDR_F1212004NCAM00285M_.json",
+    "script": "pipeline/navigation/skylinefix.py",
+    "units": "1",
+    "utc": "2026-11-14T11:16:38Z",
+    "value": 516
+  },
+  "nav.skyline.NLB_828494644EDR_F1212004NCAM00285M_.error_m": {
+    "commit": "7908eda021218284df27d6bd3082367e037f3e53-dirty",
+    "file": "localisation/NLB_828494644EDR_F1212004NCAM00285M_.json",
+    "script": "pipeline/navigation/skylinefix.py",
+    "units": "m",
+    "utc": "2026-11-14T11:16:38Z",
+    "value": 832.56
+  },
+  "nav.skyline.NLB_828494644EDR_F1212004NCAM00285M_.rms_deg": {
+    "commit": "7908eda021218284df27d6bd3082367e037f3e53-dirty",
+    "file": "localisation/NLB_828494644EDR_F1212004NCAM00285M_.json",
+    "script": "pipeline/navigation/skylinefix.py",
+    "units": "deg",
+    "utc": "2026-11-14T11:16:38Z",
+    "value": 6.0729
+  },
+  "nav.skyline.NLB_828494644EDR_F1212004NCAM00285M_.sigma_m": {
+    "commit": "7908eda021218284df27d6bd3082367e037f3e53-dirty",
+    "file": "localisation/NLB_828494644EDR_F1212004NCAM00285M_.json",
+    "script": "pipeline/navigation/skylinefix.py",
+    "units": "m",
+    "utc": "2026-11-14T11:16:38Z",
+    "value": 48.86
+  },
+  "nav.skyline.NLB_829028064EDR_F1212490NCAM00290M_.candidates_evaluated": {
+    "commit": "7908eda021218284df27d6bd3082367e037f3e53-dirty",
+    "file": "localisation/NLB_829028064EDR_F1212490NCAM00290M_.json",
+    "script": "pipeline/navigation/skylinefix.py",
+    "units": "1",
+    "utc": "2026-11-14T11:16:38Z",
+    "value": 516
+  },
+  "nav.skyline.NLB_829028064EDR_F1212490NCAM00290M_.error_m": {
+    "commit": "7908eda021218284df27d6bd3082367e037f3e53-dirty",
+    "file": "localisation/NLB_829028064EDR_F1212490NCAM00290M_.json",
+    "script": "pipeline/navigation/skylinefix.py",
+    "units": "m",
+    "utc": "2026-11-14T11:16:38Z",
+    "value": 257.32
+  },
+  "nav.skyline.NLB_829028064EDR_F1212490NCAM00290M_.rms_deg": {
+    "commit": "7908eda021218284df27d6bd3082367e037f3e53-dirty",
+    "file": "localisation/NLB_829028064EDR_F1212490NCAM00290M_.json",
+    "script": "pipeline/navigation/skylinefix.py",
+    "units": "deg",
+    "utc": "2026-11-14T11:16:38Z",
+    "value": 6.5883
+  },
+  "nav.skyline.NLB_829028064EDR_F1212490NCAM00290M_.sigma_m": {
+    "commit": "7908eda021218284df27d6bd3082367e037f3e53-dirty",
+    "file": "localisation/NLB_829028064EDR_F1212490NCAM00290M_.json",
+    "script": "pipeline/navigation/skylinefix.py",
+    "units": "m",
+    "utc": "2026-11-14T11:16:38Z",
+    "value": 28.21
+  },
+  "nav.skyline.NLB_833550923EDR_F1220690NCAM00262M_.candidates_evaluated": {
+    "commit": "7908eda021218284df27d6bd3082367e037f3e53-dirty",
+    "file": "localisation/NLB_833550923EDR_F1220690NCAM00262M_.json",
+    "script": "pipeline/navigation/skylinefix.py",
+    "units": "1",
+    "utc": "2026-11-14T11:16:38Z",
+    "value": 516
+  },
+  "nav.skyline.NLB_833550923EDR_F1220690NCAM00262M_.error_m": {
+    "commit": "7908eda021218284df27d6bd3082367e037f3e53-dirty",
+    "file": "localisation/NLB_833550923EDR_F1220690NCAM00262M_.json",
+    "script": "pipeline/navigation/skylinefix.py",
+    "units": "m",
+    "utc": "2026-11-14T11:16:38Z",
+    "value": 604.99
+  },
+  "nav.skyline.NLB_833550923EDR_F1220690NCAM00262M_.rms_deg": {
+    "commit": "7908eda021218284df27d6bd3082367e037f3e53-dirty",
+    "file": "localisation/NLB_833550923EDR_F1220690NCAM00262M_.json",
+    "script": "pipeline/navigation/skylinefix.py",
+    "units": "deg",
+    "utc": "2026-11-14T11:16:38Z",
+    "value": 6.9263
+  },
+  "nav.skyline.NLB_833550923EDR_F1220690NCAM00262M_.sigma_m": {
+    "commit": "7908eda021218284df27d6bd3082367e037f3e53-dirty",
+    "file": "localisation/NLB_833550923EDR_F1220690NCAM00262M_.json",
+    "script": "pipeline/navigation/skylinefix.py",
+    "units": "m",
+    "utc": "2026-11-14T11:16:38Z",
+    "value": 48.86
+  },
+  "nav.skyline.NLB_833905095EDR_F1221260NCAM00267M_.candidates_evaluated": {
+    "commit": "7908eda021218284df27d6bd3082367e037f3e53-dirty",
+    "file": "localisation/NLB_833905095EDR_F1221260NCAM00267M_.json",
+    "script": "pipeline/navigation/skylinefix.py",
+    "units": "1",
+    "utc": "2026-11-14T11:16:38Z",
+    "value": 516
+  },
+  "nav.skyline.NLB_833905095EDR_F1221260NCAM00267M_.error_m": {
+    "commit": "7908eda021218284df27d6bd3082367e037f3e53-dirty",
+    "file": "localisation/NLB_833905095EDR_F1221260NCAM00267M_.json",
+    "script": "pipeline/navigation/skylinefix.py",
+    "units": "m",
+    "utc": "2026-11-14T11:16:38Z",
+    "value": 703.85
+  },
+  "nav.skyline.NLB_833905095EDR_F1221260NCAM00267M_.rms_deg": {
+    "commit": "7908eda021218284df27d6bd3082367e037f3e53-dirty",
+    "file": "localisation/NLB_833905095EDR_F1221260NCAM00267M_.json",
+    "script": "pipeline/navigation/skylinefix.py",
+    "units": "deg",
+    "utc": "2026-11-14T11:16:38Z",
+    "value": 5.6968
+  },
+  "nav.skyline.NLB_833905095EDR_F1221260NCAM00267M_.sigma_m": {
+    "commit": "7908eda021218284df27d6bd3082367e037f3e53-dirty",
+    "file": "localisation/NLB_833905095EDR_F1221260NCAM00267M_.json",
+    "script": "pipeline/navigation/skylinefix.py",
+    "units": "m",
+    "utc": "2026-11-14T11:16:38Z",
+    "value": 48.2
+  },
+  "nav.skyline.NLB_833905125EDR_F1221260NCAM00267M_.candidates_evaluated": {
+    "commit": "7908eda021218284df27d6bd3082367e037f3e53-dirty",
+    "file": "localisation/NLB_833905125EDR_F1221260NCAM00267M_.json",
+    "script": "pipeline/navigation/skylinefix.py",
+    "units": "1",
+    "utc": "2026-11-14T11:16:38Z",
+    "value": 516
+  },
+  "nav.skyline.NLB_833905125EDR_F1221260NCAM00267M_.error_m": {
+    "commit": "7908eda021218284df27d6bd3082367e037f3e53-dirty",
+    "file": "localisation/NLB_833905125EDR_F1221260NCAM00267M_.json",
+    "script": "pipeline/navigation/skylinefix.py",
+    "units": "m",
+    "utc": "2026-11-14T11:16:38Z",
+    "value": 745.39
+  },
+  "nav.skyline.NLB_833905125EDR_F1221260NCAM00267M_.rms_deg": {
+    "commit": "7908eda021218284df27d6bd3082367e037f3e53-dirty",
+    "file": "localisation/NLB_833905125EDR_F1221260NCAM00267M_.json",
+    "script": "pipeline/navigation/skylinefix.py",
+    "units": "deg",
+    "utc": "2026-11-14T11:16:38Z",
+    "value": 5.6157
+  },
+  "nav.skyline.NLB_833905125EDR_F1221260NCAM00267M_.sigma_m": {
+    "commit": "7908eda021218284df27d6bd3082367e037f3e53-dirty",
+    "file": "localisation/NLB_833905125EDR_F1221260NCAM00267M_.json",
+    "script": "pipeline/navigation/skylinefix.py",
+    "units": "m",
+    "utc": "2026-11-14T11:16:38Z",
+    "value": 46.18
+  },
+  "nav.skyline.NLB_834355067EDR_F1221716NCAM00273M_.candidates_evaluated": {
+    "commit": "7908eda021218284df27d6bd3082367e037f3e53-dirty",
+    "file": "localisation/NLB_834355067EDR_F1221716NCAM00273M_.json",
+    "script": "pipeline/navigation/skylinefix.py",
+    "units": "1",
+    "utc": "2026-11-14T11:16:38Z",
+    "value": 516
+  },
+  "nav.skyline.NLB_834355067EDR_F1221716NCAM00273M_.error_m": {
+    "commit": "7908eda021218284df27d6bd3082367e037f3e53-dirty",
+    "file": "localisation/NLB_834355067EDR_F1221716NCAM00273M_.json",
+    "script": "pipeline/navigation/skylinefix.py",
+    "units": "m",
+    "utc": "2026-11-14T11:16:38Z",
+    "value": 522.86
+  },
+  "nav.skyline.NLB_834355067EDR_F1221716NCAM00273M_.rms_deg": {
+    "commit": "7908eda021218284df27d6bd3082367e037f3e53-dirty",
+    "file": "localisation/NLB_834355067EDR_F1221716NCAM00273M_.json",
+    "script": "pipeline/navigation/skylinefix.py",
+    "units": "deg",
+    "utc": "2026-11-14T11:16:38Z",
+    "value": 5.573
+  },
+  "nav.skyline.NLB_834355067EDR_F1221716NCAM00273M_.sigma_m": {
+    "commit": "7908eda021218284df27d6bd3082367e037f3e53-dirty",
+    "file": "localisation/NLB_834355067EDR_F1221716NCAM00273M_.json",
+    "script": "pipeline/navigation/skylinefix.py",
+    "units": "m",
+    "utc": "2026-11-14T11:16:38Z",
+    "value": 48.86
+  },
+  "nav.skyline.NLB_834355098EDR_F1221716NCAM00273M_.candidates_evaluated": {
+    "commit": "7908eda021218284df27d6bd3082367e037f3e53-dirty",
+    "file": "localisation/NLB_834355098EDR_F1221716NCAM00273M_.json",
+    "script": "pipeline/navigation/skylinefix.py",
+    "units": "1",
+    "utc": "2026-11-14T11:16:38Z",
+    "value": 516
+  },
+  "nav.skyline.NLB_834355098EDR_F1221716NCAM00273M_.error_m": {
+    "commit": "7908eda021218284df27d6bd3082367e037f3e53-dirty",
+    "file": "localisation/NLB_834355098EDR_F1221716NCAM00273M_.json",
+    "script": "pipeline/navigation/skylinefix.py",
+    "units": "m",
+    "utc": "2026-11-14T11:16:38Z",
+    "value": 532.08
+  },
+  "nav.skyline.NLB_834355098EDR_F1221716NCAM00273M_.rms_deg": {
+    "commit": "7908eda021218284df27d6bd3082367e037f3e53-dirty",
+    "file": "localisation/NLB_834355098EDR_F1221716NCAM00273M_.json",
+    "script": "pipeline/navigation/skylinefix.py",
+    "units": "deg",
+    "utc": "2026-11-14T11:16:38Z",
+    "value": 7.2928
+  },
+  "nav.skyline.NLB_834355098EDR_F1221716NCAM00273M_.sigma_m": {
+    "commit": "7908eda021218284df27d6bd3082367e037f3e53-dirty",
+    "file": "localisation/NLB_834355098EDR_F1221716NCAM00273M_.json",
+    "script": "pipeline/navigation/skylinefix.py",
+    "units": "m",
+    "utc": "2026-11-14T11:16:38Z",
+    "value": 40.29
+  },
+  "nav.skyline.NLB_835335081EDR_F1222352NCAM00282M_.candidates_evaluated": {
+    "commit": "7908eda021218284df27d6bd3082367e037f3e53-dirty",
+    "file": "localisation/NLB_835335081EDR_F1222352NCAM00282M_.json",
+    "script": "pipeline/navigation/skylinefix.py",
+    "units": "1",
+    "utc": "2026-11-14T11:16:38Z",
+    "value": 516
+  },
+  "nav.skyline.NLB_835335081EDR_F1222352NCAM00282M_.error_m": {
+    "commit": "7908eda021218284df27d6bd3082367e037f3e53-dirty",
+    "file": "localisation/NLB_835335081EDR_F1222352NCAM00282M_.json",
+    "script": "pipeline/navigation/skylinefix.py",
+    "units": "m",
+    "utc": "2026-11-14T11:16:38Z",
+    "value": 481.07
+  },
+  "nav.skyline.NLB_835335081EDR_F1222352NCAM00282M_.rms_deg": {
+    "commit": "7908eda021218284df27d6bd3082367e037f3e53-dirty",
+    "file": "localisation/NLB_835335081EDR_F1222352NCAM00282M_.json",
+    "script": "pipeline/navigation/skylinefix.py",
+    "units": "deg",
+    "utc": "2026-11-14T11:16:38Z",
+    "value": 4.5184
+  },
+  "nav.skyline.NLB_835335081EDR_F1222352NCAM00282M_.sigma_m": {
+    "commit": "7908eda021218284df27d6bd3082367e037f3e53-dirty",
+    "file": "localisation/NLB_835335081EDR_F1222352NCAM00282M_.json",
+    "script": "pipeline/navigation/skylinefix.py",
+    "units": "m",
+    "utc": "2026-11-14T11:16:38Z",
+    "value": 48.86
+  },
+  "nav.skyline.NLB_835335165EDR_F1222352NCAM00282M_.candidates_evaluated": {
+    "commit": "7908eda021218284df27d6bd3082367e037f3e53-dirty",
+    "file": "localisation/NLB_835335165EDR_F1222352NCAM00282M_.json",
+    "script": "pipeline/navigation/skylinefix.py",
+    "units": "1",
+    "utc": "2026-11-14T11:16:38Z",
+    "value": 516
+  },
+  "nav.skyline.NLB_835335165EDR_F1222352NCAM00282M_.error_m": {
+    "commit": "7908eda021218284df27d6bd3082367e037f3e53-dirty",
+    "file": "localisation/NLB_835335165EDR_F1222352NCAM00282M_.json",
+    "script": "pipeline/navigation/skylinefix.py",
+    "units": "m",
+    "utc": "2026-11-14T11:16:38Z",
+    "value": 781.4
+  },
+  "nav.skyline.NLB_835335165EDR_F1222352NCAM00282M_.rms_deg": {
+    "commit": "7908eda021218284df27d6bd3082367e037f3e53-dirty",
+    "file": "localisation/NLB_835335165EDR_F1222352NCAM00282M_.json",
+    "script": "pipeline/navigation/skylinefix.py",
+    "units": "deg",
+    "utc": "2026-11-14T11:16:38Z",
+    "value": 5.6342
+  },
+  "nav.skyline.NLB_835335165EDR_F1222352NCAM00282M_.sigma_m": {
+    "commit": "7908eda021218284df27d6bd3082367e037f3e53-dirty",
+    "file": "localisation/NLB_835335165EDR_F1222352NCAM00282M_.json",
+    "script": "pipeline/navigation/skylinefix.py",
+    "units": "m",
+    "utc": "2026-11-14T11:16:38Z",
+    "value": 48.86
+  },
+  "nav.skyline.NLB_836576506EDR_F1230246NCAM00294M_.candidates_evaluated": {
+    "commit": "7908eda021218284df27d6bd3082367e037f3e53-dirty",
+    "file": "localisation/NLB_836576506EDR_F1230246NCAM00294M_.json",
+    "script": "pipeline/navigation/skylinefix.py",
+    "units": "1",
+    "utc": "2026-11-14T11:16:38Z",
+    "value": 516
+  },
+  "nav.skyline.NLB_836576506EDR_F1230246NCAM00294M_.error_m": {
+    "commit": "7908eda021218284df27d6bd3082367e037f3e53-dirty",
+    "file": "localisation/NLB_836576506EDR_F1230246NCAM00294M_.json",
+    "script": "pipeline/navigation/skylinefix.py",
+    "units": "m",
+    "utc": "2026-11-14T11:16:38Z",
+    "value": 415.63
+  },
+  "nav.skyline.NLB_836576506EDR_F1230246NCAM00294M_.rms_deg": {
+    "commit": "7908eda021218284df27d6bd3082367e037f3e53-dirty",
+    "file": "localisation/NLB_836576506EDR_F1230246NCAM00294M_.json",
+    "script": "pipeline/navigation/skylinefix.py",
+    "units": "deg",
+    "utc": "2026-11-14T11:16:38Z",
+    "value": 7.4994
+  },
+  "nav.skyline.NLB_836576506EDR_F1230246NCAM00294M_.sigma_m": {
+    "commit": "7908eda021218284df27d6bd3082367e037f3e53-dirty",
+    "file": "localisation/NLB_836576506EDR_F1230246NCAM00294M_.json",
+    "script": "pipeline/navigation/skylinefix.py",
+    "units": "m",
+    "utc": "2026-11-14T11:16:38Z",
+    "value": 48.86
+  },
+  "nav.skyline.NLB_837732443EDR_F1232328NCAM00263M_.candidates_evaluated": {
+    "commit": "7908eda021218284df27d6bd3082367e037f3e53-dirty",
+    "file": "localisation/NLB_837732443EDR_F1232328NCAM00263M_.json",
+    "script": "pipeline/navigation/skylinefix.py",
+    "units": "1",
+    "utc": "2026-11-14T11:16:38Z",
+    "value": 516
+  },
+  "nav.skyline.NLB_837732443EDR_F1232328NCAM00263M_.error_m": {
+    "commit": "7908eda021218284df27d6bd3082367e037f3e53-dirty",
+    "file": "localisation/NLB_837732443EDR_F1232328NCAM00263M_.json",
+    "script": "pipeline/navigation/skylinefix.py",
+    "units": "m",
+    "utc": "2026-11-14T11:16:38Z",
+    "value": 616.58
+  },
+  "nav.skyline.NLB_837732443EDR_F1232328NCAM00263M_.rms_deg": {
+    "commit": "7908eda021218284df27d6bd3082367e037f3e53-dirty",
+    "file": "localisation/NLB_837732443EDR_F1232328NCAM00263M_.json",
+    "script": "pipeline/navigation/skylinefix.py",
+    "units": "deg",
+    "utc": "2026-11-14T11:16:38Z",
+    "value": 6.0539
+  },
+  "nav.skyline.NLB_837732443EDR_F1232328NCAM00263M_.sigma_m": {
+    "commit": "7908eda021218284df27d6bd3082367e037f3e53-dirty",
+    "file": "localisation/NLB_837732443EDR_F1232328NCAM00263M_.json",
+    "script": "pipeline/navigation/skylinefix.py",
+    "units": "m",
+    "utc": "2026-11-14T11:16:38Z",
+    "value": 48.86
   },
   "nav.vo_probe.decision": {
     "commit": "c7e9a5da9ac78be49173db18dd82615f319f2801",
@@ -1866,6 +4970,30 @@
     "units": "1",
     "utc": "2026-11-14T10:14:48Z",
     "value": 37
+  },
+  "navcam_sol.S1": {
+    "commit": "9268d3417d7ae38a4aa4c1e6efed5245bfdd6318",
+    "file": "cards/S1.json",
+    "script": "pipeline/horizon/cards.py",
+    "units": "sol",
+    "utc": "2026-11-14T11:04:16Z",
+    "value": 4834
+  },
+  "navcam_sol.S2": {
+    "commit": "9268d3417d7ae38a4aa4c1e6efed5245bfdd6318",
+    "file": "cards/S2.json",
+    "script": "pipeline/horizon/cards.py",
+    "units": "sol",
+    "utc": "2026-11-14T11:04:16Z",
+    "value": 4414
+  },
+  "navcam_sol.S4": {
+    "commit": "9268d3417d7ae38a4aa4c1e6efed5245bfdd6318",
+    "file": "cards/S4.json",
+    "script": "pipeline/horizon/cards.py",
+    "units": "sol",
+    "utc": "2026-11-14T11:04:16Z",
+    "value": 4164
   },
   "rad.baseline_uGy_day": {
     "commit": "1a98e90f274acdbc021c057bcc5f3b2b47a7de34",
@@ -2379,6 +5507,102 @@
     "utc": "2026-11-14T10:09:10Z",
     "value": "2024-05-20T05:57:07Z"
   },
+  "reachable_pct.nom_104.30": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "scenarios/index.json",
+    "script": "pipeline/engine/scenarios.py",
+    "units": "%",
+    "utc": "2026-11-14T11:00:58Z",
+    "value": 12.4
+  },
+  "reachable_pct.nom_120.30": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "scenarios/index.json",
+    "script": "pipeline/engine/scenarios.py",
+    "units": "%",
+    "utc": "2026-11-14T11:00:58Z",
+    "value": 12.1
+  },
+  "reachable_pct.nom_80.30": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "scenarios/index.json",
+    "script": "pipeline/engine/scenarios.py",
+    "units": "%",
+    "utc": "2026-11-14T11:00:57Z",
+    "value": 12.9
+  },
+  "reachable_pct.opt_104.30": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "scenarios/index.json",
+    "script": "pipeline/engine/scenarios.py",
+    "units": "%",
+    "utc": "2026-11-14T11:00:57Z",
+    "value": 17.5
+  },
+  "reachable_pct.opt_120.30": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "scenarios/index.json",
+    "script": "pipeline/engine/scenarios.py",
+    "units": "%",
+    "utc": "2026-11-14T11:00:57Z",
+    "value": 17.1
+  },
+  "reachable_pct.opt_80.30": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "scenarios/index.json",
+    "script": "pipeline/engine/scenarios.py",
+    "units": "%",
+    "utc": "2026-11-14T11:00:57Z",
+    "value": 18.2
+  },
+  "reachable_pct_range.nom_104.30.high": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "scenarios/index.json",
+    "script": "pipeline/engine/scenarios.py",
+    "units": "%",
+    "utc": "2026-11-14T11:00:58Z",
+    "value": 17.5
+  },
+  "reachable_pct_range.nom_120.30.high": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "scenarios/index.json",
+    "script": "pipeline/engine/scenarios.py",
+    "units": "%",
+    "utc": "2026-11-14T11:00:58Z",
+    "value": 17.1
+  },
+  "reachable_pct_range.nom_80.30.high": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "scenarios/index.json",
+    "script": "pipeline/engine/scenarios.py",
+    "units": "%",
+    "utc": "2026-11-14T11:00:57Z",
+    "value": 18.2
+  },
+  "reachable_pct_range.opt_104.30.high": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "scenarios/index.json",
+    "script": "pipeline/engine/scenarios.py",
+    "units": "%",
+    "utc": "2026-11-14T11:00:57Z",
+    "value": 17.5
+  },
+  "reachable_pct_range.opt_120.30.high": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "scenarios/index.json",
+    "script": "pipeline/engine/scenarios.py",
+    "units": "%",
+    "utc": "2026-11-14T11:00:57Z",
+    "value": 17.1
+  },
+  "reachable_pct_range.opt_80.30.high": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "scenarios/index.json",
+    "script": "pipeline/engine/scenarios.py",
+    "units": "%",
+    "utc": "2026-11-14T11:00:57Z",
+    "value": 18.2
+  },
   "rems.latest_feed.sol": {
     "commit": "1a98e90f274acdbc021c057bcc5f3b2b47a7de34",
     "file": "conditions/rems.json",
@@ -2595,6 +5819,98 @@
     "utc": "2026-11-14T10:09:11Z",
     "value": 0.0
   },
+  "route.nom_104.margin_terms": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "timeline_nom_104.json",
+    "script": "pipeline/engine/traverse.py",
+    "units": null,
+    "utc": "2026-11-14T11:01:38Z",
+    "value": [
+      "O2",
+      "daylight",
+      "dose"
+    ]
+  },
+  "route.nom_104.total_min": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "timeline_nom_104.json",
+    "script": "pipeline/engine/traverse.py",
+    "units": "min",
+    "utc": "2026-11-14T11:01:38Z",
+    "value": 209.74
+  },
+  "skyline_error_deg.S1.far": {
+    "commit": "9268d3417d7ae38a4aa4c1e6efed5245bfdd6318",
+    "file": "cards/S1.json",
+    "script": "pipeline/horizon/cards.py",
+    "units": "deg",
+    "utc": "2026-11-14T11:04:16Z",
+    "value": 4.236
+  },
+  "skyline_error_deg.S1.mid": {
+    "commit": "9268d3417d7ae38a4aa4c1e6efed5245bfdd6318",
+    "file": "cards/S1.json",
+    "script": "pipeline/horizon/cards.py",
+    "units": "deg",
+    "utc": "2026-11-14T11:04:16Z",
+    "value": null
+  },
+  "skyline_error_deg.S1.near": {
+    "commit": "9268d3417d7ae38a4aa4c1e6efed5245bfdd6318",
+    "file": "cards/S1.json",
+    "script": "pipeline/horizon/cards.py",
+    "units": "deg",
+    "utc": "2026-11-14T11:04:16Z",
+    "value": null
+  },
+  "skyline_error_deg.S2.far": {
+    "commit": "9268d3417d7ae38a4aa4c1e6efed5245bfdd6318",
+    "file": "cards/S2.json",
+    "script": "pipeline/horizon/cards.py",
+    "units": "deg",
+    "utc": "2026-11-14T11:04:16Z",
+    "value": 3.183
+  },
+  "skyline_error_deg.S2.mid": {
+    "commit": "9268d3417d7ae38a4aa4c1e6efed5245bfdd6318",
+    "file": "cards/S2.json",
+    "script": "pipeline/horizon/cards.py",
+    "units": "deg",
+    "utc": "2026-11-14T11:04:16Z",
+    "value": null
+  },
+  "skyline_error_deg.S2.near": {
+    "commit": "9268d3417d7ae38a4aa4c1e6efed5245bfdd6318",
+    "file": "cards/S2.json",
+    "script": "pipeline/horizon/cards.py",
+    "units": "deg",
+    "utc": "2026-11-14T11:04:16Z",
+    "value": null
+  },
+  "skyline_error_deg.S4.far": {
+    "commit": "9268d3417d7ae38a4aa4c1e6efed5245bfdd6318",
+    "file": "cards/S4.json",
+    "script": "pipeline/horizon/cards.py",
+    "units": "deg",
+    "utc": "2026-11-14T11:04:16Z",
+    "value": 6.498
+  },
+  "skyline_error_deg.S4.mid": {
+    "commit": "9268d3417d7ae38a4aa4c1e6efed5245bfdd6318",
+    "file": "cards/S4.json",
+    "script": "pipeline/horizon/cards.py",
+    "units": "deg",
+    "utc": "2026-11-14T11:04:16Z",
+    "value": null
+  },
+  "skyline_error_deg.S4.near": {
+    "commit": "9268d3417d7ae38a4aa4c1e6efed5245bfdd6318",
+    "file": "cards/S4.json",
+    "script": "pipeline/horizon/cards.py",
+    "units": "deg",
+    "utc": "2026-11-14T11:04:16Z",
+    "value": null
+  },
   "stations.S1.value": {
     "commit": "fb7e9795f4619532a0614869e00ef4bab23799ab-dirty",
     "file": "data/interim/terrain/stations.json",
@@ -2619,6 +5935,102 @@
     "utc": "2026-11-14T09:59:39Z",
     "value": 0.475
   },
+  "t_home_min.S2.nom_104": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "stations.json",
+    "script": "pipeline/engine/scenarios.py",
+    "units": "min",
+    "utc": "2026-11-14T11:01:28Z",
+    "value": 71.01
+  },
+  "t_home_min.S2.nom_120": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "stations.json",
+    "script": "pipeline/engine/scenarios.py",
+    "units": "min",
+    "utc": "2026-11-14T11:01:29Z",
+    "value": 75.23
+  },
+  "t_home_min.S2.nom_80": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "stations.json",
+    "script": "pipeline/engine/scenarios.py",
+    "units": "min",
+    "utc": "2026-11-14T11:01:28Z",
+    "value": 64.75
+  },
+  "t_home_min.S2.opt_104": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "stations.json",
+    "script": "pipeline/engine/scenarios.py",
+    "units": "min",
+    "utc": "2026-11-14T11:01:28Z",
+    "value": 60.73
+  },
+  "t_home_min.S2.opt_120": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "stations.json",
+    "script": "pipeline/engine/scenarios.py",
+    "units": "min",
+    "utc": "2026-11-14T11:01:28Z",
+    "value": 64.18
+  },
+  "t_home_min.S2.opt_80": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "stations.json",
+    "script": "pipeline/engine/scenarios.py",
+    "units": "min",
+    "utc": "2026-11-14T11:01:28Z",
+    "value": 55.62
+  },
+  "t_home_min.S4.nom_104": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "stations.json",
+    "script": "pipeline/engine/scenarios.py",
+    "units": "min",
+    "utc": "2026-11-14T11:01:29Z",
+    "value": 59.93
+  },
+  "t_home_min.S4.nom_120": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "stations.json",
+    "script": "pipeline/engine/scenarios.py",
+    "units": "min",
+    "utc": "2026-11-14T11:01:29Z",
+    "value": 62.66
+  },
+  "t_home_min.S4.nom_80": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "stations.json",
+    "script": "pipeline/engine/scenarios.py",
+    "units": "min",
+    "utc": "2026-11-14T11:01:29Z",
+    "value": 55.93
+  },
+  "t_home_min.S4.opt_104": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "stations.json",
+    "script": "pipeline/engine/scenarios.py",
+    "units": "min",
+    "utc": "2026-11-14T11:01:29Z",
+    "value": 55.55
+  },
+  "t_home_min.S4.opt_120": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "stations.json",
+    "script": "pipeline/engine/scenarios.py",
+    "units": "min",
+    "utc": "2026-11-14T11:01:29Z",
+    "value": 57.88
+  },
+  "t_home_min.S4.opt_80": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "stations.json",
+    "script": "pipeline/engine/scenarios.py",
+    "units": "min",
+    "utc": "2026-11-14T11:01:29Z",
+    "value": 52.14
+  },
   "terrain.blocked_pct.30min": {
     "commit": "4ff8b1bd4f760e2a74921db6998fe129b42213c8-dirty",
     "file": "data/interim/terrain/cellstate_3m.tif",
@@ -2636,27 +6048,27 @@
     "value": 31.357
   },
   "terrain.cellstate.pct.assessed": {
-    "commit": "f646f23fc6ee9d65296a522059c312d9b886ed5d-dirty",
+    "commit": "e3ed2d54327487d02156ad82e39554c0633a7ed8-dirty",
     "file": "terrain/cellstate.json",
     "script": "tools/make_web.py",
     "units": "%",
-    "utc": "2026-11-14T10:33:11Z",
+    "utc": "2026-11-14T11:26:11Z",
     "value": 68.78
   },
   "terrain.cellstate.pct.blocked": {
-    "commit": "f646f23fc6ee9d65296a522059c312d9b886ed5d-dirty",
+    "commit": "e3ed2d54327487d02156ad82e39554c0633a7ed8-dirty",
     "file": "terrain/cellstate.json",
     "script": "tools/make_web.py",
     "units": "%",
-    "utc": "2026-11-14T10:33:11Z",
+    "utc": "2026-11-14T11:26:11Z",
     "value": 31.22
   },
   "terrain.cellstate.pct.unknown": {
-    "commit": "f646f23fc6ee9d65296a522059c312d9b886ed5d-dirty",
+    "commit": "e3ed2d54327487d02156ad82e39554c0633a7ed8-dirty",
     "file": "terrain/cellstate.json",
     "script": "tools/make_web.py",
     "units": "%",
-    "utc": "2026-11-14T10:33:11Z",
+    "utc": "2026-11-14T11:26:11Z",
     "value": 0.0
   },
   "terrain.slope_compare.median_abs_diff": {
@@ -2699,108 +6111,876 @@
     "utc": "2026-11-14T09:57:46Z",
     "value": 15.34
   },
+  "timeline.nom_104.0.margin_min": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "timeline_nom_104.json",
+    "script": "pipeline/engine/traverse.py",
+    "units": "min",
+    "utc": "2026-11-14T11:01:38Z",
+    "value": 85.9
+  },
+  "timeline.nom_104.0.o2_left_L": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "timeline_nom_104.json",
+    "script": "pipeline/engine/traverse.py",
+    "units": "L",
+    "utc": "2026-11-14T11:01:38Z",
+    "value": 504.0
+  },
+  "timeline.nom_104.0.o2_margin_min_planning_rate": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "timeline_nom_104.json",
+    "script": "pipeline/engine/traverse.py",
+    "units": "min",
+    "utc": "2026-11-14T11:01:38Z",
+    "value": 461.59
+  },
+  "timeline.nom_104.0.o2_tasks_left_L": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "timeline_nom_104.json",
+    "script": "pipeline/engine/traverse.py",
+    "units": "L",
+    "utc": "2026-11-14T11:01:38Z",
+    "value": 0.0
+  },
+  "timeline.nom_104.0.t_home_min": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "timeline_nom_104.json",
+    "script": "pipeline/engine/traverse.py",
+    "units": "min",
+    "utc": "2026-11-14T11:01:38Z",
+    "value": 0.0
+  },
+  "timeline.nom_104.0.t_min": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "timeline_nom_104.json",
+    "script": "pipeline/engine/traverse.py",
+    "units": "min",
+    "utc": "2026-11-14T11:01:38Z",
+    "value": 0.0
+  },
+  "timeline.nom_104.1.margin_min": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "timeline_nom_104.json",
+    "script": "pipeline/engine/traverse.py",
+    "units": "min",
+    "utc": "2026-11-14T11:01:38Z",
+    "value": 37.81
+  },
+  "timeline.nom_104.1.o2_left_L": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "timeline_nom_104.json",
+    "script": "pipeline/engine/traverse.py",
+    "units": "L",
+    "utc": "2026-11-14T11:01:38Z",
+    "value": 470.67
+  },
+  "timeline.nom_104.1.o2_margin_min_planning_rate": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "timeline_nom_104.json",
+    "script": "pipeline/engine/traverse.py",
+    "units": "min",
+    "utc": "2026-11-14T11:01:38Z",
+    "value": 364.3
+  },
+  "timeline.nom_104.1.o2_tasks_left_L": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "timeline_nom_104.json",
+    "script": "pipeline/engine/traverse.py",
+    "units": "L",
+    "utc": "2026-11-14T11:01:38Z",
+    "value": 0.0
+  },
+  "timeline.nom_104.1.t_home_min": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "timeline_nom_104.json",
+    "script": "pipeline/engine/traverse.py",
+    "units": "min",
+    "utc": "2026-11-14T11:01:38Z",
+    "value": 48.09
+  },
+  "timeline.nom_104.1.t_min": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "timeline_nom_104.json",
+    "script": "pipeline/engine/traverse.py",
+    "units": "min",
+    "utc": "2026-11-14T11:01:38Z",
+    "value": 30.0
+  },
+  "timeline.nom_104.10.margin_min": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "timeline_nom_104.json",
+    "script": "pipeline/engine/traverse.py",
+    "units": "min",
+    "utc": "2026-11-14T11:01:38Z",
+    "value": 56.06
+  },
+  "timeline.nom_104.10.o2_left_L": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "timeline_nom_104.json",
+    "script": "pipeline/engine/traverse.py",
+    "units": "L",
+    "utc": "2026-11-14T11:01:38Z",
+    "value": 307.71
+  },
+  "timeline.nom_104.10.o2_margin_min_planning_rate": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "timeline_nom_104.json",
+    "script": "pipeline/engine/traverse.py",
+    "units": "min",
+    "utc": "2026-11-14T11:01:38Z",
+    "value": 226.08
+  },
+  "timeline.nom_104.10.o2_tasks_left_L": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "timeline_nom_104.json",
+    "script": "pipeline/engine/traverse.py",
+    "units": "L",
+    "utc": "2026-11-14T11:01:38Z",
+    "value": 0.0
+  },
+  "timeline.nom_104.10.t_home_min": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "timeline_nom_104.json",
+    "script": "pipeline/engine/traverse.py",
+    "units": "min",
+    "utc": "2026-11-14T11:01:38Z",
+    "value": 29.84
+  },
+  "timeline.nom_104.10.t_min": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "timeline_nom_104.json",
+    "script": "pipeline/engine/traverse.py",
+    "units": "min",
+    "utc": "2026-11-14T11:01:38Z",
+    "value": 180.0
+  },
+  "timeline.nom_104.11.margin_min": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "timeline_nom_104.json",
+    "script": "pipeline/engine/traverse.py",
+    "units": "min",
+    "utc": "2026-11-14T11:01:38Z",
+    "value": 85.9
+  },
+  "timeline.nom_104.11.o2_left_L": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "timeline_nom_104.json",
+    "script": "pipeline/engine/traverse.py",
+    "units": "L",
+    "utc": "2026-11-14T11:01:38Z",
+    "value": 267.65
+  },
+  "timeline.nom_104.11.o2_margin_min_planning_rate": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "timeline_nom_104.json",
+    "script": "pipeline/engine/traverse.py",
+    "units": "min",
+    "utc": "2026-11-14T11:01:38Z",
+    "value": 226.21
+  },
+  "timeline.nom_104.11.o2_tasks_left_L": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "timeline_nom_104.json",
+    "script": "pipeline/engine/traverse.py",
+    "units": "L",
+    "utc": "2026-11-14T11:01:38Z",
+    "value": 0.0
+  },
+  "timeline.nom_104.11.t_home_min": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "timeline_nom_104.json",
+    "script": "pipeline/engine/traverse.py",
+    "units": "min",
+    "utc": "2026-11-14T11:01:38Z",
+    "value": 0.0
+  },
+  "timeline.nom_104.11.t_min": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "timeline_nom_104.json",
+    "script": "pipeline/engine/traverse.py",
+    "units": "min",
+    "utc": "2026-11-14T11:01:38Z",
+    "value": 209.74
+  },
+  "timeline.nom_104.12.margin_min": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "timeline_nom_104.json",
+    "script": "pipeline/engine/traverse.py",
+    "units": "min",
+    "utc": "2026-11-14T11:01:38Z",
+    "value": 0.0
+  },
+  "timeline.nom_104.12.o2_left_L": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "timeline_nom_104.json",
+    "script": "pipeline/engine/traverse.py",
+    "units": "L",
+    "utc": "2026-11-14T11:01:38Z",
+    "value": 136.06
+  },
+  "timeline.nom_104.12.o2_margin_min_planning_rate": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "timeline_nom_104.json",
+    "script": "pipeline/engine/traverse.py",
+    "units": "min",
+    "utc": "2026-11-14T11:01:38Z",
+    "value": 0.0
+  },
+  "timeline.nom_104.12.o2_tasks_left_L": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "timeline_nom_104.json",
+    "script": "pipeline/engine/traverse.py",
+    "units": "L",
+    "utc": "2026-11-14T11:01:38Z",
+    "value": 0.0
+  },
+  "timeline.nom_104.12.t_home_min": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "timeline_nom_104.json",
+    "script": "pipeline/engine/traverse.py",
+    "units": "min",
+    "utc": "2026-11-14T11:01:38Z",
+    "value": 71.01
+  },
+  "timeline.nom_104.12.t_min": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "timeline_nom_104.json",
+    "script": "pipeline/engine/traverse.py",
+    "units": "min",
+    "utc": "2026-11-14T11:01:38Z",
+    "value": 409.15
+  },
+  "timeline.nom_104.13.margin_min": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "timeline_nom_104.json",
+    "script": "pipeline/engine/traverse.py",
+    "units": "min",
+    "utc": "2026-11-14T11:01:38Z",
+    "value": 0.0
+  },
+  "timeline.nom_104.13.o2_left_L": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "timeline_nom_104.json",
+    "script": "pipeline/engine/traverse.py",
+    "units": "L",
+    "utc": "2026-11-14T11:01:38Z",
+    "value": 118.22
+  },
+  "timeline.nom_104.13.o2_margin_min_planning_rate": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "timeline_nom_104.json",
+    "script": "pipeline/engine/traverse.py",
+    "units": "min",
+    "utc": "2026-11-14T11:01:38Z",
+    "value": 0.0
+  },
+  "timeline.nom_104.13.o2_tasks_left_L": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "timeline_nom_104.json",
+    "script": "pipeline/engine/traverse.py",
+    "units": "L",
+    "utc": "2026-11-14T11:01:38Z",
+    "value": 0.0
+  },
+  "timeline.nom_104.13.t_home_min": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "timeline_nom_104.json",
+    "script": "pipeline/engine/traverse.py",
+    "units": "min",
+    "utc": "2026-11-14T11:01:38Z",
+    "value": 59.93
+  },
+  "timeline.nom_104.13.t_min": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "timeline_nom_104.json",
+    "script": "pipeline/engine/traverse.py",
+    "units": "min",
+    "utc": "2026-11-14T11:01:38Z",
+    "value": 438.55
+  },
+  "timeline.nom_104.2.margin_min": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "timeline_nom_104.json",
+    "script": "pipeline/engine/traverse.py",
+    "units": "min",
+    "utc": "2026-11-14T11:01:38Z",
+    "value": 25.97
+  },
+  "timeline.nom_104.2.o2_left_L": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "timeline_nom_104.json",
+    "script": "pipeline/engine/traverse.py",
+    "units": "L",
+    "utc": "2026-11-14T11:01:38Z",
+    "value": 445.91
+  },
+  "timeline.nom_104.2.o2_margin_min_planning_rate": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "timeline_nom_104.json",
+    "script": "pipeline/engine/traverse.py",
+    "units": "min",
+    "utc": "2026-11-14T11:01:38Z",
+    "value": 301.24
+  },
+  "timeline.nom_104.2.o2_tasks_left_L": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "timeline_nom_104.json",
+    "script": "pipeline/engine/traverse.py",
+    "units": "L",
+    "utc": "2026-11-14T11:01:38Z",
+    "value": 25.2
+  },
+  "timeline.nom_104.2.t_home_min": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "timeline_nom_104.json",
+    "script": "pipeline/engine/traverse.py",
+    "units": "min",
+    "utc": "2026-11-14T11:01:38Z",
+    "value": 59.93
+  },
+  "timeline.nom_104.2.t_min": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "timeline_nom_104.json",
+    "script": "pipeline/engine/traverse.py",
+    "units": "min",
+    "utc": "2026-11-14T11:01:38Z",
+    "value": 48.44
+  },
+  "timeline.nom_104.3.margin_min": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "timeline_nom_104.json",
+    "script": "pipeline/engine/traverse.py",
+    "units": "min",
+    "utc": "2026-11-14T11:01:38Z",
+    "value": 25.97
+  },
+  "timeline.nom_104.3.o2_left_L": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "timeline_nom_104.json",
+    "script": "pipeline/engine/traverse.py",
+    "units": "L",
+    "utc": "2026-11-14T11:01:38Z",
+    "value": 436.2
+  },
+  "timeline.nom_104.3.o2_margin_min_planning_rate": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "timeline_nom_104.json",
+    "script": "pipeline/engine/traverse.py",
+    "units": "min",
+    "utc": "2026-11-14T11:01:38Z",
+    "value": 301.24
+  },
+  "timeline.nom_104.3.o2_tasks_left_L": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "timeline_nom_104.json",
+    "script": "pipeline/engine/traverse.py",
+    "units": "L",
+    "utc": "2026-11-14T11:01:38Z",
+    "value": 15.49
+  },
+  "timeline.nom_104.3.t_home_min": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "timeline_nom_104.json",
+    "script": "pipeline/engine/traverse.py",
+    "units": "min",
+    "utc": "2026-11-14T11:01:38Z",
+    "value": 59.93
+  },
+  "timeline.nom_104.3.t_min": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "timeline_nom_104.json",
+    "script": "pipeline/engine/traverse.py",
+    "units": "min",
+    "utc": "2026-11-14T11:01:38Z",
+    "value": 60.0
+  },
+  "timeline.nom_104.4.margin_min": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "timeline_nom_104.json",
+    "script": "pipeline/engine/traverse.py",
+    "units": "min",
+    "utc": "2026-11-14T11:01:38Z",
+    "value": 25.97
+  },
+  "timeline.nom_104.4.o2_left_L": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "timeline_nom_104.json",
+    "script": "pipeline/engine/traverse.py",
+    "units": "L",
+    "utc": "2026-11-14T11:01:38Z",
+    "value": 420.71
+  },
+  "timeline.nom_104.4.o2_margin_min_planning_rate": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "timeline_nom_104.json",
+    "script": "pipeline/engine/traverse.py",
+    "units": "min",
+    "utc": "2026-11-14T11:01:38Z",
+    "value": 301.24
+  },
+  "timeline.nom_104.4.o2_tasks_left_L": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "timeline_nom_104.json",
+    "script": "pipeline/engine/traverse.py",
+    "units": "L",
+    "utc": "2026-11-14T11:01:38Z",
+    "value": 0.0
+  },
+  "timeline.nom_104.4.t_home_min": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "timeline_nom_104.json",
+    "script": "pipeline/engine/traverse.py",
+    "units": "min",
+    "utc": "2026-11-14T11:01:38Z",
+    "value": 59.93
+  },
+  "timeline.nom_104.4.t_min": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "timeline_nom_104.json",
+    "script": "pipeline/engine/traverse.py",
+    "units": "min",
+    "utc": "2026-11-14T11:01:38Z",
+    "value": 78.44
+  },
+  "timeline.nom_104.5.margin_min": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "timeline_nom_104.json",
+    "script": "pipeline/engine/traverse.py",
+    "units": "min",
+    "utc": "2026-11-14T11:01:38Z",
+    "value": 37.52
+  },
+  "timeline.nom_104.5.o2_left_L": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "timeline_nom_104.json",
+    "script": "pipeline/engine/traverse.py",
+    "units": "L",
+    "utc": "2026-11-14T11:01:38Z",
+    "value": 407.79
+  },
+  "timeline.nom_104.5.o2_margin_min_planning_rate": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "timeline_nom_104.json",
+    "script": "pipeline/engine/traverse.py",
+    "units": "min",
+    "utc": "2026-11-14T11:01:38Z",
+    "value": 301.24
+  },
+  "timeline.nom_104.5.o2_tasks_left_L": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "timeline_nom_104.json",
+    "script": "pipeline/engine/traverse.py",
+    "units": "L",
+    "utc": "2026-11-14T11:01:38Z",
+    "value": 0.0
+  },
+  "timeline.nom_104.5.t_home_min": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "timeline_nom_104.json",
+    "script": "pipeline/engine/traverse.py",
+    "units": "min",
+    "utc": "2026-11-14T11:01:38Z",
+    "value": 48.38
+  },
+  "timeline.nom_104.5.t_min": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "timeline_nom_104.json",
+    "script": "pipeline/engine/traverse.py",
+    "units": "min",
+    "utc": "2026-11-14T11:01:38Z",
+    "value": 90.0
+  },
+  "timeline.nom_104.6.margin_min": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "timeline_nom_104.json",
+    "script": "pipeline/engine/traverse.py",
+    "units": "min",
+    "utc": "2026-11-14T11:01:38Z",
+    "value": 14.89
+  },
+  "timeline.nom_104.6.o2_left_L": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "timeline_nom_104.json",
+    "script": "pipeline/engine/traverse.py",
+    "units": "L",
+    "utc": "2026-11-14T11:01:38Z",
+    "value": 388.41
+  },
+  "timeline.nom_104.6.o2_margin_min_planning_rate": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "timeline_nom_104.json",
+    "script": "pipeline/engine/traverse.py",
+    "units": "min",
+    "utc": "2026-11-14T11:01:38Z",
+    "value": 226.21
+  },
+  "timeline.nom_104.6.o2_tasks_left_L": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "timeline_nom_104.json",
+    "script": "pipeline/engine/traverse.py",
+    "units": "L",
+    "utc": "2026-11-14T11:01:38Z",
+    "value": 25.2
+  },
+  "timeline.nom_104.6.t_home_min": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "timeline_nom_104.json",
+    "script": "pipeline/engine/traverse.py",
+    "units": "min",
+    "utc": "2026-11-14T11:01:38Z",
+    "value": 71.01
+  },
+  "timeline.nom_104.6.t_min": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "timeline_nom_104.json",
+    "script": "pipeline/engine/traverse.py",
+    "units": "min",
+    "utc": "2026-11-14T11:01:38Z",
+    "value": 108.73
+  },
+  "timeline.nom_104.7.margin_min": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "timeline_nom_104.json",
+    "script": "pipeline/engine/traverse.py",
+    "units": "min",
+    "utc": "2026-11-14T11:01:38Z",
+    "value": 14.89
+  },
+  "timeline.nom_104.7.o2_left_L": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "timeline_nom_104.json",
+    "script": "pipeline/engine/traverse.py",
+    "units": "L",
+    "utc": "2026-11-14T11:01:38Z",
+    "value": 378.94
+  },
+  "timeline.nom_104.7.o2_margin_min_planning_rate": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "timeline_nom_104.json",
+    "script": "pipeline/engine/traverse.py",
+    "units": "min",
+    "utc": "2026-11-14T11:01:38Z",
+    "value": 226.21
+  },
+  "timeline.nom_104.7.o2_tasks_left_L": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "timeline_nom_104.json",
+    "script": "pipeline/engine/traverse.py",
+    "units": "L",
+    "utc": "2026-11-14T11:01:38Z",
+    "value": 15.73
+  },
+  "timeline.nom_104.7.t_home_min": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "timeline_nom_104.json",
+    "script": "pipeline/engine/traverse.py",
+    "units": "min",
+    "utc": "2026-11-14T11:01:38Z",
+    "value": 71.01
+  },
+  "timeline.nom_104.7.t_min": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "timeline_nom_104.json",
+    "script": "pipeline/engine/traverse.py",
+    "units": "min",
+    "utc": "2026-11-14T11:01:38Z",
+    "value": 120.0
+  },
+  "timeline.nom_104.8.margin_min": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "timeline_nom_104.json",
+    "script": "pipeline/engine/traverse.py",
+    "units": "min",
+    "utc": "2026-11-14T11:01:38Z",
+    "value": 14.89
+  },
+  "timeline.nom_104.8.o2_left_L": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "timeline_nom_104.json",
+    "script": "pipeline/engine/traverse.py",
+    "units": "L",
+    "utc": "2026-11-14T11:01:38Z",
+    "value": 363.21
+  },
+  "timeline.nom_104.8.o2_margin_min_planning_rate": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "timeline_nom_104.json",
+    "script": "pipeline/engine/traverse.py",
+    "units": "min",
+    "utc": "2026-11-14T11:01:38Z",
+    "value": 226.21
+  },
+  "timeline.nom_104.8.o2_tasks_left_L": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "timeline_nom_104.json",
+    "script": "pipeline/engine/traverse.py",
+    "units": "L",
+    "utc": "2026-11-14T11:01:38Z",
+    "value": 0.0
+  },
+  "timeline.nom_104.8.t_home_min": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "timeline_nom_104.json",
+    "script": "pipeline/engine/traverse.py",
+    "units": "min",
+    "utc": "2026-11-14T11:01:38Z",
+    "value": 71.01
+  },
+  "timeline.nom_104.8.t_min": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "timeline_nom_104.json",
+    "script": "pipeline/engine/traverse.py",
+    "units": "min",
+    "utc": "2026-11-14T11:01:38Z",
+    "value": 138.73
+  },
+  "timeline.nom_104.9.margin_min": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "timeline_nom_104.json",
+    "script": "pipeline/engine/traverse.py",
+    "units": "min",
+    "utc": "2026-11-14T11:01:38Z",
+    "value": 25.93
+  },
+  "timeline.nom_104.9.o2_left_L": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "timeline_nom_104.json",
+    "script": "pipeline/engine/traverse.py",
+    "units": "L",
+    "utc": "2026-11-14T11:01:38Z",
+    "value": 348.21
+  },
+  "timeline.nom_104.9.o2_margin_min_planning_rate": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "timeline_nom_104.json",
+    "script": "pipeline/engine/traverse.py",
+    "units": "min",
+    "utc": "2026-11-14T11:01:38Z",
+    "value": 225.91
+  },
+  "timeline.nom_104.9.o2_tasks_left_L": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "timeline_nom_104.json",
+    "script": "pipeline/engine/traverse.py",
+    "units": "L",
+    "utc": "2026-11-14T11:01:38Z",
+    "value": 0.0
+  },
+  "timeline.nom_104.9.t_home_min": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "timeline_nom_104.json",
+    "script": "pipeline/engine/traverse.py",
+    "units": "min",
+    "utc": "2026-11-14T11:01:38Z",
+    "value": 59.97
+  },
+  "timeline.nom_104.9.t_min": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "timeline_nom_104.json",
+    "script": "pipeline/engine/traverse.py",
+    "units": "min",
+    "utc": "2026-11-14T11:01:38Z",
+    "value": 150.0
+  },
+  "trade.30.104.partner_area_km2": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "trade_table.json",
+    "script": "pipeline/engine/scenarios.py",
+    "units": "km2",
+    "utc": "2026-11-14T11:01:39Z",
+    "value": 1.2331
+  },
+  "trade.30.104.reachable_pct": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "trade_table.json",
+    "script": "pipeline/engine/scenarios.py",
+    "units": "%",
+    "utc": "2026-11-14T11:01:39Z",
+    "value": 12.4
+  },
+  "trade.30.120.partner_area_km2": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "trade_table.json",
+    "script": "pipeline/engine/scenarios.py",
+    "units": "km2",
+    "utc": "2026-11-14T11:01:39Z",
+    "value": 1.1933
+  },
+  "trade.30.120.reachable_pct": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "trade_table.json",
+    "script": "pipeline/engine/scenarios.py",
+    "units": "%",
+    "utc": "2026-11-14T11:01:39Z",
+    "value": 12.1
+  },
+  "trade.30.80.partner_area_km2": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "trade_table.json",
+    "script": "pipeline/engine/scenarios.py",
+    "units": "km2",
+    "utc": "2026-11-14T11:01:39Z",
+    "value": 1.3135
+  },
+  "trade.30.80.reachable_pct": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "trade_table.json",
+    "script": "pipeline/engine/scenarios.py",
+    "units": "%",
+    "utc": "2026-11-14T11:01:39Z",
+    "value": 12.9
+  },
+  "trade.60.104.partner_area_km2": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "trade_table.json",
+    "script": "pipeline/engine/scenarios.py",
+    "units": "km2",
+    "utc": "2026-11-14T11:01:39Z",
+    "value": 1.2331
+  },
+  "trade.60.104.reachable_pct": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "trade_table.json",
+    "script": "pipeline/engine/scenarios.py",
+    "units": "%",
+    "utc": "2026-11-14T11:01:39Z",
+    "value": 11.2
+  },
+  "trade.60.120.partner_area_km2": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "trade_table.json",
+    "script": "pipeline/engine/scenarios.py",
+    "units": "km2",
+    "utc": "2026-11-14T11:01:39Z",
+    "value": 1.1933
+  },
+  "trade.60.120.reachable_pct": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "trade_table.json",
+    "script": "pipeline/engine/scenarios.py",
+    "units": "%",
+    "utc": "2026-11-14T11:01:39Z",
+    "value": 10.3
+  },
+  "trade.60.80.partner_area_km2": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "trade_table.json",
+    "script": "pipeline/engine/scenarios.py",
+    "units": "km2",
+    "utc": "2026-11-14T11:01:39Z",
+    "value": 1.3135
+  },
+  "trade.60.80.reachable_pct": {
+    "commit": "3bad2dd76c25e88fc1ea7d49b53d89bfa455b1a4",
+    "file": "trade_table.json",
+    "script": "pipeline/engine/scenarios.py",
+    "units": "%",
+    "utc": "2026-11-14T11:01:39Z",
+    "value": 12.6
+  },
   "v2.far.median_abs_deg": {
-    "commit": "eb9046b7dba30fbf7b376b997f0d6f3a6944f09b-dirty",
+    "commit": "9268d3417d7ae38a4aa4c1e6efed5245bfdd6318",
     "file": "validation/v2.json",
     "script": "pipeline/validation/v2_skyline.py",
     "units": "deg",
-    "utc": "2026-11-14T10:12:30Z",
-    "value": 4.3035
+    "utc": "2026-11-14T11:04:19Z",
+    "value": 4.3076
   },
   "v2.far.median_deg": {
-    "commit": "eb9046b7dba30fbf7b376b997f0d6f3a6944f09b-dirty",
+    "commit": "9268d3417d7ae38a4aa4c1e6efed5245bfdd6318",
     "file": "validation/v2.json",
     "script": "pipeline/validation/v2_skyline.py",
     "units": "deg",
-    "utc": "2026-11-14T10:12:30Z",
-    "value": -4.3035
+    "utc": "2026-11-14T11:04:19Z",
+    "value": -4.3076
   },
   "v2.far.n": {
-    "commit": "eb9046b7dba30fbf7b376b997f0d6f3a6944f09b-dirty",
+    "commit": "9268d3417d7ae38a4aa4c1e6efed5245bfdd6318",
     "file": "validation/v2.json",
     "script": "pipeline/validation/v2_skyline.py",
     "units": "1",
-    "utc": "2026-11-14T10:12:30Z",
+    "utc": "2026-11-14T11:04:19Z",
     "value": 26861
   },
   "v2.far.p90_abs_deg": {
-    "commit": "eb9046b7dba30fbf7b376b997f0d6f3a6944f09b-dirty",
+    "commit": "9268d3417d7ae38a4aa4c1e6efed5245bfdd6318",
     "file": "validation/v2.json",
     "script": "pipeline/validation/v2_skyline.py",
     "units": "deg",
-    "utc": "2026-11-14T10:12:30Z",
-    "value": 7.89
+    "utc": "2026-11-14T11:04:19Z",
+    "value": 7.8941
   },
   "v2.mid.median_abs_deg": {
-    "commit": "eb9046b7dba30fbf7b376b997f0d6f3a6944f09b-dirty",
+    "commit": "9268d3417d7ae38a4aa4c1e6efed5245bfdd6318",
     "file": "validation/v2.json",
     "script": "pipeline/validation/v2_skyline.py",
     "units": "deg",
-    "utc": "2026-11-14T10:12:30Z",
+    "utc": "2026-11-14T11:04:19Z",
     "value": 0.1964
   },
   "v2.mid.median_deg": {
-    "commit": "eb9046b7dba30fbf7b376b997f0d6f3a6944f09b-dirty",
+    "commit": "9268d3417d7ae38a4aa4c1e6efed5245bfdd6318",
     "file": "validation/v2.json",
     "script": "pipeline/validation/v2_skyline.py",
     "units": "deg",
-    "utc": "2026-11-14T10:12:30Z",
+    "utc": "2026-11-14T11:04:19Z",
     "value": 0.1698
   },
   "v2.mid.n": {
-    "commit": "eb9046b7dba30fbf7b376b997f0d6f3a6944f09b-dirty",
+    "commit": "9268d3417d7ae38a4aa4c1e6efed5245bfdd6318",
     "file": "validation/v2.json",
     "script": "pipeline/validation/v2_skyline.py",
     "units": "1",
-    "utc": "2026-11-14T10:12:30Z",
+    "utc": "2026-11-14T11:04:19Z",
     "value": 951
   },
   "v2.mid.p90_abs_deg": {
-    "commit": "eb9046b7dba30fbf7b376b997f0d6f3a6944f09b-dirty",
+    "commit": "9268d3417d7ae38a4aa4c1e6efed5245bfdd6318",
     "file": "validation/v2.json",
     "script": "pipeline/validation/v2_skyline.py",
     "units": "deg",
-    "utc": "2026-11-14T10:12:30Z",
+    "utc": "2026-11-14T11:04:19Z",
     "value": 0.3637
   },
   "v2.n_stops": {
-    "commit": "eb9046b7dba30fbf7b376b997f0d6f3a6944f09b-dirty",
+    "commit": "9268d3417d7ae38a4aa4c1e6efed5245bfdd6318",
     "file": "validation/v2.json",
     "script": "pipeline/validation/v2_skyline.py",
     "units": "1",
-    "utc": "2026-11-14T10:12:30Z",
+    "utc": "2026-11-14T11:04:19Z",
     "value": 27
   },
   "v2.near.median_abs_deg": {
-    "commit": "eb9046b7dba30fbf7b376b997f0d6f3a6944f09b-dirty",
+    "commit": "9268d3417d7ae38a4aa4c1e6efed5245bfdd6318",
     "file": "validation/v2.json",
     "script": "pipeline/validation/v2_skyline.py",
     "units": "deg",
-    "utc": "2026-11-14T10:12:30Z",
+    "utc": "2026-11-14T11:04:19Z",
     "value": 0.095
   },
   "v2.near.median_deg": {
-    "commit": "eb9046b7dba30fbf7b376b997f0d6f3a6944f09b-dirty",
+    "commit": "9268d3417d7ae38a4aa4c1e6efed5245bfdd6318",
     "file": "validation/v2.json",
     "script": "pipeline/validation/v2_skyline.py",
     "units": "deg",
-    "utc": "2026-11-14T10:12:30Z",
+    "utc": "2026-11-14T11:04:19Z",
     "value": -0.00775
   },
   "v2.near.n": {
-    "commit": "eb9046b7dba30fbf7b376b997f0d6f3a6944f09b-dirty",
+    "commit": "9268d3417d7ae38a4aa4c1e6efed5245bfdd6318",
     "file": "validation/v2.json",
     "script": "pipeline/validation/v2_skyline.py",
     "units": "1",
-    "utc": "2026-11-14T10:12:30Z",
+    "utc": "2026-11-14T11:04:19Z",
     "value": 2016
   },
   "v2.near.p90_abs_deg": {
-    "commit": "eb9046b7dba30fbf7b376b997f0d6f3a6944f09b-dirty",
+    "commit": "9268d3417d7ae38a4aa4c1e6efed5245bfdd6318",
     "file": "validation/v2.json",
     "script": "pipeline/validation/v2_skyline.py",
     "units": "deg",
-    "utc": "2026-11-14T10:12:30Z",
+    "utc": "2026-11-14T11:04:19Z",
     "value": 0.53015
   },
   "validation.coverage.discs.0.budget_min": {
@@ -2866,5 +7046,205 @@
     "units": null,
     "utc": "2026-11-14T09:57:31Z",
     "value": true
+  },
+  "vo.drift.0.drift_pct": {
+    "commit": "11ac526063eb6040dc09d2c7db48efd8e9b92faa",
+    "file": "vo/drift.json",
+    "script": "pipeline/navigation/vo.py",
+    "units": "%",
+    "utc": "2026-11-14T10:47:18Z",
+    "value": 0.862
+  },
+  "vo.drift.0.endpoint_error_m": {
+    "commit": "11ac526063eb6040dc09d2c7db48efd8e9b92faa",
+    "file": "vo/drift.json",
+    "script": "pipeline/navigation/vo.py",
+    "units": "m",
+    "utc": "2026-11-14T10:47:18Z",
+    "value": 0.241
+  },
+  "vo.drift.0.heading_drift_deg": {
+    "commit": "11ac526063eb6040dc09d2c7db48efd8e9b92faa",
+    "file": "vo/drift.json",
+    "script": "pipeline/navigation/vo.py",
+    "units": "deg",
+    "utc": "2026-11-14T10:47:18Z",
+    "value": -0.978
+  },
+  "vo.drift.0.length_m": {
+    "commit": "11ac526063eb6040dc09d2c7db48efd8e9b92faa",
+    "file": "vo/drift.json",
+    "script": "pipeline/navigation/vo.py",
+    "units": "m",
+    "utc": "2026-11-14T10:47:18Z",
+    "value": 27.91
+  },
+  "vo.drift.0.sol": {
+    "commit": "11ac526063eb6040dc09d2c7db48efd8e9b92faa",
+    "file": "vo/drift.json",
+    "script": "pipeline/navigation/vo.py",
+    "units": null,
+    "utc": "2026-11-14T10:47:18Z",
+    "value": 5073
+  },
+  "vo.drift.1.drift_pct": {
+    "commit": "11ac526063eb6040dc09d2c7db48efd8e9b92faa",
+    "file": "vo/drift.json",
+    "script": "pipeline/navigation/vo.py",
+    "units": "%",
+    "utc": "2026-11-14T10:47:18Z",
+    "value": 0.693
+  },
+  "vo.drift.1.endpoint_error_m": {
+    "commit": "11ac526063eb6040dc09d2c7db48efd8e9b92faa",
+    "file": "vo/drift.json",
+    "script": "pipeline/navigation/vo.py",
+    "units": "m",
+    "utc": "2026-11-14T10:47:18Z",
+    "value": 0.199
+  },
+  "vo.drift.1.heading_drift_deg": {
+    "commit": "11ac526063eb6040dc09d2c7db48efd8e9b92faa",
+    "file": "vo/drift.json",
+    "script": "pipeline/navigation/vo.py",
+    "units": "deg",
+    "utc": "2026-11-14T10:47:18Z",
+    "value": 0.294
+  },
+  "vo.drift.1.length_m": {
+    "commit": "11ac526063eb6040dc09d2c7db48efd8e9b92faa",
+    "file": "vo/drift.json",
+    "script": "pipeline/navigation/vo.py",
+    "units": "m",
+    "utc": "2026-11-14T10:47:18Z",
+    "value": 28.7
+  },
+  "vo.drift.1.sol": {
+    "commit": "11ac526063eb6040dc09d2c7db48efd8e9b92faa",
+    "file": "vo/drift.json",
+    "script": "pipeline/navigation/vo.py",
+    "units": null,
+    "utc": "2026-11-14T10:47:18Z",
+    "value": 5070
+  },
+  "vo.drift.2.drift_pct": {
+    "commit": "11ac526063eb6040dc09d2c7db48efd8e9b92faa",
+    "file": "vo/drift.json",
+    "script": "pipeline/navigation/vo.py",
+    "units": "%",
+    "utc": "2026-11-14T10:47:18Z",
+    "value": 1.86
+  },
+  "vo.drift.2.endpoint_error_m": {
+    "commit": "11ac526063eb6040dc09d2c7db48efd8e9b92faa",
+    "file": "vo/drift.json",
+    "script": "pipeline/navigation/vo.py",
+    "units": "m",
+    "utc": "2026-11-14T10:47:18Z",
+    "value": 1.884
+  },
+  "vo.drift.2.heading_drift_deg": {
+    "commit": "11ac526063eb6040dc09d2c7db48efd8e9b92faa",
+    "file": "vo/drift.json",
+    "script": "pipeline/navigation/vo.py",
+    "units": "deg",
+    "utc": "2026-11-14T10:47:18Z",
+    "value": -2.442
+  },
+  "vo.drift.2.length_m": {
+    "commit": "11ac526063eb6040dc09d2c7db48efd8e9b92faa",
+    "file": "vo/drift.json",
+    "script": "pipeline/navigation/vo.py",
+    "units": "m",
+    "utc": "2026-11-14T10:47:18Z",
+    "value": 101.25
+  },
+  "vo.drift.2.sol": {
+    "commit": "11ac526063eb6040dc09d2c7db48efd8e9b92faa",
+    "file": "vo/drift.json",
+    "script": "pipeline/navigation/vo.py",
+    "units": null,
+    "utc": "2026-11-14T10:47:18Z",
+    "value": 5069
+  },
+  "vo.drift.3.drift_pct": {
+    "commit": "11ac526063eb6040dc09d2c7db48efd8e9b92faa",
+    "file": "vo/drift.json",
+    "script": "pipeline/navigation/vo.py",
+    "units": "%",
+    "utc": "2026-11-14T10:47:18Z",
+    "value": 0.785
+  },
+  "vo.drift.3.endpoint_error_m": {
+    "commit": "11ac526063eb6040dc09d2c7db48efd8e9b92faa",
+    "file": "vo/drift.json",
+    "script": "pipeline/navigation/vo.py",
+    "units": "m",
+    "utc": "2026-11-14T10:47:18Z",
+    "value": 0.099
+  },
+  "vo.drift.3.heading_drift_deg": {
+    "commit": "11ac526063eb6040dc09d2c7db48efd8e9b92faa",
+    "file": "vo/drift.json",
+    "script": "pipeline/navigation/vo.py",
+    "units": "deg",
+    "utc": "2026-11-14T10:47:18Z",
+    "value": -0.761
+  },
+  "vo.drift.3.length_m": {
+    "commit": "11ac526063eb6040dc09d2c7db48efd8e9b92faa",
+    "file": "vo/drift.json",
+    "script": "pipeline/navigation/vo.py",
+    "units": "m",
+    "utc": "2026-11-14T10:47:18Z",
+    "value": 12.64
+  },
+  "vo.drift.3.sol": {
+    "commit": "11ac526063eb6040dc09d2c7db48efd8e9b92faa",
+    "file": "vo/drift.json",
+    "script": "pipeline/navigation/vo.py",
+    "units": null,
+    "utc": "2026-11-14T10:47:18Z",
+    "value": 5045
+  },
+  "vo.drift.4.drift_pct": {
+    "commit": "11ac526063eb6040dc09d2c7db48efd8e9b92faa",
+    "file": "vo/drift.json",
+    "script": "pipeline/navigation/vo.py",
+    "units": "%",
+    "utc": "2026-11-14T10:47:18Z",
+    "value": 0.676
+  },
+  "vo.drift.4.endpoint_error_m": {
+    "commit": "11ac526063eb6040dc09d2c7db48efd8e9b92faa",
+    "file": "vo/drift.json",
+    "script": "pipeline/navigation/vo.py",
+    "units": "m",
+    "utc": "2026-11-14T10:47:18Z",
+    "value": 0.566
+  },
+  "vo.drift.4.heading_drift_deg": {
+    "commit": "11ac526063eb6040dc09d2c7db48efd8e9b92faa",
+    "file": "vo/drift.json",
+    "script": "pipeline/navigation/vo.py",
+    "units": "deg",
+    "utc": "2026-11-14T10:47:18Z",
+    "value": -0.875
+  },
+  "vo.drift.4.length_m": {
+    "commit": "11ac526063eb6040dc09d2c7db48efd8e9b92faa",
+    "file": "vo/drift.json",
+    "script": "pipeline/navigation/vo.py",
+    "units": "m",
+    "utc": "2026-11-14T10:47:18Z",
+    "value": 83.85
+  },
+  "vo.drift.4.sol": {
+    "commit": "11ac526063eb6040dc09d2c7db48efd8e9b92faa",
+    "file": "vo/drift.json",
+    "script": "pipeline/navigation/vo.py",
+    "units": null,
+    "utc": "2026-11-14T10:47:18Z",
+    "value": 5041
   }
 }
