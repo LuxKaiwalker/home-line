@@ -10,6 +10,7 @@ import conditionsRaw from '../../config/conditions.yaml'
 import stationsRaw from '../../config/stations.yaml'
 import horizonRaw from '../../config/horizon.yaml'
 import eventRaw from '../../config/event.yaml'
+import navRaw from '../../config/nav.yaml'
 
 type Obj = Record<string, unknown>
 
@@ -72,8 +73,9 @@ export const CONFIG = {
   simulatedLabel: cfg<string>(hudRaw, 'labels.simulated'),
   haulContourMin: num(haulRaw, 'contour_min'),
   dAllowMgy: num(conditionsRaw, 'leash.d_allow_mgy'),
-  /** D9 slider {min, max, step}; not in config/conditions.yaml yet (only a comment there), see STATUS Blocked. */
-  dAllowSliderMgy: cfgOpt<{ min: number; max: number; step: number }>(conditionsRaw, 'leash.d_allow_slider_mgy'),
+  /** D9 slider range and step (config/conditions.yaml, WS4; C answer 10:35Z). */
+  dAllowRangeMgy: cfg<[number, number]>(conditionsRaw, 'leash.d_allow_range_mgy'),
+  dAllowStepMgy: num(conditionsRaw, 'leash.d_allow_step_mgy'),
   tripwireFactor: num(conditionsRaw, 'rad.tripwire.factor'),
   tripwireSamples: num(conditionsRaw, 'rad.tripwire.consecutive_samples'),
   remsStaleSince: cfg<string>(conditionsRaw, 'rems.feed_stale_since'),
@@ -82,7 +84,19 @@ export const CONFIG = {
   h0Utc: cfg<string>(eventRaw, 'h0_utc'),
   timezone: cfg<string>(eventRaw, 'timezone'),
   o2PrimaryL: num(crewRaw, 'o2_budget.primary_L'),
+  accessRadiusM: num(variantsRaw, 'route.access_radius_m'),
+  isochroneFallbackStepMin: num(variantsRaw, 'outputs.isochrone_fallback_step_min'),
+  /** F22 gate tolerance: config/nav.yaml skyline_fix_gate.tolerance_from names the key (C 11:58). */
+  skylineFixGate: (() => {
+    const from = cfg<string>(navRaw, 'real_run_ws9.skyline_fix_gate.tolerance_from')
+    return { toleranceM: num(navRaw, from), source: `config/nav.yaml: ${from}`, rule: cfg<string>(navRaw, 'real_run_ws9.skyline_fix_gate.rule') }
+  })(),
 } as const
+
+/** O2 effort rate (L/min) per config/crew.yaml o2_margin.effort_rate_L_min (a formula string there). */
+export function effortRateLMin(c: { effortCapFrac: number; vo2max: number; bodyMassKg: number }): number {
+  return (c.effortCapFrac * c.vo2max * c.bodyMassKg) / 1000
+}
 
 /** Config values shown on screen (assumptions table, labels), each with its source. */
 export const CITED = {
@@ -91,7 +105,11 @@ export const CITED = {
   effortCapFrac: cite<number>('crew.yaml', crewRaw, 'effort_cap_frac'),
   evaH: cite<number>('crew.yaml', crewRaw, 'eva_h'),
   reserveMin: cite<number>('crew.yaml', crewRaw, 'reserve_min'),
-  o2ReserveFrac: cite<number>('crew.yaml', crewRaw, 'o2_reserve_frac'),
+  o2ReserveMinAtEffortCap: cite<number>('crew.yaml', crewRaw, 'o2_margin.reserve_min_at_effort_cap'),
+  o2EffortRateFormula: cite<string>('crew.yaml', crewRaw, 'o2_margin.effort_rate_L_min'),
+  stationTaskRateLMin: cite<number>('crew.yaml', crewRaw, 'o2_margin.station_task_rate_L_min'),
+  accessRadiusM: cite<number>('variants.yaml', variantsRaw, 'route.access_radius_m'),
+  dwellMin: cite<number>('stations.yaml', stationsRaw, 'dwell_min'),
   walkbackBudgetsMin: cite<number[]>('crew.yaml', crewRaw, 'walkback_budgets_min'),
   suitMassesKg: cite<number[]>('crew.yaml', crewRaw, 'suit_masses_kg'),
   anchorVo2: cite<number>('crew.yaml', crewRaw, 'anchor.vo2_ml_kg_min'),
