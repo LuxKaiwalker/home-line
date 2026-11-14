@@ -1173,6 +1173,10 @@ Branch: `ws8-3d`
 - KATs: `tests/test_fp3d_export.py` +5 (far texture ×3, canonical far sources, pass-rule
   scope); `web/src/fp3d` +5 (far UVs, far.tex parsing, D20 label ×2, D19). Full suite
   738 pytest, 393 vitest (+1 data check); ruff, tsc, `make validate` clean.
+- 2026-11-14T14:19Z: **Manifest fix** (C audit): the 6 `fp3d.*` keys now cite the web path `fp3d/index.json`
+  (`record_manifest`, KAT first); re-recorded by `make fp3d` at clean 2b46c60. Export deterministic (84
+  binaries byte-identical); only `index.json` `skyline_check` pad moved, because WS3's `horizons/pad.json`
+  now uses WS2's withheld `pad.json` (137.402443, −4.769028 ≠ `pad_default`). Previous index restored; **C to decide**.
 
 
 ### Doing
