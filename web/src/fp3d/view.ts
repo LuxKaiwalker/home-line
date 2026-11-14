@@ -9,7 +9,7 @@ import { FpsWatchdog } from './fps'
 import { parseEqc, xyToLonLat, type Eqc } from './geo'
 import { createSky, hazeDensity, rgb, ringGeometry, withCurvature } from './look'
 import { buildRoute, type RoutePath, type TimelineEvent } from './path'
-import { parseRing, type RingCurtain } from './ring'
+import { farCurtains, type RingCurtain } from './ring'
 import { daylightFactor, formatLmst, parseClockSun, sunAt, sunDirection, type SunTrack } from './sun'
 import { Terrain, cameraPosition, farMesh, nearChunkMesh, type Anchor, type MeshArrays } from './terrain'
 
@@ -137,20 +137,21 @@ async function loadAll(
     if (signal.aborted) throw e
     sun = null
   }
-  let ring: RingCurtain | null = null
+  let ws3Ring: unknown = null
   if (index.horizon_ring) {
     try {
-      const [west, north] = farOrigin(index)
-      const square = { west, north, size: index.far.width * index.far.res_m }
-      ring = parseRing(await getJson(index.horizon_ring), eqc, square, {
-        skirtDeg: opts.cfg.ring.skirtDeg,
-        maxDistanceRatio: opts.cfg.ring.maxDistanceRatio,
-      })
+      ws3Ring = await getJson(index.horizon_ring)
     } catch (e) {
       if (signal.aborted) throw e
-      ring = null // optional: the mesh still draws the skyline inside the terrain extent
+      ws3Ring = null // optional: the mesh still draws the skyline inside the terrain extent
     }
   }
+  // WS3's pad ring + the per-station rings in the index (F20 far skyline at every station)
+  const [west, north] = farOrigin(index)
+  const ring: RingCurtain | null = farCurtains(ws3Ring, index.station_rings, eqc, { west, north, size: index.far.width * index.far.res_m }, {
+    skirtDeg: opts.cfg.ring.skirtDeg,
+    maxDistanceRatio: opts.cfg.ring.maxDistanceRatio,
+  })
 
   const chunks = index.chunk_grid.chunks
   const total = 1 + chunks.length + chunks.filter((c) => c.tex).length + (index.far.tex ? 1 : 0)

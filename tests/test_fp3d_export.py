@@ -804,3 +804,36 @@ def test_snapped_grid_exports_dem_values_exactly(tmp_path):
     c0 = int(round(g.x0 - tr.c)) + 32
     r0 = int(round(tr.f - g.y0)) + 32
     assert np.abs(h - dem[r0:r0 + 32, c0:c0 + 32]).max() <= Q / 2 + 1e-3
+
+
+def test_station_rings_place_far_horizon_points_outside_the_far_square(geo):
+    """F20 'computed horizon as a far-skyline ring': WS3's pad ring only holds the pad's far
+    skyline. Each station's own WS3 horizon point beyond the far-mesh square is added as a ring
+    point at its true position: z = z_eye + d tan(el) + d^2/2R (WS3 ring_doc's formula), so the
+    elevation seen from the station is exactly WS3's. Points inside the square stay null (the
+    mesh draws them); the pad is left to WS3's ring."""
+    from pipeline.horizon.rays import HorizonProfile
+
+    R = SITE["crs"]["mars_radius_m"]
+    sq = {"west": -1000.0, "north": 1000.0, "size": 2000.0}
+    az = np.arange(8) * 45.0
+    d = np.array([500.0, 5000.0, 20000.0, 70000.0, np.nan, 300.0, 9000.0, 2000.0])
+    el = np.array([1.0, 2.0, 3.0, 1.5, np.nan, -1.0, 0.5, 0.0])
+    prof = HorizonProfile(az_deg=az, elevation_deg=el, distance_m=d, source=["x"] * 8,
+                          observer={"x": 0.0, "y": 0.0, "z": -3700.0, "z_ground": -3701.7},
+                          eye_height_m=1.7, az_step_deg=45.0)
+    doc = terrain_chunks.station_rings([("pad", prof), ("S7", prof)], sq, R, source="t")
+    (ring,) = doc["rings"]
+    assert ring["id"] == "S7" and ring["observer"] == {"x": 0.0, "y": 0.0}
+    assert ring["az_step_deg"] == 45.0 and len(ring["dist_m"]) == len(ring["z_m"]) == 8
+    # inside the square (500 m, 300 m) or unknown: null
+    assert [ring["dist_m"][k] is None for k in range(8)] == [True, False, False, False, True,
+                                                            True, False, False]
+    # 2000 m at az 315 lies at (-1414, 1414): outside the 2 km square
+    for k in (1, 2, 3, 6, 7):
+        z = ring["z_m"][k]
+        back = np.degrees(np.arctan((z - (-3700.0) - d[k] ** 2 / (2 * R)) / d[k]))
+        assert back == pytest.approx(el[k], abs=1e-4)
+        assert ring["elev_deg"][k] == pytest.approx(el[k], abs=1e-4)
+    assert ring["dist_m"][3] == 70000.0 and ring["elev_deg"][0] is None
+    assert "source" in doc and "note" in doc

@@ -42,6 +42,8 @@ export interface Fp3dIndex {
   /** tex: optional fp3d/far_tex.jpg over the whole far square (row 0 = north, column 0 = west) */
   far: { file: string; res_m: number; width: number; height: number; origin_xy_m?: [number, number]; bytes?: number; tex?: string; tex_bytes?: number }
   horizon_ring?: string
+  /** per-station far-skyline rings (pipeline/export/terrain_chunks.py station_rings; ring.ts farCurtains) */
+  station_rings?: { rings?: unknown[]; source?: string; note?: string }
   eye_height_m?: number
   download_bytes?: number
 }

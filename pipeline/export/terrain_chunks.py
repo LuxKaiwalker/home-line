@@ -381,7 +381,8 @@ def validate_index(idx: dict) -> None:
 def build_index(grid: ChunkGrid, geo: Geo, near: list[dict], tex: list[dict], far: dict, *,
                 quantum_m: float, datum: str, eye_height_m: float, sources: dict,
                 ring_file: str | None = RING_FILE, skyline_check: dict | None = None,
-                texture_note: str | None = None, pad: dict | None = None) -> dict:
+                texture_note: str | None = None, pad: dict | None = None,
+                station_rings: dict | None = None) -> dict:
     """fp3d/index.json (real data: ``dummy`` false), same shape as the M0 dummy index.
     ``pad`` = the pad the grids are centred on (:func:`official_pad`), recorded as ``pad``."""
     tex_by = {(t["i"], t["j"]): t for t in tex}
@@ -439,6 +440,8 @@ def build_index(grid: ChunkGrid, geo: Geo, near: list[dict], tex: list[dict], fa
         idx["skyline_check"] = skyline_check
     if pad is not None:
         idx["pad"] = pad
+    if station_rings is not None:
+        idx["station_rings"] = station_rings
     validate_index(idx)
     return idx
 
@@ -503,6 +506,45 @@ def check_pad_observer(profiles: list, geo: Geo) -> None:
                                               round(geo.pad_lonlat[1], 6)):
             raise ValueError(f"WS3 pad horizon observer ({lon:.6f}, {lat:.6f}) is not the "
                              f"official pad {geo.pad_lonlat} (D21): re-run make horizons")
+
+
+def station_rings(profiles: list, square: dict, radius_m: float, *, source: str) -> dict:
+    """fp3d/index.json ``station_rings`` (F20 "the computed horizon as a far-skyline ring"):
+    WS3's ring (horizon_ring.json) holds the pad's far skyline only. For each station's WS3
+    horizon (not the pad), the horizon points beyond the far-mesh ``square`` ({west, north,
+    size}, analysis CRS m) are placed at their true position, z = z_eye + d tan(el) + d^2/2R
+    (WS3 ring_doc's formula), in the viewer's ring format (dist_m/z_m per azimuth, observer x/y).
+    Points inside the square or unknown stay null: the mesh draws those."""
+    rings = []
+    w, n, size = float(square["west"]), float(square["north"]), float(square["size"])
+    for sid, prof in profiles:
+        if sid == "pad":
+            continue
+        ox, oy = float(prof.observer["x"]), float(prof.observer["y"])
+        z_eye = float(prof.observer["z"])
+        a = np.radians(np.asarray(prof.az_deg, dtype=float))
+        d = np.asarray(prof.distance_m, dtype=float)
+        el = np.asarray(prof.elevation_deg, dtype=float)
+        with np.errstate(invalid="ignore"):
+            x, y = ox + d * np.sin(a), oy + d * np.cos(a)
+            inside = (x >= w) & (x <= w + size) & (y <= n) & (y >= n - size)
+            ok = np.isfinite(d) & np.isfinite(el) & (d > 0) & ~inside
+            z = z_eye + d * np.tan(np.radians(el)) + d * d / (2.0 * radius_m)
+        rings.append({
+            "id": sid, "observer": {"x": round(ox, 3), "y": round(oy, 3)},
+            "az_step_deg": float(prof.az_step_deg),
+            "elev_deg": [round(float(v), 4) if k else None for v, k in zip(el, ok, strict=True)],
+            "dist_m": [round(float(v), 1) if k else None for v, k in zip(d, ok, strict=True)],
+            "z_m": [round(float(v), 2) if k else None for v, k in zip(z, ok, strict=True)],
+        })
+    return {
+        "source": source,
+        "note": "per station: WS3 horizon points beyond the far-mesh square at their true "
+                "position (z = z_eye + d tan(el) + d^2/2R, R = config/site.yaml "
+                "crs.mars_radius_m); null = inside the square (drawn by the mesh) or unknown. "
+                "Drawn as extra far-skyline curtains next to WS3's pad ring",
+        "rings": rings,
+    }
 
 
 def read_station_horizons(horizon_dir: Path, ids: list[str]) -> list:
@@ -633,16 +675,22 @@ def main(argv: list[str] | None = None) -> int:
     ids = ["pad"] + [s["id"] for s in stations]
     profs = read_station_horizons(args.station_horizons, ids)
     check_pad_observer(profs, geo)
+    rings = None
     if profs:
         check = skyline_reference(profs, geo, cfg,
                                   source=f"WS3 horizon engine, {rel(args.station_horizons)}",
                                   excluded=skyline_exclusions(stations))
+        fx0, fy0 = far["origin_xy_m"]
+        rings = station_rings(
+            profs, {"west": fx0, "north": fy0, "size": far["width"] * far["res_m"]},
+            cfg["site"]["crs"]["mars_radius_m"],
+            source=f"WS3 horizon engine, {rel(args.station_horizons)}")
     idx = build_index(
         grid, geo, near, tex, far, quantum_m=q, datum=args.datum,
         eye_height_m=cfg["hud"]["eye_height_m"], sources=sources, skyline_check=check,
         texture_note="WS1 HiRISE LRGB ortho (colour, greyscale where the mosaic is greyscale), "
                      "JPEG per near chunk; no-ortho texels = horizon.yaml panorama.ground_rgb",
-        pad=pad)
+        pad=pad, station_rings=rings)
     out_index = args.out / "fp3d" / "index.json"
     out_index.write_text(json.dumps(idx, indent=1) + "\n", encoding="utf-8")
     stale = prune_stale_chunks(args.out, idx)

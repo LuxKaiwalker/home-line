@@ -11,7 +11,7 @@ import { describe, expect, it } from 'vitest'
 import { FP3D_CONFIG } from './config'
 import { codecOf, decodeHeights, farOrigin, parseIndex, type Fp3dIndex } from './format'
 import { lonLatToXY, parseEqc, type Eqc } from './geo'
-import { parseRing, ringCrossings, type MeshSquare } from './ring'
+import { farCurtains, parseRing, ringCrossings, type MeshSquare } from './ring'
 import { DrawnSurface, compareSkylines, renderedSkyline } from './skyline'
 import { daylightFactor, formatLmst, parseClockSun, sunAt, sunDirection } from './sun'
 import { Terrain } from './terrain'
@@ -189,21 +189,70 @@ describe('far-skyline ring', () => {
   })
 })
 
+describe('station rings (fp3d/index.json station_rings, WS3 station horizons beyond the far square)', () => {
+  const eqc: Eqc = parseEqc('+proj=eqc +R=3396190 +units=m')
+  const sq: MeshSquare = { west: -1000, north: 1000, size: 2000 }
+  const opts = { skirtDeg: FP3D_CONFIG.ring.skirtDeg, maxDistanceRatio: FP3D_CONFIG.ring.maxDistanceRatio }
+  const n = 360
+  const pad = {
+    observer: { id: 'pad', x: 0, y: 0 },
+    az_step_deg: 1,
+    elev_deg: Array(n).fill(0.5),
+    dist_m: Array(n).fill(15000),
+    z_m: Array(n).fill(100),
+  }
+  // station 1.5 km east of the pad sees a rim 70 km away, 2,000 m high (the pad ring lacks it)
+  const sx = 1500
+  const d = 70000
+  const zEye = 1.7
+  const rimZ = 2000
+  const stationRing = {
+    id: 'S7',
+    observer: { x: sx, y: 0 },
+    az_step_deg: 1,
+    elev_deg: Array.from({ length: n }, (_, k) => (k === 0 ? null : Math.atan((rimZ - zEye - (d * d) / (2 * R)) / d) / DEG)),
+    dist_m: Array.from({ length: n }, (_, k) => (k === 0 ? null : d)),
+    z_m: Array.from({ length: n }, (_, k) => (k === 0 ? null : rimZ)),
+  }
+  it('without station rings it is the WS3 ring alone', () => {
+    const a = farCurtains(pad, undefined, eqc, sq, opts)!
+    const b = parseRing(pad, eqc, sq, opts)
+    expect(a.segments).toEqual(b.segments)
+    expect(a.drawn).toBe(b.drawn)
+    expect(farCurtains(null, undefined, eqc, sq, opts)).toBeNull()
+  })
+  it('adds every station ring as its own curtain (WS3 ring kept)', () => {
+    const c = farCurtains(pad, { rings: [stationRing] }, eqc, sq, opts)!
+    expect(c.segments).toHaveLength(2) // closed pad loop + station run (null at az 0 breaks it)
+    expect(c.drawn).toBe(360 + 359)
+    expect(c.note).toMatch(/1 station ring/)
+    // from the station, the rendered skyline at az 90 is the station's own horizon elevation
+    const { t } = synthetic(201, 10, () => 0, -1000, 1000)
+    const { elevationDeg } = renderedSkyline(t, c, sx, 0, [90, 200], { eyeHeightM: EYE, radiusM: R })
+    expect(elevationDeg[0]).toBeCloseTo(stationRing.elev_deg[90]!, 3)
+    expect(elevationDeg[1]).toBeCloseTo(stationRing.elev_deg[200]!, 2) // chord sag < 0.01 deg
+    // station rings alone (no WS3 ring file) still draw
+    expect(farCurtains(null, { rings: [stationRing] }, eqc, sq, opts)!.drawn).toBe(359)
+  })
+  it('ignores a malformed station_rings block', () => {
+    expect(farCurtains(pad, { rings: 'x' }, eqc, sq, opts)!.segments).toHaveLength(1)
+    expect(farCurtains(pad, 42, eqc, sq, opts)!.segments).toHaveLength(1)
+  })
+})
+
 // --------------------------------------------------------------- SPEC F20 acceptance check
 function runCheck(root: string, check: SkylineCheck, label: string) {
   const { idx, t } = loadTerrain(root)
-  let ring = null
   // WS3 writes the ring; before make web it sits in data/interim/horizon/public/
   const ringPath = idx.horizon_ring
     ? [resolve(root, idx.horizon_ring), resolve(REPO, 'data/interim/horizon/public', idx.horizon_ring)].find((p) => existsSync(p))
     : undefined
-  if (ringPath) {
-    const raw = JSON.parse(readFileSync(ringPath).toString())
-    ring = parseRing(raw, parseEqc(idx.chunk_grid.crs), squareOf(idx), {
-      skirtDeg: FP3D_CONFIG.ring.skirtDeg,
-      maxDistanceRatio: FP3D_CONFIG.ring.maxDistanceRatio,
-    })
-  }
+  const raw = ringPath ? JSON.parse(readFileSync(ringPath).toString()) : null
+  // the same curtains the view draws (view.ts: WS3 pad ring + index station_rings)
+  const ring = farCurtains(raw, idx.station_rings, parseEqc(idx.chunk_grid.crs), squareOf(idx), {
+    skirtDeg: FP3D_CONFIG.ring.skirtDeg,
+    maxDistanceRatio: FP3D_CONFIG.ring.maxDistanceRatio,
+  })
   const surf = new DrawnSurface(t)
   const rows: string[] = []
   const results = check.stations.map((st) => {
