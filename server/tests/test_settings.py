@@ -265,3 +265,12 @@ def test_precomputed_label_known_answer():
     labels = st.load().labels
     assert labels.precomputed == "Precomputed · official plan"
     assert "scorecard" not in labels.precomputed
+
+
+def test_design_yaml_not_in_engine_config_hash(cfg_copy):
+    """A UI-only config/design.yaml (design block) must not change the engine config hash (D57)."""
+    from tools import make_bundle as mb
+    before = mb.config_hash(cfg_copy)
+    (cfg_copy / "design.yaml").write_text("tokens: {accent: '#ff6a00'}\n")
+    assert mb.config_hash(cfg_copy) == before
+    assert "design.yaml" not in [f.name for f in mb.config_files(cfg_copy)]
