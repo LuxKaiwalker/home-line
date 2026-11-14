@@ -10,14 +10,18 @@ Branch: `main`
 
 - 2026-11-14T09:34Z: SPEC.md, AGENTS.md, briefs/, docs/ exported from Notion; config/*.yaml (11 files) copied verbatim.
 - Scaffold: pyproject (uv, Python 3.11), Makefile stubs, pipeline/ tree (SPEC §4.3), web/ Vite + TS skeleton, LICENSE, `data` -> ~/hl-data symlink.
+- 2026-11-14T09:34Z: pushed skeleton to origin/main.
+- 2026-11-14T09:39Z: contracts v1.0.0 (32 schemas, contracts/README.md), tools/validate_contracts.py, tests/test_contracts.py.
+- CI workflow `.github/workflows/ci.yml`: ruff, pytest, tsc --noEmit, vite build, contract validation, no-dummy-in-public, 50 MB size check; all steps green locally.
 
 ### Doing
 
-- contracts/ (JSON Schema 2020-12, v1.0.0) and CI workflow.
+- —
 
 ### Next
 
-- —
+- WS6 adds the H0 provenance check (`pipeline/provenance/check_h0.py`) to CI.
+- Producers propose structures for the loose schemas (partner, route, horizon_ring, coverage, rems, clock, fp3d_index details) to C.
 
 ### Blocked
 
@@ -25,7 +29,9 @@ Branch: `main`
 
 ### Assumptions added
 
-- —
+- Web paths `validation/coverage.json` and `validation/coreg.json` (brief WS1 names the files only).
+- `fp3d/index.json` key names `bounds`, `chunk_grid`, `height_scale` (SPEC §6.1 gives the content only).
+- `nav/fix_interval_summary.json` is one file with a `set` field, as SPEC §6.2 writes it.
 
 ## M0 Dummy data
 
