@@ -224,7 +224,7 @@ def test_defaults_known_answers(instant_client):
     assert_valid(d, "/defaults")
     inp = d["inputs"]
     assert "title" not in inp
-    assert inp["contract_version"] == "1.0.0"
+    assert inp["contract_version"] == settings().contract_version == OPENAPI["info"]["version"]
     # F26 table (spec §3): 75 kg, 104 kg, 10 kg, 36 mL/kg/min, 50 %
     assert inp["crew"] == {"body_mass_kg": 75, "suit_kg": 104, "tools_kg": 10,
                            "vo2max_ml_kg_min": 36, "effort_cap_frac": 0.5}
