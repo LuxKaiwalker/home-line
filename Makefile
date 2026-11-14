@@ -1,6 +1,6 @@
 # HOMELINE pipeline entry points. Stub targets print a message until the owning workstream
 # adds its CLI (ownership: AGENTS.md "Folder ownership"; this file is owned by C).
-.PHONY: all terrain engine horizons conditions conditions-fetch nav fields fp3d fp3d-check web web-plan bundle bundle-fixture bundle-check dummy test lint validate kats h0 clean
+.PHONY: all terrain engine horizons conditions conditions-fetch nav fields fp3d fp3d-check web web-plan bundle bundle-fixture bundle-check serve serverdata parity parity-synthetic server-test dummy test lint validate kats h0 clean
 
 PY := uv run --no-sync python
 
@@ -45,6 +45,24 @@ bundle-fixture:  ## C: rebuild the committed official-pad fixture (contracts/bun
 	$(PY) tools/make_bundle.py --fixture
 bundle-check:  ## C: unzip + sha256 + schema check of the committed fixture zips
 	$(PY) tools/make_bundle.py --check contracts/bundle/fixtures/official_pad_v1/*.zip
+# --- Backend (optional live layer, D48; docs/backend.md). Server data lives in $(HL_SERVER_DATA).
+# server-test and parity-synthetic only name paths that exist ($(wildcard)) and treat pytest exit 5
+# ("no tests collected") as success, so CI stays green before server/ and the parity tests land;
+# new files under server/ and tests/test_backend_*.py are picked up automatically.
+HL_SERVER_DATA ?= data/server
+SERVER_TEST_PATHS = $(wildcard server tests/test_backend_*.py)
+PYTEST_OK5 = rc=0; $(1) || rc=$$?; if [ $$rc -eq 5 ]; then echo "(no tests collected: ok)"; rc=0; fi; exit $$rc
+serve:       ## WS11: run the API locally (http://localhost:8000/api/v1/health)
+	HL_SERVER_DATA=$(HL_SERVER_DATA) uv run --no-sync uvicorn server.app:app --port 8000 --reload
+serverdata:  ## WS11: station fields + grids + data manifest -> $(HL_SERVER_DATA) (after the core re-run)
+	$(PY) tools/make_serverdata.py --out $(HL_SERVER_DATA)
+parity:      ## WS11: official pad via the API == web/public/data (real data; before every server/engine merge, D56). Strict: no tests = fail
+	HL_SERVER_DATA=$(HL_SERVER_DATA) HL_PARITY_REAL=1 uv run --no-sync pytest server/tests -k parity -q
+parity-synthetic:  ## WS11: batch == server on the synthetic world (what CI runs, D56)
+	@$(if $(wildcard server/tests),$(call PYTEST_OK5,uv run --no-sync pytest server/tests -k "parity and synthetic" -q),echo "parity-synthetic: no server/tests yet (ok)")
+server-test: ## backend tests: server/ + tests/test_backend_*.py (no real data needed)
+	@$(if $(SERVER_TEST_PATHS),$(call PYTEST_OK5,uv run --no-sync pytest $(SERVER_TEST_PATHS) -q),echo "server-test: no backend tests yet (ok)")
+
 dummy:       ## M0: tools/make_dummy.py -> web/public/data-dummy
 	$(PY) tools/make_dummy.py --quiet
 
