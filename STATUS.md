@@ -636,6 +636,8 @@ Branch: `ws7-hud`
   0.27 min); margins likewise; the tightest HUD margin along the walk equals the tightest row
   (14.9 min at S2, dose-bound), so alarms 1/4 do not fire on this plan.
 - KATs: `tests/test_fields_png.py` 48 pass; `web/src/hud/*.test.ts` 59 pass (5 on real data).
+- 2026-11-14T11:20Z: browser check of `/hud` on data-dummy: playback 300×, band shading,
+  dwell ring, expanded panel + minimap, drag-anywhere readout; layout fixed to fit the outlet.
 
 ### Doing
 
@@ -645,7 +647,8 @@ Branch: `ws7-hud`
 
 - Bind the HUD to WS2's `route_nom_104` once `make web` publishes it (already works on data/interim).
 - con_* fields when V1 lands (`make fields` again; worst-case + bearing unchanged).
-- 60 fps check at 60× on the real fields (capture).
+- 60 fps check at 60× on a real laptop (the automated browser here is throttled to ~15 fps even
+  when the HUD is idle, so it measures nothing).
 
 ### Blocked
 

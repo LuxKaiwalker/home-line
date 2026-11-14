@@ -369,3 +369,11 @@
   background: var(--hud-bg);
   font-size: 12px;
 }
+/* the hidden attribute must win over the display rules above (drag bar, hints, banner) */
+.hl-hud [hidden] {
+  display: none !important;
+}
+/* /hud slot (WS5 .outlet > .slot): fill the outlet so the controls stay on screen */
+.slot[data-slot='hud'] {
+  height: 100%;
+}

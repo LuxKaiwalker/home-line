@@ -293,7 +293,7 @@ export class HudMap {
     }
 
     // dwell progress ring
-    if (frame.state.phase === 'dwell' && frame.state.dwellFrac !== null) {
+    if (!frame.dragging && frame.state.phase === 'dwell' && frame.state.dwellFrac !== null) {
       ctx.strokeStyle = '#7fd8ff'
       ctx.lineWidth = 3
       ctx.beginPath()
