@@ -3,7 +3,7 @@
 // dummy-flagged files in real mode. Images (PNG overlays, panoramas, fields) are referenced by URL.
 import { DATA_MODE, dataUrl, type DataMode } from '../env'
 import { schemaFor } from './contracts'
-import { checkSchema, type SchemaError } from './schema'
+import { checkSchema, type JsonSchema, type SchemaError } from './schema'
 import type {
   AnyFC,
   BandsFC,
@@ -67,11 +67,17 @@ export const browserFetcher =
     return text
   }
 
-export function createLoader(fetchText: TextFetcher, mode: DataMode) {
+export interface LoaderOptions {
+  /** Path -> contract schema (default: SCHEMA_MAP via schemaFor). Tests inject rows C has not added yet. */
+  schemaFor?: (path: string) => JsonSchema | undefined
+}
+
+export function createLoader(fetchText: TextFetcher, mode: DataMode, opts: LoaderOptions = {}) {
+  const lookupSchema = opts.schemaFor ?? schemaFor
   const cache = new Map<string, Promise<unknown>>()
 
   async function readJson(path: string): Promise<unknown> {
-    const schema = schemaFor(path)
+    const schema = lookupSchema(path)
     if (!schema) throw new DataError(path, 'no-contract', 'no contract in contracts/ covers this path')
     const text = await fetchText(path)
     if (text === null) throw new DataError(path, 'missing', 'file not found')

@@ -17,6 +17,8 @@ import { padInUse, padMarker, padProposal } from '../map/pad'
 import { allScienceZero } from '../views/trade'
 import { katAreas, v2Classes } from '../views/validation'
 import { createLoader, type TextFetcher } from './loader'
+import { schemaFor } from './contracts'
+import { loadPadsIndex, padFiles, padKey, PADS_INDEX, parsePadSummary } from './pads'
 import type { Localisation, ManifestEntry } from './types'
 
 // HOMELINE_REAL_DATA points the checks at another real tree (e.g. a scratch `make web` output).
@@ -244,4 +246,35 @@ describe.skipIf(!S5)('real data tree, pad.json v1.1.2 (F8, C 15:31)', () => {
     for (const a of p.ranked) for (const f of ['lon', 'lat', 'score'] as const) expect((await entry(`pad.proposal.alternatives.${a.rank}.${f}`))?.value).toBe(a[f])
     if (p.assessedPct === null) expect(p.checksNote).toBeTruthy()
   })
+})
+
+// D21 parking options (C 16:17 layout): on once WS2 publishes scenarios/pads/ and C's contract rows cover it.
+const hasPads = has && existsSync(resolve(REAL, PADS_INDEX)) && !!schemaFor(PADS_INDEX)
+describe.skipIf(!hasPads)('real tree: D21 rover parking options', () => {
+  const L = createLoader(fsFetcher, 'real')
+
+  it('index: one official row = pad.json; every option loads its files; numbers keyed pads.{id}.*', async () => {
+    const r = await loadPadsIndex(L)
+    expect(r.state).toBe('ok')
+    if (r.state !== 'ok') return
+    const pf = await L.pad()
+    expect([r.index.official.lon, r.index.official.lat]).toEqual([pf.pad.lon, pf.pad.lat])
+    expect(Math.max(...r.index.options.map((o) => o.score ?? -1))).toBe(r.index.official.score)
+    const m = await L.manifest()
+    const idx = await L.scenarios()
+    const nominal = idx.scenarios.find((s) => s.id === idx.default)!
+    for (const o of r.index.options) {
+      expect((m[padKey(o.id, 'score')] as ManifestEntry | undefined)?.value).toBe(o.score)
+      if (o.official) continue
+      const f = padFiles(o.id, nominal)
+      const s = parsePadSummary(await L.json(f.summary), o.id)
+      expect(s.score).toBe(o.score)
+      expect(s.headlines.map((h) => h.budget)).toEqual(expect.arrayContaining(CONFIG.bandBudgetsMin))
+      await L.json(f.bands)
+      await L.json(f.edges)
+      await L.json(f.partner)
+      await L.json(f.route)
+      await L.json(f.timeline)
+    }
+  }, 60_000)
 })

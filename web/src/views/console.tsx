@@ -1,5 +1,6 @@
 // "/" planning console (F17): map + side panel. Default view per SPEC F17: basemap, 30-min nominal
-// band, edge causes, stations; everything else behind toggles. Budget slider (F5), scenario picker (F6).
+// band, edge causes, stations; everything else behind toggles. Budget slider (F5), scenario picker (F6),
+// D21 "Rover parking options" (scenarios/pads/, optional: hidden without its index).
 import { render, type ComponentChildren } from 'preact'
 import { useEffect, useMemo, useState } from 'preact/hooks'
 import { CITED, CONFIG } from '../config'
@@ -7,7 +8,8 @@ import { data } from '../data/loader'
 import { accessFor } from '../data/access'
 import { unknownMaskField } from '../data/fields'
 import { partnerLabel } from '../data/partner'
-import type { PartnerFC, RouteFC, ScenarioEntry, ScenariosIndex, Station, TimelineEvent } from '../data/types'
+import { headlineFor, loadPadsIndex, padFiles, padKey, padViewMode, parsePadSummary, PADS_INDEX, type PadOption, type PadsIndexLoad, type PadsIndexView, type PadSummaryView } from '../data/pads'
+import type { BandsFC, EdgesFC, IsochroneFC, PartnerFC, RouteFC, ScenarioEntry, ScenariosIndex, Station, TimelineEvent } from '../data/types'
 import { dataUrl } from '../env'
 import { ConsoleMap, DEFAULT_VISIBLE, type LayerGroup } from '../map/consoleMap'
 import { BASEMAP_CREDIT, basemapSources } from '../map/basemap'
@@ -34,8 +36,10 @@ const LAYER_LABELS: Record<LayerGroup, string> = {
   slider: 'Budget slider (isochrones)',
   route: 'Planned route',
   partner: 'Partner line (cart haul)', // replaced by partner.geojson `label` (D20) once loaded
-  siting: 'Pad siting proposal (F8)',
+  siting: 'F8 heatmap',
 }
+
+const NO_ISOCHRONES: IsochroneFC = { type: 'FeatureCollection', features: [] }
 
 export const view: View = async (el) => {
   el.innerHTML = `<div class="console"><div class="console-map"></div><aside class="console-panel"></aside></div>`
@@ -75,6 +79,11 @@ function ConsolePanel({ cmap }: { cmap: ConsoleMap }) {
   const [route, setRoute] = useState<RouteFC | null>(null)
   const [timeline, setTimeline] = useState<TimelineEvent[] | null>(null)
   const [credit, setCredit] = useState<string | null>(null)
+  // D21 parking options: null = the official pad (pad.json, existing paths).
+  const [pads, setPads] = useState<PadsIndexLoad | null>(null)
+  const [padSel, setPadSel] = useState<string | null>(null)
+  const [padSummary, setPadSummary] = useState<PadSummaryView | null>(null)
+  const [padError, setPadError] = useState<unknown>(null)
 
   const note = (k: LayerGroup, v: ComponentChildren) => setNotes((n) => ({ ...n, [k]: v }))
 
@@ -114,7 +123,7 @@ function ConsolePanel({ cmap }: { cmap: ConsoleMap }) {
         if (sp || pp) {
           await cmap.setSiting(
             sp ? { url: dataUrl(sp.image), coordinates: sp.coordinates } : null,
-            pp ? { lon: pp.lon, lat: pp.lat, title: 'F8 siting proposal (not adopted; pad_default is kept, S decides)', alternatives: pp.alternatives } : null,
+            pp ? { lon: pp.lon, lat: pp.lat, title: 'Top F8 siting score (D21 picks the official pad by feasible EVAs, not by this score)', alternatives: pp.alternatives } : null,
           )
         }
         note('siting', sp ? '' : 'siting_png.json not available yet')
@@ -183,7 +192,33 @@ function ConsolePanel({ cmap }: { cmap: ConsoleMap }) {
     }
   }, [])
 
+  // D21 picker index (optional): missing, or not yet covered by a contract row -> no picker.
+  useEffect(() => {
+    let alive = true
+    void loadPadsIndex(L).then((r) => {
+      if (alive) setPads(r)
+    })
+    return () => {
+      alive = false
+    }
+  }, [])
+  const padIndex: PadsIndexView | null = pads?.state === 'ok' ? pads.index : null
+
   const scenario = useMemo(() => idx?.scenarios.find((s) => s.id === scenarioId) ?? null, [idx, scenarioId])
+  const nominal = useMemo(() => idx?.scenarios.find((s) => s.id === idx.default) ?? null, [idx])
+  const padF = padSel && nominal ? padFiles(padSel, nominal) : null
+  const mode = padViewMode(padSel)
+
+  // Parking-option markers (official pad excluded: it is the "Pad" marker); click selects.
+  useEffect(() => {
+    if (!padIndex) return
+    cmap.setPadOptions(
+      padIndex.options
+        .filter((o) => !o.official && o.lon !== null && o.lat !== null)
+        .map((o) => ({ id: o.id, lon: o.lon!, lat: o.lat!, label: o.label, title: `Rover parking option ${o.label} (scenarios/pads/index.json): click to switch the bands, route and partner line`, selected: o.id === padSel })),
+      (id) => pickPad(id),
+    )
+  }, [padIndex, padSel])
 
   // Science points, access cells and walk-in lines depend on the scenario (WS2 access per scenario).
   useEffect(() => {
@@ -194,35 +229,57 @@ function ConsolePanel({ cmap }: { cmap: ConsoleMap }) {
   useEffect(() => {
     if (!scenario) return
     let alive = true
+    const pf = padSel && nominal ? padFiles(padSel, nominal) : null
     ;(async () => {
-      try {
-        const [bands, isochrones, edges, partner] = await Promise.all([L.bands(scenario), L.isochrones(scenario), L.edges(scenario), L.partner(scenario)])
-        if (!alive) return
-        await cmap.setScenarioData({ bands, isochrones, edges, partner, variant: scenario.variant })
-        setPartner(partner)
-        const mins = isochroneMinutes(isochrones)
-        setIsoMinutes(mins)
-        setSliderMin((v) => snapMinutes(mins, v) ?? v)
-        setError(null)
-      } catch (e) {
-        if (alive) setError(e)
+      if (pf && padSel) {
+        // D21 parking option: its own bands, edges, partner line, route and summary; no isochrones.
+        setPadSummary(null)
+        setPadError(null)
+        try {
+          const [bands, edges, partner, sum] = await Promise.all([L.json<BandsFC>(pf.bands), L.json<EdgesFC>(pf.edges), L.json<PartnerFC>(pf.partner), L.json<unknown>(pf.summary)])
+          if (!alive) return
+          setPadSummary(parsePadSummary(sum, padSel))
+          await cmap.setScenarioData({ bands, isochrones: NO_ISOCHRONES, edges, partner, variant: nominal!.variant })
+          setPartner(partner)
+          setIsoMinutes([])
+        } catch (e) {
+          if (alive) setPadError(e)
+        }
+      } else {
+        setPadSummary(null)
+        setPadError(null)
+        try {
+          const [bands, isochrones, edges, partner] = await Promise.all([L.bands(scenario), L.isochrones(scenario), L.edges(scenario), L.partner(scenario)])
+          if (!alive) return
+          await cmap.setScenarioData({ bands, isochrones, edges, partner, variant: scenario.variant })
+          setPartner(partner)
+          const mins = isochroneMinutes(isochrones)
+          setIsoMinutes(mins)
+          setSliderMin((v) => snapMinutes(mins, v) ?? v)
+          setError(null)
+        } catch (e) {
+          if (alive) setError(e)
+        }
       }
+      const routeFile = pf ? pf.route : `route_${scenario.id}.geojson`
       try {
-        const r = await L.optional(() => L.route(scenario.id))
+        const r = await L.optional(() => (pf ? L.json<RouteFC>(pf.route) : L.route(scenario.id)))
         if (!alive) return
         setRoute(r)
-        setTimeline(r ? await L.optional(() => L.timeline(scenario.id)) : null)
+        setTimeline(r ? await L.optional(() => (pf ? L.json<TimelineEvent[]>(pf.timeline) : L.timeline(scenario.id))) : null)
         await cmap.setRoute(r)
-        note('route', r ? (routeSummary(r) ? '' : `route_${scenario.id}.geojson has no legs (no reachable station)`) : `no route for ${scenario.id}`)
+        note('route', r ? (routeSummary(r) ? '' : `${routeFile} has no legs (no reachable station)`) : `no ${routeFile}`)
       } catch (e) {
         setRoute(null)
+        setTimeline(null)
+        await cmap.setRoute(null)
         if (alive) note('route', e instanceof Error ? e.message : String(e))
       }
     })()
     return () => {
       alive = false
     }
-  }, [scenario])
+  }, [scenario, padSel])
 
   useEffect(() => cmap.setBudget(budget), [budget])
   useEffect(() => cmap.setSliderMinutes(sliderMin), [sliderMin])
@@ -231,6 +288,16 @@ function ConsolePanel({ cmap }: { cmap: ConsoleMap }) {
     cmap.setVisible(g, on)
     setVisible((v) => ({ ...v, [g]: on }))
   }
+
+  /** D21: null = the official pad. A parking option is nominal at the default suit and has no isochrones. */
+  function pickPad(id: string | null) {
+    if (id !== null) toggle('slider', false)
+    setPadSel(id)
+  }
+  // A parking option runs on the default scenario only (nominal, its suit).
+  useEffect(() => {
+    if (padSel && idx && scenarioId !== idx.default) setScenarioId(idx.default)
+  }, [padSel, idx])
 
   if (error && !idx) {
     return (
@@ -249,6 +316,10 @@ function ConsolePanel({ cmap }: { cmap: ConsoleMap }) {
   const h = scenario.headline
   const hb = h.budget_min
   const defaultPartnerFile = idx.scenarios.find((s) => s.id === idx.default)?.files.partner ?? null
+  const partnerFile = padF ? padF.partner : scenario.files.partner
+  const routeProps = padF && padSel
+    ? { label: `parking option ${padIndex?.options.find((o) => o.id === padSel)?.label ?? padSel}`, routeFile: padF.route, timelineFile: padF.timeline, routeKey: padKey(padSel, 'route'), timelineKey: padKey(padSel, 'timeline') }
+    : { label: scenario.id, routeFile: `route_${scenario.id}.geojson`, timelineFile: `timeline_${scenario.id}.json`, routeKey: `route.${scenario.id}`, timelineKey: `timeline.${scenario.id}` }
   const label = (g: LayerGroup) => (g === 'partner' ? partnerLabel(partner) : LAYER_LABELS[g])
 
   return (
@@ -256,25 +327,37 @@ function ConsolePanel({ cmap }: { cmap: ConsoleMap }) {
       <DummyNote />
       {error != null && <DataProblem error={error} what="Scenario layers" />}
 
-      <section class="headline">
-        <div class="headline-value">
-          <Num v={h.reachable_pct} units="%" file="scenarios/index.json" k={`reachable_pct.${scenario.id}.${hb}`} />
-        </div>
-        <div class="headline-text">
-          reachable of the <i>assessed</i> flat disc within {hb} min.
-          <br />
-          Range <Num v={h.range_pct[0]} units="%" file="scenarios/index.json" k={`reachable_pct_range.${scenario.id}.${hb}.low`} /> (conservative) to{' '}
-          <Num v={h.range_pct[1]} units="%" file="scenarios/index.json" k={`reachable_pct_range.${scenario.id}.${hb}.high`} /> (optimistic)
-        </div>
-      </section>
+      {padSel && padF ? (
+        <PadHeadline id={padSel} summary={padSummary} file={padF.summary} budget={budget} error={padError} />
+      ) : (
+        <section class="headline">
+          <div class="headline-value">
+            <Num v={h.reachable_pct} units="%" file="scenarios/index.json" k={`reachable_pct.${scenario.id}.${hb}`} />
+          </div>
+          <div class="headline-text">
+            reachable of the <i>assessed</i> flat disc within {hb} min.
+            <br />
+            Range <Num v={h.range_pct[0]} units="%" file="scenarios/index.json" k={`reachable_pct_range.${scenario.id}.${hb}.low`} /> (conservative) to{' '}
+            <Num v={h.range_pct[1]} units="%" file="scenarios/index.json" k={`reachable_pct_range.${scenario.id}.${hb}.high`} /> (optimistic)
+            {padIndex && (
+              <>
+                <br />
+                Official pad: <Num v={padIndex.official.score} file={PADS_INDEX} k={padKey(padIndex.official.id, 'score')} /> feasible EVAs.
+              </>
+            )}
+          </div>
+        </section>
+      )}
 
-      <RouteSection scenarioId={scenario.id} route={route} timeline={timeline} shown={visible.route} onShow={(on) => toggle('route', on)} />
+      {padIndex && nominal && <PadPicker index={padIndex} selected={padSel} onPick={pickPad} suitKg={nominal.suit_kg} />}
+
+      <RouteSection {...routeProps} route={route} timeline={timeline} shown={visible.route} onShow={(on) => toggle('route', on)} />
 
       <section>
         <h3>Scenario</h3>
         <div class="seg" role="radiogroup" aria-label="Variant">
           {CONFIG.variantNames.map((v) => {
-            const ok = !!findScenario(idx, v, scenario.suit_kg)
+            const ok = mode.scenarioPicker && !!findScenario(idx, v, scenario.suit_kg)
             return (
               <button type="button" role="radio" aria-checked={scenario.variant === v} class={scenario.variant === v ? 'on' : ''} disabled={!ok} onClick={() => pick(v, scenario.suit_kg)}>
                 {v}
@@ -284,7 +367,7 @@ function ConsolePanel({ cmap }: { cmap: ConsoleMap }) {
         </div>
         <div class="seg" role="radiogroup" aria-label="Suit mass">
           {CONFIG.suitMassesKg.map((kg) => {
-            const ok = !!findScenario(idx, scenario.variant, kg)
+            const ok = mode.scenarioPicker && !!findScenario(idx, scenario.variant, kg)
             return (
               <button
                 type="button"
@@ -293,7 +376,7 @@ function ConsolePanel({ cmap }: { cmap: ConsoleMap }) {
                 class={scenario.suit_kg === kg ? 'on' : ''}
                 disabled={!ok}
                 onClick={() => pick(scenario.variant, kg)}
-                title={ok ? '' : 'scenario not in scenarios/index.json'}
+                title={ok ? '' : mode.scenarioPicker ? 'scenario not in scenarios/index.json' : 'parking options are computed at the nominal suit only'}
               >
                 {kg} kg suit
               </button>
@@ -303,6 +386,7 @@ function ConsolePanel({ cmap }: { cmap: ConsoleMap }) {
         <p class="caption">
           Scenario <code>{scenario.id}</code>. Combinations not in <code>scenarios/index.json</code> are disabled.
           {CONFIG.suitMassesKg[0] === 80 && <> The 80 kg suit is our sensitivity value.</>}
+          {!mode.scenarioPicker && <> Locked to <code>{scenario.id}</code> while a parking option is selected (options are computed for it only).</>}
         </p>
       </section>
 
@@ -316,12 +400,18 @@ function ConsolePanel({ cmap }: { cmap: ConsoleMap }) {
           ))}
         </div>
         <p class="caption">NASA is <i>considering</i> a 30- or 60-min walkback; neither is a rule.</p>
-        <label class="toggle">
-          <input type="checkbox" checked={visible.slider} onChange={(e) => toggle('slider', (e.target as HTMLInputElement).checked)} />
-          Budget slider (0–{CONFIG.isochroneMinutes.max} min)
-        </label>
-        {visible.slider && isoMinutes.length > 0 && (
-          <BudgetSlider values={isoMinutes} value={sliderMin} onChange={setSliderMin} file={scenario.files.isochrones} scenarioId={scenario.id} />
+        {mode.slider ? (
+          <>
+            <label class="toggle">
+              <input type="checkbox" checked={visible.slider} onChange={(e) => toggle('slider', (e.target as HTMLInputElement).checked)} />
+              Budget slider (0–{CONFIG.isochroneMinutes.max} min)
+            </label>
+            {visible.slider && isoMinutes.length > 0 && (
+              <BudgetSlider values={isoMinutes} value={sliderMin} onChange={setSliderMin} file={scenario.files.isochrones} scenarioId={scenario.id} />
+            )}
+          </>
+        ) : (
+          <p class="caption slider-off">Budget slider off: no isochrones are computed for parking options. Select the official pad to use it.</p>
         )}
       </section>
 
@@ -345,8 +435,9 @@ function ConsolePanel({ cmap }: { cmap: ConsoleMap }) {
         minutes={isoMinutes}
         pad={padInfo}
         credit={credit}
-        partner={visible.partner ? { fc: partner, label: partnerLabel(partner), file: scenario.files.partner, defaultFile: defaultPartnerFile } : null}
+        partner={visible.partner ? { fc: partner, label: partnerLabel(partner), file: partnerFile, defaultFile: defaultPartnerFile } : null}
         proposal={visible.siting ? proposal : null}
+        padOptions={!!padIndex}
       />
 
       {padUse && (
@@ -404,6 +495,11 @@ function ConsolePanel({ cmap }: { cmap: ConsoleMap }) {
           </table>
         ) : (
           <p class="muted">{notes.stations || 'Loading…'}</p>
+        )}
+        {stations && padSel && (
+          <p class="caption">
+            <b>Official pad:</b> the walk-home times, access cells and station cards are for the official pad, not the selected parking option.
+          </p>
         )}
         {stations && (
           <p class="caption">
@@ -481,6 +577,7 @@ function Legend(p: {
   credit: string | null
   partner: { fc: PartnerFC | null; label: string; file: string; defaultFile: string | null } | null
   proposal: PadProposal | null
+  padOptions: boolean
 }) {
   const v = p.visible
   const edges = binEdges(CONFIG.isochroneMinutes.max, THEME.isoBinStepMin) // same bins as the map colour ramp
@@ -538,6 +635,12 @@ function Legend(p: {
             {p.pad ? <span class="muted"> ({p.pad.sourceLabel})</span> : null}
           </li>
         )}
+        {v.stations && p.padOptions && (
+          <li>
+            <span class="pad-option">#2</span>
+            <span>rover parking option (click to select; outlined = selected)</span>
+          </li>
+        )}
         {v.route && (
           <li>
             <Swatch kind="line" color={THEME.route} dashed /> planned route (simulated EVA)
@@ -552,14 +655,14 @@ function Legend(p: {
         )}
         {v.siting && (
           <li>
-            <Swatch kind="fill" color="#bbbbbb" /> F8 siting score (grey; white = highest)
+            <Swatch kind="fill" color="#bbbbbb" /> F8 heatmap: siting score per candidate block (grey; white = highest)
             {p.proposal ? (
               <>
                 {' '}
-                · <span class="pad-marker pad-proposal">Pad?</span> proposed pad · <span class="pad-alt">#2</span> alternatives
+                · <span class="pad-marker pad-proposal">F8?</span> top F8 score · <span class="pad-alt">#2</span> next F8 ranks
               </>
             ) : null}
-            . <b>Proposal only</b>: the plan keeps pad_default.
+            . The official pad is chosen by feasible EVAs (D21), not by this score.
           </li>
         )}
       </ul>
@@ -568,21 +671,36 @@ function Legend(p: {
 }
 
 /** F9 route (simulated EVA): stop order from the route legs, times from the timeline (manifest-backed). */
-function RouteSection(p: { scenarioId: string; route: RouteFC | null; timeline: TimelineEvent[] | null; shown: boolean; onShow: (on: boolean) => void }) {
+function RouteSection(p: {
+  /** What the route belongs to (scenario id, or the parking option). */
+  label: string
+  routeFile: string
+  timelineFile: string
+  /** Manifest key prefixes: route.{sid} / timeline.{sid}, or pads.{id}.route / pads.{id}.timeline (D21). */
+  routeKey: string
+  timelineKey: string
+  route: RouteFC | null
+  timeline: TimelineEvent[] | null
+  shown: boolean
+  onShow: (on: boolean) => void
+}) {
   const r = routeSummary(p.route)
-  const tf = `timeline_${p.scenarioId}.json`
+  const tf = p.timelineFile
   if (!r) {
     return (
       <section>
         <h3>Planned route</h3>
-        <p class="muted">No route for {p.scenarioId}{p.route ? ' (no reachable station)' : ''}.</p>
+        <p class="muted">
+          No route for {p.label}
+          {p.route ? ' (no reachable station)' : ''}.
+        </p>
       </section>
     )
   }
   const tl = p.timeline ?? []
   const at = (event: string, station: string | null) => {
     const i = tl.findIndex((e) => e.event === event && e.station === station)
-    return i < 0 ? null : <Num v={tl[i].t_min} units="min" file={tf} k={`timeline.${p.scenarioId}.${i}.t_min`} />
+    return i < 0 ? null : <Num v={tl[i].t_min} units="min" file={tf} k={`${p.timelineKey}.${i}.t_min`} />
   }
   return (
     <section>
@@ -603,9 +721,9 @@ function RouteSection(p: { scenarioId: string; route: RouteFC | null; timeline: 
           )
         })}
       </ol>
-      <RouteLegs scenarioId={p.scenarioId} legs={r.legs} />
+      <RouteLegs file={p.routeFile} keyPrefix={p.routeKey} legs={r.legs} />
       <p>
-        Total <Num v={r.endMin} units="min" file={tf} k={`route.${p.scenarioId}.total_min`} />{' '}
+        Total <Num v={r.endMin} units="min" file={tf} k={`${p.routeKey}.total_min`} />{' '}
         <label class="toggle inline">
           <input type="checkbox" checked={p.shown} onChange={(e) => p.onShow((e.target as HTMLInputElement).checked)} /> show on map
         </label>
@@ -614,21 +732,30 @@ function RouteSection(p: { scenarioId: string; route: RouteFC | null; timeline: 
   )
 }
 
-/** Route legs (F9) from route_{scenario}.geojson; manifest keys route.{sid}.leg.{i}.* (WS2, i = the 1-based `leg`). */
-function RouteLegs({ scenarioId, legs }: { scenarioId: string; legs: RouteLeg[] }) {
-  const rf = `route_${scenarioId}.geojson`
-  const k = (l: RouteLeg, f: string) => `route.${scenarioId}.leg.${l.leg}.${f}`
+/**
+ * Route legs (F9) from route_{scenario}.geojson; manifest keys {prefix}.leg.{i}.* (WS2, i = the 1-based `leg`).
+ * Units sit in the header so the table fits the 340 px side panel.
+ */
+function RouteLegs({ file, keyPrefix, legs }: { file: string; keyPrefix: string; legs: RouteLeg[] }) {
+  const rf = file
+  const k = (l: RouteLeg, f: string) => `${keyPrefix}.leg.${l.leg}.${f}`
   const name = (s: string) => (s === 'pad' ? 'Pad' : s)
   return (
     <table class="mini route-legs">
       <thead>
         <tr>
           <th>Leg</th>
-          <th class="r">Walk</th>
-          <th class="r">Distance</th>
-          <th class="r">O₂</th>
+          <th class="r">
+            Walk <span class="unit">min</span>
+          </th>
+          <th class="r">
+            Dist. <span class="unit">m</span>
+          </th>
+          <th class="r">
+            O₂ <span class="unit">L</span>
+          </th>
           <th class="r" title="Straight walk-in from the access cell to the science point at the leg's end (not modelled)">
-            Walk-in
+            Walk-in <span class="unit">m</span>
           </th>
         </tr>
       </thead>
@@ -636,18 +763,18 @@ function RouteLegs({ scenarioId, legs }: { scenarioId: string; legs: RouteLeg[] 
         {legs.map((l) => (
           <tr>
             <td>
-              {name(l.from)} → {name(l.to)}
+              {name(l.from)}→{name(l.to)}
             </td>
             <td class="r">
-              <Num v={l.t_min} units="min" file={rf} k={k(l, 't_min')} />
+              <Num v={l.t_min} file={rf} k={k(l, 't_min')} />
             </td>
             <td class="r">
-              <Num v={l.length_m} units="m" file={rf} k={k(l, 'length_m')} />
+              <Num v={l.length_m} file={rf} k={k(l, 'length_m')} />
             </td>
             <td class="r">
-              <Num v={l.o2_L} units="L" file={rf} k={k(l, 'o2_L')} />
+              <Num v={l.o2_L} file={rf} k={k(l, 'o2_L')} />
             </td>
-            <td class="r">{l.to === 'pad' ? <span class="muted">–</span> : <Num v={l.to_access_dist_m} units="m" file={rf} k={k(l, 'to_access_dist_m')} />}</td>
+            <td class="r">{l.to === 'pad' ? <span class="muted">–</span> : <Num v={l.to_access_dist_m} file={rf} k={k(l, 'to_access_dist_m')} />}</td>
           </tr>
         ))}
       </tbody>
@@ -655,25 +782,23 @@ function RouteLegs({ scenarioId, legs }: { scenarioId: string; legs: RouteLeg[] 
   )
 }
 
-/** F8 pad siting proposal (C 14:58, contract pad v1.1.2): siting.png heatmap + the pad.json `proposal` block; never the pad in use. */
+/** F8 heatmap (siting.png) + the pad.json `proposal` block (F8 top score, contract pad v1.1.2); D21 chooses the pad by feasible EVAs instead. */
 function PadProposalSection({ p, heatmap, pad }: { p: PadProposal | null; heatmap: boolean; pad: PadMarkerInfo | null }) {
   const F = 'pad.json'
   const b = CONFIG.walkbackBudgetsMin[0]
   const ak = (rank: number, f: string) => `pad.proposal.alternatives.${rank}.${f}`
   return (
     <section>
-      <h3>
-        Pad siting <span class="tag tag-assumed">proposal</span>
-      </h3>
+      <h3>F8 heatmap</h3>
       <p>
-        <b>pad_default is kept; S decides.</b> The pad in use is {pad?.file ? 'pad.json (= pad_default)' : 'config/site.yaml pad_default'}; every route, band
-        and number in the plan uses it. The F8 siting rule's result is shown here only as a proposal, not adopted
-        {heatmap ? ' (grey heatmap: siting score, white = highest)' : ' (siting.png not in this tree)'}.
+        {heatmap ? 'Grey heatmap: the F8 siting score of each candidate block (white = highest).' : 'siting.png is not in this tree: no heatmap.'} D21 (user, 14 Nov
+        16:14): the official pad is the candidate with the most feasible EVAs, not the top F8 score; see Rover parking options. The pad in use is{' '}
+        {pad?.file ? 'pad.json' : 'config/site.yaml pad_default'}.
       </p>
       {p ? (
         <>
           <p>
-            Proposed pad <Num v={p.lon} file={F} k="pad.proposal.lon" />, <Num v={p.lat} file={F} k="pad.proposal.lat" />, elevation{' '}
+            Top F8 score at <Num v={p.lon} file={F} k="pad.proposal.lon" />, <Num v={p.lat} file={F} k="pad.proposal.lat" />, elevation{' '}
             <Num v={p.elevM} units="m" file={F} k="pad.proposal.elev_m" />: score <Num v={p.score} file={F} k="pad.proposal.score" />
             {p.stations.length > 0 && <> (stations within the conservative {b}-min walk home: {p.stations.join(', ')})</>}; <PadBlockLabel />{' '}
             <Num v={p.maxSlopeDeg} units="deg" file={F} k="pad.proposal.checks.max_slope_deg" />; {b}-min disc{' '}
@@ -711,7 +836,7 @@ function PadProposalSection({ p, heatmap, pad }: { p: PadProposal | null; heatma
               <tbody>
                 {p.ranked.map((a) => (
                   <tr>
-                    <td title={a.isProposal ? 'rank 1 = the proposed pad' : 'same rule, not adopted'}>
+                    <td title={a.isProposal ? 'rank 1 = the top F8 score' : 'F8 rank'}>
                       #{a.rank}
                       {a.isProposal ? '*' : ''}
                     </td>
@@ -726,7 +851,7 @@ function PadProposalSection({ p, heatmap, pad }: { p: PadProposal | null; heatma
               </tbody>
             </table>
           )}
-          {p.ranked.some((a) => a.isProposal) && <p class="caption">* the proposed pad (rank 1 of the alternatives).</p>}
+          {p.ranked.some((a) => a.isProposal) && <p class="caption">* the top F8 score (rank 1).</p>}
           {!p.tie && p.tied && <p class="caption">Every listed alternative has the proposal's score: the rule cannot tell the candidates apart.</p>}
           {p.noAccess.length > 0 && (
             <p class="caption">
@@ -743,8 +868,117 @@ function PadProposalSection({ p, heatmap, pad }: { p: PadProposal | null; heatma
           {p.rule && <p class="caption">Rule: {p.rule}.</p>}
         </>
       ) : (
-        <p class="caption">No proposal block in pad.json: only the heatmap is shown.</p>
+        <p class="caption">pad.json carries no F8 result block: only the heatmap is shown.</p>
       )}
+    </section>
+  )
+}
+
+/** Headline of a D21 parking option (scenarios/pads/{id}/summary.json, keys pads.{id}.*). */
+function PadHeadline({ id, summary, file, budget, error }: { id: string; summary: PadSummaryView | null; file: string; budget: number; error: unknown }) {
+  if (error != null) return <DataProblem error={error} what={`Parking option ${id}`} />
+  if (!summary) return <section class="headline muted">Loading parking option…</section>
+  const h = headlineFor(summary, budget)
+  const k = (...p: (string | number)[]) => padKey(id, ...p)
+  return (
+    <section class="headline">
+      <div class="headline-value">{h ? <Num v={h.reachablePct} units="%" file={file} k={k('headline', h.budget, 'reachable_pct')} /> : <span class="num-unknown">–</span>}</div>
+      <div class="headline-text">
+        {h ? (
+          <>
+            reachable of the <i>assessed</i> flat disc within {h.budget} min, from this parking option.
+            {h.range && (
+              <>
+                <br />
+                Range <Num v={h.range[0]} units="%" file={file} k={k('headline', h.budget, 'range_pct', 'low')} /> (conservative) to{' '}
+                <Num v={h.range[1]} units="%" file={file} k={k('headline', h.budget, 'range_pct', 'high')} /> (optimistic)
+              </>
+            )}
+          </>
+        ) : (
+          <>no headline in {file}</>
+        )}
+        <br />
+        Feasible EVAs: <Num v={summary.score} file={file} k={k('score')} />
+      </div>
+    </section>
+  )
+}
+
+/** Tiebreak values to print: an elevation tiebreak equal to the Elev. column is not repeated. */
+const shownTiebreaks = (o: PadOption) => o.tiebreak.filter(([n, v]) => !(/elev/.test(n) && v === o.elevM))
+
+const tbLabel = (name: string) => {
+  const m = /^reachable_pct(?:_(\d+)_?min)?$/.exec(name)
+  return m ? `reachable${m[1] ? ` in ${m[1]} min` : ''}` : name.replace(/_/g, ' ')
+}
+
+const tbUnits = (name: string): string | null => (/pct/.test(name) ? '%' : /elev|_m$/.test(name) ? 'm' : null)
+
+/** D21 "Rover parking options": the official pad first (default), then the ranked alternatives. */
+function PadPicker({ index, selected, onPick, suitKg }: { index: PadsIndexView; selected: string | null; onPick: (id: string | null) => void; suitKg: number }) {
+  const F = PADS_INDEX
+  return (
+    <section class="pad-picker">
+      <h3>Rover parking options</h3>
+      <table class="mini">
+        <thead>
+          <tr>
+            <th />
+            <th>Pad</th>
+            <th class="r" title="D21 score: station subsets with a feasible route from this pad">
+              Feasible EVAs
+            </th>
+            <th class="r">
+              Elev. <span class="unit">m</span>
+            </th>
+          </tr>
+        </thead>
+        <tbody>
+          {index.options.map((o) => {
+            const on = o.official ? selected === null : selected === o.id
+            const pick = () => onPick(o.official ? null : o.id)
+            return (
+              <tr class={on ? 'on' : ''} onClick={pick}>
+                <td>
+                  <input type="radio" name="pad-option" checked={on} onChange={pick} aria-label={o.label} />
+                </td>
+                <td>
+                  <b>{o.label}</b>
+                  {o.rank !== null && (
+                    <span class="muted">
+                      {' '}
+                      rank <Num v={o.rank} file={F} k={padKey(o.id, 'rank')} />
+                    </span>
+                  )}
+                  {shownTiebreaks(o).length > 0 && (
+                    <div class="caption">
+                      tiebreak{' '}
+                      {shownTiebreaks(o).map(([n, v], i) => (
+                        <>
+                          {i > 0 ? ' · ' : ''}
+                          {tbLabel(n)} <Num v={v} units={tbUnits(n)} file={F} k={padKey(o.id, 'tiebreak', n)} />
+                        </>
+                      ))}
+                    </div>
+                  )}
+                </td>
+                <td class="r">
+                  <Num v={o.score} file={F} k={padKey(o.id, 'score')} />
+                </td>
+                <td class="r">
+                  <Num v={o.elevM} file={F} k={padKey(o.id, 'elev_m')} />
+                </td>
+              </tr>
+            )
+          })}
+        </tbody>
+      </table>
+      <p class="caption">
+        D21: the official pad is the candidate with the most feasible EVAs (station subsets with a feasible route); it is the default. Choosing another option
+        switches the bands, route, partner line, headline and feasible-EVA count to that pad (nominal variant, {suitKg} kg suit only; no budget slider).{' '}
+        <b>The HUD, the 3D view and the station cards stay on the official pad.</b>
+      </p>
     </section>
   )
 }
