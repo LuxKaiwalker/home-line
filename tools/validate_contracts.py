@@ -78,6 +78,15 @@ SCHEMA_MAP: list[tuple[str, str]] = [
     ("terrain/cellstate.json", "cellstate.schema.json"),
     # v1.1.2: conservative cell states (WS1 cellstate_3m_conservative.tif, make web)
     ("terrain/cellstate_conservative.json", "cellstate.schema.json"),
+    # v1.1.4: D21 rover parking options (WS2 pipeline/engine/padpick.py; C layout 16:17). Four
+    # segments under scenarios/pads/, so no overlap with the three-segment scenario rows above.
+    ("scenarios/pads/index.json", "pads_index.schema.json"),
+    ("scenarios/pads/*/summary.json", "pad_summary.schema.json"),
+    ("scenarios/pads/*/bands_*.geojson", "bands.schema.json"),
+    ("scenarios/pads/*/edges.geojson", "edges.schema.json"),
+    ("scenarios/pads/*/partner.geojson", "partner.schema.json"),
+    ("scenarios/pads/*/route_*.geojson", "route.schema.json"),
+    ("scenarios/pads/*/timeline_*.json", "timeline.schema.json"),
 ]
 
 # Pipeline-internal JSON (not web-facing), relative to data/interim/. Checked only with
@@ -90,6 +99,53 @@ INTERIM_SCHEMA_MAP: list[tuple[str, str]] = [
 ]
 
 JSON_SUFFIXES = {".json", ".geojson"}
+
+
+def _check_pads_index(rel: str, doc) -> list[str]:
+    """v1.1.4: exactly one official row, equal to the top-level ``official``; unique ids."""
+    rows = doc.get("pads") if isinstance(doc, dict) else None
+    if not isinstance(rows, list):
+        return []
+    rows = [r for r in rows if isinstance(r, dict)]
+    out = []
+    official = [r.get("id") for r in rows if r.get("official") is True]
+    if len(official) != 1:
+        out.append(f"exactly one pad row must have official: true (found {len(official)})")
+    elif "official" in doc and doc["official"] != official[0]:
+        out.append(f"official {doc['official']!r} is not the official row {official[0]!r}")
+    ids = [r.get("id") for r in rows]
+    dup = sorted({str(i) for i in ids if ids.count(i) > 1})
+    if dup:
+        out.append(f"duplicate pad ids {dup}")
+    return out
+
+
+def _check_pad_summary(rel: str, doc) -> list[str]:
+    """v1.1.4: id = folder name under scenarios/pads/; each headline key = its budget_min."""
+    if not isinstance(doc, dict):
+        return []
+    out = []
+    parts = rel.split("/")
+    if len(parts) >= 2 and doc.get("id") != parts[-2]:
+        out.append(f"id {doc.get('id')!r} is not the folder name {parts[-2]!r}")
+    headline = doc.get("headline")
+    for key, h in (headline.items() if isinstance(headline, dict) else []):
+        b = h.get("budget_min") if isinstance(h, dict) else None
+        try:
+            same = float(key) == b
+        except ValueError:
+            same = False
+        if isinstance(b, int | float) and not same:
+            out.append(f"headline key {key!r} has budget_min {b}")
+    return out
+
+
+# Checks JSON Schema cannot express in the keyword subset the browser checker supports
+# (web/src/data/schema.ts): schema file -> fn(data-root-relative path, doc) -> error messages.
+SEMANTIC_CHECKS = {
+    "pads_index.schema.json": _check_pads_index,
+    "pad_summary.schema.json": _check_pad_summary,
+}
 
 
 @dataclass
@@ -172,6 +228,8 @@ def check_tree(root: Path, schemas: dict[str, dict], report: Report, *, public: 
         for err in sorted(validator.iter_errors(doc), key=lambda e: list(e.absolute_path)):
             loc = "/".join(str(p) for p in err.absolute_path) or "<root>"
             report.errors.append(f"{path} [{schema_name}] at {loc}: {err.message}")
+        for msg in SEMANTIC_CHECKS.get(schema_name, lambda *_: [])(rel, doc):
+            report.errors.append(f"{path} [{schema_name}]: {msg}")
         if not public and is_index_schema(schema) and top_dummy is not True:
             report.errors.append(f'{path}: index file in dummy tree must have "dummy": true')
     return n

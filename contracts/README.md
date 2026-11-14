@@ -1,8 +1,8 @@
 # Data contracts (pipeline → web)
 
-**Contracts v1.1.3** (2026-11-14, additive; see "Changes" at the end). Only C changes a contract,
+**Contracts v1.1.4** (2026-11-14, additive; see "Changes" at the end). Only C changes a contract,
 by PR with a version bump and a note to every consumer (AGENTS.md rule 4). A schema's
-`x-contract-version` is the version that last changed it (1.0.0, 1.1.0, 1.1.1 or 1.1.2). Every schema carries `"x-contract-version"` and `"x-source"` (the SPEC
+`x-contract-version` is the version that last changed it (1.0.0, 1.1.0 … 1.1.4). Every schema carries `"x-contract-version"` and `"x-source"` (the SPEC
 section or brief it comes from).
 
 Source of truth: SPEC.md §6, §6.1, §6.2. Schemas are JSON Schema draft 2020-12.
@@ -31,7 +31,7 @@ Paths are relative to both `web/public/data/` (real) and `web/public/data-dummy/
 | `route_{scenario}.geojson` | `route.schema.json` | §6 |
 | `timeline_{scenario}.json` | `timeline.schema.json` | §6 |
 | `trade_table.json` | `trade_table.schema.json` | §6 |
-| `pad.json` (carries `dummy`) | `pad.schema.json` | §6 (F8, added 13 Nov); `pad` = the pad in use, F8 result in `proposal` (v1.1.2) |
+| `pad.json` (carries `dummy`) | `pad.schema.json` | §6 (F8, added 13 Nov); `pad` = the pad in use, F8 result in `proposal` (v1.1.2); since D21 the official pad, D21 extras (v1.1.4) |
 | `conditions/rad.json` | `rad.schema.json` | §6 |
 | `manifest.json` | `manifest.schema.json` | §6 |
 | `fields/index.json` (**index**) | `fields_index.schema.json` | §6.1, §6.2 |
@@ -64,6 +64,13 @@ other workstreams read them. Each schema says where it comes from.
 | `tiles/basemap/tilejson.json` (v1.1.0) | `tilejson.schema.json` | F17 basemap index (TileJSON 3.0.0 subset); written by `make web` |
 | `terrain/cellstate.json` (v1.1.0) | `cellstate.schema.json` | F1 cell states for hatching unknown terrain; written by `make web` from WS1 |
 | `terrain/cellstate_conservative.json` (v1.1.2) | `cellstate.schema.json` | the same at the conservative no-go (17°, D23; cell slope = 3 m plane fit + 30° step guard, D22); written by `make web` from WS1 |
+| `scenarios/pads/index.json` (**index**, v1.1.4) | `pads_index.schema.json` | D21 rover parking options: ranking table incl. the official pad; WS2 |
+| `scenarios/pads/{id}/summary.json` (v1.1.4) | `pad_summary.schema.json` | D21 parking option: pad, rank, score, tiebreaks, headline 30/60 min, route summary; WS2 |
+| `scenarios/pads/{id}/bands_{suit}.geojson` (v1.1.4) | `bands.schema.json` | the option's bands (nominal suit only) |
+| `scenarios/pads/{id}/edges.geojson` (v1.1.4) | `edges.schema.json` | its band edges |
+| `scenarios/pads/{id}/partner.geojson` (v1.1.4) | `partner.schema.json` | its partner line (cart, D20) |
+| `scenarios/pads/{id}/route_{scenario}.geojson` (v1.1.4) | `route.schema.json` | its route |
+| `scenarios/pads/{id}/timeline_{scenario}.json` (v1.1.4) | `timeline.schema.json` | its timeline |
 
 The web paths `validation/coverage.json` and `validation/coreg.json` are B0's choice (WS1's
 brief names the files, not their web path); `make web` copies them there.
@@ -80,12 +87,15 @@ Paths relative to `data/interim/`. Checked with `tools/validate_contracts.py --i
 | `terrain/coreg.json` | `coreg.schema.json` | WS1 |
 
 The glob tables are `SCHEMA_MAP` and `INTERIM_SCHEMA_MAP` in `tools/validate_contracts.py`.
-JSON files that match no pattern produce a warning, not a failure.
+JSON files that match no pattern produce a warning, not a failure. First match wins and patterns
+must not overlap (`tests/test_contracts.py` checks every pair). A few rules JSON Schema cannot
+express in the keyword subset of the browser checker (`web/src/data/schema.ts`) are checked by
+`SEMANTIC_CHECKS` in the same file (v1.1.4: the parking-option index and summaries).
 
 ### Dummy flag
 
-Every **index** file (`scenarios/index.json`, `fields/index.json`, `fp3d/index.json`) and
-`pad.json` has a required boolean `"dummy"`: `true` in `data-dummy/`, `false` in `data/`. Other
+Every **index** file (`scenarios/index.json`, `fields/index.json`, `fp3d/index.json`,
+`scenarios/pads/index.json`) and `pad.json` has a required boolean `"dummy"`: `true` in `data-dummy/`, `false` in `data/`. Other
 object-shaped files may carry an optional `"dummy"`. CI fails if any file under
 `web/public/data/` has a top-level `"dummy": true`, or if an index file under `data-dummy/` lacks
 `"dummy": true`.
@@ -207,6 +217,34 @@ schema, from WS1's `cellstate_3m_conservative.tif` (blocked iff the cell's max 1
 manifest keys `terrain.cellstate_conservative.pct.*`. Display and checks only: WS2's con_* runs
 re-derive passability from `maxslope_3m.tif` (same rule). Not in the dummy tree.
 
+### Rover parking options — `scenarios/pads/` (v1.1.4, D21)
+
+User decision D21 (16:14), C file layout 16:17. The official pad (`pad.json` `pad`, every main
+scenario file, the HUD, the 3D view and the station cards) is the candidate with the most feasible
+EVAs. The picker offers the next candidates (+ `pad_default` when not among them) at the default
+scenario's suit (nominal, 104 kg) only:
+
+- `scenarios/pads/index.json` (**index**, `dummy` required): `pads[]` rows {`id`, `lon`, `lat`, `elev_m`, `rank`, `score`
+  (feasible-EVA count), `official`, `tiebreak` {name: value}; optional `kind`, `picker`,
+  `summary`, `screen_score`, `screen_rank`, `label`, and on the official row `files` / `route`};
+  optional top-level `official` (id), `scenario`, `score_kind`, `order`, `decision`, `screening`.
+  **Exactly one row has `official: true`, and its id equals `official` when given** (checked by
+  `validate_contracts.py`); a row with `picker: true` is not official and names its
+  `summary` (`scenarios/pads/{id}/summary.json`). Ids are plain file names.
+- `scenarios/pads/{id}/summary.json`: `id` (= folder), `pad` {lon, lat, elev_m}, `rank`, `score`,
+  `headline` {"30": {`reachable_pct`, `range_pct` [con, opt], `budget_min`}, "60": …} (key =
+  the budget; WS2 also writes `budget_min`, which must then equal the key; the 60-min % and either
+  range end may be null), `route` {`stops`, `total_min`, …}
+  or null; optional `kind`, `scenario`, `official`, `score_kind`, `tiebreak`, `files`, `note`.
+- `bands_{suit}.geojson`, `edges.geojson`, `partner.geojson`, `route_{scenario}.geojson`,
+  `timeline_{scenario}.json` next to it: the same contracts as the main files. **No isochrones
+  and no field PNGs** for parking options; their rasters stay in `data/interim/`.
+- Manifest keys `pads.{id}.*` (WS2 `padpick.py`; e.g. `pads.{id}.score`,
+  `pads.{id}.headline.30.range_pct.low`, `pads.{id}.route.leg.{i}.t_min`,
+  `pads.{id}.timeline.{i}.t_min`).
+
+The dummy tree has a small set (`rank1` = the dummy pad, two options `rank2`, `rank3`; docs/dummy.md).
+
 ### Siting heatmap — `siting.png` + `siting_png.json` (v1.1.0)
 
 Grey PNG of the F8 siting score (WS2 `pipeline/engine/siting.py`; white = `grey_max_score`).
@@ -233,7 +271,8 @@ its run is in progress), with its manifest entries.
 | WS1 | `terrain/cellstate_3m.tif` | `terrain/cellstate.png` + `.json` (transform) |
 | WS1 | `terrain/cellstate_3m_conservative.tif` | `terrain/cellstate_conservative.png` + `.json` (transform, v1.1.2) |
 | WS1 | `terrain/tiles/basemap/{z}/{x}/{y}.png` | `tiles/basemap/{z}/{x}/{y}.webp` + `tilejson.json` (transform) |
-| WS2 | `engine/public/**` (mirror of the web tree: `scenarios/`, `stations.json`, `route_*`, `timeline_*`, `trade_table.json`, `pad.json`, `siting.png`, `siting_png.json`) | same path; **`pad.json` withheld** (C 14:58, below) |
+| WS2 | `engine/public/**` (mirror of the web tree: `scenarios/`, `stations.json`, `route_*`, `timeline_*`, `trade_table.json`, `pad.json`, `siting.png`, `siting_png.json`) | same path |
+| WS2 | `engine/public/scenarios/pads/{index.json, */summary.json, */bands_*.geojson, */edges.geojson, */partner.geojson, */route_*.geojson, */timeline_*.json}` (v1.1.4, D21) | same path; nothing else under `pads/` (no isochrones, no rasters) |
 | WS3 | `horizon/validation/v2.json` | `validation/v2.json` |
 | WS3 + WS2 | `horizon/public/cards/{S}.json` + `engine/public/cards/{S}.timeline.json` | `cards/{S}.json` (merged, see "Station cards") |
 | WS3 | `horizon/public/cards/{S}/*.png` (built cards only), `horizon/public/fp3d/horizon_ring.json` | same path |
@@ -246,8 +285,11 @@ its run is in progress), with its manifest entries.
 
 **Withheld (`WITHHELD` in `tools/make_web.py`):** a web path a producer writes but that must not
 be published yet is reported as `withheld: …` (not copied, not "missing"), and manifest entries
-citing it are left out. Now: `pad.json` (C decision 14:58: WS2's file puts the F8 siting proposal
-in `pad`; it is withheld until WS2 writes `pad_default` there and the proposal in `proposal`).
+citing it are left out. Now: none (`pad.json` was withheld 14:58–15:30, C decision, until WS2
+wrote the pad in use into `pad` and the F8 result into `proposal`).
+
+`make web` also reports as DANGLING a parking-option `summary` named in `scenarios/pads/index.json`
+or a file named in a summary's `files` that is not in the public tree (v1.1.4).
 
 Manifest: every fragment in `data/interim/manifest/` is merged (WS6 `manifest.merge`); WS1's
 `terrain/manifest_pending.json` is merged as WS1's fragment until WS1 records through
@@ -307,3 +349,15 @@ the web tree; one there would fail the card schema).
 ### v1.1.3 (2026-11-14 16:26, C, for WS2 D28)
 
 - `timeline.schema.json`, `card.schema.json`: `margin_binding` may be `"EVA duration"` (D28: turn-back = min over all constraints incl. EVA budget − T_home). Card: optional `turn_back_binding` (same enum). Consumers: WS5 (labels), WS7 (HUD binding text).
+
+### v1.1.4 (2026-11-14, C, for D21 and D33) — additive; new schemas for new files only
+
+| Schema / path | Change | Consumers |
+| --- | --- | --- |
+| `pads_index.schema.json` (new) + `SCHEMA_MAP` `scenarios/pads/index.json` | D21 ranking table (above); index file (`dummy` required); exactly one official row (semantic check) | WS5 (picker) |
+| `pad_summary.schema.json` (new) + `SCHEMA_MAP` `scenarios/pads/*/summary.json` | D21 parking-option summary; `headline` entries carry `budget_min`, `range_pct` = [con, opt], the 60-min % may be null | WS5 |
+| `SCHEMA_MAP` `scenarios/pads/*/{bands_*.geojson, edges.geojson, partner.geojson, route_*.geojson, timeline_*.json}` | reuse `bands`, `edges`, `partner`, `route`, `timeline` (four path segments: no overlap with the scenario rows) | WS5 |
+| `pad.schema.json` | `pad` = the D21 official pad; optional `pad.id`, `pad.score_kind`, `pad.tiebreak`, `pad.f8_score`; `alternatives[]` `id`, `kind`, `score_basis`, `d21_rank`, `tiebreak`, `picker`, `f8_score`, `note`; top-level `d21` block (WS2 session 7) | WS5 (pad marker, F8 text) |
+| `card.schema.json` | landmark `display`: `label` (above the computed skyline) or `bearing_tick` (below it, bearing-only compass tick; D33, WS3 session 5) | WS5 (station card compass) |
+| `tools/make_web.py` | WS2 rules for `scenarios/pads/**` (the seven patterns only); DANGLING check for `summary` / `files` references | C |
+| dummy tree | `scenarios/pads/` set (3 rows, 2 options), `make dummy` deterministic | WS5 |

@@ -4,6 +4,7 @@ import { readdirSync, readFileSync, statSync } from 'node:fs'
 import { join, relative, resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { contractVersions, matchPattern, SCHEMA_MAP, schemaFor } from './contracts'
+import { PAD_SCHEMA_PATTERNS } from './pads'
 import { checkSchema } from './schema'
 
 const REPO = resolve(__dirname, '../../..')
@@ -34,7 +35,31 @@ describe('SCHEMA_MAP mirrors tools/validate_contracts.py', () => {
     })
   })
   it('contracts are v1.x (v1.1.x is additive; untouched schemas keep their version)', () => {
-    expect(contractVersions().sort()).toEqual(['1.0.0', '1.1.0', '1.1.1', '1.1.2', '1.1.3'])
+    expect(contractVersions().sort()).toEqual(['1.0.0', '1.1.0', '1.1.1', '1.1.2', '1.1.3', '1.1.4'])
+  })
+})
+
+describe('D21 parking-option rows (v1.1.4) cover pads.ts PAD_SCHEMA_PATTERNS', () => {
+  const at = (p: string) => SCHEMA_MAP.find(([q]) => q === p)?.[1]
+  it.each(PAD_SCHEMA_PATTERNS.map((x) => [x.pattern, x.shape] as const))('%s', (pattern, shape) => {
+    expect(at(pattern), pattern).toBeDefined()
+    if (shape) expect(at(pattern)).toBe(at(shape))
+  })
+  it.each([
+    ['scenarios/pads/index.json', 'pads_index.schema.json'],
+    ['scenarios/pads/rank2/summary.json', 'pad_summary.schema.json'],
+    ['scenarios/pads/rank2/bands_104.geojson', 'bands.schema.json'],
+    ['scenarios/pads/pad_default/route_nom_104.geojson', 'route.schema.json'],
+    ['scenarios/pads/pad_default/timeline_nom_104.json', 'timeline.schema.json'],
+    ['scenarios/nom_104/edges.geojson', 'edges.schema.json'],
+  ])('%s -> %s', (path, file) => {
+    const want = JSON.parse(readFileSync(resolve(REPO, 'contracts', file), 'utf8'))
+    expect(schemaFor(path)).toEqual(want)
+  })
+  it('no data path matches two patterns', () => {
+    const hits = (p: string) => SCHEMA_MAP.filter(([q]) => matchPattern(q, p)).length
+    for (const p of ['scenarios/pads/index.json', 'scenarios/pads/rank2/summary.json', 'scenarios/pads/rank2/edges.geojson', 'scenarios/pads/rank2/partner.geojson', 'scenarios/nom_104/partner.geojson', 'scenarios/bands_104.geojson'])
+      expect(hits(p), p).toBe(1)
   })
 })
 
