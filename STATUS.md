@@ -1058,3 +1058,6 @@ Branch: `ws10-vo`
 | 2026-11-14 12:35 | F20 at S2 (0.87° vs 0.5°) | WS3 uses the 1 m DEM out to the edge of its coverage before handing over to CTX (WS8 showed WS3's engine with dem_1m to 3.7 km agrees within 0.29° at S2). The 3D terrain is not lowered to CTX. WS3 session 3 implements; then re-run the F20 check | C |
 | 2026-11-14 12:35 | F20 at S1 (0.54°) | S1 is not on the route (no access cell), so the camera never stands there: S1 is reported but excluded from the F20 pass rule; the pass rule covers the pad and route stations | C |
 | 2026-11-14 12:35 | `make all` | Adds `fp3d` after `fields`; `config/fp3d.yaml` (all assumed) accepted for now, R to review | C |
+| 2026-11-14 12:37 | V1 footprint | **3 m** (SPEC); 5 m reported as sensitivity. WS6 sets `config/validation.yaml v1.footprint_m: 3` | User (for S) |
+| 2026-11-14 12:37 | G0 pad check reading | "Assessed" = cells with data (walkable or blocked), not unknown → passes at 100 %; blocked share (41.2 %) shown separately | User (for S/C) |
+| 2026-11-14 12:37 | D7 sky detection | Automatic + manual check (SPEC default); the user reviews the 39-frame sheet in data/interim/horizon/validation/manual_check/; import with `python -m pipeline.validation.v2_skyline --import-manual <csv>` | User |
