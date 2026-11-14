@@ -34,7 +34,8 @@ def test_schema_is_valid_draft_2020_12(path):
     assert schema["$schema"] == "https://json-schema.org/draft/2020-12/schema"
     assert schema["$id"] == f"homeline/contracts/{path.name}"
     # 1.1.x is additive
-    assert schema["x-contract-version"] in ("1.0.0", "1.1.0", "1.1.1", "1.1.2", "1.1.3", "1.1.4")
+    assert schema["x-contract-version"] in ("1.0.0", "1.1.0", "1.1.1", "1.1.2", "1.1.3", "1.1.4",
+                                            "1.1.5")
     for key in ("title", "description", "x-source"):
         assert schema.get(key)
 
@@ -529,3 +530,86 @@ def test_card_landmark_display_d33():
     assert list(v.iter_errors({**lm, "display": "label", "above_skyline": True})) == []
     assert list(v.iter_errors({k: x for k, x in lm.items() if k != "display"})) == []
     assert list(v.iter_errors({**lm, "display": "hidden"}))
+
+
+# --------------------------------------------------------------------------- v1.1.5 (WS2 s8)
+INTERIM_PUBLIC = Path(__file__).resolve().parents[1] / "data" / "interim" / "engine" / "public"
+
+HEADLINE_60 = {"budget_min": 60, "reachable_pct": 31.5, "range_pct": [16.2, 43.8],
+               "basis": "in_data", "in_data_pct": 75.8,
+               "label": "75.8 % of the circle lies inside the terrain data"}
+FEASIBLE = {"screen_count": 52, "full_run_count": 38, "excluded_by_effort_cap_rule": 14,
+            "note": "screening count minus the full-run count"}
+
+
+def scenarios_index_doc(**extra) -> dict:
+    sc = {"id": "nom_104", "variant": "nominal", "suit_kg": 104,
+          "files": {"isochrones": "scenarios/nom_104/isochrones.geojson",
+                    "bands": "scenarios/bands_104.geojson",
+                    "edges": "scenarios/nom_104/edges.geojson",
+                    "partner": "scenarios/nom_104/partner.geojson"},
+          "headline": {"budget_min": 30, "reachable_pct": 23.0, "range_pct": [15.2, 28.7]}}
+    sc.update(extra)
+    return {"dummy": False, "default": "nom_104", "scenarios": [sc]}
+
+
+def test_v115_scenarios_headline_60_optional_and_checked():
+    assert errs("scenarios_index.schema.json", scenarios_index_doc()) == []
+    assert errs("scenarios_index.schema.json", scenarios_index_doc(headline_60=HEADLINE_60)) == []
+    bad = dict(HEADLINE_60, in_data_pct=175.8)
+    assert errs("scenarios_index.schema.json", scenarios_index_doc(headline_60=bad))
+    bad = {k: v for k, v in HEADLINE_60.items() if k != "range_pct"}
+    assert errs("scenarios_index.schema.json", scenarios_index_doc(headline_60=bad))
+
+
+def test_v115_pads_feasible_block():
+    doc = pads_index_doc()
+    doc["pads"][0]["feasible"] = FEASIBLE
+    assert errs("pads_index.schema.json", doc) == []
+    s = dict(pad_summary_doc(), feasible=FEASIBLE)
+    assert errs("pad_summary.schema.json", s) == []
+    s = dict(pad_summary_doc(), feasible={"screen_count": 51})
+    assert errs("pad_summary.schema.json", s)  # all three counts required when the block exists
+
+
+def test_v115_trade_table_in_data_pct():
+    cell = {"science_value": 2.0281, "reachable_pct": 31.5, "partner_area_km2": 2.6658}
+    doc = {"rows": [30, 60], "cols": [104], "cells": [[cell], [dict(cell, in_data_pct=75.8)]]}
+    assert errs("trade_table.schema.json", doc) == []
+    doc["cells"][1][0]["in_data_pct"] = "75.8"
+    assert errs("trade_table.schema.json", doc)
+
+
+def golden_doc() -> dict:
+    return {"version": "1.0.0", "kind": "homeline_physio_golden",
+            "coords": {"frame": "pad-local metres", "x": "east", "y": "north", "z": "up"},
+            "units": {"t": "min"}, "tolerances": {"physio": {"rel": 1e-6, "abs": 1e-9}},
+            "cases": {"physio": [{"id": "physio.nominal.104.0deg",
+                                  "inputs": {"grade_deg": 0.0}, "expected": {"v_star_ms": 0.98}}]}}
+
+
+def test_v115_golden_schema_and_mapping():
+    assert vc.match_schema("physio/golden.json") == "golden.schema.json"
+    assert errs("golden.schema.json", golden_doc()) == []
+    bad = golden_doc()
+    bad["tolerances"]["physio"] = {"rel": -1, "abs": 0}
+    assert errs("golden.schema.json", bad)
+    bad = golden_doc()
+    bad["cases"]["physio"][0].pop("id")
+    assert errs("golden.schema.json", bad)
+    assert errs("golden.schema.json", dict(golden_doc(), kind="other"))
+
+
+@pytest.mark.parametrize("rel, schema", [
+    ("physio/golden.json", "golden.schema.json"),
+    ("scenarios/index.json", "scenarios_index.schema.json"),
+    ("scenarios/pads/index.json", "pads_index.schema.json"),
+    ("scenarios/pads/rank2/summary.json", "pad_summary.schema.json"),
+    ("trade_table.json", "trade_table.schema.json"),
+])
+def test_v115_ws2_real_files_validate(rel, schema):
+    """WS2 session 8's real interim files (skipped where data/interim is absent, e.g. CI)."""
+    p = INTERIM_PUBLIC / rel
+    if not p.is_file():
+        pytest.skip(f"{p} not present")
+    assert errs(schema, json.loads(p.read_text(encoding="utf-8"))) == []

@@ -2,8 +2,8 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "homeline/contracts/pads_index.schema.json",
   "title": "scenarios/pads/index.json",
-  "description": "D21 \"Rover parking options\" ranking table (user 2026-11-14 16:14; C file layout 16:17). One row per ranked pad, the official pad included (rank 1, the pad of pad.json and of every main scenario file); the other rows with picker: true have their own files under scenarios/pads/{id}/ (summary.json, bands_{suit}.geojson, edges.geojson, partner.geojson, route_{scenario}.geojson, timeline_{scenario}.json; nominal suit only, no isochrones or fields). Exactly one row has official: true, and its id equals the top-level official when that is given (checked by tools/validate_contracts.py; the browser checker's keyword subset cannot count). Index file: requires \"dummy\". Producer WS2 (pipeline/engine/padpick.py). Manifest keys pads.{id}.*. Added in v1.1.4; extra keys allowed.",
-  "x-contract-version": "1.1.4",
+  "description": "D21 \"Rover parking options\" ranking table (user 2026-11-14 16:14; C file layout 16:17). One row per ranked pad, the official pad included (rank 1, the pad of pad.json and of every main scenario file); the other rows with picker: true have their own files under scenarios/pads/{id}/ (summary.json, bands_{suit}.geojson, edges.geojson, partner.geojson, route_{scenario}.geojson, timeline_{scenario}.json; nominal suit only, no isochrones or fields). Exactly one row has official: true, and its id equals the top-level official when that is given (checked by tools/validate_contracts.py; the browser checker's keyword subset cannot count). Index file: requires \"dummy\". Producer WS2 (pipeline/engine/padpick.py). Manifest keys pads.{id}.*. Added in v1.1.4; extra keys allowed. v1.1.5: optional feasible block (D45).",
+  "x-contract-version": "1.1.5",
   "x-source": "SPEC §11 D21; STATUS Decision log 2026-11-14 16:14 and 16:17",
   "type": "object",
   "properties": {
@@ -146,6 +146,40 @@
                 ]
               }
             }
+          },
+          "feasible": {
+            "type": "object",
+            "description": "v1.1.5, optional (D45 of set A): how many station combinations the planning rule keeps. screen_count = screening count (walk + dwell within the EVA budget, no margin check); full_run_count = exact DP count with margin >= 0 on every leg (the D21 score); excluded_by_effort_cap_rule = screen_count - full_run_count. Extra keys allowed.",
+            "properties": {
+              "screen_count": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "minimum": 0
+              },
+              "full_run_count": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "minimum": 0
+              },
+              "excluded_by_effort_cap_rule": {
+                "type": [
+                  "integer",
+                  "null"
+                ]
+              },
+              "note": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "screen_count",
+              "full_run_count",
+              "excluded_by_effort_cap_rule"
+            ]
           }
         },
         "required": [

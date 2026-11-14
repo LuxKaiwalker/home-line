@@ -627,3 +627,13 @@ def test_dangling_card_images(tmp_path):
     (tmp_path / "cards" / "S2.json").write_text(json.dumps(horizon_part("S2")))
     assert mw.dangling(tmp_path) == ["cards/S2/overlay.png (named in cards/S2.json)",
                                      "cards/S2/panorama.png (named in cards/S2.json)"]
+
+
+def test_plan_ws2_golden_rule(tree):
+    """v1.1.5: engine/public/physio/golden.json -> physio/golden.json (WS2)."""
+    src = tree["interim"] / "engine/public/physio/golden.json"
+    src.parent.mkdir(parents=True, exist_ok=True)
+    src.write_text(json.dumps({"version": "1.0.0", "kind": "homeline_physio_golden",
+                               "tolerances": {}, "cases": {"physio": [{"id": "a"}]}}))
+    p = mw.plan(tree["interim"], settings=SETTINGS, dummy_tree=tree["dummy"], h0=H0)
+    assert [c.owner for c in p.copies if c.dst.as_posix() == "physio/golden.json"] == ["WS2"]

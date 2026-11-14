@@ -171,6 +171,8 @@ RULES: list[Rule] = [
     Rule("WS2", "engine/public", "scenarios/pads/*/partner.geojson"),
     Rule("WS2", "engine/public", "scenarios/pads/*/route_*.geojson"),
     Rule("WS2", "engine/public", "scenarios/pads/*/timeline_*.json"),
+    # v1.1.5: physiology golden vectors (D41; pipeline/engine/golden.py)
+    Rule("WS2", "engine/public", "physio/golden.json"),
     # WS3 horizon: V2 (pipeline/validation/v2_skyline.py V2_OUT); horizon/public/ mirrors the
     # web tree for the card images (+ card horizon part) and the 3D horizon ring
     Rule("WS3", "horizon/validation", "v2.json", to="validation/v2.json"),

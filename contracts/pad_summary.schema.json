@@ -2,8 +2,8 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "homeline/contracts/pad_summary.schema.json",
   "title": "scenarios/pads/{id}/summary.json",
-  "description": "D21 parking option (picker pad) summary (C file layout 2026-11-14 16:17): the pad, its D21 rank and score (feasible-EVA count), tiebreak values, the headline at the 30- and 60-min walkback budgets (reachable % of the assessed flat disc, range [conservative, optimistic]) and the route summary, all for the nominal scenario of scenarios/pads/index.json. The 60-min reachable % may be null (60-min disc leaves the grid); a range end may be null. id equals the folder name, and each headline key equals its budget_min when given (checked by tools/validate_contracts.py). Producer WS2 (pipeline/engine/padpick.py); manifest keys pads.{id}.*. Added in v1.1.4; extra keys allowed.",
-  "x-contract-version": "1.1.4",
+  "description": "D21 parking option (picker pad) summary (C file layout 2026-11-14 16:17): the pad, its D21 rank and score (feasible-EVA count), tiebreak values, the headline at the 30- and 60-min walkback budgets (reachable % of the assessed flat disc, range [conservative, optimistic]) and the route summary, all for the nominal scenario of scenarios/pads/index.json. The 60-min reachable % may be null (60-min disc leaves the grid); a range end may be null. id equals the folder name, and each headline key equals its budget_min when given (checked by tools/validate_contracts.py). Producer WS2 (pipeline/engine/padpick.py); manifest keys pads.{id}.*. Added in v1.1.4; extra keys allowed. v1.1.5: optional feasible block (D45).",
+  "x-contract-version": "1.1.5",
   "x-source": "SPEC §11 D21; STATUS Decision log 2026-11-14 16:17",
   "type": "object",
   "properties": {
@@ -176,6 +176,40 @@
     },
     "note": {
       "type": "string"
+    },
+    "feasible": {
+      "type": "object",
+      "description": "v1.1.5, optional (D45 of set A): how many station combinations the planning rule keeps. screen_count = screening count (walk + dwell within the EVA budget, no margin check); full_run_count = exact DP count with margin >= 0 on every leg (the D21 score); excluded_by_effort_cap_rule = screen_count - full_run_count. Extra keys allowed.",
+      "properties": {
+        "screen_count": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "full_run_count": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "excluded_by_effort_cap_rule": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "note": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "screen_count",
+        "full_run_count",
+        "excluded_by_effort_cap_rule"
+      ]
     }
   },
   "required": [

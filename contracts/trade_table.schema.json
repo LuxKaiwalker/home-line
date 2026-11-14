@@ -2,8 +2,8 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "homeline/contracts/trade_table.schema.json",
   "title": "trade_table.json",
-  "description": "Trade table (F11): rows = walkback budgets (min), cols = suit masses (kg), cells[row][col].",
-  "x-contract-version": "1.0.0",
+  "description": "Trade table (F11): rows = walkback budgets (min), cols = suit masses (kg), cells[row][col]. v1.1.5: optional per-cell in_data_pct (60-min row, D43).",
+  "x-contract-version": "1.1.5",
   "x-source": "SPEC §6",
   "type": "object",
   "properties": {
@@ -51,6 +51,15 @@
                 "number",
                 "null"
               ]
+            },
+            "in_data_pct": {
+              "type": [
+                "number",
+                "null"
+              ],
+              "minimum": 0,
+              "maximum": 100,
+              "description": "v1.1.5, optional: % of the budget's circle inside the terrain data; reachable_pct is over that part (D43, 60-min row)"
             }
           },
           "required": [
