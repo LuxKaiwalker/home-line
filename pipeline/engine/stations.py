@@ -1,0 +1,81 @@
+"""Engine part of stations.json (F4, F7, F10): T_home per scenario at the station cell and the
+partner-line flag.
+
+Stations come from WS1 (``data/interim/terrain/stations.json``: the contract array, or an
+object with a ``stations`` array). A station is evaluated at the 3 m cell that holds its
+lon/lat. Nothing is moved: a station whose cell has no walk home in a scenario gets ``null``
+there (unknown stays unknown, AGENTS.md rule 7).
+"""
+
+from __future__ import annotations
+
+import json
+import math
+from pathlib import Path
+
+import numpy as np
+
+from .config import load
+from .dijkstra import Field
+from .geo import xy_of_lonlat
+from .graph import Grid
+
+
+def load_ws1_stations(path: Path) -> tuple[list[dict], list[str]]:
+    """(stations with a position, ids without one)."""
+    doc = json.loads(Path(path).read_text(encoding="utf-8"))
+    rows = doc["stations"] if isinstance(doc, dict) else doc
+    have, missing = [], []
+    for s in rows:
+        if s.get("lon") is None or s.get("lat") is None:
+            missing.append(s["id"])
+        else:
+            have.append(dict(s))
+    return have, missing
+
+
+def attach_cells(grid: Grid, stations: list[dict]) -> list[dict]:
+    for s in stations:
+        s["rc"] = grid.rc_of_xy(*xy_of_lonlat(s["lon"], s["lat"], grid.crs))
+    return stations
+
+
+def bearing_dist(lon, lat, lon_to, lat_to) -> tuple[float, float]:
+    """Great-circle initial bearing (deg from north) and distance (m) on the Mars sphere."""
+    r = float(load("site")["crs"]["mars_radius_m"])
+    p1, p2 = math.radians(lat), math.radians(lat_to)
+    dl = math.radians(lon_to - lon)
+    y = math.sin(dl) * math.cos(p2)
+    x = math.cos(p1) * math.sin(p2) - math.sin(p1) * math.cos(p2) * math.cos(dl)
+    b = math.degrees(math.atan2(y, x)) % 360.0
+    h = math.sin((p2 - p1) / 2) ** 2 + math.cos(p1) * math.cos(p2) * math.sin(dl / 2) ** 2
+    return b, 2 * r * math.asin(math.sqrt(h))
+
+
+def _at(arr: np.ndarray, rc) -> float | None:
+    v = float(arr[rc])
+    return round(v, 2) if math.isfinite(v) else None
+
+
+def station_records(stations: list[dict], fields: dict[str, Field],
+                    partner_t: np.ndarray | None, partner_min: float) -> list[dict]:  # fmt: skip
+    """stations.json records (contract stations). objective/tasks pass through from WS1."""
+    out = []
+    for s in stations:
+        rc = s["rc"]
+        t_home = {sid: _at(f.t_min, rc) for sid, f in fields.items()}
+        in_partner = None
+        if partner_t is not None:
+            tp = float(partner_t[rc])
+            in_partner = bool(math.isfinite(tp) and tp <= float(partner_min))
+        out.append({
+            "id": s["id"], "name": s["name"],
+            "lon": round(float(s["lon"]), 6), "lat": round(float(s["lat"]), 6),
+            "value": s.get("value"),
+            "objective": s.get("objective", ""),
+            "tasks": list(s.get("tasks", [])),
+            "dwell_min": s.get("dwell_min", load("stations")["dwell_min"]),
+            "t_home_min": t_home, "in_partner_line": in_partner,
+            "card": s.get("card", f"cards/{s['id']}.json"),
+        })  # fmt: skip
+    return out
