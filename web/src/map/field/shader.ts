@@ -1,4 +1,4 @@
-// WS16 task 2 (M2): the field shader, bands mode (DESIGN U2 implementation 2-4, §6.4). Lazy: only
+// WS16 task 2 (M2) + task 3 (M3): the field shader, bands mode and margin mode (DESIGN U2 implementation 2-4, §6.4). Lazy: only
 // layer.ts imports it, and the planning map loads layer.ts with a dynamic import.
 // CPU mirror + tests: decode.ts (decode, manual bilinear, band classification).
 //
@@ -36,6 +36,14 @@ uniform float u_hatchPx;   // CSS px
 uniform float u_dpr;       // device px per CSS px
 uniform float u_lineHalfPx; // CSS px
 uniform vec3 u_safe, u_unknown;
+// ---- margin mode (M3, DESIGN U2 "Margin per pixel"; CPU mirror: margin.ts marginAt) ----
+uniform float u_mode;      // 0 bands, 1 margin
+uniform sampler2D u_o2;    // o2_home nominal (RGBA8, NEAREST)
+uniform float u_o2Scale;   // L per count
+uniform float u_hasO2;     // 0: no o2_home published -> margin mode draws nothing (none)
+uniform float u_t, u_o2Left, u_reserve, u_o2Tasks, u_o2Rate, u_tDark, u_tauDose, u_tEva; // min, L, L/min
+uniform float u_amber;     // min (hud.yaml margin_amber_min)
+uniform vec3 u_caution, u_limit;
 uniform vec2 u_opacity;    // tokens overlayOpacity min, max
 in vec2 v_uv;
 out vec4 o;
@@ -47,7 +55,7 @@ float decode(sampler2D s, ivec2 p, out bool known) {
 }
 // Manual bilinear on decoded values; -1 if any of the four neighbours has no value.
 // g = analytic gradient (value per grid pixel), 0 where there is no value.
-float field(sampler2D s, vec2 uv, out vec2 g) {
+float fieldS(sampler2D s, vec2 uv, float scale, out vec2 g) {
   vec2 p = uv * u_size - 0.5;
   vec2 i0 = floor(p);
   vec2 f = p - i0;
@@ -60,9 +68,10 @@ float field(sampler2D s, vec2 uv, out vec2 g) {
   float v3 = decode(s, clamp(a + ivec2(1, 1), ivec2(0), mx), k3);
   g = vec2(0.0);
   if (!(k0 && k1 && k2 && k3)) return -1.0;
-  g = vec2(mix(v1 - v0, v3 - v2, f.y), mix(v2 - v0, v3 - v1, f.x)) * u_scale;
-  return mix(mix(v0, v1, f.x), mix(v2, v3, f.x), f.y) * u_scale;
+  g = vec2(mix(v1 - v0, v3 - v2, f.y), mix(v2 - v0, v3 - v1, f.x)) * scale;
+  return mix(mix(v0, v1, f.x), mix(v2, v3, f.x), f.y) * scale;
 }
+float field(sampler2D s, vec2 uv, out vec2 g) { return fieldS(s, uv, u_scale, g); }
 // Screen-space gradient (per device px) from the grid gradient g and the grid-px derivatives J.
 vec2 screenGrad(vec2 g, vec2 jx, vec2 jy) { return vec2(dot(g, jx), dot(g, jy)); }
 // Coverage of a constant-width screen-space line where t crosses the budget (antialiased 1 px ramp).
@@ -105,6 +114,34 @@ void main() {
       float line = 1.0 - smoothstep(1.0, 2.0, h);
       col = vec4(u_unknown, u_opacity.y * line);
     }
+  } else if (u_mode > 0.5) {
+    if (u_showBands > 0.5 && u_hasO2 > 0.5) {
+      // T(x) of the selected variant (u_k collapse: task 4) and O2_home(x), both manual bilinear
+      float T = to; vec2 sT = sO;
+      if (u_variant > 0.5) { T = tn; sT = sN; }
+      if (u_variant > 1.5) { T = tc; sT = sC; }
+      vec2 gH;
+      float oh = fieldS(u_o2, v_uv, u_o2Scale, gH);
+      if (T >= 0.0 && oh >= 0.0) {
+        // WS2 margin(): terms in the order O2, daylight, dose, EVA duration; ties -> first
+        float m = (u_o2Left - u_o2Tasks - u_reserve - oh) / u_o2Rate;
+        vec2 sm = -screenGrad(gH, jx, jy) / u_o2Rate;
+        float d = u_tDark - u_t - T;
+        if (d < m) { m = d; sm = -sT; }
+        d = u_tauDose - T;
+        if (d < m) { m = d; sm = -sT; }
+        d = u_tEva - u_t - T;
+        if (d < m) { m = d; sm = -sT; }
+        vec3 c = u_safe; float a = u_opacity.x;
+        if (m <= u_amber) { c = u_caution; a = 0.5 * (u_opacity.x + u_opacity.y); }
+        if (m < 0.0) { c = u_limit; a = u_opacity.y; }
+        col = vec4(c, a);
+        // zero-margin edge: constant-width screen-space line from the analytic gradient
+        float w = max(abs(sm.x) + abs(sm.y), 1e-6);
+        float cov = clamp(u_lineHalfPx * u_dpr + 0.5 - abs(m) / w, 0.0, 1.0);
+        col = mix(col, vec4(u_limit, 1.0), cov);
+      }
+    }
   } else if (u_showBands > 0.5) {
     float a = 0.0;
     if (to >= 0.0 && to <= u_budget) a = u_opacity.x;
@@ -128,6 +165,8 @@ export interface FieldTextureData {
   scale: number
   /** RGBA8 bytes of the three t_home grids (opt, nom, con), encoded as the PNGs. */
   t: [Uint8Array, Uint8Array, Uint8Array]
+  /** o2_home nominal (RGBA8 bytes as the PNG) and its scale (L per count); null = not published. */
+  o2: { bytes: Uint8Array; scale: number } | null
   /** Cell-state codes (one byte per cell); null = not published (no hatch from this layer). */
   state: { code: Uint8Array; size: [number, number]; xform: [number, number, number, number] } | null
 }
@@ -142,6 +181,20 @@ export interface BandsUniforms {
   lineHalfPx: number
   colors: { safe: [number, number, number]; unknown: [number, number, number] }
   opacity: [number, number]
+  /** Margin mode (M3); null = bands mode. Terms left out arrive as VERY_LARGE (margin.ts shaderScalars). */
+  margin: {
+    t: number
+    o2Left: number
+    reserve: number
+    o2Tasks: number
+    o2Rate: number
+    tDark: number
+    tauDose: number
+    tEva: number
+    amber: number
+    caution: [number, number, number]
+    limit: [number, number, number]
+  } | null
 }
 
 function compile(gl: WebGL2RenderingContext, type: number, src: string): WebGLShader {
@@ -208,7 +261,8 @@ export class BandsProgram {
     this.tex.forEach((t) => gl.deleteTexture(t))
     const [w, h] = td.size
     const st = td.state ?? { code: new Uint8Array(1), size: [1, 1] as [number, number] }
-    this.tex = [...td.t.map((d) => upload(gl, d, w, h, false)), upload(gl, st.code, st.size[0], st.size[1], true)]
+    const o2 = td.o2 ? upload(gl, td.o2.bytes, w, h, false) : upload(gl, new Uint8Array(4), 1, 1, false)
+    this.tex = [...td.t.map((d) => upload(gl, d, w, h, false)), upload(gl, st.code, st.size[0], st.size[1], true), o2]
     this.td = td
   }
 
@@ -238,7 +292,7 @@ export class BandsProgram {
     const td = this.td
     if (!td) return
     gl.useProgram(this.prog)
-    ;['u_t0', 'u_t1', 'u_t2', 'u_state'].forEach((name, i) => {
+    ;['u_t0', 'u_t1', 'u_t2', 'u_state', 'u_o2'].forEach((name, i) => {
       gl.activeTexture(gl.TEXTURE0 + i)
       gl.bindTexture(gl.TEXTURE_2D, this.tex[i])
       gl.uniform1i(this.u(name), i)
@@ -259,6 +313,23 @@ export class BandsProgram {
     gl.uniform3fv(this.u('u_safe'), un.colors.safe)
     gl.uniform3fv(this.u('u_unknown'), un.colors.unknown)
     gl.uniform2f(this.u('u_opacity'), un.opacity[0], un.opacity[1])
+    const mg = un.margin
+    gl.uniform1f(this.u('u_mode'), mg ? 1 : 0)
+    gl.uniform1f(this.u('u_hasO2'), td.o2 ? 1 : 0)
+    gl.uniform1f(this.u('u_o2Scale'), td.o2?.scale ?? 1)
+    if (mg) {
+      gl.uniform1f(this.u('u_t'), mg.t)
+      gl.uniform1f(this.u('u_o2Left'), mg.o2Left)
+      gl.uniform1f(this.u('u_reserve'), mg.reserve)
+      gl.uniform1f(this.u('u_o2Tasks'), mg.o2Tasks)
+      gl.uniform1f(this.u('u_o2Rate'), mg.o2Rate)
+      gl.uniform1f(this.u('u_tDark'), mg.tDark)
+      gl.uniform1f(this.u('u_tauDose'), mg.tauDose)
+      gl.uniform1f(this.u('u_tEva'), mg.tEva)
+      gl.uniform1f(this.u('u_amber'), mg.amber)
+      gl.uniform3fv(this.u('u_caution'), mg.caution)
+      gl.uniform3fv(this.u('u_limit'), mg.limit)
+    }
     gl.bindVertexArray(this.vao)
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, this.vertexCount)
     gl.bindVertexArray(null)

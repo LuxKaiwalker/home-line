@@ -7,6 +7,9 @@ import { FIELD_QUERY_KEY } from './constants'
 export { FIELD_LAYER, FIELD_QUERY_KEY, VARIANTS, VARIANT_OF, type CellState, type Variant } from './constants'
 export { activeField, bandClass, FieldData, fieldAt, onFieldChange, setActiveField, type BandClass, type FieldSample } from './decode'
 export { loadFieldData } from './load'
+export { BINDING_LABEL, marginAt, marginClass, resolveMarginInputs, type Binding, type FieldClass, type MarginInputs } from './margin'
+export { driveMargin, fieldModeQuery, loadFlownPlan, type MarginState } from './drive'
+export { zeroEdgeLabels, type EdgeLabel } from './edgeLabels'
 
 export const loadFieldLayer = () => import('./layer')
 

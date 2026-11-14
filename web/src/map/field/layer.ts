@@ -5,6 +5,7 @@ import { MercatorCoordinate, type CustomLayerInterface, type Map as MlMap } from
 import tokens from '../../ui/tokens.json'
 import { FIELD_LAYER, VARIANTS, type Variant } from './constants'
 import { gridXform, hexToRgb01, type Bounds, type DecodedGrid, type FieldData } from './decode'
+import { shaderScalars, type MarginInputs } from './margin'
 import { BandsProgram, type BandsUniforms, type FieldTextureData } from './shader'
 
 export const FIELD_LAYER_ID = 'field-bands'
@@ -52,6 +53,8 @@ export function textureData(fd: FieldData): FieldTextureData {
     size: [g.width, g.height],
     scale: g.scale,
     t: [encode(fd.t.opt), encode(fd.t.nom), encode(fd.t.con)],
+    // o2_home must sit on the t_home grid (contract §1); otherwise margin mode draws nothing
+    o2: fd.o2 && fd.o2.width === g.width && fd.o2.height === g.height ? { bytes: encode(fd.o2), scale: fd.o2.scale } : null,
     state: fd.state ? { code: fd.state.code, size: [fd.state.width, fd.state.height], xform: gridXform(fd.bounds, fd.state.bounds) } : null,
   }
 }
@@ -61,6 +64,8 @@ export interface BandsParams {
   variant: Variant
   showBands: boolean
   showHatch: boolean
+  /** Margin mode inputs at the clock minute (M3); null = bands mode. */
+  margin: MarginInputs | null
 }
 
 export interface FieldLayerHandle {
@@ -120,6 +125,9 @@ export function addFieldLayer(map: MlMap, fd: FieldData, initial: BandsParams, b
           lineHalfPx: tokens.line.fieldEdgePx / 2,
           colors: { safe: hexToRgb01(c.safe), unknown: hexToRgb01(c.unknown) },
           opacity: [tokens.overlayOpacity.min, tokens.overlayOpacity.max],
+          margin: params.margin
+            ? { ...shaderScalars(params.margin), amber: FIELD_LAYER.amberMin, caution: hexToRgb01(c.caution), limit: hexToRgb01(c.limit) }
+            : null,
         }
         // A flat overlay: MapLibre may leave depth/stencil tests on for custom layers (it marks its
         // GL state dirty after a custom render, so nothing needs restoring here).
