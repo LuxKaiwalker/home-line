@@ -7,14 +7,22 @@ import 'maplibre-gl/dist/maplibre-gl.css'
 import workerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?url'
 import { CONFIG } from '../config'
 import { accessFor, walkInLines } from '../data/access'
+import { data } from '../data/loader'
 import { drawnPartner } from '../data/partner'
-import type { AnyFC, BandsFC, EdgesFC, IsochroneFC, PartnerFC, RouteFC, Station } from '../data/types'
+import type { AnyFC, BandsFC, EdgesFC, IsochroneFC, PartnerFC, RouteFC, ScenarioEntry, Station } from '../data/types'
 import { THEME } from '../theme'
 import type { BasemapSource } from './basemap'
 import { hatchDataUrl } from './hatch'
 import { edgeLabelPoints } from './labels'
 import { binEdges, stepColorExpression } from './legend'
 import { MarsScaleControl } from './scale'
+import { activeField, FIELD_TRUST, fieldRequested, loadFieldData, loadFieldLayer, setActiveField, VARIANT_OF, webgl2Available, type FieldData } from './field'
+
+/** The GPU field layer handle (field/layer.ts, loaded lazily). */
+type FieldLayerHandle = ReturnType<Awaited<ReturnType<typeof loadFieldLayer>>['addFieldLayer']>
+
+/** Polygon layers the GPU field replaces while it is on (they stay as the fallback, DESIGN U2 item 8). */
+const POLYGON_BAND_LAYERS = ['band-opt', 'band-con', 'band-lines']
 
 // After bundling, MapLibre cannot find its worker next to itself; point it at the emitted asset.
 setWorkerUrl(workerUrl)
@@ -72,9 +80,21 @@ export class ConsoleMap {
   private hasBasemap = false
   private groupLayers: Record<LayerGroup, string[]> = Object.fromEntries(Object.entries(GROUP_LAYERS).map(([k, v]) => [k, [...v]])) as Record<LayerGroup, string[]>
   private readonly onStation: (id: string) => void
+  // WS16 task 2: GPU field layer (bands mode). Drawn only for the published scenario bands (the field
+  // PNGs exist for those); D21 parking options, live previews, no WebGL2 or ?field=off -> polygons.
+  private readonly fieldWanted = fieldRequested(location.search, location.hash) && webgl2Available()
+  private fieldFailed = false
+  private fieldSeq = 0
+  private fieldLayer: FieldLayerHandle | null = null
+  private fieldData: FieldData | null = null
+  private fieldOn = false
+  private stationsScenario: string | null = null
 
   constructor(container: HTMLElement, onStation: (id: string) => void) {
     this.onStation = onStation
+    // Trust-chip hook (DESIGN §3.6): the homeline layer group is Modelled; A2's chip attaches here.
+    container.setAttribute(FIELD_TRUST.attr, FIELD_TRUST.chip)
+    container.setAttribute(FIELD_TRUST.renderAttr, 'polygons')
     const f = CONFIG.aoiFocus
     this.map = new MlMap({
       container,
@@ -187,6 +207,71 @@ export class ConsoleMap {
     ;(this.map.getSource('partner') as GeoJSONSource).setData(drawnPartner(d.partner)) // D20: cart only, drag never drawn
     this.applyFilters()
     this.renderEdgeLabels()
+    void this.syncField(d.bands)
+  }
+
+  /**
+   * The published scenario these bands belong to, by identity with the loader's cached file (the
+   * scenario last passed to setStations, then the default). null for anything else (D21 parking
+   * options, live previews): those have no field PNGs, so they keep the polygons.
+   */
+  private async publishedScenario(bands: BandsFC): Promise<ScenarioEntry | null> {
+    const L = data()
+    const idx = await L.scenarios()
+    for (const id of new Set([this.stationsScenario, idx.default])) {
+      const s = idx.scenarios.find((x) => x.id === id)
+      if (s && (await L.bands(s)) === bands) return s
+    }
+    return null
+  }
+
+  private async syncField(bands: BandsFC): Promise<void> {
+    const seq = ++this.fieldSeq
+    try {
+      const entry = await this.publishedScenario(bands)
+      if (seq !== this.fieldSeq) return
+      if (!entry) return this.showField(null)
+      const fd = await loadFieldData(entry.suit_kg)
+      if (seq !== this.fieldSeq) return
+      this.fieldData = fd
+      setActiveField(fd) // fieldAt() works with or without WebGL2
+      if (!this.fieldWanted || this.fieldFailed) return this.showField(null)
+      const mod = await loadFieldLayer()
+      if (seq !== this.fieldSeq || this.fieldFailed) return
+      const variant = VARIANT_OF[this.variant] ?? 'nom'
+      if (!this.fieldLayer) {
+        const h = mod.addFieldLayer(this.map, fd, { budget: this.budget, variant, showBands: this.visible.bands, showHatch: this.visible.unknown }, 'iso-lines', (e) => this.fieldError(e))
+        if (this.fieldFailed) return h.remove()
+        this.fieldLayer = h
+      } else this.fieldLayer.setData(fd)
+      this.fieldLayer.update({ variant, budget: this.budget })
+      this.showField(fd)
+    } catch (e) {
+      this.fieldError(e)
+    }
+  }
+
+  private fieldError(e: unknown): void {
+    this.fieldFailed = true
+    console.warn('GPU field layer unavailable; showing the polygon bands:', e)
+    this.fieldLayer?.remove()
+    this.fieldLayer = null
+    this.showField(null)
+  }
+
+  private showField(fd: FieldData | null): void {
+    this.fieldOn = fd !== null && this.fieldLayer !== null
+    if (!fd && this.fieldData && activeField() === this.fieldData) setActiveField(null)
+    const c = this.map.getContainer()
+    c.setAttribute(FIELD_TRUST.renderAttr, this.fieldOn ? 'gpu' : 'polygons')
+    if (fd) c.setAttribute(FIELD_TRUST.sourceAttr, fd.sources.join(' '))
+    else c.removeAttribute(FIELD_TRUST.sourceAttr)
+    this.applyVisibility()
+  }
+
+  /** True while the GPU field draws the bands (the polygons are hidden). */
+  get fieldActive(): boolean {
+    return this.fieldOn
   }
 
   async setRoute(route: RouteFC | null): Promise<void> {
@@ -215,6 +300,7 @@ export class ConsoleMap {
 
   /** Station science points (markers), access cells and walk-in lines for one scenario. */
   async setStations(stations: Station[], scenarioId: string): Promise<void> {
+    this.stationsScenario = scenarioId
     this.stationMarkers.forEach((m) => m.remove())
     this.stationMarkers = stations.map((s) => {
       const a = accessFor(s, scenarioId)
@@ -306,6 +392,7 @@ export class ConsoleMap {
 
   setBudget(minutes: number): void {
     this.budget = minutes
+    this.fieldLayer?.update({ budget: minutes })
     this.applyFilters()
     this.renderEdgeLabels()
   }
@@ -347,6 +434,17 @@ export class ConsoleMap {
     for (const mk of this.padOptionMarkers) mk.getElement().hidden = !this.visible.stations
     for (const mk of this.sitingMarkers) mk.getElement().hidden = !this.visible.siting
     for (const mk of this.edgeMarkers) mk.getElement().hidden = !this.visible.edges
+    // GPU field: replaces the polygon bands (and the hatch image when it has the cell states).
+    const fl = this.fieldLayer
+    if (fl && m.getLayer(fl.id)) {
+      const hatch = this.fieldOn && !!this.fieldData?.state
+      const showBands = this.fieldOn && this.visible.bands
+      const showHatch = hatch && this.visible.unknown
+      if (this.fieldOn) for (const id of POLYGON_BAND_LAYERS) if (m.getLayer(id)) m.setLayoutProperty(id, 'visibility', 'none')
+      if (hatch && m.getLayer('unknown-hatch')) m.setLayoutProperty('unknown-hatch', 'visibility', 'none')
+      fl.update({ showBands, showHatch })
+      m.setLayoutProperty(fl.id, 'visibility', showBands || showHatch ? 'visible' : 'none')
+    }
   }
 
   private renderEdgeLabels(): void {
@@ -365,6 +463,8 @@ export class ConsoleMap {
   }
 
   destroy(): void {
+    this.fieldSeq++
+    if (this.fieldData && activeField() === this.fieldData) setActiveField(null)
     this.map.remove()
   }
 }
