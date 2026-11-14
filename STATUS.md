@@ -93,11 +93,49 @@ Branch: `d0-discovery`
 
 ## C Integration
 
-Branch: `main`
+Branch: `c-integration` (merged to `main` by the orchestrator)
 
 ### Done
 
-- —
+- 2026-11-14T10:35Z: **contracts v1.1.0** (additive; consumer notes in contracts/README.md "Changes"):
+  - `partner` (WS2 Q7): feature properties `case`, `casualty_kg`, `contour_min`, `style` (const
+    `dashed`), `default_visible` (const `false`), `caption`, `feasible`, `area_km2`; optional.
+  - `route` (WS2 Q7): leg properties `leg`, `from`, `to`, `t_min`, `o2_L`, `length_m`,
+    `t_start_min`, `t_end_min`, `times_min[]`; optional.
+  - `timeline` (WS2 Q7): `margin_binding` (`O2`/`daylight`/`dose`/null), `in_partner_line`, plus
+    `o2_tasks_left_L` and `o2_margin_min_planning_rate` (WS2's code writes them); `turn_back` and
+    the other event names documented; optional.
+  - `rad`: `leash.tau_min_at_latest`, `formula`, `D_allow_note`, `table[]`, `d_allow_range_mgy`,
+    `d_allow_step_mgy`; optional.
+  - New: `siting_png.schema.json` (`siting_png.json`, WS2), `tilejson.schema.json`
+    (`tiles/basemap/tilejson.json`), `cellstate.schema.json` (`terrain/cellstate.json` +
+    `terrain/cellstate.png`, F1 cell states: A = 0 unknown).
+  - Checked against WS2's code: WS2's engine tests (origin/ws2-engine 4c54e5e) pass with v1.1.0;
+    WS2's real run (10:30Z) and WS4's real `rad.json` validate.
+  - `SCHEMA_MAP` rows mirrored in `web/src/data/contracts.ts`; version assertions in
+    `tests/test_contracts.py` and `web/src/data/contracts.test.ts` accept 1.0.0/1.1.0;
+    `web/src/data/loader.test.ts` uses another uncovered path (tilejson is now covered).
+  - Dummy tree: `terrain/cellstate.{png,json}` added (5 m, `"dummy": true`); `make dummy`
+    regenerated, every other file byte-identical.
+- 2026-11-14T10:35Z: **`tools/make_web.py`, `make web`, `make web-plan`** (KATs
+  `tests/test_make_web.py`, 17 pass): copies `data/interim/**` to the contract paths in
+  `web/public/data/` (table in contracts/README.md "`make web` sources"); refuses `"dummy"` /
+  `"synthetic": true`, sources in `data-dummy/`, sources written before H0 and dummy manifest
+  fragments, before touching the public tree; keeps producer mtimes; merges the manifest
+  (WS6 `merge`), runs `validate_contracts` and `check_h0`; lists missing outputs by owner, files
+  named by an index but absent, and size per folder. `--skip-owner WSn` leaves an owner and its
+  manifest entries out. WS6 Blocked 4 (make web runs merge + check_h0) done.
+- 2026-11-14T10:35Z: **Basemap (WS1 Blocked "basemap size") decided by C:** WebP quality 80,
+  z13–18 all kept: **2,760 tiles, 33.1 MB** (from 292 MB PNG). `config/web.yaml` (new, C):
+  format, quality, maxzoom 18, budget 50 MB (above it make web drops the top zoom, z18 first).
+  `tiles/basemap/tilejson.json`: bounds = z13–16 extent, `zoom_bounds` for z17/z18 (focus only).
+- 2026-11-14T10:35Z: **Real web data committed (WS2 skipped):** `make web --skip-owner WS2`:
+  2,773 files, **36.3 MB** (tiles 33.1, validation 2.4, terrain 0.6, manifest 0.1, conditions
+  0.1, vo); all validate, no dummy flag, largest file 1.6 MB (`validation/v2.json`), H0 check OK, manifest 299 keys.
+  Present: WS1 (coverage, coreg, cell states, basemap), WS3 `validation/v2.json`, WS4
+  `conditions/{rad,clock,rems,donki}.json`, WS10 `vo/probe.json`.
+  Missing: WS3 cards + `fp3d/horizon_ring.json`; WS6 `validation/{v1.json,v1.svg,kats.json}`;
+  WS7 fields; WS8 fp3d; WS9 nav/localisation/fix-interval; WS10 `vo/drift.json`.
 
 ### Doing
 
@@ -105,15 +143,51 @@ Branch: `main`
 
 ### Next
 
-- —
+- Re-run `make web` (with WS2) once WS2 cuts the isochrone size (below), then at each gate.
 
 ### Blocked
 
-- —
+- **WS2 web files not committed (size).** WS2's run at 10:30Z validates, but
+  `scenarios/` is **159.5 MB** for 6 scenarios: `isochrones.geojson` 18.8–23.9 MB each
+  (nom_104: 19.3 MB, 2.7 MB gzipped, over `variants.yaml isochrone_size_budget_mb_gz` 1.5),
+  `bands_*` 4.2–4.6 MB, `edges` 2.2–3.1 MB. WS2: please bring each isochrone file within the
+  budget (the 2-min fallback, or coarser simplification/coordinate rounding per config) before C
+  commits WS2's web files. Also: `route_nom_104.geojson` is empty and no `pad.json` /
+  `siting.png` yet (expected while stations are unreachable under nominal; reported only).
+
+### Answers to questions for C
+
+- WS2 Q6: WS2 writes the web `stations.json` (`data/interim/engine/public/stations.json`);
+  make web copies it. Station cards (`cards/{id}.json`) have no named producer yet: make web takes
+  them from `data/interim/horizon/public/cards/` (WS3 card fragments); C to settle with WS3/WS5
+  before G2.
+- WS2 Q7: done in v1.1.0 (above). Siting: one grey PNG + `siting_png.json`, no tiles.
+- WS2 Q8 (F11 partner area / reachable % choice) is a science choice: S.
+- WS5 basemap: read `tiles/basemap/tilejson.json` (contract `tilejson.schema.json`; tile URLs are
+  relative to the data root). Fields map one to one to `BasemapSource`.
+- WS5 unknown terrain: hatch from `terrain/cellstate.png` (A = 0 unknown) placed on
+  `terrain/cellstate.json bounds`; same decoder as the field alpha.
+- WS5 D9 slider: there is no `leash.d_allow_slider_mgy`. Read `config/conditions.yaml`
+  `leash.d_allow_range_mgy` ([min, max]) and `leash.d_allow_step_mgy` at build time (config.ts),
+  and τ per step from `rad.json leash.table` (contract v1.1.0; its first/last rows are the range).
+- WS5 / WS6 KAT list: `validation/kats.json` has a contract (`kats.schema.json`, mapped); make web
+  copies `data/interim/validation/kats.json` once `make kats` has run.
+- WS1 provenance: WS6's `manifest.record` is on main; please switch `pipeline/terrain/prov.py`
+  to it. Until then make web merges `terrain/manifest_pending.json` as WS1's fragment
+  (`pipeline__terrain__build.json`; once that fragment exists, the bridge stops).
+- WS3: write card images to `data/interim/horizon/public/cards/{station}/{panorama,overlay}.png`
+  and the 3D ring to `data/interim/horizon/public/fp3d/horizon_ring.json`.
+- WS7/WS8: write web files under `data/interim/export/` mirroring the web tree
+  (`export/fields/…`, `export/fp3d/…`). WS9: `data/interim/navigation/{nav,localisation,fields}/`
+  as `pipeline/navigation/real.py` does now.
 
 ### Assumptions added
 
-- —
+- `config/web.yaml` (new, C): `web_export.basemap` format webp, quality 80, method 4, maxzoom 18,
+  budget_mb 50, tile_size_px 256, attribution; format/quality/method/budget `assumed`.
+- Web paths `siting_png.json`, `tiles/basemap/tilejson.json`, `terrain/cellstate.{png,json}`.
+- Cell states are published at the routing grid's own 3 m (no resampling); codes other than 0/1
+  are drawn unknown.
 
 ## WS1 Terrain
 
