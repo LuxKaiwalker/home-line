@@ -161,7 +161,7 @@
     "utc": "2026-11-14T09:00:00Z"
   },
   "timeline.nom_104.0.o2_left_L": {
-    "value": 504.0,
+    "value": 482.0,
     "units": "L",
     "file": "timeline_nom_104.json",
     "script": "tools/make_dummy.py",
@@ -193,7 +193,7 @@
     "utc": "2026-11-14T09:00:00Z"
   },
   "timeline.nom_104.1.o2_left_L": {
-    "value": 501.2,
+    "value": 479.2,
     "units": "L",
     "file": "timeline_nom_104.json",
     "script": "tools/make_dummy.py",
@@ -225,7 +225,7 @@
     "utc": "2026-11-14T09:00:00Z"
   },
   "timeline.nom_104.2.o2_left_L": {
-    "value": 493.7,
+    "value": 471.7,
     "units": "L",
     "file": "timeline_nom_104.json",
     "script": "tools/make_dummy.py",
@@ -257,7 +257,7 @@
     "utc": "2026-11-14T09:00:00Z"
   },
   "timeline.nom_104.3.o2_left_L": {
-    "value": 488.7,
+    "value": 466.7,
     "units": "L",
     "file": "timeline_nom_104.json",
     "script": "tools/make_dummy.py",
@@ -289,7 +289,7 @@
     "utc": "2026-11-14T09:00:00Z"
   },
   "timeline.nom_104.4.o2_left_L": {
-    "value": 481.2,
+    "value": 459.2,
     "units": "L",
     "file": "timeline_nom_104.json",
     "script": "tools/make_dummy.py",
@@ -321,7 +321,7 @@
     "utc": "2026-11-14T09:00:00Z"
   },
   "timeline.nom_104.5.o2_left_L": {
-    "value": 473.5,
+    "value": 451.5,
     "units": "L",
     "file": "timeline_nom_104.json",
     "script": "tools/make_dummy.py",
@@ -353,7 +353,7 @@
     "utc": "2026-11-14T09:00:00Z"
   },
   "timeline.nom_104.6.o2_left_L": {
-    "value": 466.0,
+    "value": 444.0,
     "units": "L",
     "file": "timeline_nom_104.json",
     "script": "tools/make_dummy.py",
@@ -385,7 +385,7 @@
     "utc": "2026-11-14T09:00:00Z"
   },
   "timeline.nom_104.7.o2_left_L": {
-    "value": 459.5,
+    "value": 437.5,
     "units": "L",
     "file": "timeline_nom_104.json",
     "script": "tools/make_dummy.py",

@@ -3,7 +3,8 @@
 Formulas (variants.yaml ``formulas``; angles in radians, i = tan(theta)):
 
     a_anchor = (anchor.vo2 - V0) / anchor.speed                       # mL/kg/min per m/s
-    alpha    = ist2.level_increment / (ist2.delta_mass_kg * anchor.speed)
+    span_kg  = (g_frac[1] - g_frac[0]) g_earth (system_kg + subject_kg) / g_mars   # IST-2 span
+    alpha    = ist2.level_increment / (span_kg * anchor.speed)            # decision 14 Nov 15:40
     a(M)     = a_anchor * a_mult + alpha * (M - anchor.carried_kg)
     k        = (m_b + M) g sin(theta) / (eta m_b) * 60 / 20.1          # theta > 0, else 0
     VO2      = V0 + a(M) v + k v                                       # theta >= 0
@@ -122,6 +123,33 @@ def resolve_nogo(spec, v1_rmse_deg: float | None) -> float:
     return float(m.group(1)) - float(v1_rmse_deg)
 
 
+def _check_formula(key: str, expected: str) -> None:
+    text = load("variants")["formulas"][key].split("#", 1)[0].replace(" ", "")
+    if text != expected.replace(" ", ""):
+        raise ValueError(f"variants.formulas.{key} changed: {text!r}; update physio.py")
+
+
+def ist2_span_mars_kg() -> float:
+    """IST-2 weight span as carried mass at Mars g (variants.yaml formulas.ist2_span_kg):
+    (g_frac[1] - g_frac[0]) * g_earth * (system_kg + subject_kg) / g_mars = 106.6 kg.
+    IST-2 changed gravity (0.12 -> 0.32 g) on a fixed 121 + 80.7 kg system, not the mass."""
+    _check_formula("ist2_span_kg", "span_kg = (g_frac[1] - g_frac[0]) * g_earth_ms2 * "
+                   "(system_kg + subject_kg) / crew.g_mars")  # fmt: skip
+    ist2 = load("variants")["ist2"]
+    if ist2["level_span"] != "weight_span":
+        raise ValueError("variants.ist2.level_span must be 'weight_span'")
+    w = ist2["weight_span"]
+    dg = (float(w["g_frac"][1]) - float(w["g_frac"][0])) * float(ist2["g_earth_ms2"])
+    return dg * (float(w["system_kg"]) + float(w["subject_kg"])) / float(load("crew")["g_mars"])
+
+
+def alpha_level() -> float:
+    """alpha = ist2.level_increment / (span_kg * anchor.speed), mL/kg/min per m/s per kg."""
+    _check_formula("alpha", "alpha = ist2.level_increment / (span_kg * anchor.speed)")
+    ist2, a = load("variants")["ist2"], load("crew")["anchor"]
+    return float(ist2["level_increment_ml_kg_min"]) / (ist2_span_mars_kg() * float(a["speed_ms"]))
+
+
 def params(
     variant: str,
     suit_kg: float | None = None,
@@ -136,7 +164,7 @@ def params(
         if suit_kg is None:
             suit_kg = crew["default_suit_kg"]
         carried_kg = float(suit_kg) + crew["tools_kg"]
-    a, ist2 = crew["anchor"], var["ist2"]
+    a = crew["anchor"]
     table = sorted(crew["v_safe_ms"], key=lambda r: r["max_deg"])
     return Params(
         variant=variant,
@@ -152,7 +180,7 @@ def params(
         anchor_vo2=float(a["vo2_ml_kg_min"]),
         anchor_speed=float(a["speed_ms"]),
         anchor_carried_kg=float(a["carried_kg"]),
-        alpha=ist2["level_increment_ml_kg_min"] / (ist2["delta_mass_kg"] * a["speed_ms"]),
+        alpha=alpha_level(),
         j_per_ml=float(crew["o2_energy_j_per_ml"]),
         vsafe_max_deg=tuple(float(r["max_deg"]) for r in table),
         vsafe_v=tuple(float(r["v"]) for r in table),
@@ -272,8 +300,14 @@ def ist2_weight_span(variant: str = "nominal") -> dict:
     The model is run at the same grade at the lightest and heaviest IST-2 weight (g fractions
     of Earth g) with the IST-2 system (carried = system_kg, body = subject_kg, so VO2 is per kg
     of subject mass) over the IST-2 speed range. The band is min..max of the difference over
-    the speed sweep; ``inside`` says whether IST-2's reported difference falls in it. Only the
-    variant's eta matters (V0 and a(M) do not depend on g and cancel).
+    the speed sweep; ``inside`` says whether IST-2's reported difference falls in it.
+
+    Two terms change with the weight (alpha encoding, decision 14 Nov 15:40): the uphill term k
+    (g enters directly) and the level term, since alpha is now defined per kg of carried mass
+    at Mars g and the IST-2 span equals ``ist2_span_mars_kg()`` of it: + alpha * span_kg * v
+    (= 1.9 * v / 0.98). ``band`` is the sum (the model's prediction, pass rule);
+    ``band_vertical_only`` is the k term alone (the session-2 check, independent of alpha).
+    V0 cancels; a_mult only scales a_anchor, so the level term is the same in every variant.
     """
     ist2 = load("variants")["ist2"]
     w = ist2["weight_span"]
@@ -282,11 +316,17 @@ def ist2_weight_span(variant: str = "nominal") -> dict:
     base = replace(base, variant=variant, eta=eta, m_b=float(w["subject_kg"]))
     g_lo, g_hi = (float(f) * float(ist2["g_earth_ms2"]) for f in w["g_frac"])
     v = np.linspace(float(w["speed_ms"][0]), float(w["speed_ms"][1]), int(w["speed_sweep_n"]))
-    out: dict = {"variant": variant, "eta": eta, "speed_ms": [float(v[0]), float(v[-1])]}
+    level = base.alpha * ist2_span_mars_kg() * v
+    out: dict = {"variant": variant, "eta": eta, "speed_ms": [float(v[0]), float(v[-1])],
+                 "alpha": base.alpha, "level_term_band": [float(level[0]), float(level[-1])]}
     for key, reported in ist2["uphill_check_ml_kg_min"].items():
         th = math.atan(float(key.split("_")[1].rstrip("pct")) / 100)
-        d = vo2(replace(base, g=g_hi), v, th) - vo2(replace(base, g=g_lo), v, th)
+        dk = vo2(replace(base, g=g_hi), v, th) - vo2(replace(base, g=g_lo), v, th)
+        d = dk + level
         lo, hi = float(np.min(d)), float(np.max(d))
+        klo, khi = float(np.min(dk)), float(np.max(dk))
         out[key] = {"band": [lo, hi], "reported": float(reported),
-                    "inside": bool(lo <= reported <= hi)}  # fmt: skip
+                    "inside": bool(lo <= reported <= hi),
+                    "band_vertical_only": [klo, khi],
+                    "inside_vertical_only": bool(klo <= reported <= khi)}  # fmt: skip
     return out

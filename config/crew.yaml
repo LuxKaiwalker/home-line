@@ -13,7 +13,7 @@ anchor:
   vo2_ml_kg_min: 19.0             # ICES-2026-127, level walking, Mars offload
   speed_ms: 0.98                  # 2.2 mph
   carried_kg: 120
-o2_energy_j_per_ml: 20.1
+o2_energy_j_per_ml: 20.1          # physiology constant: uphill term k, heat (W) and haul power (F10). NOT the O2 budget conversion since 2026-11-14 15:40 (that is o2_budget.conversion, ICES-2026-127); flagged for S in STATUS
 v_safe_ms:                        # assumed
   - {max_deg: 10, v: 1.0}
   - {max_deg: 17, v: 0.6}
@@ -26,13 +26,14 @@ o2_budget:                        # added 13 Nov (gap found by WS2); derived, se
   primary_design_rate_btu_h: 1200  # ICES-2026-127 average metabolic design rate
   secondary_eva_h: 1               # ICES-2026 Mars PLSS study: secondary sized 1 h for 4-8 h EVAs
   secondary_design_rate_btu_h: 3000
-  formula: "O2_L = hours * rate_btu_h * 0.29307 * 3600 / 20.1 / 1000"
-  primary_L: 504                   # = 8 h x 63.0 L/h (derived)
-  secondary_L: 157                 # = 1 h x 157 L/h at 3000 BTU/h (derived)
+  formula: "O2_L = hours * rate_btu_h / o2_margin.conversion.btu_per_kcal / (kcal_per_L_vo2 + kcal_per_L_vco2 * rer)"   # energy -> O2 with the ICES-2026-127 MetRate equation at RER 0.85 (5.0225 kcal per L O2); decision 2026-11-14 15:40 (user for S), replaces 20.1 J/mL here
+  conversion: "o2_margin.conversion"   # ICES-2026-127 (NTRS 20260005410), same coefficients as the O2 margin
+  primary_L: 482                   # derived, = 8 h x 1200 BTU/h / 3.96567 / 5.0225 = 481.99 L (was 504 L at 20.1 J/mL); the engine computes it, KAT checks this value
+  secondary_L: 151                 # derived, = 1 h x 3000 BTU/h / 3.96567 / 5.0225 = 150.62 L (was 157 L at 20.1 J/mL)
   margin_uses: primary_L           # O2_left = primary_L - consumed; secondary is shown, never planned against
   assumed: true
 o2_margin:                         # added by WS2 2026-11-14 per docs/review/2026-11-14-ist2-and-o2-margin.md (S review, binding)
-  formula: "margin_min = (O2_left - O2_return_route - O2_station_tasks - O2_reserve) / effort_rate_L_min"   # all terms in litres
+  formula: "margin_min = (O2_left - O2_return_route - O2_station_tasks - O2_reserve) / effort_rate_L_min"   # all terms in litres; O2_station_tasks = task O2 still to do at the current station, 0 while walking (confirmed, decision 2026-11-14 15:40)
   label: "minutes at maximum effort"
   effort_rate_L_min: "effort_cap_frac * vo2max_ml_kg_min * body_mass_kg / 1000"   # 1.35 L/min ~ 1,600 BTU/hr; S review: conversion at the effort cap confirmed
   station_task_rate_L_min: 0.84    # 1,000 BTU/hr (ISS/EMU average metabolic rate) at RER 0.85; S review; replaces the resting rate V0 while at a station
