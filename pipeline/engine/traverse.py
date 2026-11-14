@@ -248,6 +248,21 @@ def write(res: Result, sid: str, public: Path) -> None:
         for k, u in units.items():
             if row.get(k) is not None:
                 provenance.record(f"timeline.{sid}.{i}.{k}", row[k], u, tfile, SCRIPT)
+    # WS6 audit: per-leg numbers (route_{sid}.geojson, leg = 1-based "leg" property) and each
+    # station's walk-in distance shown with the timeline
+    rfile = f"route_{sid}.geojson"
+    leg_units = {"t_min": "min", "o2_L": "L", "length_m": "m", "t_start_min": "min",
+                 "t_end_min": "min", "to_access_dist_m": "m"}  # fmt: skip
+    for lg in res.legs:
+        for k, u in leg_units.items():
+            if lg.get(k) is not None:
+                provenance.record(f"route.{sid}.leg.{lg['leg']}.{k}", lg[k], u, rfile, SCRIPT)
+    seen = {}
+    for row in res.timeline:
+        if row.get("station") is not None and row.get("access_dist_m") is not None:
+            seen.setdefault(row["station"], row["access_dist_m"])
+    for st, d in seen.items():
+        provenance.record(f"timeline.{sid}.{st}.access_dist_m", d, "m", tfile, SCRIPT)
     provenance.record(f"route.{sid}.total_min", round(res.total_min, 2), "min", tfile, SCRIPT)
     provenance.record(f"route.{sid}.margin_terms", res.margin_terms, None, tfile, SCRIPT)
     provenance.record_file(f"route_{sid}.geojson", rp, SCRIPT)

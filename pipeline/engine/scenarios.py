@@ -265,13 +265,14 @@ def _write_web(public: Path, rel: str, obj, schema: str) -> Path:
 
 def partner_fields(grid: Grid, pad, ridge_index, suit_kg: int, settings: Settings,
                    out_dir: Path = ENGINE_DIR) -> dict[tuple[str, float], np.ndarray]:  # fmt: skip
-    """Nominal-variant haul fields: (suited, bound) casualty x (cart, drag), ridges masked."""
+    """Nominal-variant haul fields: (suited, bound) casualty x haul.yaml partner_cases (D20: cart
+    only; no drag fields), ridges masked."""
     h = load("haul")
     p = physio.params("nominal", suit_kg=suit_kg)
     hg = haul.haul_grid(grid.with_nogo(p.nogo_deg), ridge_index)
     out = {}
     for m_ic in (haul.suited_casualty_kg(suit_kg), h["casualty_kg"]["bound"]):
-        for name in h["cases"]:
+        for name in haul.partner_cases():
             c = haul.case(name, m_ic)
             f = dijkstra.return_field(hg, haul.grade_table(p, c), pad)
             tag = f"nom_{suit_kg}_{name}_{int(m_ic)}"
@@ -283,9 +284,35 @@ def partner_fields(grid: Grid, pad, ridge_index, suit_kg: int, settings: Setting
 
 def partner_product(grid: Grid, fields, suit_kg: int, settings: Settings,
                     public: Path = PUBLIC) -> dict:  # fmt: skip
+    """partner.geojson (cart line, D20) plus the drag finding as a foreign member
+    ``drag_finding`` (flat ground, haul.drag_flat). Manifest keys haul.drag.flat.nom_{suit}.*,
+    and haul.drag.flat.* for the default suit (the numbers SPEC §11 D20 cites)."""
     fc = haul.partner(grid, fields, settings.simplify_m)
-    _write_web(public, f"scenarios/nom_{suit_kg}/partner.geojson", fc, "partner.schema.json")
+    d = haul.drag_flat(suit_kg)
+    fc["drag_finding"] = {**{k: (round(v, 3) if isinstance(v, float) else v)
+                             for k, v in d.items()},
+                          "note": load("haul")["drag_note"]}  # fmt: skip
+    rel = f"scenarios/nom_{suit_kg}/partner.geojson"
+    _write_web(public, rel, fc, "partner.schema.json")
+    units = {"force_N": "N", "traction_limit_N": "N", "max_mass_kg": "kg", "casualty_kg": "kg",
+             "rescuer_system_kg": "kg", "mu": "1", "boot_mu": "1"}  # fmt: skip
+    prefixes = [f"haul.drag.flat.nom_{suit_kg}"]
+    if suit_kg == load("crew")["default_suit_kg"]:
+        prefixes.append("haul.drag.flat")
+    for pre in prefixes:
+        for k, u in units.items():
+            provenance.record(f"{pre}.{k}", fc["drag_finding"][k], u, rel, SCRIPT)
+        provenance.record(f"{pre}.feasible", d["feasible"], None, rel, SCRIPT)
     return fc
+
+
+def siting_scenario() -> str:
+    """Scenario whose access cells start the F8 forward runs: the site.yaml siting rule's
+    variant at the default suit (con_104)."""
+    from . import siting
+
+    pre = {v: k for k, v in physio.VARIANT_PREFIX.items()}[siting.rule_from_config().variant]
+    return f"{pre}_{load('crew')['default_suit_kg']}"
 
 
 def diagnostics(grid: Grid, pad, fields: dict[str, dijkstra.Field], settings: Settings) -> dict:
@@ -568,11 +595,22 @@ def main(argv=None) -> int:
     if st:
         trade_product(grid, pad, fields, partner_by_suit, st, settings, public=pub)
         lap("trade")
+    siting_info = None
     if a.siting and st and all(s.get("value") is not None for s in st):
         from . import siting
 
         try:
-            siting.run(grid, access.routing_stations(st, default)[0], rmse, out, pub)
+            ssid = siting_scenario()
+            sst, s_none = access.routing_stations(st, ssid)
+            print(f"siting: forward runs from the {ssid} access cells of {[s['id'] for s in sst]}"
+                  f"; no access cell: {s_none}")
+            if not sst:
+                raise MissingInput(f"no station has an access cell in {ssid}")
+            siting_doc = siting.run(grid, sst, rmse, out, pub)
+            siting_info = {"scenario": ssid, "stations": [s["id"] for s in sst],
+                           "no_access": s_none, "pad": siting_doc["pad"],
+                           "alternatives": siting_doc["alternatives"],
+                           "hop_options": siting_doc["hop_options"]}  # fmt: skip
         except MissingInput as e:  # conservative rule variant needs V1
             print(f"siting skipped: {e}")
         lap("siting")
@@ -583,7 +621,7 @@ def main(argv=None) -> int:
         "v1": v1, "margin_inputs": cond, "pad_rc": [int(pad[0]), int(pad[1])],
         "grid_shape": list(grid.shape),
         "res_m": grid.res_m, "timing_s": timing, "diagnostics": diag, "routes": routes,
-        "isochrones": getattr(web_products, "iso_info", {}),
+        "isochrones": getattr(web_products, "iso_info", {}), "siting": siting_info,
     }  # fmt: skip
     summ = out / "summary.json"
     summ.parent.mkdir(parents=True, exist_ok=True)
