@@ -279,3 +279,37 @@ def test_sky_detector_presmoothing_keeps_edge_position():
     ok = np.isfinite(det.rows) & ~det.in_ref_band
     assert ok.mean() > 0.9
     assert np.all(np.abs(det.rows[ok] - 119.5) <= 1.0)   # no smoothing bias
+
+
+# --------------------------------------------------------------------------------------------
+# Far-field bands (bands.py)
+# --------------------------------------------------------------------------------------------
+
+def test_ctx_greedy_pick_known_answer():
+    from shapely.geometry import box
+
+    from pipeline.horizon.bands import pick_ctx_items
+
+    def feat(i, x0, x1):
+        return {"id": i, "geometry": {"type": "Polygon", "coordinates": [
+            [[x0, -10], [x1, -10], [x1, 10], [x0, 10], [x0, -10]]]}}
+
+    disc = box(0, -10, 10, 10)  # area 200 in "lon/lat" units with an identity transform
+    feats = [feat("a", 0, 6), feat("b", 0, 5), feat("c", 5, 10), feat("d", 9, 10)]
+    ident = lambda x, y: (x, y)  # noqa: E731
+    got = pick_ctx_items(feats, disc, 3, 0.01, to_xy=ident)
+    assert [g["id"] for g in got] == ["a", "c"]  # b and d add nothing after a + c
+    assert got[0]["gain_pct"] == pytest.approx(60.0) and got[1]["cum_pct"] == pytest.approx(100)
+    got = pick_ctx_items(feats, disc, 3, 0.01, to_xy=ident, exclude=["a"])
+    assert [g["id"] for g in got] == ["b", "c"]
+
+
+def test_band_target_grid_centred_on_pad():
+    from pipeline.horizon.bands import _pad_xy, target_grid
+
+    gt, w, h = target_grid(1000.0, 20.0)
+    px, py = _pad_xy()
+    assert w == h == 101
+    assert gt[0] <= px - 1000 and gt[0] + w * gt[1] >= px + 1000
+    assert gt[3] >= py + 1000 and gt[3] + h * gt[5] <= py - 1000
+    assert gt[0] % 20 == 0 and gt[3] % 20 == 0
