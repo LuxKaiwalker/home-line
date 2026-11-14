@@ -6979,6 +6979,70 @@
     "utc": "2026-11-14T15:53:30Z",
     "value": 1294
   },
+  "labels.APL.bearing_deg": {
+    "commit": "398df3c56bfdbbb44c88600ae9dd64693987a014",
+    "file": "labels.json",
+    "script": "pipeline/export/labels.py",
+    "units": "deg",
+    "utc": "2026-11-14T23:52:35Z",
+    "value": 3.6
+  },
+  "labels.APL.dist_m": {
+    "commit": "398df3c56bfdbbb44c88600ae9dd64693987a014",
+    "file": "labels.json",
+    "script": "pipeline/export/labels.py",
+    "units": "m",
+    "utc": "2026-11-14T23:52:35Z",
+    "value": 18547
+  },
+  "labels.GDV.bearing_deg": {
+    "commit": "398df3c56bfdbbb44c88600ae9dd64693987a014",
+    "file": "labels.json",
+    "script": "pipeline/export/labels.py",
+    "units": "deg",
+    "utc": "2026-11-14T23:52:35Z",
+    "value": 155.78
+  },
+  "labels.GDV.dist_m": {
+    "commit": "398df3c56bfdbbb44c88600ae9dd64693987a014",
+    "file": "labels.json",
+    "script": "pipeline/export/labels.py",
+    "units": "m",
+    "utc": "2026-11-14T23:52:35Z",
+    "value": 4954
+  },
+  "labels.MSH.bearing_deg": {
+    "commit": "398df3c56bfdbbb44c88600ae9dd64693987a014",
+    "file": "labels.json",
+    "script": "pipeline/export/labels.py",
+    "units": "deg",
+    "utc": "2026-11-14T23:52:35Z",
+    "value": 124.71
+  },
+  "labels.MSH.dist_m": {
+    "commit": "398df3c56bfdbbb44c88600ae9dd64693987a014",
+    "file": "labels.json",
+    "script": "pipeline/export/labels.py",
+    "units": "m",
+    "utc": "2026-11-14T23:52:35Z",
+    "value": 31857
+  },
+  "labels.PCV.bearing_deg": {
+    "commit": "398df3c56bfdbbb44c88600ae9dd64693987a014",
+    "file": "labels.json",
+    "script": "pipeline/export/labels.py",
+    "units": "deg",
+    "utc": "2026-11-14T23:52:35Z",
+    "value": 343.07
+  },
+  "labels.PCV.dist_m": {
+    "commit": "398df3c56bfdbbb44c88600ae9dd64693987a014",
+    "file": "labels.json",
+    "script": "pipeline/export/labels.py",
+    "units": "m",
+    "utc": "2026-11-14T23:52:35Z",
+    "value": 35426
+  },
   "landmark.S1.Aeolis_Mons.bearing_deg": {
     "commit": "70b113677ad851b520a15044a73a1625ceae3c24",
     "file": "cards/S1.json",
@@ -19525,51 +19589,51 @@
     "value": 23.766
   },
   "terrain.cellstate.pct.assessed": {
-    "commit": "9833420c6592e94b4442d036722558319fdc97aa",
+    "commit": "398df3c56bfdbbb44c88600ae9dd64693987a014",
     "file": "terrain/cellstate.json",
     "script": "tools/make_web.py",
     "units": "%",
-    "utc": "2026-11-14T20:27:35Z",
+    "utc": "2026-11-14T23:52:41Z",
     "value": 75.59
   },
   "terrain.cellstate.pct.blocked": {
-    "commit": "9833420c6592e94b4442d036722558319fdc97aa",
+    "commit": "398df3c56bfdbbb44c88600ae9dd64693987a014",
     "file": "terrain/cellstate.json",
     "script": "tools/make_web.py",
     "units": "%",
-    "utc": "2026-11-14T20:27:35Z",
+    "utc": "2026-11-14T23:52:41Z",
     "value": 24.41
   },
   "terrain.cellstate.pct.unknown": {
-    "commit": "9833420c6592e94b4442d036722558319fdc97aa",
+    "commit": "398df3c56bfdbbb44c88600ae9dd64693987a014",
     "file": "terrain/cellstate.json",
     "script": "tools/make_web.py",
     "units": "%",
-    "utc": "2026-11-14T20:27:35Z",
+    "utc": "2026-11-14T23:52:41Z",
     "value": 0.0
   },
   "terrain.cellstate_conservative.pct.assessed": {
-    "commit": "9833420c6592e94b4442d036722558319fdc97aa",
+    "commit": "398df3c56bfdbbb44c88600ae9dd64693987a014",
     "file": "terrain/cellstate_conservative.json",
     "script": "tools/make_web.py",
     "units": "%",
-    "utc": "2026-11-14T20:27:39Z",
+    "utc": "2026-11-14T23:52:44Z",
     "value": 69.5
   },
   "terrain.cellstate_conservative.pct.blocked": {
-    "commit": "9833420c6592e94b4442d036722558319fdc97aa",
+    "commit": "398df3c56bfdbbb44c88600ae9dd64693987a014",
     "file": "terrain/cellstate_conservative.json",
     "script": "tools/make_web.py",
     "units": "%",
-    "utc": "2026-11-14T20:27:39Z",
+    "utc": "2026-11-14T23:52:44Z",
     "value": 30.5
   },
   "terrain.cellstate_conservative.pct.unknown": {
-    "commit": "9833420c6592e94b4442d036722558319fdc97aa",
+    "commit": "398df3c56bfdbbb44c88600ae9dd64693987a014",
     "file": "terrain/cellstate_conservative.json",
     "script": "tools/make_web.py",
     "units": "%",
-    "utc": "2026-11-14T20:27:39Z",
+    "utc": "2026-11-14T23:52:44Z",
     "value": 0.0
   },
   "terrain.cellstates.conservative.disc_30.assessed_pct": {
