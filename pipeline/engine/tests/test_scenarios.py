@@ -97,6 +97,9 @@ def test_isochrone_fallback_step(settings):
     fc2, step2, _ = scenarios.isochrones_within_budget(g, f.t_min, tiny)
     assert step2 == 2
     assert [x["properties"]["minutes"] for x in fc2["features"]][:2] == [2, 4]
+    # the fallback is the even-minute subset of the 1-min set (no second contouring pass)
+    by_min = {x["properties"]["minutes"]: x for x in fc["features"]}
+    assert all(x == by_min[x["properties"]["minutes"]] for x in fc2["features"])
 
 
 def test_ridge_3m_aggregation():
@@ -277,6 +280,10 @@ def test_main_on_synthetic_terrain(tmp_path):
                 "scenarios/nom_104/partner.geojson", "stations.json", "route_nom_104.geojson",
                 "timeline_nom_104.json", "trade_table.json", "pad.json", "siting.png"):
         assert (pub / rel).exists(), rel  # fmt: skip
+    # card timeline fragments (merged into cards/{S}.json by make web, not web files themselves)
+    frag = json.loads((pub / "cards/S1.timeline.json").read_text())
+    assert set(frag["timeline"]) == {"arrive", "leave", "turn_back"}
+    (pub / "cards").rename(tmp_path / "cards_fragments")
     assert validate_tree(["--data", str(pub), "--dummy", str(tmp_path / "none")]) == 0
     recs = json.loads((pub / "stations.json").read_text())
     assert all(r["t_home_min"]["nom_104"] is not None for r in recs)

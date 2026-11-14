@@ -17,7 +17,7 @@ from __future__ import annotations
 
 import numpy as np
 from scipy.ndimage import distance_transform_edt
-from shapely.geometry import LineString
+from shapely.geometry import LineString, MultiLineString
 from skimage.measure import find_contours
 
 from .envelope import envelope_mask
@@ -76,10 +76,18 @@ def _vertex_cause(inside, causes, r, c) -> int:
 
 
 def edges(grid: Grid, t_min: np.ndarray, budgets, buffer_m: float, simplify_m: float) -> dict:
-    """edges.geojson FeatureCollection (contract edges) for the given budgets."""
+    """edges.geojson FeatureCollection (contract edges) for the given budgets: one
+    MultiLineString per (budget, cause), lossless (same pieces as separate LineStrings, without
+    the per-feature overhead; the contract allows MultiLineString)."""
     items = []
     for b in budgets:
+        parts: dict[str, list] = {c: [] for c in CAUSES}
         for line, cause in edge_lines(grid, t_min, b, buffer_m):
             geom = line.simplify(simplify_m) if simplify_m else line
-            items.append((geom, {"budget": int(b), "cause": cause}))
+            if not geom.is_empty:
+                parts[cause].append(geom)
+        for cause in CAUSES:
+            if parts[cause]:
+                g = parts[cause][0] if len(parts[cause]) == 1 else MultiLineString(parts[cause])
+                items.append((g, {"budget": int(b), "cause": cause}))
     return feature_collection(items, grid.crs)

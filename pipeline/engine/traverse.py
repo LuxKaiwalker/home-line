@@ -14,6 +14,10 @@ the effort-capped rate x elapsed time (VO2 never exceeds the cap), which makes t
 on departure time only and keeps the DP exact; the timeline then reports the actual margins.
 
 Stations with no walk home (T_home infinite) are left out and listed in ``unreachable``.
+
+Access cells (access.py): a station's ``rc`` is its access cell for the scenario. Its optional
+``access_dist_m`` (walk-in leg to the science point, not modelled) is copied to the station's
+timeline rows and, as ``to_access_dist_m``, to the leg that arrives there.
 """
 
 from __future__ import annotations
@@ -142,6 +146,7 @@ def plan(grid: Grid, table: GradeTable, home: dijkstra.Field, pad, stations: lis
             tp = float(partner_t[s["rc"]])
             in_partner[s["id"]] = bool(math.isfinite(tp) and tp <= partner_min)
 
+    access_dist = {s["id"]: s.get("access_dist_m") for s in reach}
     t, used = 0.0, 0.0
     track_t, track_u, track_th, track_oh = [0.0], [0.0], [], []
     items, legs, events = [], [], []
@@ -166,6 +171,8 @@ def plan(grid: Grid, table: GradeTable, home: dijkstra.Field, pad, stations: lis
                 o2_margin_min(mi, u, oh, tasks, rate_l_min=mi.planning_rate_l_min), 2)
         if st is not None and st in in_partner:
             row["in_partner_line"] = in_partner[st]
+        if st is not None and access_dist.get(st) is not None:
+            row["access_dist_m"] = access_dist[st]  # walk-in leg, not modelled (access.py)
         events.append(row)
 
     ev(0.0, "depart", None, 0.0, 0.0, 0.0)
@@ -195,6 +202,8 @@ def plan(grid: Grid, table: GradeTable, home: dijkstra.Field, pad, stations: lis
             "t_start_min": round(t, 2), "t_end_min": round(t + lp.t, 2),
             VERTEX_TIME_KEY: [round(float(v), 2) for v in times],
         }  # fmt: skip
+        if access_dist.get(to) is not None:
+            props["to_access_dist_m"] = access_dist[to]  # walk-in to the science point
         legs.append(props)
         from shapely.geometry import LineString
 

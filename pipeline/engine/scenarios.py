@@ -14,7 +14,20 @@ from pathlib import Path
 
 import numpy as np
 
-from . import dijkstra, edges, envelope, haul, margin, physio, provenance, stations, trade, traverse
+from . import (
+    access,
+    cards,
+    dijkstra,
+    edges,
+    envelope,
+    haul,
+    margin,
+    physio,
+    provenance,
+    stations,
+    trade,
+    traverse,
+)
 from .config import ENGINE_DIR, INTERIM_DIR, load
 from .geo import write_json, xy_of_lonlat
 from .graph import Grid, load_ws1_grid
@@ -34,6 +47,7 @@ class Settings:
     disc_speed_ms: float
     buffer_m: float
     v1_rmse_deg: float | None = None
+    min_hole_m2: float = 0.0
 
 
 def settings_from_config(v1_rmse_deg: float | None = None) -> Settings:
@@ -53,6 +67,7 @@ def settings_from_config(v1_rmse_deg: float | None = None) -> Settings:
         disc_speed_ms=float(load("crew")["anchor"]["speed_ms"]),
         buffer_m=float(load("site")["coverage"]["source_edge_buffer_m"]),
         v1_rmse_deg=v1_rmse_deg,
+        min_hole_m2=float(out.get("display_min_hole_m2", 0.0)),
     )
 
 
@@ -72,16 +87,26 @@ def gz_mb(obj) -> float:
 
 
 def isochrones_within_budget(grid: Grid, t_min, settings: Settings) -> tuple[dict, int, float]:
-    """F5: 1-min isochrones unless they exceed the gz size budget, then the fallback step.
+    """F5: 1-min isochrones unless they exceed the gz size budget, then the fallback step
+    (its levels are a subset of the 1-min levels, so the features are reused). Holes below
+    settings.min_hole_m2 are filled (display filter, C decision 2026-11-14 11:42).
     Returns (FeatureCollection, step used, gz MB)."""
     out = load("variants")["outputs"]["isochrone_minutes"]
-    fc = envelope.isochrones(grid, t_min, settings.isochrone_minutes, settings.simplify_m)
+    fc = envelope.isochrones(grid, t_min, settings.isochrone_minutes, settings.simplify_m,
+                             settings.min_hole_m2)  # fmt: skip
     mb = gz_mb(fc)
+    isochrones_within_budget.first_gz_mb = mb  # 1-min size, for the run summary
     step = int(out["step"])
     if mb > settings.isochrone_budget_mb_gz:
         step = settings.isochrone_fallback_step
-        levels = isochrone_levels(out["min"], out["max"], step)
-        fc = envelope.isochrones(grid, t_min, levels, settings.simplify_m)
+        levels = set(isochrone_levels(out["min"], out["max"], step))
+        missing = sorted(levels - {int(m) for m in settings.isochrone_minutes})
+        feats = [f for f in fc["features"] if f["properties"]["minutes"] in levels]
+        if missing:  # fallback level not in the 1-min set (not with the config values)
+            feats += envelope.isochrones(grid, t_min, missing, settings.simplify_m,
+                                         settings.min_hole_m2)["features"]  # fmt: skip
+            feats.sort(key=lambda f: f["properties"]["minutes"])
+        fc = {**fc, "features": feats}
         mb = gz_mb(fc)
     return fc, step, mb
 
@@ -185,7 +210,9 @@ def web_products(grid: Grid, pad, fields: dict[str, dijkstra.Field], settings: S
         _write_web(public, f"scenarios/{sid}/isochrones.geojson", iso, "isochrones.schema.json")
         provenance.record(f"isochrone_step_min.{sid}", step, "min",
                           f"scenarios/{sid}/isochrones.geojson", SCRIPT)  # fmt: skip
-        iso_info[sid] = {"step_min": step, "gz_mb": round(mb, 3)}
+        iso_info[sid] = {"step_min": step, "gz_mb": round(mb, 3),
+                         "gz_mb_1min": round(isochrones_within_budget.first_gz_mb, 3),
+                         "min_hole_m2": settings.min_hole_m2}  # fmt: skip
         cg = grid.with_nogo(physio.scenario_params(sid, v1_rmse_deg=settings.v1_rmse_deg).nogo_deg)
         _write_web(public, f"scenarios/{sid}/edges.geojson",
                    edges.edges(cg, f.t_min, settings.budgets, settings.buffer_m,
@@ -295,11 +322,13 @@ def diagnostics(grid: Grid, pad, fields: dict[str, dijkstra.Field], settings: Se
 
 def stations_product(grid: Grid, fields, partner_t, public: Path = PUBLIC,
                      terrain_dir: Path = INTERIM_DIR / "terrain") -> tuple:  # fmt: skip
-    """stations.json = WS1's stations + T_home per scenario and the partner-line flag.
-    Stations without a position are left out (the contract needs lon/lat) and returned in
-    ``missing``. Nothing is snapped."""
+    """stations.json = WS1's stations + T_home per scenario at the access cell (access.py,
+    user decision 11:40), the access block and the partner-line flag. Stations without a
+    position are left out (the contract needs lon/lat) and returned in ``missing``. The science
+    lon/lat is never moved."""
     st, missing = stations.load_ws1_stations(terrain_dir / "stations.json")
     stations.attach_cells(grid, st)
+    access.resolve(grid, fields, st, access.radius_m())
     recs = stations.station_records(st, fields, partner_t, load("haul")["contour_min"])
     _write_web(public, "stations.json", recs, "stations.schema.json")
     f = "stations.json"
@@ -307,6 +336,15 @@ def stations_product(grid: Grid, fields, partner_t, public: Path = PUBLIC,
         for sid, v in r["t_home_min"].items():
             if v is not None:
                 provenance.record(f"t_home_min.{r['id']}.{sid}", v, "min", f, SCRIPT)
+        for sid, a in r.get("access", {}).items():
+            for k, u in (("dist_m", "m"), ("lon", "deg"), ("lat", "deg"), ("o2_home_L", "L")):
+                if a.get(k) is not None:
+                    provenance.record(f"access.{r['id']}.{sid}.{k}", a[k], u, f, SCRIPT)
+            w = a.get("walk_in") or {}
+            for k, u in (("rise_m", "m"), ("mean_slope_deg", "deg"), ("max_slope_deg", "deg"),
+                         ("max_terrain_slope_deg", "deg")):  # fmt: skip
+                if w.get(k) is not None:
+                    provenance.record(f"access.{r['id']}.{sid}.walk_in.{k}", w[k], u, f, SCRIPT)
         if r["in_partner_line"] is not None:
             provenance.record(f"in_partner_line.{r['id']}", r["in_partner_line"], None, f,
                               SCRIPT)  # fmt: skip
@@ -349,7 +387,7 @@ def trade_product(grid: Grid, pad, fields, partner_by_suit, station_list, settin
             con, nom = fields.get(f"con_{m}"), fields.get(f"nom_{m}")
             sv = None
             if con is not None and station_list and all(v is not None for v in values.values()):
-                t_at = {s["id"]: float(con.t_min[s["rc"]]) for s in station_list}
+                t_at = {s["id"]: _t_access(s, f"con_{m}", con) for s in station_list}
                 sv = round(trade.science_value(t_at, values, b), 4)
             pct = None
             if nom is not None:
@@ -369,6 +407,16 @@ def trade_product(grid: Grid, pad, fields, partner_by_suit, station_list, settin
             if c[k] is not None:
                 provenance.record(f"trade.{b}.{m}.{k}", c[k], u, "trade_table.json", SCRIPT)
     return tt
+
+
+def _t_access(s: dict, sid: str, f: dijkstra.Field) -> float:
+    """T_home at the station's access cell in scenario sid (inf if none); falls back to the
+    station cell when access.resolve has not run."""
+    acc = s.get("access")
+    if acc is None:
+        return float(f.t_min[s["rc"]])
+    a = acc.get(sid)
+    return np.inf if a is None or a.t_home_min is None else float(a.t_home_min)
 
 
 def conditions_inputs(t_dark_min: float | None, tau_dose_min: float | None, dose: str,
@@ -494,14 +542,27 @@ def main(argv=None) -> int:
             continue
         p = physio.scenario_params(sid, v1_rmse_deg=rmse)
         mi = margin.inputs(p, cond["t_dark_min"], cond["tau_dose_min"])
+        suit = physio.parse_scenario(sid)[1]
+        rst, no_access = access.routing_stations(st, sid)
         res = traverse.plan(grid.with_nogo(p.nogo_deg), physio.grade_table(p), fields[sid], pad,
-                            st, budget, ck, mi, partner_by_suit.get(physio.parse_scenario(sid)[1]),
+                            rst, budget, ck, mi, partner_by_suit.get(suit),
                             load("haul")["contour_min"])  # fmt: skip
+        res.unreachable = res.unreachable + list(no_access)
         traverse.write(res, sid, pub)
         routes[sid] = {"order": res.order, "unreachable": res.unreachable,
+                       "no_access": no_access,
+                       "access_dist_m": {s["id"]: s["access_dist_m"] for s in rst},
                        "total_min": round(res.total_min, 2), "value": round(res.value, 4),
                        "margin_terms": res.margin_terms}  # fmt: skip
-        print(f"route {sid}: {res.order} {res.total_min:.1f} min; terms {res.margin_terms}")
+        print(f"route {sid}: {res.order} {res.total_min:.1f} min; terms {res.margin_terms}; "
+              f"no access cell: {no_access}")
+        if sid == default:
+            hcfg = load("haul")
+            frags = cards.fragments(st, res, sid, partner_by_suit.get(suit),
+                                    float(haul.suited_casualty_kg(suit)), "cart",
+                                    float(hcfg["contour_min"]), access.radius_m())  # fmt: skip
+            cards.write(frags, pub)
+            routes[sid]["cards"] = sorted(frags)
     lap("routes")
 
     if st:
@@ -511,7 +572,7 @@ def main(argv=None) -> int:
         from . import siting
 
         try:
-            siting.run(grid, st, rmse, out, pub)
+            siting.run(grid, access.routing_stations(st, default)[0], rmse, out, pub)
         except MissingInput as e:  # conservative rule variant needs V1
             print(f"siting skipped: {e}")
         lap("siting")
