@@ -2,8 +2,8 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "homeline/contracts/timeline.schema.json",
   "title": "timeline_{scenario}.json",
-  "description": "Traverse timeline (F9): [{t_min, event, station, o2_left_L, t_home_min, margin_min}].",
-  "x-contract-version": "1.0.0",
+  "description": "Traverse timeline (F9): [{t_min, event, station, o2_left_L, t_home_min, margin_min}]. v1.1.0: optional margin_binding, in_partner_line, o2_tasks_left_L, o2_margin_min_planning_rate (WS2 pipeline/engine/traverse.py); events include turn_back.",
+  "x-contract-version": "1.1.0",
   "x-source": "SPEC §6",
   "type": "array",
   "items": {
@@ -14,7 +14,8 @@
         "description": "EVA time, min"
       },
       "event": {
-        "type": "string"
+        "type": "string",
+        "description": "depart | arrive | leave | return | turn_back | o2_checkpoint (WS2); other strings allowed"
       },
       "station": {
         "type": [
@@ -43,6 +44,36 @@
           "null"
         ],
         "description": "min"
+      },
+      "margin_binding": {
+        "enum": [
+          "O2",
+          "daylight",
+          "dose",
+          null
+        ],
+        "description": "the term that sets margin_min (as cards/{station}.json)"
+      },
+      "in_partner_line": {
+        "type": [
+          "boolean",
+          "null"
+        ],
+        "description": "station rows only: station inside the partner line"
+      },
+      "o2_tasks_left_L": {
+        "type": [
+          "number",
+          "null"
+        ],
+        "description": "O2 still needed for station tasks, L"
+      },
+      "o2_margin_min_planning_rate": {
+        "type": [
+          "number",
+          "null"
+        ],
+        "description": "O2 margin at the planning O2 rate, min"
       }
     },
     "required": [

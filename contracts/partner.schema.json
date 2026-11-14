@@ -2,8 +2,8 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "homeline/contracts/partner.schema.json",
   "title": "scenarios/{scenario}/partner.geojson",
-  "description": "Partner line: where one astronaut can still haul the other home (F10). SPEC §6 names the file but not its properties; properties are free until the producer (WS2) proposes them to C.",
-  "x-contract-version": "1.0.0",
+  "description": "Partner line: where one astronaut can still haul the other home (F10). SPEC §6 names the file but not its properties; properties are free until the producer (WS2) proposes them to C. v1.1.0: feature properties proposed by WS2 (pipeline/engine/haul.py partner()); all optional.",
+  "x-contract-version": "1.1.0",
   "x-source": "SPEC §6 (scenarios/index.json files.partner), F10",
   "type": "object",
   "properties": {
@@ -44,7 +44,42 @@
           },
           "properties": {
             "type": "object",
-            "properties": {},
+            "properties": {
+              "case": {
+                "type": "string",
+                "description": "haul case from config/haul.yaml (e.g. cart, drag)"
+              },
+              "casualty_kg": {
+                "type": "number",
+                "exclusiveMinimum": 0,
+                "description": "suited casualty mass, kg"
+              },
+              "contour_min": {
+                "type": "number",
+                "exclusiveMinimum": 0,
+                "description": "haul time of the contour, min (haul.yaml contour_min)"
+              },
+              "style": {
+                "const": "dashed",
+                "description": "brief WS2: never drawn solid"
+              },
+              "default_visible": {
+                "const": false,
+                "description": "brief WS2: never on by default"
+              },
+              "caption": {
+                "type": "string"
+              },
+              "feasible": {
+                "type": "boolean",
+                "description": "false = the haul is infeasible everywhere (only the pad cell reached)"
+              },
+              "area_km2": {
+                "type": "number",
+                "minimum": 0,
+                "description": "area inside the contour, km2"
+              }
+            },
             "required": []
           }
         },

@@ -1,8 +1,9 @@
 // Data path pattern -> contract schema, mirroring SCHEMA_MAP in tools/validate_contracts.py
-// (contracts v1.0.0; contracts.test.ts checks the two tables match row by row). Schemas are
+// (contracts v1.1.0; contracts.test.ts checks the two tables match row by row). Schemas are
 // imported from contracts/ at build time, so the browser checks the frozen contract itself.
 import bandsSchema from '../../../contracts/bands.schema.json'
 import cardSchema from '../../../contracts/card.schema.json'
+import cellstateSchema from '../../../contracts/cellstate.schema.json'
 import clockSchema from '../../../contracts/clock.schema.json'
 import coregSchema from '../../../contracts/coreg.schema.json'
 import katsSchema from '../../../contracts/kats.schema.json'
@@ -24,8 +25,10 @@ import radSchema from '../../../contracts/rad.schema.json'
 import remsSchema from '../../../contracts/rems.schema.json'
 import routeSchema from '../../../contracts/route.schema.json'
 import scenariosIndexSchema from '../../../contracts/scenarios_index.schema.json'
+import sitingPngSchema from '../../../contracts/siting_png.schema.json'
 import stationsSchema from '../../../contracts/stations.schema.json'
 import timelineSchema from '../../../contracts/timeline.schema.json'
+import tilejsonSchema from '../../../contracts/tilejson.schema.json'
 import tracksSchema from '../../../contracts/tracks.schema.json'
 import tradeTableSchema from '../../../contracts/trade_table.schema.json'
 import v1Schema from '../../../contracts/v1.schema.json'
@@ -66,6 +69,9 @@ export const SCHEMA_MAP: [pattern: string, schema: JsonSchema][] = [
   ['conditions/rems.json', remsSchema],
   ['conditions/clock.json', clockSchema],
   ['conditions/donki.json', donkiSchema],
+  ['siting_png.json', sitingPngSchema],
+  ['tiles/basemap/tilejson.json', tilejsonSchema],
+  ['terrain/cellstate.json', cellstateSchema],
 ]
 
 /** fnmatch-style match where `*` does not cross `/` (one glob per path segment, as in Python). */
