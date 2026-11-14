@@ -1,0 +1,15 @@
+/* Live layer status line (WS13). Colours are the app's tokens from src/style.css. */
+.live-status {
+  margin: 0;
+  padding: 6px 16px;
+  font-size: 0.85rem;
+  color: var(--muted);
+  background: var(--panel);
+  border-bottom: 1px solid var(--line);
+}
+.live-status[hidden] {
+  display: none;
+}
+.live-status[data-tone='warn'] {
+  color: var(--warn);
+}
