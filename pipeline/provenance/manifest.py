@@ -44,7 +44,7 @@ import re
 import subprocess
 import sys
 import tempfile
-from collections.abc import Iterator
+from collections.abc import Iterable, Iterator
 from datetime import UTC, datetime
 from functools import lru_cache
 from pathlib import Path
@@ -67,6 +67,7 @@ _KEY_RE = re.compile(r"^\S+$")
 
 __all__ = [
     "record",
+    "drop",
     "merge",
     "load_fragments",
     "validate",
@@ -263,6 +264,30 @@ def record(
         frag[key] = entry
         _atomic_write_json(path, frag)
     return entry
+
+
+def drop(
+    keys: Iterable[str],
+    script: str | os.PathLike[str],
+    *,
+    fragment_dir: str | os.PathLike[str] | None = None,
+) -> list[str]:
+    """Remove retired ``keys`` from ``script``'s own fragment; returns the keys removed.
+
+    Only the calling script's fragment is touched, so a script can never delete another
+    workstream's entries. Keys not present (or no fragment at all) are ignored.
+    """
+    path = _fragment_dir(fragment_dir) / _fragment_name(_rel(script))
+    if not path.exists():
+        return []
+    with _locked(path):
+        frag = json.loads(path.read_text())
+        gone = [k for k in keys if k in frag]
+        if gone:
+            for k in gone:
+                del frag[k]
+            _atomic_write_json(path, frag)
+    return gone
 
 
 def load_fragments(fragment_dir: str | os.PathLike[str] | None = None) -> dict[str, dict]:
