@@ -200,8 +200,8 @@ def station_access(grid_v: Grid, table, st: dict, cands: list[Candidate], radius
             break
         if covered[k] or not grid_v.passable[r, c]:
             continue
-        fwd = dijkstra.forward_field(grid_v, table, (r, c)).t_min
-        rev = dijkstra.return_field(grid_v, table, (r, c)).t_min
+        fwd_f, rev_f = access_fields(grid_v, table, (r, c))
+        fwd, rev = fwd_f.t_min, rev_f.t_min
         n_runs += 1
         scc = np.isfinite(fwd[crc[:, 0], crc[:, 1]]) & np.isfinite(rev[crc[:, 0], crc[:, 1]])
         covered |= scc
@@ -210,6 +210,45 @@ def station_access(grid_v: Grid, table, st: dict, cands: list[Candidate], radius
             assign[reach] = len(runs)
             runs.append(AccessRun((r, c), dist, fwd.astype(np.float32), rev.astype(np.float32)))
     return StationAccess(st["id"], runs, assign, len(cells), n_runs)
+
+
+def access_fields(grid_v: Grid, table, cell, tmax_min: float | None = None):
+    """(forward, reverse) dijkstra.Field from one station access cell: station -> x and
+    x -> station. The one place the station Dijkstra pair is run (D21 screening and
+    station_fields, D48)."""
+    return (dijkstra.forward_field(grid_v, table, cell, tmax_min=tmax_min),
+            dijkstra.return_field(grid_v, table, cell, tmax_min=tmax_min))  # fmt: skip
+
+
+def station_cell(grid_v: Grid, station: dict, radius_m: float) -> tuple[float, int, int] | None:
+    """The station's access cell for its own fields: the nearest assessed cell within
+    radius_m that is passable in grid_v (the screening's first run), as (dist_m, row, col);
+    None if there is none."""
+    for dist, r, c in access_cells(grid_v, station["lon"], station["lat"], radius_m):
+        if grid_v.passable[r, c]:
+            return dist, r, c
+    return None
+
+
+def station_fields(grid: Grid, station: dict, scenario="nom_104", settings: Settings | None = None,
+                   *, crew: dict | None = None, tmax_min: float | None = None):  # fmt: skip
+    """D48: (forward, reverse) dijkstra.Field for one station: forward = from the station's
+    access cell to every cell, reverse = from every cell to the access cell (T_home-style field
+    towards the station). station: lon, lat (WS1 record). scenario: a scenario id (with crew
+    overrides, F26) or physio.Params. settings: padpick.Settings (access_radius_m; default from
+    config). The access cell is ``station_cell`` (the D21 screening's first run). Raises
+    physio.MissingInput if the station has no passable assessed cell within the radius."""
+    from . import physio
+
+    s = settings or settings_from_config()
+    p = scenario if isinstance(scenario, physio.Params) else physio.scenario_params(
+        scenario, crew=crew)  # fmt: skip
+    gv = grid.with_nogo(p.nogo_deg)
+    cell = station_cell(gv, station, s.access_radius_m)
+    if cell is None:
+        raise physio.MissingInput(f"station {station.get('id')}: no passable assessed cell "
+                                  f"within {s.access_radius_m} m")  # fmt: skip
+    return access_fields(gv, physio.grade_table(p), (cell[1], cell[2]), tmax_min)
 
 
 def matrices(acc: list[StationAccess], cands: list[Candidate]):

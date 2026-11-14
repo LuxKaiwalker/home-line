@@ -21,14 +21,28 @@ from __future__ import annotations
 
 import math
 import re
-from dataclasses import dataclass, replace
+from dataclasses import replace
 
 import numpy as np
 
+from . import physio_core as core
 from .config import load
+from .physio_core import (  # noqa: F401  (re-exported: the engine's physio API)
+    ML_PER_L,
+    SEC_PER_MIN,
+    GradeTable,
+    Params,
+    a_of_m,
+    cost_slope,
+    governor,
+    heat_w,
+    k_uphill,
+    o2_litres,
+    step,
+    v_safe,
+    vo2,
+)
 
-SEC_PER_MIN = 60.0
-ML_PER_L = 1000.0
 VARIANT_PREFIX = {"opt": "optimistic", "nom": "nominal", "con": "conservative"}
 
 
@@ -63,46 +77,15 @@ DOWNHILL_CLAMP = _parse_clamp(_F["vo2_downhill"])
 
 def minetti_f(i):
     """Minetti 2002 cost-of-transport shape f(i) (J/kg/m on Earth; shape only here)."""
-    return np.polyval(MINETTI_COEF, i)
+    return core.minetti_f(i, MINETTI_COEF)
 
 
 def downhill_mult(i):
     """clamp(f(i) / f(0), lo, hi) for i = tan(theta) < 0."""
-    lo, hi = DOWNHILL_CLAMP
-    return np.clip(minetti_f(i) / minetti_f(0.0), lo, hi)
+    return core.downhill_mult(i, MINETTI_COEF, DOWNHILL_CLAMP)
 
 
 # ------------------------------------------------------------------ parameters
-
-
-@dataclass(frozen=True)
-class Params:
-    variant: str
-    eta: float
-    V0: float
-    a_mult: float
-    nogo_deg: float
-    m_b: float  # body mass, kg
-    carried_kg: float  # M = suit + tools, kg
-    g: float
-    vo2max: float
-    effort_cap: float
-    anchor_vo2: float
-    anchor_speed: float
-    anchor_carried_kg: float
-    alpha: float
-    j_per_ml: float
-    vsafe_max_deg: tuple[float, ...]
-    vsafe_v: tuple[float, ...]
-
-    @property
-    def a_anchor(self) -> float:
-        return (self.anchor_vo2 - self.V0) / self.anchor_speed
-
-    @property
-    def cap(self) -> float:
-        """Effort-capped VO2, mL/kg/min."""
-        return self.effort_cap * self.vo2max
 
 
 def parse_scenario(sid: str) -> tuple[str, int]:
@@ -150,20 +133,43 @@ def alpha_level() -> float:
     return float(ist2["level_increment_ml_kg_min"]) / (ist2_span_mars_kg() * float(a["speed_ms"]))
 
 
+# F26 (D48): the crew values a plan may override; everything else stays config-only.
+CREW_KEYS = ("body_mass_kg", "tools_kg", "vo2max_ml_kg_min", "effort_cap_frac")
+
+
+def crew_values(crew: dict | None = None) -> dict:
+    """crew.yaml body_mass_kg, tools_kg, vo2max_ml_kg_min, effort_cap_frac with ``crew``'s
+    overrides (F26). Unknown keys raise ValueError; None or {} gives the config values."""
+    base = load("crew")
+    out = {k: base[k] for k in CREW_KEYS}
+    if crew:
+        bad = sorted(set(crew) - set(CREW_KEYS))
+        if bad:
+            raise ValueError(f"unknown crew override(s) {bad}; allowed: {list(CREW_KEYS)}")
+        for k, v in crew.items():
+            if v is not None:
+                out[k] = float(v)
+    return out
+
+
 def params(
     variant: str,
     suit_kg: float | None = None,
     *,
     carried_kg: float | None = None,
     v1_rmse_deg: float | None = None,
+    crew: dict | None = None,
 ) -> Params:
-    """Build Params for a variant and either a suit mass (M = suit + tools) or carried mass M."""
-    crew, var = load("crew"), load("variants")
+    """Build Params for a variant and either a suit mass (M = suit + tools) or carried mass M.
+    crew: optional overrides of CREW_KEYS (F26), config values otherwise."""
+    var = load("variants")
+    cv = crew_values(crew)
+    crew = load("crew")
     v = var["variants"][variant]
     if carried_kg is None:
         if suit_kg is None:
             suit_kg = crew["default_suit_kg"]
-        carried_kg = float(suit_kg) + crew["tools_kg"]
+        carried_kg = float(suit_kg) + cv["tools_kg"]
     a = crew["anchor"]
     table = sorted(crew["v_safe_ms"], key=lambda r: r["max_deg"])
     return Params(
@@ -172,11 +178,11 @@ def params(
         V0=float(v["V0"]),
         a_mult=float(v["a_mult"]),
         nogo_deg=resolve_nogo(v["nogo_deg"], v1_rmse_deg),
-        m_b=float(crew["body_mass_kg"]),
+        m_b=float(cv["body_mass_kg"]),
         carried_kg=float(carried_kg),
         g=float(crew["g_mars"]),
-        vo2max=float(crew["vo2max_ml_kg_min"]),
-        effort_cap=float(crew["effort_cap_frac"]),
+        vo2max=float(cv["vo2max_ml_kg_min"]),
+        effort_cap=float(cv["effort_cap_frac"]),
         anchor_vo2=float(a["vo2_ml_kg_min"]),
         anchor_speed=float(a["speed_ms"]),
         anchor_carried_kg=float(a["carried_kg"]),
@@ -184,87 +190,21 @@ def params(
         j_per_ml=float(crew["o2_energy_j_per_ml"]),
         vsafe_max_deg=tuple(float(r["max_deg"]) for r in table),
         vsafe_v=tuple(float(r["v"]) for r in table),
+        minetti_coef=MINETTI_COEF,
+        downhill_clamp=DOWNHILL_CLAMP,
     )
 
 
-def scenario_params(sid: str, *, v1_rmse_deg: float | None = None) -> Params:
+def scenario_params(sid: str, *, v1_rmse_deg: float | None = None,
+                    crew: dict | None = None) -> Params:  # fmt: skip
     variant, suit = parse_scenario(sid)
-    return params(variant, suit_kg=suit, v1_rmse_deg=v1_rmse_deg)
+    return params(variant, suit_kg=suit, v1_rmse_deg=v1_rmse_deg, crew=crew)
 
 
-# ------------------------------------------------------------------ model
-
-
-def a_of_m(p: Params, m: float | None = None) -> float:
-    """Level cost slope a(M), mL/kg/min per m/s."""
-    m = p.carried_kg if m is None else m
-    return p.a_anchor * p.a_mult + p.alpha * (m - p.anchor_carried_kg)
-
-
-def k_uphill(p: Params, theta):
-    """Uphill term k(theta, M), mL/kg/min per m/s; 0 for theta <= 0."""
-    th = np.asarray(theta, dtype=float)
-    k = (p.m_b + p.carried_kg) * p.g * np.sin(th) / (p.eta * p.m_b) * SEC_PER_MIN / p.j_per_ml
-    out = np.where(th > 0, k, 0.0)
-    return out if out.ndim else float(out)
-
-
-def cost_slope(p: Params, theta):
-    """d VO2 / d v at grade theta: a + k uphill, a * clamp(f/f0) downhill."""
-    th = np.asarray(theta, dtype=float)
-    a = a_of_m(p)
-    out = np.where(th >= 0, a + k_uphill(p, th), a * downhill_mult(np.tan(np.minimum(th, 0.0))))
-    return out if out.ndim else float(out)
-
-
-def vo2(p: Params, v, theta):
-    """Oxygen uptake, mL/kg/min, at speed v (m/s) and grade angle theta (rad)."""
-    out = p.V0 + cost_slope(p, theta) * np.asarray(v, dtype=float)
-    return out if np.ndim(out) else float(out)
-
-
-def v_safe(p: Params, theta):
-    """Safety speed from the crew.yaml table by |theta|; 0 beyond the last row."""
-    deg = np.abs(np.degrees(np.asarray(theta, dtype=float)))
-    out = np.zeros_like(deg)
-    for max_deg, v in zip(reversed(p.vsafe_max_deg), reversed(p.vsafe_v), strict=True):
-        out = np.where(deg <= max_deg, v, out)
-    return out if out.ndim else float(out)
-
-
-def governor(p: Params, theta):
-    """Governed speed v* (m/s) = min(v_safe, (cap - V0) / cost_slope)."""
-    vs = v_safe(p, theta)
-    v_cap = max(p.cap - p.V0, 0.0) / cost_slope(p, theta)
-    out = np.minimum(vs, v_cap)
-    return out if np.ndim(out) else float(out)
-
-
-def o2_litres(p: Params, vo2_ml_kg_min, minutes):
-    """O2 = VO2 * m_b * dt / 1000 (litres) for a constant VO2 over `minutes`."""
-    return np.asarray(vo2_ml_kg_min) * p.m_b * np.asarray(minutes) / ML_PER_L
-
-
-def heat_w(p: Params, vo2_ml_kg_min):
-    """Metabolic heat (W) = VO2 * m_b / 60 * 20.1 J/mL."""
-    return np.asarray(vo2_ml_kg_min) * p.m_b / SEC_PER_MIN * p.j_per_ml
+# ------------------------------------------------------------------ model (physio_core.py, D48)
 
 
 # ------------------------------------------------------------------ router lookup table
-
-
-@dataclass(frozen=True)
-class GradeTable:
-    """Per-metre time and O2 as a function of edge grade angle, for the router kernels.
-
-    theta_deg is uniform from -90 to 90 deg; pace is inf where impassable
-    (|theta| > nogo_deg or v* = 0). Kernels interpolate linearly.
-    """
-
-    theta_deg: np.ndarray
-    pace_s_per_m: np.ndarray
-    o2_l_per_m: np.ndarray
-    step_deg: float
 
 
 def table_step_deg() -> float:
@@ -273,16 +213,8 @@ def table_step_deg() -> float:
 
 
 def grade_table(p: Params, step_deg: float | None = None) -> GradeTable:
-    step_deg = table_step_deg() if step_deg is None else step_deg
-    n = int(round(180.0 / step_deg)) + 1
-    deg = np.linspace(-90.0, 90.0, n)
-    th = np.radians(deg)
-    v = governor(p, th)
-    ok = (np.abs(deg) <= p.nogo_deg + 1e-9) & (v > 0)
-    vv = np.where(ok, v, 1.0)
-    pace = np.where(ok, 1.0 / vv, np.inf)
-    o2 = np.where(ok, o2_litres(p, vo2(p, vv, th), 1.0 / vv / SEC_PER_MIN), np.inf)
-    return GradeTable(deg, pace, o2, 180.0 / (n - 1))
+    """Router lookup table (physio_core.grade_table) at the config step by default."""
+    return core.grade_table(p, table_step_deg() if step_deg is None else step_deg)
 
 
 def level_to_grade_increment(p: Params, v: float) -> dict:
