@@ -32,8 +32,8 @@ class Blocks:
 
 
 def blocks(grid: Grid, block_m: float, max_slope_deg: float) -> Blocks:
-    if grid.cellstate is None or grid.maxslope is None:
-        raise ValueError("siting needs cellstate and maxslope")
+    if grid.cellstate is None or grid.routing_slope is None:
+        raise ValueError("siting needs cellstate and the cell slope")
     h, w = grid.shape
     x, y = grid.xy_of_rc(*np.indices(grid.shape))
     bx = np.floor((x - grid.x0) / block_m).astype(np.int64)
@@ -46,7 +46,9 @@ def blocks(grid: Grid, block_m: float, max_slope_deg: float) -> Blocks:
     flat = label.ravel()
     sel = flat >= 0
     good = (
-        (grid.cellstate == ASSESSED) & (grid.maxslope <= max_slope_deg) & np.isfinite(grid.elev)
+        (grid.cellstate == ASSESSED)
+        & (grid.routing_slope <= max_slope_deg)
+        & np.isfinite(grid.elev)
     ).ravel()
     n_cells = np.bincount(flat[sel], minlength=nb)
     n_good = np.bincount(flat[sel], weights=good[sel], minlength=nb)
@@ -141,7 +143,7 @@ def assessed_pct(grid: Grid, rc, radius_m: float) -> float | None:
 
 
 def block_max_slope(grid: Grid, b: Blocks, i: int) -> float:
-    return float(np.nanmax(grid.maxslope[b.label == i]))
+    return float(np.nanmax(grid.routing_slope[b.label == i]))
 
 
 def coverage(b: Blocks, station_t_min: list[np.ndarray], budget_min: float) -> np.ndarray:
@@ -202,7 +204,7 @@ def pad_in_use(grid: Grid, station_t_min: list[np.ndarray], values, rule: Rule, 
     out["score"] = round(float(vals[np.asarray(reach, bool)].sum()) if len(vals) else 0.0, 4)
     k = max(int(round(rule.block_m / grid.res_m / 2.0)), 0)
     win = (slice(max(r0 - k, 0), r0 + k + 1), slice(max(c0 - k, 0), c0 + k + 1))
-    ms = grid.maxslope[win]
+    ms = grid.routing_slope[win]
     mslope = float(np.nanmax(ms)) if np.isfinite(ms).any() else None
     block_ok = bool((grid.cellstate[win] == ASSESSED).all() and mslope is not None
                     and np.isfinite(ms).all() and mslope <= rule.max_slope_deg)  # fmt: skip
@@ -279,11 +281,35 @@ def proposal_block(grid: Grid, b: Blocks, s: np.ndarray, order: np.ndarray, rule
     return prop
 
 
-def pad_file(pad: dict, proposal: dict | None, rule: Rule) -> dict:
-    """pad.json (contract pad v1.1.2): ``pad`` = the pad in use; its own alternatives and hop
-    options are empty (those belong to the proposal); the F8 result sits in ``proposal``."""
-    doc = {"dummy": False, "pad": pad, "alternatives": [], "hop_options": [],
+def pad_file(pad: dict, proposal: dict | None, rule: Rule, d21: dict | None = None) -> dict:
+    """pad.json (contract pad v1.1.2): ``pad`` = the pad in use; the F8 result sits in
+    ``proposal``. Without D21 the top-level alternatives are empty. With D21 (user 16:14) the pad
+    is the official pad, ``pad.score`` = its feasible-EVA count (``pad.score_kind``), the F8
+    rule's own score moves to ``pad.f8_score``, and ``alternatives`` lists the other ranked
+    pads, pad_default and the F8 proposal (extra properties id, kind, d21_rank, tiebreak,
+    score_basis); a ``d21`` block carries the decision, order and screening statistics."""
+    alts = []
+    if d21 is not None:
+        pad = {**pad, "f8_score": pad.get("score"), "score": d21["official_info"]["score"],
+               "score_kind": d21["score_kind"], "id": d21["official_info"]["id"],
+               "tiebreak": d21["official_info"]["tiebreak"]}  # fmt: skip
+        alts = [dict(a) for a in d21["alternatives"]]
+        if proposal is not None:
+            pp = proposal["pad"]
+            f8 = d21.get("f8_lookup", lambda lon, lat: None)(pp["lon"], pp["lat"])
+            alts.append({"rank": len(alts) + 2, "id": "f8_proposal", "kind": "f8_proposal",
+                         "lon": pp["lon"], "lat": pp["lat"], "elev_m": pp["elev_m"],
+                         "score": None if f8 is None else f8["score"],
+                         "score_basis": None if f8 is None else f8["score_basis"],
+                         "d21_rank": None if f8 is None else f8.get("d21_rank"),
+                         "f8_score": pp["score"],
+                         "note": "F8 siting proposal (site.yaml siting rule)"
+                                 + ("" if f8 is not None else "; not a D21 candidate (its "
+                                    "30-min disc leaves the grid or it is not a block)")})
+    doc = {"dummy": False, "pad": pad, "alternatives": alts, "hop_options": [],
            "site_rule_version": rule.version}  # fmt: skip
+    if d21 is not None:
+        doc["d21"] = d21["block"]
     if proposal is not None:
         if proposal.get("adopted") is not False:
             raise ValueError("a siting proposal is never adopted in pad.json (C 14:58)")
@@ -310,6 +336,18 @@ def record_pad(doc: dict, script: str) -> None:
                 provenance.record(f"{prefix}.checks.{k}", v, units[k], "pad.json", script)
 
     rec("pad", doc["pad"])
+    if doc["pad"].get("f8_score") is not None:
+        provenance.record("pad.f8_score", doc["pad"]["f8_score"], "score", "pad.json", script)
+    for k, v in (doc["pad"].get("tiebreak") or {}).items():
+        if v is not None:
+            provenance.record(f"pad.tiebreak.{k}", v, "%" if "pct" in k else "m", "pad.json",
+                              script)  # fmt: skip
+    for a in doc.get("alternatives", []):
+        for k in ("lon", "lat", "elev_m", "score"):
+            if a.get(k) is not None:
+                provenance.record(f"pad.alternatives.{a['id']}.{k}", a[k], units[k], "pad.json",
+                                  script)  # fmt: skip
+        provenance.record(f"pad.alternatives.{a['id']}.rank", a["rank"], None, "pad.json", script)
     prop = doc.get("proposal")
     if prop:
         rec("pad.proposal", prop["pad"])
@@ -343,7 +381,7 @@ PAD_DEFAULT_SOURCE = "config/site.yaml pad_default (kept by the user, 14 Nov 11:
 def run(grid: Grid, stations: list[dict], v1_rmse_deg: float | None, out_dir, public,
         pad_lonlat: tuple[float, float] | None = None, pad_source: str | None = None,
         no_access: dict | None = None, script: str = "pipeline/engine/siting.py",
-        ) -> dict:  # fmt: skip
+        d21: dict | None = None) -> dict:  # fmt: skip
     """Forward runs from every station (rule variant, default suit), score, rank, write
     siting.tif / siting.png / siting_png.json / pad.json. stations: id, rc, value. The pad in
     use is pad_lonlat (default: site.yaml pad_default); the F8 result is only a proposal."""
@@ -376,7 +414,11 @@ def run(grid: Grid, stations: list[dict], v1_rmse_deg: float | None, out_dir, pu
                      pad_source or "pad override", radius, min_pct)  # fmt: skip
     prop = proposal_block(grid, b, s, order, rule, radius, min_pct, hop,
                           [st["id"] for st in stations], no_access)  # fmt: skip
-    doc = pad_file(pad, prop, rule)
+    if d21 is not None:
+        prop["note"] = ("F8 siting proposal (WS2 pipeline/engine/siting.py): superseded by D21 "
+                        "(user 16:14, the official pad is the candidate with the most feasible "
+                        "EVAs); listed in alternatives. Not used by any route, band or number.")
+    doc = pad_file(pad, prop, rule, d21)
     out_dir, public = Path(out_dir), Path(public)
     hm = heatmap(b, s)
     write_raster(out_dir / "siting.tif", hm, grid, np.float32(np.nan))

@@ -43,9 +43,10 @@ def test_settings_from_config(settings):
         1, 60, 2)  # fmt: skip
 
 
-def test_runnable_needs_v1():
+def test_runnable_without_v1_d23():
+    """D23: the conservative no-go is 17 deg; no scenario waits for V1 any more."""
     ok, skipped = scenarios.runnable(["nom_104", "con_104"], None)
-    assert ok == ["nom_104"] and "con_104" in skipped
+    assert ok == ["nom_104", "con_104"] and not skipped
 
 
 def test_batch_on_dummy_world(tmp_path, settings, manifest_dir):
@@ -188,14 +189,15 @@ def test_traverse_plan_and_timeline(plane_world, tmp_path):
     tbs = [e for e in tl if e["event"] == "turn_back"]
     assert len(tbs) == 3 and all(abs(e["margin_min"]) < 0.02 for e in tbs)
     assert all(e["margin_min"] >= 0 for e in walk)
-    # S review O2 term: station work at 0.84 L/min; on arrival the station's remaining tasks
-    # (30 min x 0.84 = 25.2 L) are subtracted, so the O2 margin on arrival equals the one on
-    # leaving (same cell, same O2_home); fixed 40.5 L reserve, no (1 + r).
+    # S review O2 term: station work at 0.837 L/min (1,000 BTU/h at 21.0 J/mL, D29); on arrival
+    # the station's remaining tasks (30 min x 0.837 L) are subtracted, so the O2 margin on
+    # arrival equals the one on leaving (same cell, same O2_home); fixed 40.5 L reserve, no (1 + r).
     for e in tl:
         if e["event"] == "arrive":
             lv = next(x for x in tl if x["event"] == "leave" and x["station"] == e["station"])
-            assert e["o2_tasks_left_L"] == pytest.approx(30 * 0.84)
-            assert lv["o2_left_L"] == pytest.approx(e["o2_left_L"] - 30 * 0.84, abs=0.02)
+            task = margin.station_task_rate_l_min()
+            assert e["o2_tasks_left_L"] == pytest.approx(30 * task, abs=0.01)
+            assert lv["o2_left_L"] == pytest.approx(e["o2_left_L"] - 30 * task, abs=0.02)
             s = next(x for x in st if x["id"] == e["station"])
             oh = float(home.o2_l[s["rc"]])
             exp = (lv["o2_left_L"] - oh - 40.5) / 1.35
@@ -204,9 +206,42 @@ def test_traverse_plan_and_timeline(plane_world, tmp_path):
             assert e["o2_margin_min_planning_rate"] == pytest.approx(
                 (e["o2_left_L"] - e["o2_tasks_left_L"] - oh - 40.5) / mi.planning_rate_l_min,
                 abs=0.05)
+    # D28: the EVA term is in every margin and each turn-back names its binding term
+    assert "EVA duration" in res.margin_terms
+    for e in tbs:
+        s = next(x for x in st if x["id"] == e["station"])
+        assert e["margin_binding"] in ("O2", "EVA duration")
+        assert e["t_min"] <= 390.0 - home.t_min[s["rc"]] + 0.01  # never beyond EVA - T_home
+    assert res.n_feasible_subsets == 7  # all 3 stations fit: every non-empty subset
     traverse.write(res, "nom_104", tmp_path)
     assert json.loads((tmp_path / "timeline_nom_104.json").read_text()) == tl
 
+
+def test_traverse_timed_dose_d39(plane_world):
+    """D39: the storm is placed at the route's max-T_home minute; tau(t) follows the series."""
+    g, pad, p, tab, home, st = plane_world
+    rad = {"storm_2024": {"tripwire_utc": "2024-05-20T06:00:00Z", "series": [
+        ["2024-05-20T00:00:00Z", 3000.0], ["2024-05-20T06:00:00Z", 6000.0],
+        ["2024-05-20T06:20:00Z", 24000.0], ["2024-05-20T12:00:00Z", 3000.0]]},
+        "leash": {"D_allow_mGy": 0.5}}
+    sr = {"tripwire_at": "route_max_t_home", "anchor_event": "tripwire", "tie_break": "first"}
+
+    def fn(t_star):
+        return margin.dose_timing_from_ws4(t_star, rad, sr)
+
+    res = traverse.plan(g, tab, home, pad, st, 390.0, 30.0, margin.inputs(p), dose_fn=fn)
+    assert res.t_star_min is not None and "dose" in res.margin_terms
+    d = res.dose
+    # at t*: rate 6000 uGy/day = 0.25 mGy/h -> tau = 120 min
+    assert d["tau_at_t_star_min"] == pytest.approx(120.0)
+    assert d["t_home_at_t_star_min"] == pytest.approx(max(
+        e["t_home_min"] for e in res.timeline if e["event"] != "turn_back"), abs=0.5)
+    assert d["violation"] == (d["lowest_dose_margin_min"] < 0)
+    # depart row: dose term = tau(0) - 0 with tau(0) from the series shifted by t*
+    dep = next(e for e in res.timeline if e["event"] == "depart")
+    tau0 = float(fn(res.t_star_min).tau_min(0.0))
+    assert dep["margin_min"] == pytest.approx(min(tau0, 390.0, dep["margin_min"] + 1e9), abs=0.01)
+    assert dep["margin_binding"] == "dose" and tau0 < 390.0
 
 def test_traverse_manifest_keys(plane_world, tmp_path):
     """WS6 audit: every route leg number and each station's access_dist_m has a key."""
@@ -299,6 +334,10 @@ def test_main_on_synthetic_terrain(tmp_path):
     _write_tif(terr / "maxslope_3m.tif", np.nan_to_num(grid.maxslope, nan=-1), grid, "float32",
                -1)  # fmt: skip
     _write_tif(terr / "cellstate_3m.tif", grid.cellstate, grid, "uint8", 255)
+    # D22 grids: plane-fit cell slope (here the synthetic slope) and the step guard (none)
+    _write_tif(terr / "slope_3m.tif", np.nan_to_num(grid.maxslope, nan=-1), grid, "float32", -1)
+    sg = np.where(grid.cellstate == 2, 255, 0).astype(np.uint8)
+    _write_tif(terr / "stepguard_3m.tif", sg, grid, "uint8", 255)
     ridge = np.zeros((grid.shape[0] * 3, grid.shape[1] * 3), np.float32)
     ridge[:, 600] = 1.0  # one 1 m ridge column
     _write_tif(terr / "ridge_index.tif", ridge, grid, "float32", -9999, res=1.0)
@@ -310,11 +349,8 @@ def test_main_on_synthetic_terrain(tmp_path):
                    "tasks": [], "dwell_min": 30, "t_home_min": {}, "in_partner_line": None,
                    "card": f"cards/S{i + 1}.json"})  # fmt: skip
     (terr / "stations.json").write_text(json.dumps(st))
-    v1 = tmp_path / "v1.json"
-    v1.write_text(json.dumps({"n": 10, "bias_deg": 0.1, "rmse_deg": RMSE_STUB, "r": 0.9,
-                              "thresholds_deg": [10, 20], "confusion": {}}))  # fmt: skip
     out = tmp_path / "engine"
-    rc = scenarios.main(["--terrain", str(terr), "--out", str(out), "--v1-json", str(v1),
+    rc = scenarios.main(["--terrain", str(terr), "--out", str(out),
                          "--scenarios", "nom_104", "con_104", "opt_104", "--siting",
                          "--no-conditions"])  # fmt: skip
     assert rc == 0
@@ -342,12 +378,87 @@ def test_main_on_synthetic_terrain(tmp_path):
     # --siting-only re-runs F8 + pad.json alone (one forward field set, no other product)
     (pub / "pad.json").unlink()
     before = (pub / "stations.json").stat().st_mtime_ns
-    rc = scenarios.main(["--terrain", str(terr), "--out", str(out), "--v1-json", str(v1),
+    rc = scenarios.main(["--terrain", str(terr), "--out", str(out),
                          "--siting-only"])  # fmt: skip
     assert rc == 0
     assert json.loads((pub / "pad.json").read_text()) == pj
     assert (pub / "stations.json").stat().st_mtime_ns == before
     assert json.loads((out / "summary.json").read_text())["siting"]["pad"] == pj["pad"]
+
+
+def test_main_d21_on_synthetic_terrain(tmp_path, monkeypatch):
+    """--d21 on the dummy world (a 5-min disc instead of 30 so candidates fit): pad.json is the
+    top-ranked candidate, the picker files validate with the existing schemas, the index lists
+    the official pad once, the manifest has pads.{id}.* keys with web paths."""
+    from pipeline.engine import padpick
+    from pipeline.engine.geo import lonlat_of_xy
+
+    real = padpick.settings_from_config
+
+    def small():
+        s = real()
+        s.disc_min, s.tiebreak_budget_min = 5.0, 5.0
+        return s
+
+    monkeypatch.setattr(padpick, "settings_from_config", small)
+    grid, pad, _ = dummy_world(3.0, half_m=700.0)
+    terr = tmp_path / "terrain"
+    terr.mkdir()
+    _write_tif(terr / "elev_3m.tif", np.nan_to_num(grid.elev, nan=-32767), grid, "float32",
+               -32767)  # fmt: skip
+    for name in ("maxslope_3m.tif", "slope_3m.tif"):
+        _write_tif(terr / name, np.nan_to_num(grid.maxslope, nan=-1), grid, "float32", -1)
+    _write_tif(terr / "cellstate_3m.tif", grid.cellstate, grid, "uint8", 255)
+    _write_tif(terr / "stepguard_3m.tif", np.where(grid.cellstate == 2, 255, 0).astype(np.uint8),
+               grid, "uint8", 255)  # fmt: skip
+    ridge = np.zeros((grid.shape[0] * 3, grid.shape[1] * 3), np.float32)
+    _write_tif(terr / "ridge_index.tif", ridge, grid, "float32", -9999, res=1.0)
+    st = []
+    for i, (r, c) in enumerate([(pad[0] - 60, pad[1] + 10), (pad[0] + 50, pad[1] - 30)]):
+        lon, lat = lonlat_of_xy(*grid.xy_of_rc(r, c), grid.crs)
+        st.append({"id": f"S{i + 1}", "name": f"Test {i + 1}", "lon": round(float(lon), 6),
+                   "lat": round(float(lat), 6), "value": 0.5, "objective": "", "tasks": [],
+                   "dwell_min": 30, "card": f"cards/S{i + 1}.json"})  # fmt: skip
+    (terr / "stations.json").write_text(json.dumps(st))
+    out = tmp_path / "engine"
+    rc = scenarios.main(["--terrain", str(terr), "--out", str(out), "--scenarios", "nom_104",
+                         "con_104", "opt_104", "--siting", "--no-conditions", "--d21"])
+    assert rc == 0
+    pub = out / "public"
+    idx = json.loads((pub / "scenarios/pads/index.json").read_text())
+    assert idx["dummy"] is False
+    off = [r for r in idx["pads"] if r["official"]]
+    assert len(off) == 1 and off[0]["rank"] == 1
+    pj = json.loads((pub / "pad.json").read_text())
+    validate(pj, "pad.schema.json")
+    assert (pj["pad"]["lon"], pj["pad"]["lat"]) == (off[0]["lon"], off[0]["lat"])
+    assert pj["pad"]["score"] == off[0]["score"] and pj["pad"]["source"] == padpick.SOURCE
+    ids = [a["id"] for a in pj["alternatives"]]
+    assert "pad_default" in ids or off[0]["id"] == "pad_default"
+    # the official pad is the best of the top 5 by (score, tiebreak 1, elevation)
+    top = [r for r in idx["pads"] if r["rank"] <= 5]
+    best = min(top, key=lambda r: padpick.rank_key(r["score"], r["tiebreak"]["reachable_pct_5"],
+                                                    r["elev_m"]))  # fmt: skip
+    assert best["id"] == off[0]["id"]
+    picks = [r for r in idx["pads"] if r["picker"]]
+    assert off[0]["id"] not in [r["id"] for r in picks]
+    keys = provenance.load_all()
+    for r in picks:
+        d = pub / "scenarios/pads" / r["id"]
+        summ = json.loads((d / "summary.json").read_text())
+        assert summ["id"] == r["id"] and set(summ["headline"]) == {"30", "60"}
+        assert set(summ["route"]) >= {"stops", "total_min"}
+        validate(json.loads((d / "bands_104.geojson").read_text()), "bands.schema.json")
+        validate(json.loads((d / "edges.geojson").read_text()), "edges.schema.json")
+        validate(json.loads((d / "partner.geojson").read_text()), "partner.schema.json")
+        validate(json.loads((d / "route_nom_104.geojson").read_text()), "route.schema.json")
+        validate(json.loads((d / "timeline_nom_104.json").read_text()), "timeline.schema.json")
+        assert not (d / "isochrones.geojson").exists()
+        assert keys[f"pads.{r['id']}.rank"]["file"] == f"scenarios/pads/{r['id']}/summary.json"
+        assert keys[f"pads.{r['id']}.timeline.0.t_min"]["file"] == (
+            f"scenarios/pads/{r['id']}/timeline_nom_104.json")
+        assert f"pads.{r['id']}.haul.drag.flat.force_N" in keys
+        assert (out / "pads" / r["id"] / "nom_104" / "t_home.tif").exists()
 
 
 def test_conditions_inputs(monkeypatch):

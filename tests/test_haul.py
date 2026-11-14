@@ -57,13 +57,13 @@ def test_casualty_suited_mass():
 
 
 def test_haul_speed_self_consistent():
-    """v = eps * P(v) / F with P(v) = (effort * VO2max - VO2_walk(v)) * m_b * 20.1 / 60."""
+    """v = eps * P(v) / F with P(v) = (effort * VO2max - VO2_walk(v)) * m_b * 21.0 / 60 (D29)."""
     c = _case("cart", SUITED)
     for deg in (0.0, 5.0, 12.0):
         th = math.radians(deg)
         v = haul.speed(P_NOM, c, th)
         F = haul.force(SUITED, c.mu, th, G)
-        P = (c.effort_frac * P_NOM.vo2max - physio.vo2(P_NOM, v, th)) * P_NOM.m_b * 20.1 / 60
+        P = (c.effort_frac * P_NOM.vo2max - physio.vo2(P_NOM, v, th)) * P_NOM.m_b * 21.0 / 60
         if v < physio.v_safe(P_NOM, th):
             assert v == pytest.approx(c.eps * P / F, rel=1e-9)
 

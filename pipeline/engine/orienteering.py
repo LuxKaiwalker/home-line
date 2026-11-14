@@ -78,6 +78,57 @@ def solve(values, dwell, t_from_pad, t_to_pad, t_leg, budget_min, leg_ok: LegOk 
     return best
 
 
+def feasible_subsets(dwell, t_from_pad, t_to_pad, t_leg, budget_min, leg_ok: LegOk | None = None,
+                     ) -> list[int]:  # fmt: skip
+    """D21: every non-empty station subset (bit mask) with at least one feasible route (pad ->
+    each station once in some order -> pad, sum(walk + dwell) <= budget, every leg_ok). Exact by
+    the same argument as ``solve``: with leg_ok monotone in departure time, the earliest time
+    per (subset, last station) dominates. O(2^n n^2)."""
+    ok = leg_ok or _always
+    t_from_pad = np.asarray(t_from_pad, float)
+    n = len(t_from_pad)
+    dwell = np.broadcast_to(np.asarray(dwell, float), (n,))
+    t_to_pad, t_leg = np.asarray(t_to_pad, float), np.asarray(t_leg, float).reshape(n, n)
+    if n > 20:
+        raise ValueError("more than 20 stations is not supported")
+    done = np.full((1 << n, n), np.inf)
+    for j in range(n):
+        if np.isfinite(t_from_pad[j]) and ok(PAD, j, 0.0):
+            done[1 << j, j] = t_from_pad[j] + dwell[j]
+    feas = []
+    for mask in range(1, 1 << n):
+        good = False
+        for j in range(n):
+            t = done[mask, j]
+            if not np.isfinite(t) or t > budget_min + 1e-9:
+                continue
+            if not good and t + t_to_pad[j] <= budget_min + 1e-9 and ok(j, PAD, t):
+                good = True
+            for k in range(n):
+                if mask >> k & 1 or not np.isfinite(t_leg[j, k]):
+                    continue
+                tk = t + t_leg[j, k] + dwell[k]
+                nm = mask | (1 << k)
+                if tk < done[nm, k] and tk <= budget_min + 1e-9 and ok(j, k, t):
+                    done[nm, k] = tk
+        if good:
+            feas.append(mask)
+    return feas
+
+
+def feasible_subsets_brute(dwell, t_from_pad, t_to_pad, t_leg, budget_min, leg_ok=None,
+                           ) -> list[int]:  # fmt: skip
+    """Reference for the KAT: a subset is feasible if any ordering passes ``evaluate``."""
+    n = len(t_from_pad)
+    out = []
+    for mask in range(1, 1 << n):
+        members = [i for i in range(n) if mask >> i & 1]
+        if any(evaluate(list(o), dwell, t_from_pad, t_to_pad, t_leg, budget_min, leg_ok)
+               is not None for o in itertools.permutations(members)):  # fmt: skip
+            out.append(mask)
+    return out
+
+
 def _unwind(prev, mask, j) -> list[int]:
     order = []
     while j != PAD:

@@ -66,3 +66,46 @@ def test_timeline_contract():
     validate(tl, "timeline.schema.json")
     assert tl[0]["event"] == "depart" and tl[-1]["event"] == "return"
     assert tl[-1]["t_min"] == pytest.approx(plan.total_min, abs=0.01)
+
+
+# ---- D21: feasible-subset counter (KAT on a synthetic matrix) ----
+
+
+def test_feasible_subsets_known_answer():
+    """3 stations, dwell 30, budget 100: pad->A 10, A->pad 10; B 20/20; C 60/60 (C alone =
+    150 > 100). A-B legs 10. Feasible: {A} 50, {B} 70, {A,B} 10+30+10+30+20 = 100. Count 3."""
+    inf = np.inf
+    t_from = [10, 20, 60]
+    t_to = [10, 20, 60]
+    t_leg = [[inf, 10, 50], [10, inf, 50], [50, 50, inf]]
+    feas = ori.feasible_subsets(30, t_from, t_to, t_leg, 100)
+    assert sorted(feas) == [0b001, 0b010, 0b011]
+    # a leg check that forbids leaving A after minute 35: every route leaves A at >= 40, so
+    # only {B} stays feasible
+    def ok(frm, to, t):
+        return not (frm == 0 and t > 35)
+    assert sorted(ori.feasible_subsets(30, t_from, t_to, t_leg, 100, ok)) == [0b010]
+    assert ori.feasible_subsets(30, t_from, t_to, t_leg, 100, ok) == \
+        ori.feasible_subsets_brute(30, t_from, t_to, t_leg, 100, ok)
+
+
+@pytest.mark.parametrize("seed", range(6))
+def test_feasible_subsets_equals_brute_force(seed):
+    _, t_from, t_to, t_leg = _instance(seed, n=6)
+    for budget in (BUDGET, BUDGET / 2):
+        dp = ori.feasible_subsets(DWELL, t_from, t_to, t_leg, budget)
+        bf = ori.feasible_subsets_brute(DWELL, t_from, t_to, t_leg, budget)
+        assert dp == bf
+
+
+def test_feasible_subsets_with_monotone_leg_ok_equals_brute_force():
+    _, t_from, t_to, t_leg = _instance(4, n=6)
+    lat = np.random.default_rng(1).uniform(50, 300, size=(7, 7))
+
+    def ok(frm, to, t):  # monotone: earlier is never worse
+        return t <= lat[frm + 1, to + 1]
+
+    dp = ori.feasible_subsets(DWELL, t_from, t_to, t_leg, BUDGET, ok)
+    bf = ori.feasible_subsets_brute(DWELL, t_from, t_to, t_leg, BUDGET, ok)
+    assert dp == bf
+    assert len(dp) < len(ori.feasible_subsets(DWELL, t_from, t_to, t_leg, BUDGET))

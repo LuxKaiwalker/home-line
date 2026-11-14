@@ -5,6 +5,12 @@ Edge time t(x->y) = length / v*(theta_xy), theta_xy from the elevation differenc
 horizontal length (physio.GradeTable). A move is allowed only if both end cells are passable
 and every cell its straight segment crosses is passable (no corner cutting, no knight jumps
 over a one-cell wall). Cell states follow contracts/README.md (cellstate_3m.tif).
+
+D22 (user 2026-11-14 16:16): passability uses WS1's 3 m plane-fit cell slope (slope_3m.tif) and
+step guard (stepguard_3m.tif: 0 no, 1 fires, 255 unknown cell); a cell is passable at a no-go
+limit iff it is not unknown, the step guard does not fire and slope_3m <= nogo (= WS1's
+cellstate_3m_{variant} == 0). maxslope_3m.tif is only the "rough footing" overlay (walk-in
+report). Synthetic grids without ``slope`` fall back to ``maxslope`` as their cell slope.
 """
 
 from __future__ import annotations
@@ -62,7 +68,14 @@ class Grid:
     y0: float  # north edge
     crs: str
     cellstate: np.ndarray | None = None  # uint8 (0 assessed, 1 blocked, 2 unknown)
-    maxslope: np.ndarray | None = None  # degrees
+    maxslope: np.ndarray | None = None  # degrees, max 1 m slope (D22: rough footing only)
+    slope: np.ndarray | None = None  # degrees, D22 plane-fit cell slope (routing)
+    stepguard: np.ndarray | None = None  # bool, D22 step guard fires
+
+    @property
+    def routing_slope(self) -> np.ndarray | None:
+        """Cell slope for passability and the siting block test (D22 plane fit when loaded)."""
+        return self.slope if self.slope is not None else self.maxslope
 
     @property
     def shape(self) -> tuple[int, int]:
@@ -89,28 +102,34 @@ class Grid:
 
     def with_nogo(self, nogo_deg: float) -> Grid:
         """Copy whose passable mask uses a variant's slope limit (needs cellstate + maxslope)."""
-        if self.cellstate is None or self.maxslope is None:
-            raise ValueError("grid has no cellstate/maxslope to re-derive passability")
+        if self.cellstate is None or self.routing_slope is None:
+            raise ValueError("grid has no cellstate/slope to re-derive passability")
         g = Grid(**self.__dict__)
-        g.passable = passable_mask(self.cellstate, self.maxslope, nogo_deg, self.elev)
+        g.passable = passable_mask(self.cellstate, self.routing_slope, nogo_deg, self.elev,
+                                   self.stepguard)  # fmt: skip
         return g
 
 
-def passable_mask(cellstate, maxslope, nogo_deg: float, elev=None) -> np.ndarray:
-    """Passable = not unknown, max 1 m slope within the variant's limit, finite elevation.
-
-    WS1's ``blocked`` state is drawn at one limit; each variant has its own (variants.yaml
-    nogo_deg), so blocked is re-derived here from maxslope_3m.
-    """
-    ok = (np.asarray(cellstate) != UNKNOWN) & (np.asarray(maxslope) <= nogo_deg)
-    ok &= np.isfinite(maxslope)
+def passable_mask(cellstate, slope, nogo_deg: float, elev=None, stepguard=None) -> np.ndarray:
+    """Passable = not unknown, cell slope within the variant's limit, no step guard (D22),
+    finite elevation. Each variant has its own limit (variants.yaml nogo_deg), so blocked is
+    re-derived here from the cell slope (equals WS1's cellstate_3m_{variant} == 0)."""
+    with np.errstate(invalid="ignore"):
+        ok = (np.asarray(cellstate) != UNKNOWN) & (np.asarray(slope) <= nogo_deg)
+    ok &= np.isfinite(slope)
+    if stepguard is not None:
+        ok &= ~np.asarray(stepguard, bool)
     if elev is not None:
         ok &= np.isfinite(elev)
     return ok
 
 
+D22_FILES = ("slope_3m.tif", "stepguard_3m.tif")
+
+
 def load_ws1_grid(terrain_dir: Path) -> Grid:
-    """Read WS1's elev_3m.tif, maxslope_3m.tif, cellstate_3m.tif (contracts/README.md)."""
+    """Read WS1's elev_3m.tif, maxslope_3m.tif, cellstate_3m.tif and the D22 slope_3m.tif +
+    stepguard_3m.tif (required: the engine never routes on the max 1 m slope again)."""
     import rasterio
 
     def read(name):
@@ -122,6 +141,12 @@ def load_ws1_grid(terrain_dir: Path) -> Grid:
     maxslope, _ = read("maxslope_3m.tif")
     with rasterio.open(terrain_dir / "cellstate_3m.tif") as cs:
         cellstate = cs.read(1).astype(np.uint8)
+    for f in D22_FILES:
+        if not (terrain_dir / f).exists():
+            raise FileNotFoundError(f"D22 routing grid {terrain_dir / f} missing (WS1)")
+    slope, _ = read("slope_3m.tif")
+    with rasterio.open(terrain_dir / "stepguard_3m.tif") as sg:
+        stepguard = sg.read(1) == 1
     t = ds.transform
     if abs(t.a + t.e) > 1e-9 or t.b != 0 or t.d != 0:
         raise ValueError("routing grid must be north-up with square cells")
@@ -134,4 +159,6 @@ def load_ws1_grid(terrain_dir: Path) -> Grid:
         crs=ds.crs.to_string() if ds.crs else "",
         cellstate=cellstate,
         maxslope=maxslope,
+        slope=slope,
+        stepguard=stepguard,
     )
