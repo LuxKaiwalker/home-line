@@ -199,6 +199,40 @@ Branch: `c-integration` (merged to `main` by the orchestrator)
   **Still `-dirty`: WS7 72 keys (`fields_png.py` 78cb57d), WS9 172 (7908eda).** WS8's 6
   `fp3d.*` keys cite `data/interim/export/fp3d/index.json` (should be `fp3d/index.json`).
 
+- 2026-11-14T16:45Z (session 4): **contracts v1.1.4** (additive; contracts/README.md "Changes",
+  section "Rover parking options"). KATs first (`tests/test_contracts.py` +44, `tests/test_make_web.py` +3).
+  - New `pads_index.schema.json` (`scenarios/pads/index.json`, index: `dummy` and `pads`
+    required; rows `id`, `lon`, `lat`, `elev_m`, `rank`, `score`, `official`, `tiebreak`
+    required, a `picker: true` row is not official and names its `summary`; top-level `official`
+    id optional) and `pad_summary.schema.json` (`scenarios/pads/*/summary.json`: `id`, `pad`,
+    `rank`, `score`, `headline` "30"/"60" {`reachable_pct` (may be null), `range_pct` [con, opt],
+    `budget_min` optional = key}, `route` (or null)). Written from WS2's real files; extra keys
+    allowed; required = what WS5's parsers need (WS5's provisional fixture in `pads.test.ts`,
+    without top-level `official` and `budget_min`, validates too).
+  - "Exactly one official row (= `official`)", "summary id = folder" and "headline key =
+    budget_min" are `SEMANTIC_CHECKS` in `tools/validate_contracts.py` (the browser checker's
+    keyword subset has no `contains`; WS5's `parsePadsIndex` enforces the official count too).
+  - `SCHEMA_MAP` (+ `web/src/data/contracts.ts`, same order): `scenarios/pads/index.json`,
+    `scenarios/pads/*/summary.json`, `scenarios/pads/*/bands_*.geojson` -> bands,
+    `*/edges.geojson` -> edges, `*/partner.geojson` -> partner, `*/route_*.geojson` -> route,
+    `*/timeline_*.json` -> timeline. `make web-plan` picks up all 25 WS2 pads files (WS2: 63
+    present, 0 missing). New pytest: no two patterns of either map overlap (glob
+    intersection per segment); vitest: every `PAD_SCHEMA_PATTERNS` row is mapped to its shape.
+  - `pad.schema.json`: `pad` = D21 official pad; optional WS2 extras (`pad.id/score_kind/
+    tiebreak/f8_score`, alternatives `id/kind/score_basis/d21_rank/tiebreak/picker/f8_score/note`,
+    top-level `d21`). `card.schema.json`: landmark `display` enum `label` / `bearing_tick` (D33).
+  - `make web`: WS2 rules for the seven `scenarios/pads/**` patterns (nothing else under pads/);
+    DANGLING check for index `summary` and summary `files` references.
+  - Dummy: `scenarios/pads/` (rank1 = the dummy pad, options rank2 beside the wall and rank3
+    beside the hole, ranked by the D21 order on the synthetic model; 13 files, 0.36 MB, manifest
+    +123 `pads.*` keys); `make dummy` byte-stable (all other files unchanged), 11 s.
+  - **WS2's real files validate** (index + 4 picker pads x 6 files + pad.json: 26 files, 0 errors,
+    0 warnings); WS3's 48 card landmarks validate with `display`. Not published (`make web` is the
+    orchestrator's, after WS7/WS8).
+  - For WS5: the picker's real-tree KAT can run after the next publish; `parsePadsIndex` /
+    `parsePadSummary` match the final shape (rows under `pads`, `official` on every row,
+    headline object keyed "30"/"60" with `budget_min`).
+
 ### Doing
 
 - —
@@ -936,6 +970,11 @@ Branch: `ws4-conditions`
 - Downloads: WS4 cache 17.0 MB in 171 files (RAD 0.44 MB, REMS feed 1.7 MB, REMS PDS ~14.4 MB, DONKI 0.5 MB, Horizons 0.01 MB).
 - 2026-11-14T15:35Z (session 2, user decisions 16:20): **D39** storm-timing key + `storm_replay.py` helper (KATs `pipeline/conditions/test_storm_replay.py`); **D34** E column label/status; **D35** midpoints (unchanged: already used) + derived tripwire half-width; **D36** lower-bound excess + end-of-window rate; **D37** REMS air temperature and pressure only (ground T and UV dropped, 777750c); **D31** EVA start decided. Manifest fragments are now reset on each write (no stale keys). `make conditions` re-run from clean commit e900d5a (no `-dirty` key). Storm numbers before -> after: onset 05:15:52Z, peak 8.38 mGy/day at 06:19:52Z, excess 1.733 mGy all **unchanged**; tripwire 05:57:07Z -> **05:57:07Z ± 9 min** (half-width 8.55 min = half the 17.1-min median sample); excess 1.733 -> **≥ 1.73 mGy (lower bound)**; new end-of-window rate **154.7 uGy/day at 2024-05-22T23:50:54Z = 1.016 × baseline 152.3 (+2.4 uGy/day)**. Latest RAD 190.9 uGy/day at 2026-11-11T16:45:49Z (lag 2.95 d at build).
 
+- 2026-11-14T17:40Z (session 3, **D21**): the sun is computed at the official pad. `config/conditions.yaml clock.site` = `data/interim/engine/public/pad.json pad` (WS2 rank1, 137.401783, -4.77748); `clock.site_fallback` = `config/site.yaml pad_default`, used **only if pad.json is missing** and then flagged in `clock.json site.pad_fallback` / `site.pad_note` (+ a printed warning); a pad.json without `pad` raises. LMST, EVA start (09:00 LMST = 10:51:18Z) and sol numbers stay on the MSL label longitude 137.4085 E; the sun (sunrise/sunset, `t_dark_min`, sun series, h0 sun) uses the pad lat/lon (`site.sun_lon_east_deg`). Per-observer daylight now uses each observer's own lat/lon from the WS3 horizon `meta` (was the pad's). KATs first (5 new in `tests/test_clock.py`). Code 37f74f9; `make conditions` re-run from that clean commit (283 conditions manifest keys, all at 37f74f9). Before (pad_default lat -4.806, sun lon 137.4085) -> after (rank1):
+  - `eva.t_dark_min` **578.63 -> 578.67 min**; flat sunset 20:29:56Z -> **20:29:59Z**; sol 5074 sunset 18:23:09 -> 18:23:11 LMST (sunrise unchanged 06:29:35).
+  - Sun series (79 rows, 5 min): max |d az| 0.072 deg, max |d el| 0.030 deg; start az/el 74.789/36.696 -> 74.811/36.697, peak el 75.975 -> 76.003 deg (t = 210 min), end 288.007/44.610 -> 287.983/44.625.
+  - `t_dark_min_by_observer` (WS3 horizons of 17:14, D21 pad + D26 stations): pad 560.48 -> **569.80**, S1 495.32 -> **491.91**, S2 568.91 -> **503.88** (WS3's new S2 horizon: 503.72 even at the old site), S4 570.10 -> **570.13**, S6 **569.95**, S7 **567.63**, S8 **569.08** (new); 90 V2 stop observers kept (WS7 local horizons), none null.
+  - WS2: `margin_inputs()` -> `--t-dark-min 578.67 --tau-dose-min 85.9`. The daylight term (t_dark - t - T_home) stays 188.67 min above the EVA-duration term (390 - t - T_home), so it never binds; only the recorded value (`engine/summary.json` 578.63) is stale by +0.04 min until WS2's next run.
 ### For WS5 / WS6 (labels and keys, session 2)
 
 - **D34:** show `TOTAL_DOSE_E` as **"dose in plastic (E)"**: `rad.json source.component_label`; status text `source.component_status` = "accepted because it reproduces the published storm peak and excess; dataset notes not yet read (G to check)" (unverified; show it). Manifest keys `rad.source.component_label`, `rad.source.component_status`.
@@ -952,13 +991,13 @@ Branch: `ws4-conditions`
 
 - Sun API hand-off to WS7/WS8 (documented below); per-station daylight once WS3 horizons land in `data/interim/horizon/horizons/` (`make conditions` picks them up; `eva.t_dark_min_by_observer`).
 - G: read the RAD dataset notes (D34 column, D35 time tag) and confirm or correct.
-- Re-run `make conditions` in the SPEC §11 single re-run (after WS1/WS3 re-placement, so `t_dark_min_by_observer` covers the new stations).
+- Re-run `make conditions` whenever WS2 moves the pad or WS3 re-runs horizons (done 17:40Z for D21 + D26).
 
 ### For WS2 (margins; SPEC F4)
 
 - **D39 shared storm-timing key (WS2 + WS7): `config/conditions.yaml` → `storm_replay.tripwire_at` = `"route_max_t_home"`** (pushed 0338363; siblings `storm_replay.anchor_event` = `"tripwire"`, `storm_replay.eva_clock_units` = `"min"`, `storm_replay.tie_break` = `"first"`, assumed). Meaning: the 20 May 2024 storm series is shifted onto the EVA clock so that its tripwire (`rad.json storm_2024.tripwire_utc`) fires at t* = the EVA minute (since EVA start, 09:00 LMST, D31) where the route's T_home is largest (first sample on a tie). `storm_utc(eva_min) = tripwire_utc + (eva_min - t*) min`; storm onset sits at EVA minute `t* - (tripwire_utc - onset_utc)`. Helper: `pipeline/conditions/storm_replay.py` (8a6d960): `tripwire_target_min(eva_min, t_home_min)` -> t*, `storm_offset_utc(tripwire_utc, t*)` (storm UTC at EVA minute 0), `storm_utc_at`, `eva_min_of`, and `replay(rad_json, eva_min, t_home_min)` -> `{tripwire_eva_min, onset_eva_min, peak_eva_min, storm_utc_at_eva_start}`. Real numbers: onset 41.25 min before the tripwire, peak 22.75 min after it.
-- One command: `uv run --no-sync python -m pipeline.conditions.margins --flags` prints `--t-dark-min 578.63 --tau-dose-min 85.9` (now). Options: `--observer S1` (daylight against that station's F12 horizon, once WS3 files exist), `--dose latest` (quiet-sun tau at the latest RAD rate, ~3772 min) instead of the storm-peak default. JSON without `--flags`; Python: `pipeline.conditions.margins.margin_inputs(observer, dose)`.
-- Files: `data/interim/conditions/clock.json` `eva.t_dark_min` (minutes from the simulated EVA start, 09:00 LMST on sol 5074 = 2026-11-14T10:51:18Z, to sunset on a flat horizon at the pad) and `eva.t_dark_min_by_observer[id]`; `data/interim/conditions/rad.json` `leash.tau_min_at_peak` / `leash.tau_min_at_latest`, plus `leash.table` (one row per 0.05 mGy slider step).
+- One command: `uv run --no-sync python -m pipeline.conditions.margins --flags` prints `--t-dark-min 578.67 --tau-dose-min 85.9` (now; D21 pad). Options: `--observer S1` (daylight against that station's F12 horizon, once WS3 files exist), `--dose latest` (quiet-sun tau at the latest RAD rate, ~3772 min) instead of the storm-peak default. JSON without `--flags`; Python: `pipeline.conditions.margins.margin_inputs(observer, dose)`.
+- Files: `data/interim/conditions/clock.json` `eva.t_dark_min` (minutes from the simulated EVA start, 09:00 LMST on sol 5074 = 2026-11-14T10:51:18Z, to sunset on a flat horizon at the D21 official pad, pad.json) and `eva.t_dark_min_by_observer[id]`; `data/interim/conditions/rad.json` `leash.tau_min_at_peak` / `leash.tau_min_at_latest`, plus `leash.table` (one row per 0.05 mGy slider step).
 - Sun API: `from pipeline.conditions import sun`; `sun.sun_position(utc, lat, lon_e)`, `sun.sun_at_lmst(ref_utc, lmst_h, lat, lon_e)`, `sun.t_dark_min(eva_start, lat, lon_e, horizon_deg=0.0 | profile=<F12 horizon dict>)`, `sun.eva_start_utc()`.
 
 ### Blocked
@@ -969,7 +1008,7 @@ Branch: `ws4-conditions`
 
 - **`config/conditions.yaml clock.gale_lon_east_deg` 137.39 -> 137.4085** (docs/discovery.md §4.5: MSL label LMST matches Mars24 at 137.4085 E, median |error| 0.23 s; 137.39 gave a systematic +4.4 s). G to review. `site.yaml analysis_proj lon_0=137.39` is untouched (projection origin, not the clock).
 - `rad.dose_variable` DOSIMETRY_TOTAL_f, `rad.dose_component` TOTAL_DOSE_E (decided D34, unverified), `rad.time_tag` start (decided D35, unverified; config `rad.unverified`), `rad.tripwire_time_halfwidth_display` "whole minutes, rounded half up" (assumed), `rad.sample_duration`, `rad.tripwire.fires_at` ("end of the last qualifying sample"), `rad.event_bounds`; `leash.d_allow_range_mgy` [0.25, 1.0] (D9), `leash.d_allow_step_mgy` 0.05 (assumed).
-- `clock.eva_start_lmst_h` 9.0 (**decided D31**, no longer assumed) and `clock.eva_sol_ref_utc` = H0 (assumed); `storm_replay.tie_break` "first" (assumed), `clock.sun_horizon_elevation_deg` 0, `clock.sun_series_step_min` 5, `clock.mars_year_epoch_utc` 1955-04-11, `clock.msl_landing_utc` 2012-08-06T05:17:57Z; sun latitude = `site.yaml pad_default`.
+- `clock.eva_start_lmst_h` 9.0 (**decided D31**, no longer assumed) and `clock.eva_sol_ref_utc` = H0 (assumed); `storm_replay.tie_break` "first" (assumed), `clock.sun_horizon_elevation_deg` 0, `clock.sun_series_step_min` 5, `clock.mars_year_epoch_utc` 1955-04-11, `clock.msl_landing_utc` 2012-08-06T05:17:57Z; sun lat/lon = D21 official pad (`pad.json`), fallback `site.yaml pad_default` only if pad.json is missing.
 - REMS: `pds_mars_years` [36, 37, 38], `pds_rows_per_sol` 200, `pds_min_lmst_coverage_h` 18; DONKI `window_utc` 12-23 May 2024 (+IPS endpoint); Horizons `step` 1 h.
 - KAT notes: GISS example 2 prints LTST 0.00025 h and declination -13.42065, but its own formulas on its own inputs give 0.00020 h and -13.42040; tested with 1e-4 h / 5e-4 deg tolerance (example 1 matches to 2e-5). Ls KAT evaluated at 12:00 UTC on 2026-08-25 (the brief gives a date only).
 
@@ -1346,40 +1385,87 @@ Branch: `ws7-hud`
   re-run at 1dbbff8 -> 96 `fields.*` keys, all clean, all citing `fields/...`; the 26 previous PNGs are
   byte-identical, +9 `con_{80,104,120}` fields (WS2's con rasters now exist), index gains only those.
 
+- 2026-11-14T15:45Z (session 4): **D39 storm placement** (`config/conditions.yaml storm_replay`):
+  `storm.ts` is a TypeScript port of WS4's `pipeline/conditions/storm_replay.py`
+  (`tripwireTargetMin`, `stormOffsetUtcMs`, `stormUtcAtMs`, `evaMinOf`, `stormReplay`;
+  `parseStormReplayConfig` refuses any rule other than route_max_t_home / tripwire / min / first, as
+  `check_config`). The tripwire fires at t* = the EVA minute of the route's largest T_home (samples:
+  WS2's timeline rows along the walk, turn_back excluded, so the HUD's t* = WS2's; on the official-pad
+  nom_104 **t* = 44.39 min, arrive S7** = WS2 session 7; a 5 m field lookup along route vertices gave
+  44.28, one vertex early, so it was dropped); turning
+  the switch on no longer moves the storm ("onset at switch-on" removed). The tripwire row reads
+  "armed: fires T+h:mm:ss ± 9 min" / "FIRED …" with the label from `rad.json
+  storm_2024.tripwire_halfwidth_label` (none shown if absent); its provenance cites
+  `rad.storm_2024.tripwire_utc`, `.tripwire_halfwidth_label`, `rad.leash.tau_min_at_peak`,
+  `fields.{sc}/t_home.sha256`. KATs `storm.test.ts` mirror all seven WS4 KATs (same inputs, same
+  answers) + HUD placement, alarm 2 timing, ± label on the real rad.json.
+- 2026-11-14T15:45Z: **D39 drift radius**: the core circle (D19) is max(`fallback_drift.sigma_floor_m`
+  5 m, `pct_of_distance` 2 % of distance since the last fix), also at a fix (5 m at the rover pad;
+  before: the fix's 2 m). The `sigma_floor_m: 5` key already existed; now cited as D39 in
+  `config/hud.yaml`. The F21 ellipse is a separate optional toggle "Odometry (F21, set, optional)"
+  shown only with WS9's files; "Drift" is always the D39 circle (before, WS9's files replaced it).
+- 2026-11-14T15:45Z: **D28 turn-back binding** (contracts v1.1.3): BINDING row and the turn-back
+  sub-line show the term incl. **"EVA duration"** ("bound by EVA duration"); during a dwell the
+  station's WS2 `turn_back` row adds e.g. "S2 latest leave T+6:22:10 (O₂)" (pre-D28 timeline). Read from the
+  timeline (`margin_binding` of the row in force and of the `turn_back` rows); the card's
+  `turn_back_binding` carries the same term (the HUD loads no cards).
+- 2026-11-14T16:21Z: **`make fields` on the D21 official pad** (WS2 session 7 rasters, all 9
+  scenarios incl. **con_\***), from clean commit **8a1e249** (main + WS2 + WS3 s5): **38 index entries
+  (35 PNGs + WS9's 3 `fix_interval_*`), 58.1 MB in `data/interim/export/fields/`** (pointers 9 × ≈ 2.2
+  = 20.1 MB; con_\* 14.3 MB incl. their pointers; largest `shared/slope.png` 4.06 MB) + WS9 0.7 MB =
+  **58.8 MB in the web tree**; every file < 50 MB. Manifest: 98 `fields.*` keys, all at 8a1e249 (0
+  `-dirty`). nom_104 T_home max 199.6 min, known 66.8 % of the grid; con_104 max 264.8 min.
+- **Fix (D21): `home_bearing` now aims at the pad in use** (`engine/public/pad.json` `pad`, projected
+  with grid.json's crs; manifest `fields.nom_104/home_bearing.pad_lon/lat` = 137.401783 / −4.77748).
+  Before, it aimed at `grid.json` pad = pad_default, 2 km off the official pad. KATs: projection round
+  trip, synthetic pad shift, real bearing + WS2's T_home = 0 cell at the official pad.
+- **Finding (C):** the pad is no longer the grid anchor, so no 5 m pixel centre falls on WS2's single
+  T_home = 0 cell: the HUD reads **0.1 min (6 s) at the pad** (the 3 m cell under the pad pixel's
+  centre). Data left as sampled (no special case); the KATs "T_home = 0 at the pad" now use the
+  brief's ±0.5 min timeline tolerance (`real.test.ts`, `test_real_index_valid_and_pad_zero`). The
+  real wayhome KAT read its pad from grid.json (test bug; the app uses pad.json): fixed.
+- **WS8 (info):** `src/fp3d/fp3d.test.ts` "camera on the route … real route (nom_104)" fails on the
+  new route until `make fp3d` is re-run on the official pad (not WS7's).
+- KATs session 4: `web/src/hud/*.test.ts` **114 pass** (93 before; storm 18 incl. 2 real, drift D39,
+  D28 4); `tests/test_fields_png.py` **54 pass** (incl. 3 real); whole web suite 479 pass, 1 fail
+  (WS8 above), 2 skipped; `tsc --noEmit` clean; `vite build` OK.
+
 ### Doing
 
 - —
 
 ### Next
 
+- C: `make web` to publish the official-pad fields (58.8 MB incl. con_\*).
 - C: `make web` to publish the pointers and the merged index (the HUD already runs on the real tree).
-- con_* fields when V1 lands (`make fields` again; worst-case + bearing unchanged).
 - 60 fps check at 60× on a real laptop (the automated browser here is throttled to ~15 fps even
   when the HUD is idle, so it measures nothing).
 
 ### Blocked
 
-- **Fields size, C (info):** 41.9 MB in the web tree now (28.4 MB fields + 12.8 MB pointers + 0.7 MB
-  WS9); con_* will add ≈ 8 MB fields + ≈ 6 MB pointers (≈ 56 MB). The HUD reads one pointer (the
-  active scenario). If that is too much: `--no-pointer` and a nom_104-only pointer run (2.0 MB), or
-  pointers for the 104 kg suits only. Way-home path and pointer-field proposal: resolved (v1.1.1).
+- — (fields size accepted by C 14:28, "≈ 56 MB with con_*"; actual with con_* on the official pad
+  **58.8 MB** in the web tree, every file < 50 MB. If too much: `--no-pointer` + a nom_104-only
+  pointer run, or pointers for the 104 kg suits only.)
 
 ### Assumptions added
 
 - A-WS7-1: within a leg the marker follows the route's `times_min`; without them, uniform speed.
-- A-WS7-2: worst-case fields and the alarm-3 circle skip cells with no T_home (blocked > no-go,
+- ~~A-WS7-2~~ **Accepted (D39, user 16:20, "HUD no-route skip accepted"), no longer an assumption:**
+  worst-case fields and the alarm-3 circle skip cells with no T_home (blocked > no-go,
   unreached): the crew cannot be there on the plan. Unknown only if no reachable cell is in the
   disc. (The M0 dummy used "any unknown → unknown".) Disc radius rounded up to whole 3 m cells
   (12 / 51 / 102 m).
 - A-WS7-3: HUD margin = (timeline `margin_min` + `t_home_min`, interpolated in t) − T_home at the
   position (worst case within σ); turn-back countdown = that margin.
-- A-WS7-4: storm switch puts the 2024 onset at the EVA minute the switch is turned on; the
-  tripwire fires after the real onset→tripwire delay (rad.json); the dose budget then counts down
-  from `leash.tau_min_at_peak`; alarm 2 when T_home ≥ budget left.
+- A-WS7-4 (revised session 4; placement decided D39): the storm tripwire fires at t* per
+  `conditions.yaml storm_replay` (no longer at switch-on). Assumed: the route T_home samples are
+  WS2's timeline rows along the walk (turn_back excluded), as WS2 uses; the dose budget
+  counts down from `leash.tau_min_at_peak` after the tripwire; alarm 2 when T_home ≥ budget left.
 - A-WS7-6: the pad is "reached" when the pointer path stops within one 3 m pixel of the pad
   (pad on a cell corner). Sun row minutes are floored; outside WS4's series the sun position is
   unknown (not extrapolated).
-- A-WS7-5: drift σ = fix σ at the fix, else max(fix σ, floor 5 m, 2 % of distance since the fix).
+- ~~A-WS7-5~~ **Decided (D39):** drift σ = max(5 m, 2 % of distance since the last fix), also at
+  the fix (a fix σ above the floor would still hold; none is).
 - 5 m sampling: each 5 m pixel takes the 3 m cell under its centre (no ties on these grids);
   slope = the 1 m `slope_5m` cell at the 5 m pixel centre; `home_bearing` = geometric bearing to
   the pad (grid.json), known everywhere.
@@ -1801,3 +1887,6 @@ Branch: `ws10-vo`
 | 16:28 | Deployment | GitHub Pages live at https://luxkaiwalker.github.io/home-line/ (private repo, owner has Pro). Earlier failures: Pages not yet configured (15:11 configure-pages 404) and a manual dispatch before CI finished (guard works). Deploys automatically after green CI on main | C |
 | 16:36 | D35 tripwire label / D37 scope (C) | Tripwire uncertainty shown as the derived "± 9 min" (half of the 17.1 min median sample = 8.55 min, rounded up; user asked "± 8", one config line to change); REMS keeps air temperature and pressure only (UV dropped too, per the user's "air temperature and pressure only") | C |
 | 17:20 | D38 fps | Human fps check of /hud3d passed (user: "works very nicely"); default quality preset kept | User |
+| 2026-11-14 17:22 | D40–D47 | D40 Unity interface: planner formats only (JSON, LE float32 grids + JSON header, PNG/JPEG, zip bundles; pad-local metres x=E y=N z=up), C# port must pass physio/golden.json, plan/bundle contracts v1 frozen by ~20:00 + static official-pad bundle fixture (C); D41 60-min headline = in-data share 31.5 % (16.2–43.8), coverage 75.8 % labelled; D42 S3/S5 dropped unless S picks by 19:00; D43 route DP + EVA counts use modelled O₂ along the route (reserve kept); D44 official pad rank1 frozen, recount reported for picker pads; D45 conservative result shown as is; D46 direction suffix for same-name stations; D47 placement assumptions accepted (assumed) | User |
+| 17:25 | HUD fields after D21 | Accept 58.8 MB (pointer + con_*; every file < 50 MB); T_home at the official pad samples to 0.1 min on the 5 m grid (pad not on a pixel corner) — kept as sampled, tests use the ±0.5 min tolerance | C |
+| 17:34 | §11 conflict D40–D47 | Two sets were logged; the user chose **set A (17:16–17:28)**: D40 backend allowed (defaults FastAPI/VM/Supabase; server owner open), D41 Unity handover (plan/bundle contracts v1 by 20:00 + official-pad fixture + physio/golden.json), D42 official pad rank1 frozen (ranks 2–3 + pad_default in picker), D43 60-min in-data share 31.5 % (16.2–43.8) with 75.8 % coverage label, D44 stations final S1/S2/S4/S6/S7/S8 + compass suffix from the pad bearing, D45 keep the effort-cap O₂ planning rule + excluded-combination count, D46/D47 accepted. Set B (17:22) marked superseded. Backend: contracts + fixture tonight, code after G2 | User |

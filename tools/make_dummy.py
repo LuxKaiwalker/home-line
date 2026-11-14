@@ -86,6 +86,9 @@ DUMMY_COMMIT = "dummy"
 DUMMY_OBSTACLE_POLY_N = 32                        # polygon sides for geodesic waypoints
 DUMMY_PAD_ALTERNATIVES = [(150.0, 30.0), (250.0, 200.0), (320.0, 120.0)]  # dist, bearing
 DUMMY_SITE_RULE_VERSION = "DUMMY"
+# D21 parking-option picker (contracts v1.1.4): picker pads (dist m, bearing deg from the pad);
+# the dummy official pad is the pad of pad.json. Ids rank{n} follow the computed D21 order.
+DUMMY_PICKER_PADS = [(380.0, 270.0), (400.0, 135.0)]  # beside the wall and the hole
 
 CAUSES = ("physiology", "slope", "data")
 VARIANT_OF = {"opt": "optimistic", "nom": "nominal", "con": "conservative"}
@@ -254,16 +257,19 @@ def seg_seg_dist(ax, ay, bx, by, cx, cy, dx, dy):
     return np.where(cross, 0.0, d)
 
 
-def geodesic_distance(world: World, x: np.ndarray, y: np.ndarray) -> np.ndarray:
-    """Shortest walking distance (m) from the pad around the wall and hole; inf on obstacles.
+def geodesic_distance(world: World, x: np.ndarray, y: np.ndarray,
+                      origin: tuple[float, float] = (0.0, 0.0)) -> np.ndarray:
+    """Shortest walking distance (m) from ``origin`` (default the pad) around the wall and
+    hole; inf on obstacles.
 
     Visible cells: straight-line distance. Shadow cells: via the visibility graph of waypoints
     circumscribing the (convex) obstacles, solved with Dijkstra. Exact to < 1 m here.
     """
+    ox, oy = origin
     blocked = world.wall(x, y) | world.hole(x, y)
-    d = np.hypot(x, y)
-    shadow = world.blocked_segment(0.0, 0.0, x, y) & ~blocked
-    nodes = np.vstack([[0.0, 0.0], world.waypoints()])
+    d = np.hypot(x - ox, y - oy)
+    shadow = world.blocked_segment(ox, oy, x, y) & ~blocked
+    nodes = np.vstack([[ox, oy], world.waypoints()])
     n = len(nodes)
     ii, jj = np.triu_indices(n, 1)
     clear = ~world.blocked_segment(nodes[ii, 0], nodes[ii, 1], nodes[jj, 0], nodes[jj, 1])
@@ -565,6 +571,22 @@ def generate(out_dir: Path = OUT_DIR, config_dir: Path = CONFIG_DIR) -> list[Pat
     assert wgrid.centre * step == grid.centre
     simplify_m = variants["outputs"]["simplify_tolerance_m"]
     band_feats, headline = [], {}
+
+    def edge_features(g, b: int) -> list[dict]:
+        """Band boundary split by cause (slope at the wall, data at the hole / CTX strip)."""
+        parts: dict[int, list] = {0: [], 1: [], 2: []}
+        for line in getattr(g.boundary, "geoms", [g.boundary]):
+            c = np.asarray(shapely.segmentize(line, web_res).coords)
+            mid = (c[:-1] + c[1:]) / 2
+            cause = world.cause(mid[:, 0], mid[:, 1], buffer_m)
+            start = 0
+            for k in range(1, len(cause) + 1):
+                if k == len(cause) or cause[k] != cause[start]:
+                    parts[int(cause[start])].append(LineString(c[start:k + 1]))
+                    start = k
+        return [o.feature(MultiLineString(lines), {"budget": b, "cause": CAUSES[ci]})
+                for ci, lines in parts.items() if lines]
+
     for sc, v in DUMMY_SCENARIOS.items():
         t10 = t_fields[sc][::step, ::step]
         iso_feats, regions = [], {}
@@ -579,20 +601,7 @@ def generate(out_dir: Path = OUT_DIR, config_dir: Path = CONFIG_DIR) -> list[Pat
         for b in band_budgets:
             g = regions[b]
             band_feats.append(o.feature(g, {"budget": b, "variant": variant, "scenario": sc}))
-            parts: dict[int, list] = {0: [], 1: [], 2: []}
-            for line in getattr(g.boundary, "geoms", [g.boundary]):
-                c = np.asarray(shapely.segmentize(line, web_res).coords)
-                mid = (c[:-1] + c[1:]) / 2
-                cause = world.cause(mid[:, 0], mid[:, 1], buffer_m)
-                start = 0
-                for k in range(1, len(cause) + 1):
-                    if k == len(cause) or cause[k] != cause[start]:
-                        parts[int(cause[start])].append(LineString(c[start:k + 1]))
-                        start = k
-            for ci, lines in parts.items():
-                if lines:
-                    edge_feats.append(o.feature(MultiLineString(lines),
-                                                {"budget": b, "cause": CAUSES[ci]}))
+            edge_feats += edge_features(g, b)
         o.write_json(f"scenarios/{sc}/edges.geojson", fc(edge_feats), compact=True)
 
         r_partner = DUMMY_PARTNER_FRAC * v * max(band_budgets) * 60
@@ -981,6 +990,149 @@ def generate(out_dir: Path = OUT_DIR, config_dir: Path = CONFIG_DIR) -> list[Pat
         "texture": "DUMMY flat tan JPEG per near chunk",
         "eye_height_m": eye,
     })
+
+    # ---- scenarios/pads: D21 parking-option picker (contracts v1.1.4) -------------------------
+    # Same synthetic model as the main scenarios (walking distance around the wall and hole /
+    # speed, here on the 10 m web grid), nominal suit only, no isochrones or fields (C layout
+    # 16:17). Score = station subsets whose straight-leg tour (DUMMY_STATIONS order, dwell each)
+    # fits the EVA minus the reserve; tiebreak 1 = reachable % at the first budget (nominal),
+    # tiebreak 2 = lower elevation (pad-relative synthetic heights). The official row is the pad
+    # of pad.json.
+    flat_v = {sc: v for sc, v in DUMMY_SCENARIOS.items()}
+    sc_con = next(sc for sc in DUMMY_SCENARIOS if sc.startswith("con_"))
+    sc_opt = next(sc for sc in DUMMY_SCENARIOS if sc.startswith("opt_"))
+
+    def pad_tour(px: float, py: float, sids) -> tuple[float, list[tuple]]:
+        pts = [("pad", (px, py))] + [(sid, st_xy[sid]) for sid in sids] + [("pad", (px, py))]
+        legs_, t_ = [], 0.0
+        for (a_id, a), (b_id, b) in zip(pts[:-1], pts[1:], strict=True):
+            length = math.hypot(b[0] - a[0], b[1] - a[1])
+            dur = length / v_route / 60
+            legs_.append((a_id, b_id, a, b, length, t_, t_ + dur))
+            t_ += dur + (dwell if b_id != "pad" else 0.0)
+        return t_, legs_
+
+    def pad_reach(dist_p: np.ndarray, sc: str, b: int, off: float) -> float | None:
+        r_flat = flat_v[sc] * b * 60
+        if off + r_flat > grid.half:   # the flat disc leaves the grid: not computed (as WS2)
+            return None
+        cells = np.count_nonzero(dist_p / flat_v[sc] / 60.0 <= b) * web_res * web_res
+        return r1(100 * cells / (math.pi * r_flat ** 2))
+
+    sids_all = [sid for sid, _, _ in DUMMY_STATIONS]
+    wgx, wgy = gx[::step, ::step], gy[::step, ::step]  # on the 10 m web grid (speed)
+    cands = [(0.0, 0.0)] + [polar(dd, bb) for dd, bb in DUMMY_PICKER_PADS]
+    pads_info = []
+    for k, (px, py) in enumerate(cands):
+        dist_p = dist[::step, ::step] if k == 0 else geodesic_distance(world, wgx, wgy,
+                                                                        origin=(px, py))
+        n_ok = sum(1 for m in range(1, 2 ** len(sids_all))
+                   if pad_tour(px, py, [s_ for i, s_ in enumerate(sids_all) if m >> i & 1])[0]
+                   <= eva_min - reserve_min)
+        off = math.hypot(px, py)
+        heads = {b: {"budget_min": b, "reachable_pct": pad_reach(dist_p, rs, b, off),
+                     "range_pct": [pad_reach(dist_p, sc_con, b, off),
+                                   pad_reach(dist_p, sc_opt, b, off)]} for b in band_budgets}
+        lon, lat = geo.lonlat_pt(px, py)
+        pads_info.append({"xy": (px, py), "dist": dist_p, "lon": lon, "lat": lat,
+                          "elev": r1(float(world.elevation(px, py))), "score": n_ok,
+                          "tb1": heads[budgets[0]]["reachable_pct"], "heads": heads,
+                          "official": k == 0})
+    pads_info.sort(key=lambda q: (-q["score"], -(q["tb1"] or 0.0), q["elev"]))
+    assert pads_info[0]["official"], "dummy picker pad outranks the dummy official pad"
+    tb1_name = f"reachable_pct_{budgets[0]}"
+    pads_f = "scenarios/pads/index.json"
+    rows = []
+    for rank, q in enumerate(pads_info, start=1):
+        pid = q["id"] = f"rank{rank}"
+        row = {"id": pid, "kind": "dummy", "lon": q["lon"], "lat": q["lat"], "elev_m": q["elev"],
+               "rank": rank, "score": q["score"], "official": q["official"],
+               "picker": not q["official"],
+               "tiebreak": {tb1_name: q["tb1"], "elev_m": q["elev"]},
+               "summary": None if q["official"] else f"scenarios/pads/{pid}/summary.json"}
+        rows.append(row)
+        for kk, u in (("lon", "deg"), ("lat", "deg"), ("elev_m", "m"), ("rank", None),
+                      ("score", None)):
+            o.record(f"pads.{pid}.{kk}", row[kk], u, pads_f)
+        for kk, val in row["tiebreak"].items():
+            o.record(f"pads.{pid}.tiebreak.{kk}", val, "m" if kk == "elev_m" else "%", pads_f)
+    official_id = next(q["id"] for q in pads_info if q["official"])
+    o.write_json(pads_f, {
+        "dummy": True, "scenario": rs, "score_kind": "dummy_feasible_eva_count",
+        "order": "DUMMY: feasible station subsets desc; tiebreak 1 reachable % at "
+                 f"{budgets[0]} min desc; tiebreak 2 elevation asc",
+        "official": official_id, "decision": "D21 (dummy picker, synthetic world)",
+        "ids": "rank{n} = dummy D21 rank n", "pads": rows})
+
+    for q in pads_info:
+        if q["official"]:
+            continue
+        pid, (px, py), dist_p = q["id"], q["xy"], q["dist"]
+        d = f"scenarios/pads/{pid}"
+        t_p = dist_p / v_route / 60.0
+        pb, pe = [], []
+        for b in band_budgets:
+            g = region_polygon(t_p <= b, wgrid, simplify_m)
+            pb.append(o.feature(g, {"budget": b, "variant": VARIANT_OF[rs.split("_")[0]],
+                                    "scenario": rs}))
+            pe += edge_features(g, b)
+        o.write_json(f"{d}/bands_{suit}.geojson", fc(pb), compact=True)
+        o.write_json(f"{d}/edges.geojson", fc(pe), compact=True)
+        o.write_json(f"{d}/partner.geojson", fc([o.feature(
+            circle(px, py, r_partner_rs), {"radius_m": r1(r_partner_rs)})]), compact=True)
+
+        t_tot, plegs = pad_tour(px, py, sids_all)
+        feats: list[dict] = []
+        tl_rows: list[dict] = []
+
+        def tl_row(ev: str, station, t_: float, x: float, y: float,
+                   t_p=t_p, tl_rows=tl_rows) -> None:
+            th = r1(t_p[wgrid.pixel(x, y)])
+            tl_rows.append({"t_min": r1(t_), "event": ev, "station": station,
+                            "o2_left_L": r1(o2_start - DUMMY_O2_L_PER_MIN * t_),
+                            "t_home_min": th, "margin_min": r1(eva_min - reserve_min - t_ - th)})
+
+        tl_row("depart", None, 0.0, px, py)
+        for i, (a_id, b_id, a, b, length, t0, t1) in enumerate(plegs, start=1):
+            assert not world.blocked_segment(*a, *b), f"dummy pad {pid} leg {a_id}->{b_id}"
+            props = {"leg": i, "from": a_id, "to": b_id, "length_m": r1(length),
+                     "t_min": r1(t1 - t0), "o2_L": r1(DUMMY_O2_L_PER_MIN * (t1 - t0)),
+                     "t_start_min": r1(t0), "t_end_min": r1(t1)}
+            feats.append(o.feature(shapely.segmentize(LineString([a, b]), web_res), props))
+            for kk, u in (("t_min", "min"), ("length_m", "m"), ("o2_L", "L")):
+                o.record(f"pads.{pid}.route.leg.{i}.{kk}", props[kk], u, f"{d}/route_{rs}.geojson")
+            if b_id == "pad":
+                tl_row("return", None, t1, *b)
+            else:
+                tl_row("arrive", b_id, t1, *b)
+                tl_row("leave", b_id, t1 + dwell, *b)
+        o.write_json(f"{d}/route_{rs}.geojson", fc(feats), compact=True)
+        o.write_json(f"{d}/timeline_{rs}.json", tl_rows)
+        for i, row in enumerate(tl_rows):
+            for kk, u in (("t_min", "min"), ("o2_left_L", "L"), ("t_home_min", "min"),
+                          ("margin_min", "min")):
+                o.record(f"pads.{pid}.timeline.{i}.{kk}", row[kk], u, f"{d}/timeline_{rs}.json")
+
+        heads = {str(b): h for b, h in q["heads"].items()}
+        o.write_json(f"{d}/summary.json", {
+            "dummy": True, "id": pid, "kind": "dummy", "scenario": rs,
+            "pad": {"lon": q["lon"], "lat": q["lat"], "elev_m": q["elev"]},
+            "rank": rows[pads_info.index(q)]["rank"], "official": False, "score": q["score"],
+            "score_kind": "dummy_feasible_eva_count",
+            "tiebreak": rows[pads_info.index(q)]["tiebreak"], "headline": heads,
+            "route": {"stops": sids_all, "total_min": r1(t_tot),
+                      "n_feasible_subsets": q["score"]},
+            "files": {"bands": f"{d}/bands_{suit}.geojson", "edges": f"{d}/edges.geojson",
+                      "partner": f"{d}/partner.geojson", "route": f"{d}/route_{rs}.geojson",
+                      "timeline": f"{d}/timeline_{rs}.json"},
+            "note": "DUMMY parking option (synthetic world, not Mars data)"})
+        sf = f"{d}/summary.json"
+        o.record(f"pads.{pid}.score", q["score"], None, sf)
+        o.record(f"pads.{pid}.route.total_min", r1(t_tot), "min", sf)
+        for b, h in heads.items():
+            o.record(f"pads.{pid}.headline.{b}.reachable_pct", h["reachable_pct"], "%", sf)
+            o.record(f"pads.{pid}.headline.{b}.range_pct.low", h["range_pct"][0], "%", sf)
+            o.record(f"pads.{pid}.headline.{b}.range_pct.high", h["range_pct"][1], "%", sf)
 
     # ---- manifest last --------------------------------------------------------------------------
     o.write_json("manifest.json", {"dummy": True, **o.manifest})

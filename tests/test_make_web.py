@@ -314,6 +314,59 @@ def test_pad_json_published_when_not_withheld(tree):
     assert "pad.json" in {c.dst.as_posix() for c in p.copies}
 
 
+PAD_FILES = ("summary.json", "bands_104.geojson", "edges.geojson", "partner.geojson",
+             "route_nom_104.geojson", "timeline_nom_104.json")
+
+
+def write_pads(interim: Path, ids=("rank2", "pad_default")) -> Path:
+    root = interim / "engine" / "public" / "scenarios" / "pads"
+    root.mkdir(parents=True)
+    (root / "index.json").write_text(json.dumps({"dummy": False, "pads": []}))
+    for pid in ids:
+        (root / pid).mkdir()
+        for name in PAD_FILES:
+            (root / pid / name).write_text(json.dumps({"id": pid}))
+    # internal products next to them are never copied
+    (root / "rank2" / "t_home.tif").write_bytes(b"II*")
+    return root
+
+
+def test_plan_ws2_pads_rules(tree):
+    """v1.1.4 D21 picker (C layout 16:17): scenarios/pads/** mirrors the web tree, owner WS2;
+    no isochrones, no rasters."""
+    write_pads(tree["interim"])
+    (tree["interim"] / "engine/public/scenarios/pads/rank2/isochrones.geojson").write_text("{}")
+    p = mw.plan(tree["interim"], settings=SETTINGS, dummy_tree=tree["dummy"], h0=H0)
+    got = {c.dst.as_posix() for c in p.copies if c.owner == "WS2"}
+    want = {"scenarios/pads/index.json"} | {f"scenarios/pads/{i}/{n}"
+                                            for i in ("rank2", "pad_default") for n in PAD_FILES}
+    assert got == want and not p.refused
+    assert not any("scenarios/pads" in w for o, w, _ in p.missing)
+
+
+def test_plan_ws2_pads_missing_reported(tree):
+    p = mw.plan(tree["interim"], settings=SETTINGS, dummy_tree=tree["dummy"], h0=H0)
+    assert ("WS2", "scenarios/pads/index.json",
+            "data/interim/engine/public/scenarios/pads/index.json") in p.missing
+
+
+def test_dangling_pads_references(tmp_path):
+    pub = tmp_path
+    d = pub / "scenarios" / "pads" / "rank2"
+    d.mkdir(parents=True)
+    (d / "summary.json").write_text(json.dumps({"id": "rank2", "files": {
+        "bands": "scenarios/pads/rank2/bands_104.geojson",
+        "edges": "scenarios/pads/rank2/edges.geojson"}}))
+    (d / "edges.geojson").write_text("{}")
+    (pub / "scenarios" / "pads" / "index.json").write_text(json.dumps({"dummy": False, "pads": [
+        {"id": "rank1", "official": True, "summary": None},
+        {"id": "rank2", "summary": "scenarios/pads/rank2/summary.json"},
+        {"id": "rank3", "summary": "scenarios/pads/rank3/summary.json"}]}))
+    assert mw.dangling(pub) == [
+        "scenarios/pads/rank3/summary.json (named in scenarios/pads/index.json rank3)",
+        "scenarios/pads/rank2/bands_104.geojson (named in scenarios/pads/rank2/summary.json)"]
+
+
 def test_plan_ws8_far_texture_rule(tree):
     """WS8 STATUS: far texture fp3d/far_tex.jpg (8 m ortho over the far mesh)."""
     src = tree["interim"] / "export" / "fp3d" / "far_tex.jpg"

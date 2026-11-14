@@ -1,6 +1,7 @@
 // /hud view (F18, F19): playback clock, route-following marker, helmet panel, alarms, minimap,
-// drag-anywhere, storm switch, fallback drift. Self-contained: reads its own files from the data
-// root through opts.dataUrl.
+// drag-anywhere, storm switch (D39 placement), drift circle (D39 radius; the F21 ellipse is an
+// optional add-on, D19). Self-contained: reads its own files from the data root through
+// opts.dataUrl.
 //
 //   const hud = await mountHud(container, { dataUrl, config })   // config = parseHudConfig(...)
 //   hud.destroy()
@@ -21,7 +22,7 @@ import { createHudPanel, fmtEva, type HudPanel } from './panel'
 import { Plan } from './plan'
 import { readoutSources } from './provenance'
 import { playbackPosition, type HudContext, type HudFields } from './readout'
-import { radiationInput, stormReplay, stormState, type StormReplay } from './storm'
+import { radiationInput, routeTHomeSeries, stormReplay, stormState, type StormReplay } from './storm'
 import { parseClockSun, sunAt, sunRowText, sunSources, type ClockFile, type SunData } from './sun'
 import type { Bounds, FieldsIndex, HudPosition, LonLat, PadFile, PolygonFC, Rad, RouteFC, ScenariosIndex, Station, TimelineEvent } from './types'
 import { loadPointer, wayHomeView, type PointerField } from './wayhome'
@@ -206,35 +207,54 @@ export async function mountHud(container: HTMLElement, opts: MountHudOptions): P
   scrub.setAttribute('aria-label', 'EVA time')
   const timeLbl = el('span', 'hl-hud-time')
   const fpsLbl = el('span', 'hl-hud-fps')
-  // storm switch (F18) and fallback drift (F19, D12)
+  // storm switch (F18; placement D39) and the drift circle (F19 core, D19; radius D39)
+  const series = routeTHomeSeries(ctx.plan, ctx.fields.tHome)
+  const replay: StormReplay | null = cfg.stormReplay ? stormReplay(data.rad, series.evaMin, series.tHomeMin) : null
+  const tripAt = replay ? `${fmtEva(replay.tripwireEvaMin)}${replay.halfwidthLabel ? ' ' + replay.halfwidthLabel : ''}` : ''
   const stormBtn = button('hl-hud-toggle-btn', 'Storm replay: off')
-  stormBtn.title = 'Replay the 20 May 2024 storm during this EVA (onset now)'
-  // F21 Monte Carlo ellipses when WS9's files exist, else the fallback 2 % drift (D12)
-  const driftName = data.nav ? `Odometry (F21, ${data.nav.set})` : 'Drift'
-  const driftBtn = button('hl-hud-toggle-btn', `${driftName}: off`)
-  driftBtn.title = data.nav
-    ? `Dead-reckoning uncertainty from nav/montecarlo_${data.nav.set}.json (95 % ellipse)`
-    : `Simulated dead reckoning: ${cfg.fallbackDrift.pctOfDistance}% of distance since the last fix (assumed, fallback)`
+  stormBtn.title = replay
+    ? `Replay the 20 May 2024 storm during this EVA: its tripwire fires at ${tripAt}, the minute of the route's largest T_home (D39, config/conditions.yaml storm_replay)`
+    : 'Storm replay unavailable: no storm tripwire, tau_dose or route T_home known'
+  const driftBtn = button('hl-hud-toggle-btn', 'Drift: off')
+  driftBtn.title = `Dead reckoning: circle radius = max(${cfg.fallbackDrift.sigmaFloorM} m, ${cfg.fallbackDrift.pctOfDistance} % of distance since the last fix) (D39); fixes at the rover pad and surveyed stations`
+  // F21 Monte Carlo ellipse (WS9): optional add-on (D19), only when its files exist
+  const odoName = data.nav ? `Odometry (F21, ${data.nav.set}, optional)` : ''
+  const odoBtn = button('hl-hud-toggle-btn', `${odoName}: off`)
+  odoBtn.hidden = !data.nav
+  if (data.nav) odoBtn.title = `Optional add-on (D19): dead-reckoning uncertainty from nav/montecarlo_${data.nav.set}.json (95 % ellipse)`
   const fixBtn = button('hl-hud-toggle-btn', 'Take fix')
   fixBtn.hidden = true
-  controls.append(scrub, timeLbl, stormBtn, driftBtn, fixBtn, fpsLbl)
+  controls.append(scrub, timeLbl, stormBtn, driftBtn, odoBtn, fixBtn, fpsLbl)
   root.append(controls)
 
   let storm: StormReplay | null = null
-  stormBtn.disabled = stormReplay(data.rad, 0) === null
+  stormBtn.disabled = replay === null
   stormBtn.addEventListener('click', () => {
-    storm = storm ? null : stormReplay(data.rad, clock.t)
-    stormBtn.textContent = storm ? `Storm replay: on (onset T+${Math.round(clock.t)} min)` : 'Storm replay: off'
+    storm = storm ? null : replay
+    stormBtn.textContent = storm ? `Storm replay: on (tripwire ${tripAt})` : 'Storm replay: off'
     stormBtn.classList.toggle('active', !!storm)
     dirty = true
   })
+  // one uncertainty source at a time: the core drift circle or the optional F21 ellipse
   let drift = false
+  let odo = false
+  const syncPos = () => {
+    driftBtn.textContent = `Drift: ${drift ? 'on' : 'off'}`
+    driftBtn.classList.toggle('active', drift)
+    odoBtn.textContent = `${odoName}: ${odo ? 'on' : 'off'}`
+    odoBtn.classList.toggle('active', odo)
+    fixBtn.hidden = !odo
+    dirty = true
+  }
   driftBtn.addEventListener('click', () => {
     drift = !drift
-    driftBtn.textContent = `${driftName}: ${drift ? 'on' : 'off'}`
-    driftBtn.classList.toggle('active', drift)
-    fixBtn.hidden = !(drift && data.nav)
-    dirty = true
+    if (drift) odo = false
+    syncPos()
+  })
+  odoBtn.addEventListener('click', () => {
+    odo = !odo && !!data.nav
+    if (odo) drift = false
+    syncPos()
   })
   fixBtn.addEventListener('click', () => {
     const t = takeFixTime(data.nav, clock.t)
@@ -335,11 +355,11 @@ export async function mountHud(container: HTMLElement, opts: MountHudOptions): P
       if (state.headingDeg !== null) lastHeading = state.headingDeg
       const base: HudPosition = drag
         ? { lon: drag[0], lat: drag[1], sigma_m: Number(sigma.value), source: 'drag', t_eva_min: clock.t, last_fix: null }
-        : drift && !data.nav
+        : drift
           ? driftPosition(ctx.plan, cfg, data.fixes, clock.t)
           : playbackPosition(ctx.plan, clock.t)
       const st = stormState(storm, clock.t)
-      const f = hudFrame(base, { ...ctx, radiation: radiationInput(st) }, drift ? data.nav : null)
+      const f = hudFrame(base, { ...ctx, radiation: radiationInput(st) }, odo ? data.nav : null)
       const pos = f.pos
       const r = f.readout
       const way = wayHomeView(data.pointer, drag, ctx.pad)
@@ -357,7 +377,7 @@ export async function mountHud(container: HTMLElement, opts: MountHudOptions): P
         rad: data.rad,
         dummy: data.dummy,
         minimap: mini.canvas,
-        sources: readoutSources(r, { scenario: data.scenario, consScenario: data.consScenario, padFromFile: data.padFromFile, partnerFile: data.partnerFile, sunSources: sun ? sunSources(sun) : null }),
+        sources: readoutSources(r, { scenario: data.scenario, consScenario: data.consScenario, padFromFile: data.padFromFile, partnerFile: data.partnerFile, sunSources: sun ? sunSources(sun) : null, storm: st }),
         sun: sun ? sunRowText(sun) : null,
         wayHome: way.panel,
         storm: st,
