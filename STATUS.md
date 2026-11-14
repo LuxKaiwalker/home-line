@@ -696,3 +696,7 @@ Branch: `ws10-vo`
 | 2026-11-14 11:24 | D3 Source mask origin | A: STAC footprint quads (SPEC §11) | User |
 | 2026-11-14 11:24 | D16 X8 visual odometry | Go at 256² only; stop rule per SPEC §2.4 | User (for N) |
 | 2026-11-14 11:24 | `pad_default` | Keep unchanged (drive-end centroids 74–265 m away, reported by WS1) | User |
+| 2026-11-14 11:40 | Stations on blocked cells (S1 57°, S2 40°, S4 24° max slope) | **Access-cell rule**: keep each station's science coordinate; route to the nearest walkable cell within `access_radius_m` (50 m, assumed) and show both points plus the walk-in distance on the card; no snapping | User |
+| 2026-11-14 11:42 | Isochrone display size (nom_104 2.7 MB gz vs 1.5 MB budget) | Display filter: drop holes < 100 m² (measured 1.19 MB gz); keep 1-min steps if within budget, else the 2-min fallback | C |
+| 2026-11-14 11:42 | Station card producer | WS3 writes `horizon/public/cards/{S}.json` fragments (navcam, skyline error, panorama, landmarks); WS2 writes the timeline/margin part; `make web` (C) merges into `cards/{S}.json` | C |
+| 2026-11-14 11:42 | Basemap | WebP q80, z13–18, 33.1 MB (`config/web.yaml`) | C |
