@@ -823,9 +823,14 @@ Branch: `ws2-engine`
     - `dose_leash` (12): tau = 60 D_allow / Ddot for D_allow 0.25/0.5/1.0 mGy x 226/3000/6000/24000 uGy/day.
     - `route` (1): 3 % plane, 3 stations, nominal 104 kg, t_dark 578.6, static tau 113.7: legs with per-vertex xyz / tau / O2 / T_home / O2_home, way-home series per station, expected order A -> C -> B (119.09 min, 7 feasible subsets) and 14 timeline rows with their inputs.
   - Before → after (session 7 → 8): everything identical except the files listed above (diff of the public tree: `scenarios/index.json`, `trade_table.json`, `scenarios/pads/index.json`, 4 picker summaries; new `physio/golden.json`).
+
+- 2026-11-14 (session 9): **D44 names in the engine's public files, no recompute.** New `python -m pipeline.engine.scenarios --stations-only` (`scenarios.stations_names_patch`, needs no grid): copies WS1's `name`, plus `name_base` and `name_suffix` where WS1 has them (S6, S7), into every published file with a station-keyed `name`. It refuses (exit 3, writes nothing, says "do a full re-run") if the station ids, lon/lat (6 dp), `value` or `dwell_min` differ from `stations.json`, or a card's `science` point differs from WS1's. `station_records` (full run) now passes `name_base`/`name_suffix` through the same way. KATs first: `tests/test_station_names.py` (12 tests: other files byte-identical, non-name fields and key order equal, idempotent, cards with names renamed, refusal on lon/lat/ids/value/dwell/card point), plus an e2e no-op check after a full run in `test_main_on_synthetic_terrain`. Code commit acf85b1.
+  - Run from clean acf85b1: **only `stations.json` changed** (sha256 of all 64 public files compared before and after). S6 = "dense ridge network + high SINDEX2 sulfate signal (south-west, nearer)", S7 = "… (south-west, farther)", S1/S2/S4/S8 unchanged. Every non-name field is equal. Manifest: `file.stations.json` re-recorded at acf85b1, and no engine key is `-dirty`. `validate_contracts --interim` OK.
+  - Card timeline parts (`cards/{S}.timeline.json`), picker summaries, timelines and routes carry **no station names** (only ids), so they were not rewritten. WS1's top-level `same_name_suffix` block is not copied: the web `stations.json` is a contract array with no top level.
+  - Downstream: `make web` (C) picks up the new names. WS3 cards and WS5 read the names from there.
 ### Doing
 
-- Waiting for C: merge session 8; contracts for `physio/golden.json` (+ make_web rule), `headline_60` in scenarios_index, `feasible` in pads index/summary, trade cell `in_data_pct`.
+- Waiting for C: merge sessions 8 and 9; contracts for `physio/golden.json` (+ make_web rule), `headline_60` in scenarios_index, `feasible` in pads index/summary, trade cell `in_data_pct`.
 
 ### Next
 
