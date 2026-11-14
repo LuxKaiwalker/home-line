@@ -525,6 +525,23 @@ def test_build_index_validates_and_matches_dummy_shape(dummy_grid, dummy_index, 
 
 
 # ------------------------------------------------------------------------ sun (Mars24) ----
+def test_manifest_keys_cite_the_web_index_path(tmp_path):
+    """The fp3d.* keys cite fp3d/index.json, the path make web publishes (contracts README
+    "make web sources"), never the data/interim/export/ source: make web drops those."""
+    mb = terrain_chunks.record_manifest(
+        download_bytes=12_345_678, near_chunks=7, near_res_m=1.0, far_res_m=8.0,
+        far_extent_m=12345.6, corridor_half_width_m=150, fragment_dir=tmp_path)
+    assert mb == 12.35
+    frag = json.loads(next(tmp_path.glob("*terrain_chunks.json")).read_text())
+    assert set(frag) == {"fp3d.download_mb", "fp3d.near_chunks", "fp3d.near_res_m",
+                         "fp3d.far_res_m", "fp3d.far_extent_m", "fp3d.corridor_half_width_m"}
+    assert {e["file"] for e in frag.values()} == {"fp3d/index.json"}
+    assert frag["fp3d.download_mb"]["value"] == 12.35
+    assert frag["fp3d.near_chunks"]["value"] == 7
+    assert frag["fp3d.far_extent_m"] == {**frag["fp3d.far_extent_m"], "value": 12345.6,
+                                         "units": "m"}
+
+
 # The 3D view's sun is WS4's Mars24 series in conditions/clock.json (eva.sun_series), read by
 # web/src/fp3d/sun.ts. KAT: the committed series equals WS4's sun API (pipeline/conditions/sun.py)
 # at eva_start + t, so the browser lights the scene with the API's sun, interpolated only.

@@ -41,6 +41,7 @@ REPO = Path(__file__).resolve().parents[2]
 CONFIG_DIR = REPO / "config"
 CONTRACTS = REPO / "contracts"
 DEFAULT_OUT = REPO / "data" / "interim" / "export"  # files land in <out>/fp3d/... (make web source)
+WEB_INDEX = "fp3d/index.json"  # published path of <out>/fp3d/index.json (make web); manifest file
 
 NEAR_DIR = "fp3d/near"
 TEX_DIR = "fp3d/near_tex"
@@ -448,6 +449,26 @@ def _read_raster(path: Path):
         return arr, ds.transform
 
 
+def record_manifest(*, download_bytes: int, near_chunks: int, near_res_m: float,
+                    far_res_m: float, far_extent_m: float, corridor_half_width_m: float,
+                    fragment_dir: str | Path | None = None) -> float:
+    """Record the fp3d.* numbers shown in the app, citing the web path ``fp3d/index.json``
+    (make web publishes data/interim/export/fp3d/index.json there and drops entries that cite
+    the interim source). Returns the download size in MB."""
+    from pipeline.provenance.manifest import record
+
+    mb = round(download_bytes / 1e6, 2)
+    rows = {"fp3d.download_mb": (mb, "MB"),
+            "fp3d.near_chunks": (near_chunks, None),
+            "fp3d.near_res_m": (near_res_m, "m"),
+            "fp3d.far_res_m": (far_res_m, "m"),
+            "fp3d.far_extent_m": (round(far_extent_m, 1), "m"),
+            "fp3d.corridor_half_width_m": (corridor_half_width_m, "m")}
+    for key, (value, units) in rows.items():
+        record(key, value, units, WEB_INDEX, __file__, fragment_dir=fragment_dir)
+    return mb
+
+
 def _repo_rel(p) -> str:
     """Path relative to the repo (``data/`` is a symlink, so no resolve())."""
     a = Path(p).absolute()
@@ -542,16 +563,10 @@ def main(argv: list[str] | None = None) -> int:
     out_index = args.out / "fp3d" / "index.json"
     out_index.write_text(json.dumps(idx, indent=1) + "\n", encoding="utf-8")
 
-    from pipeline.provenance.manifest import record
-
-    mb = round(idx["download_bytes"] / 1e6, 2)
-    record("fp3d.download_mb", mb, "MB", out_index, __file__)
-    record("fp3d.near_chunks", len(near), None, out_index, __file__)
-    record("fp3d.near_res_m", grid.res_m, "m", out_index, __file__)
-    record("fp3d.far_res_m", f3["far"]["res_m"], "m", out_index, __file__)
-    record("fp3d.far_extent_m", round(fgrid.extent_m, 1), "m", out_index, __file__)
-    record("fp3d.corridor_half_width_m", f3["near"]["corridor_half_width_m"], "m", out_index,
-           __file__)
+    mb = record_manifest(download_bytes=idx["download_bytes"], near_chunks=len(near),
+                         near_res_m=grid.res_m, far_res_m=f3["far"]["res_m"],
+                         far_extent_m=fgrid.extent_m,
+                         corridor_half_width_m=f3["near"]["corridor_half_width_m"])
     print(f"fp3d: {len(near)} near chunks, {len(tex)} textures, far {far['width']}x{far['height']}"
           f", {mb:.1f} MB -> {args.out / 'fp3d'}; skyline check stations: "
           f"{[s['id'] for s in check['stations']] if check else 'none'}")
