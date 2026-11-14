@@ -119,8 +119,14 @@ class Frame:
 
 
 # --------------------------------------------------------------------------------- config ----
+# D57: server-only settings (rate limits, CORS, gates) are not engine inputs; leaving them out keeps
+# the config hash, the config snapshot and every result hash stable when a limit changes.
+NON_ENGINE_CONFIG = ("backend.yaml",)
+
+
 def config_files(config_dir: Path = CONFIG) -> list[Path]:
-    return sorted(config_dir.glob("*.yaml"), key=lambda p: p.name)
+    return sorted((p for p in config_dir.glob("*.yaml") if p.name not in NON_ENGINE_CONFIG),
+                  key=lambda p: p.name)
 
 
 def config_hash(config_dir: Path = CONFIG) -> str:
