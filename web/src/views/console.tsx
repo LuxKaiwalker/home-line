@@ -1,14 +1,15 @@
 // "/" planning console (F17): map + side panel. Default view per SPEC F17: basemap, 30-min nominal
 // band, edge causes, stations; everything else behind toggles. Budget slider (F5), scenario picker (F6).
-import { render } from 'preact'
+import { render, type ComponentChildren } from 'preact'
 import { useEffect, useMemo, useState } from 'preact/hooks'
-import { CONFIG } from '../config'
+import { CITED, CONFIG } from '../config'
 import { data } from '../data/loader'
+import { accessFor } from '../data/access'
 import { unknownMaskField } from '../data/fields'
-import type { ScenarioEntry, ScenariosIndex, Station } from '../data/types'
+import type { RouteFC, ScenarioEntry, ScenariosIndex, Station, TimelineEvent } from '../data/types'
 import { dataUrl } from '../env'
 import { ConsoleMap, DEFAULT_VISIBLE, type LayerGroup } from '../map/consoleMap'
-import { BASEMAP_PLACEHOLDER_NOTE } from '../map/basemap'
+import { BASEMAP_CREDIT, basemapSources } from '../map/basemap'
 import { loadAlpha } from '../map/hatch'
 import { padMarker, type PadMarkerInfo } from '../map/pad'
 import { binEdges, binLabelsFor } from '../map/legend'
@@ -18,6 +19,7 @@ import { THEME } from '../theme'
 import { AssumedTag, DataProblem, DummyNote } from '../components/labels'
 import { CfgNum, Num } from '../components/Num'
 import { ensureManifest } from './common'
+import { routeSummary } from './route'
 import type { View } from './types'
 
 const LAYER_LABELS: Record<LayerGroup, string> = {
@@ -60,10 +62,13 @@ function ConsolePanel({ cmap }: { cmap: ConsoleMap }) {
   const [sliderMin, setSliderMin] = useState<number>(CONFIG.walkbackBudgetsMin[0])
   const [isoMinutes, setIsoMinutes] = useState<number[]>([])
   const [visible, setVisible] = useState<Record<LayerGroup, boolean>>({ ...DEFAULT_VISIBLE })
-  const [notes, setNotes] = useState<Partial<Record<LayerGroup, string>>>({ basemap: BASEMAP_PLACEHOLDER_NOTE })
+  const [notes, setNotes] = useState<Partial<Record<LayerGroup, ComponentChildren>>>({})
   const [padInfo, setPadInfo] = useState<PadMarkerInfo | null>(null)
+  const [route, setRoute] = useState<RouteFC | null>(null)
+  const [timeline, setTimeline] = useState<TimelineEvent[] | null>(null)
+  const [credit, setCredit] = useState<string | null>(null)
 
-  const note = (k: LayerGroup, v: string) => setNotes((n) => ({ ...n, [k]: v }))
+  const note = (k: LayerGroup, v: ComponentChildren) => setNotes((n) => ({ ...n, [k]: v }))
 
   // Static layers: index, pad, stations, unknown mask.
   useEffect(() => {
@@ -91,20 +96,52 @@ function ConsolePanel({ cmap }: { cmap: ConsoleMap }) {
         const st = await L.stations()
         if (!alive) return
         setStations(st)
-        cmap.setStations(st)
         cmap.fitTo([...st, pad])
       } catch (e) {
         note('stations', e instanceof Error ? e.message : String(e))
       }
-      // Hatched unknowns (F1): alpha of the shared slope field, A = 0 unknown (SPEC §6.1).
+      // Basemap (F17): tiles/basemap/tilejson.json (contract v1.1.0).
       try {
+        const tj = await L.optional(() => L.tilejson())
+        if (!alive) return
+        if (!tj) {
+          note('basemap', 'tiles/basemap/tilejson.json not available yet: plain background')
+        } else {
+          const src = basemapSources(tj, (p) => dataUrl(p))
+          await cmap.setBasemap(src)
+          setCredit(tj.attribution ?? BASEMAP_CREDIT)
+          note('basemap', `HiRISE colour ortho, z${tj.minzoom}–${tj.maxzoom}${tj.zoom_bounds ? ` (z${Object.keys(tj.zoom_bounds).join('/z')} near the stations)` : ''}`)
+        }
+      } catch (e) {
+        note('basemap', e instanceof Error ? e.message : String(e))
+      }
+      // Hatched unknowns (F1): terrain/cellstate.png alpha (A = 0 unknown, contract v1.1.0);
+      // without it, the alpha of the shared slope field (SPEC §6.1).
+      try {
+        const cs = await L.optional(() => L.cellstate())
+        if (cs) {
+          const a = await loadAlpha(dataUrl(cs.image))
+          if (a.width !== cs.width || a.height !== cs.height) return note('unknown', `${cs.image} is ${a.width}×${a.height}, cellstate.json says ${cs.width}×${cs.height}`)
+          await cmap.setUnknownMask({ ...a, bounds: cs.bounds })
+          const pct = cs.pct?.unknown
+          if (alive)
+            note(
+              'unknown',
+              <>
+                F1 cell states, {cs.res_m} m cells; unknown{' '}
+                {pct === undefined ? '(share not given)' : <Num v={pct} units="%" file="terrain/cellstate.json" k="terrain.cellstate.pct.unknown" />}
+                {pct === 0 ? ' (nothing to hatch: every cell is HiRISE-assessed)' : ''}
+              </>,
+            )
+          return
+        }
         const fi = await L.optional(() => L.fieldsIndex())
         const g = fi && unknownMaskField(fi)
-        if (!g) return note('unknown', fi ? 'no shared slope field in fields/index.json' : 'fields/index.json not available yet')
+        if (!g) return note('unknown', fi ? 'no cell states and no shared slope field' : 'terrain/cellstate.json not available yet')
         const a = await loadAlpha(dataUrl(g.file))
         if (a.width !== g.width || a.height !== g.height) return note('unknown', `${g.file} is ${a.width}×${a.height}, index says ${g.width}×${g.height}`)
         await cmap.setUnknownMask({ ...a, bounds: g.bounds })
-        if (alive) note('unknown', `from ${g.file} (A = 0)`)
+        if (alive) note('unknown', `from ${g.file} (A = 0; no terrain/cellstate.json)`)
       } catch (e) {
         note('unknown', e instanceof Error ? e.message : String(e))
       }
@@ -115,6 +152,11 @@ function ConsolePanel({ cmap }: { cmap: ConsoleMap }) {
   }, [])
 
   const scenario = useMemo(() => idx?.scenarios.find((s) => s.id === scenarioId) ?? null, [idx, scenarioId])
+
+  // Science points, access cells and walk-in lines depend on the scenario (WS2 access per scenario).
+  useEffect(() => {
+    if (stations && scenario) void cmap.setStations(stations, scenario.id)
+  }, [stations, scenario])
 
   // Scenario layers.
   useEffect(() => {
@@ -133,11 +175,14 @@ function ConsolePanel({ cmap }: { cmap: ConsoleMap }) {
         if (alive) setError(e)
       }
       try {
-        const route = await L.optional(() => L.route(scenario.id))
+        const r = await L.optional(() => L.route(scenario.id))
         if (!alive) return
-        await cmap.setRoute(route)
-        note('route', route ? '' : `no route_${scenario.id}.geojson yet`)
+        setRoute(r)
+        setTimeline(r ? await L.optional(() => L.timeline(scenario.id)) : null)
+        await cmap.setRoute(r)
+        note('route', r ? (routeSummary(r) ? '' : `route_${scenario.id}.geojson has no legs (no reachable station)`) : `no route for ${scenario.id}`)
       } catch (e) {
+        setRoute(null)
         if (alive) note('route', e instanceof Error ? e.message : String(e))
       }
     })()
@@ -181,12 +226,21 @@ function ConsolePanel({ cmap }: { cmap: ConsoleMap }) {
           <Num v={h.reachable_pct} units="%" file="scenarios/index.json" k={`reachable_pct.${scenario.id}.${hb}`} />
         </div>
         <div class="headline-text">
-          reachable <span class="muted">(</span>
-          <Num v={h.range_pct[0]} units="%" file="scenarios/index.json" k={`reachable_pct_range.${scenario.id}.${hb}.low`} />–
-          <Num v={h.range_pct[1]} units="%" file="scenarios/index.json" k={`reachable_pct_range.${scenario.id}.${hb}.high`} />
-          <span class="muted">)</span> of the <i>assessed</i> flat disc within {hb} min
+          reachable of the <i>assessed</i> flat disc within {hb} min.
+          <br />
+          Range{' '}
+          {h.range_pct[0] === null ? (
+            <span class="pending" title="The conservative variant needs the V1 tilt RMSE (WS6 validation/v1.json); until then the low end is not computed">
+              conservative end pending V1
+            </span>
+          ) : (
+            <Num v={h.range_pct[0]} units="%" file="scenarios/index.json" k={`reachable_pct_range.${scenario.id}.${hb}.low`} />
+          )}{' '}
+          to <Num v={h.range_pct[1]} units="%" file="scenarios/index.json" k={`reachable_pct_range.${scenario.id}.${hb}.high`} /> (optimistic)
         </div>
       </section>
+
+      <RouteSection scenarioId={scenario.id} route={route} timeline={timeline} shown={visible.route} onShow={(on) => toggle('route', on)} />
 
       <section>
         <h3>Scenario</h3>
@@ -238,7 +292,9 @@ function ConsolePanel({ cmap }: { cmap: ConsoleMap }) {
           <input type="checkbox" checked={visible.slider} onChange={(e) => toggle('slider', (e.target as HTMLInputElement).checked)} />
           Budget slider (0–{CONFIG.isochroneMinutes.max} min)
         </label>
-        {visible.slider && isoMinutes.length > 0 && <BudgetSlider values={isoMinutes} value={sliderMin} onChange={setSliderMin} file={scenario.files.isochrones} />}
+        {visible.slider && isoMinutes.length > 0 && (
+          <BudgetSlider values={isoMinutes} value={sliderMin} onChange={setSliderMin} file={scenario.files.isochrones} scenarioId={scenario.id} />
+        )}
       </section>
 
       <section>
@@ -254,7 +310,7 @@ function ConsolePanel({ cmap }: { cmap: ConsoleMap }) {
           ))}
       </section>
 
-      <Legend visible={visible} budget={budget} variant={scenario.variant} minutes={isoMinutes} pad={padInfo} />
+      <Legend visible={visible} budget={budget} variant={scenario.variant} minutes={isoMinutes} pad={padInfo} credit={credit} />
 
       <section>
         <h3>Stations</h3>
@@ -263,28 +319,59 @@ function ConsolePanel({ cmap }: { cmap: ConsoleMap }) {
             <thead>
               <tr>
                 <th>Station</th>
-                <th class="r" title="Walk home from the station, this scenario">
+                <th class="r" title="Straight-line walk-in from the access cell to the science point (not modelled)">
+                  Walk-in
+                </th>
+                <th class="r" title="Walk home from the access cell, this scenario">
                   Home
                 </th>
               </tr>
             </thead>
             <tbody>
-              {stations.map((s) => (
-                <tr>
-                  <td>
-                    <a href={href({ name: 'station', id: s.id })}>
-                      <b>{s.id}</b> {s.name}
-                    </a>
-                  </td>
-                  <td class="r">
-                    <Num v={s.t_home_min[scenario.id] ?? null} units="min" file="stations.json" k={`t_home_min.${s.id}.${scenario.id}`} />
-                  </td>
-                </tr>
-              ))}
+              {stations.map((s) => {
+                const a = accessFor(s, scenario.id)
+                return (
+                  <tr>
+                    <td>
+                      <a href={href({ name: 'station', id: s.id })}>
+                        <b>{s.id}</b> {s.name}
+                      </a>
+                    </td>
+                    <td class="r">
+                      {a.state === 'access' ? (
+                        <Num v={a.dist_m} units="m" file={a.file} k={`${a.keyPrefix}.dist_m`} />
+                      ) : a.state === 'none' ? (
+                        <span class="num-unknown" title={a.reason ?? ''}>
+                          no access cell
+                        </span>
+                      ) : (
+                        <span class="num-unknown">unknown</span>
+                      )}
+                    </td>
+                    <td class="r">
+                      <Num v={s.t_home_min[scenario.id] ?? null} units="min" file="stations.json" k={`t_home_min.${s.id}.${scenario.id}`} />
+                    </td>
+                  </tr>
+                )
+              })}
             </tbody>
           </table>
         ) : (
           <p class="muted">{notes.stations || 'Loading…'}</p>
+        )}
+        {stations && (
+          <p class="caption">
+            Access-cell rule: each station keeps its science point (filled marker); the route ends at the nearest walkable cell within{' '}
+            <CfgNum v={CITED.accessRadiusM.value} units="m" source={CITED.accessRadiusM.source} /> (open circle, dotted walk-in line).{' '}
+            <AssumedTag note="Access radius: assumed (WS2), user chose the rule 2026-11-14 11:40" /> The walk-in leg is not modelled.
+            {stations.some((s) => accessFor(s, scenario.id).state === 'none') && (
+              <>
+                {' '}
+                <b>{stations.filter((s) => accessFor(s, scenario.id).state === 'none').map((s) => s.id).join(', ')}</b>: no access cell within the radius, so no walk home
+                is computed (hover for the reason).
+              </>
+            )}
+          </p>
         )}
       </section>
     </div>
@@ -295,7 +382,7 @@ function ConsolePanel({ cmap }: { cmap: ConsoleMap }) {
  * Budget slider over the contours that exist (isochrones.geojson `minutes`): the range input runs
  * over their indices, so dragging, clicking and the arrow keys always land on a real contour.
  */
-function BudgetSlider({ values, value, onChange, file }: { values: number[]; value: number; onChange: (v: number) => void; file: string }) {
+function BudgetSlider({ values, value, onChange, file, scenarioId }: { values: number[]; value: number; onChange: (v: number) => void; file: string; scenarioId: string }) {
   const v = snapMinutes(values, value) ?? values[0]
   const i = values.indexOf(v)
   const step = uniformStep(values)
@@ -321,17 +408,25 @@ function BudgetSlider({ values, value, onChange, file }: { values: number[]; val
       <span class="slider-value">{v} min</span>
       <span class="caption slider-steps">
         Where the crew can be and still walk home within {v} min. Contours {values[0]}–{values[values.length - 1]} min,{' '}
-        {step !== null ? `${step}-min steps` : `${values.length} contours`} (<code>{file}</code>).
+        {step !== null ? (
+          <>
+            <Num v={step} units="min" file={file} k={`isochrone_step_min.${scenarioId}`} /> steps
+            {step === CONFIG.isochroneFallbackStepMin && step !== CONFIG.isochroneMinutes.step ? ' (size fallback; config/variants.yaml isochrone_fallback_step_min)' : ''}
+          </>
+        ) : (
+          `${values.length} contours`
+        )}{' '}
+        (<code>{file}</code>).
       </span>
     </div>
   )
 }
 
-function Swatch({ kind, color, dashed }: { kind: 'fill' | 'line' | 'hatch' | 'dot' | 'pad'; color?: string; dashed?: boolean }) {
+function Swatch({ kind, color, dashed }: { kind: 'fill' | 'line' | 'hatch' | 'dot' | 'ring' | 'pad'; color?: string; dashed?: boolean }) {
   return <span class={`sw sw-${kind}${dashed ? ' sw-dashed' : ''}`} style={color ? { '--c': color } : undefined} />
 }
 
-function Legend(p: { visible: Record<LayerGroup, boolean>; budget: number; variant: string; minutes: number[]; pad: PadMarkerInfo | null }) {
+function Legend(p: { visible: Record<LayerGroup, boolean>; budget: number; variant: string; minutes: number[]; pad: PadMarkerInfo | null; credit: string | null }) {
   const v = p.visible
   const edges = binEdges(CONFIG.isochroneMinutes.max, THEME.isoBinStepMin) // same bins as the map colour ramp
   return (
@@ -340,7 +435,15 @@ function Legend(p: { visible: Record<LayerGroup, boolean>; budget: number; varia
       <ul>
         {v.basemap && (
           <li>
-            <Swatch kind="fill" color={THEME.mapBackground} /> Basemap {BASEMAP_PLACEHOLDER_NOTE}
+            {p.credit ? (
+              <>
+                Basemap: HiRISE colour ortho <span class="muted">({p.credit})</span>
+              </>
+            ) : (
+              <>
+                <Swatch kind="fill" color={THEME.mapBackground} /> Basemap not available: plain background
+              </>
+            )}
           </li>
         )}
         {v.bands && (
@@ -375,7 +478,8 @@ function Legend(p: { visible: Record<LayerGroup, boolean>; budget: number; varia
           ))}
         {v.stations && (
           <li>
-            <Swatch kind="dot" color={THEME.station} /> science station (click for its card) · <Swatch kind="pad" /> rover pad
+            <Swatch kind="dot" color={THEME.station} /> science point (click for its card) · <Swatch kind="ring" color={THEME.station} /> access cell, dotted walk-in ·{' '}
+            <Swatch kind="pad" /> rover pad
             {p.pad ? <span class="muted"> ({p.pad.sourceLabel})</span> : null}
           </li>
         )}
@@ -391,6 +495,52 @@ function Legend(p: { visible: Record<LayerGroup, boolean>; budget: number; varia
           </li>
         )}
       </ul>
+    </section>
+  )
+}
+
+/** F9 route (simulated EVA): stop order from the route legs, times from the timeline (manifest-backed). */
+function RouteSection(p: { scenarioId: string; route: RouteFC | null; timeline: TimelineEvent[] | null; shown: boolean; onShow: (on: boolean) => void }) {
+  const r = routeSummary(p.route)
+  const tf = `timeline_${p.scenarioId}.json`
+  if (!r) {
+    return (
+      <section>
+        <h3>Planned route</h3>
+        <p class="muted">No route for {p.scenarioId}{p.route ? ' (no reachable station)' : ''}.</p>
+      </section>
+    )
+  }
+  const tl = p.timeline ?? []
+  const at = (event: string, station: string | null) => {
+    const i = tl.findIndex((e) => e.event === event && e.station === station)
+    return i < 0 ? null : <Num v={tl[i].t_min} units="min" file={tf} k={`timeline.${p.scenarioId}.${i}.t_min`} />
+  }
+  return (
+    <section>
+      <h3>
+        Planned route <span class="tag tag-simulated">simulated EVA</span>
+      </h3>
+      <ol class="route-stops">
+        {r.stops.map((st, i) => {
+          const first = i === 0
+          const last = i === r.stops.length - 1
+          const t = first ? at('depart', null) : last ? at('return', null) : at('arrive', st)
+          return (
+            <li>
+              {st === 'pad' ? 'Pad' : <a href={href({ name: 'station', id: st })}>{st}</a>}
+              {t ? <span class="muted"> · {first ? 'depart' : last ? 'back' : 'arrive'} </span> : null}
+              {t}
+            </li>
+          )
+        })}
+      </ol>
+      <p>
+        Total <Num v={r.endMin} units="min" file={tf} k={`route.${p.scenarioId}.total_min`} />{' '}
+        <label class="toggle inline">
+          <input type="checkbox" checked={p.shown} onChange={(e) => p.onShow((e.target as HTMLInputElement).checked)} /> show on map
+        </label>
+      </p>
     </section>
   )
 }

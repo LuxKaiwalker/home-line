@@ -9,7 +9,7 @@ import { linear, log10Scale, logTicks, polyline } from '../chart/scale'
 import { AssumedTag, DummyNote, StatusTag } from '../components/labels'
 import { LooseTable } from '../components/Loose'
 import { CfgNum, DerivedNum, Num } from '../components/Num'
-import { sliderStops, tauMin } from './leash'
+import { leashSteps, tauMin } from './leash'
 import { Page, preactView, Show, useLoad } from './page'
 
 const F = 'conditions/rad.json'
@@ -84,48 +84,56 @@ export function RadChart({ rad }: { rad: Rad }) {
   )
 }
 
-/** D9: dose allowance slider. Off the file's default, tau is recomputed with the config formula. */
+/**
+ * D9: dose allowance slider. Range and step from config/conditions.yaml (build time); tau per step
+ * from rad.json leash.table (manifest keys rad.leash.table.{i}.*). A step the table lacks is
+ * computed in the browser with the config formula and labelled so.
+ */
 export function LeashSlider({ rad }: { rad: Rad }) {
-  const sl = CONFIG.dAllowSliderMgy
+  const steps = leashSteps(CONFIG.dAllowRangeMgy, CONFIG.dAllowStepMgy, rad.leash.table)
   const d0 = rad.leash.D_allow_mGy ?? CONFIG.dAllowMgy
   const [d, setD] = useState(d0)
-  if (!sl) {
-    return (
-      <p class="muted">
-        Dose-allowance slider (D9): waiting for its range in <code>config/conditions.yaml</code> (<code>leash.d_allow_slider_mgy</code>); the page will not
-        invent one.
-      </p>
-    )
-  }
-  const stops = sliderStops(sl.min, sl.max, sl.step)
-  const i = Math.max(0, stops.findIndex((s) => Math.abs(s - d) < 1e-9))
-  const atDefault = Math.abs(d - d0) < 1e-9
+  const i = Math.max(0, steps.findIndex((s) => Math.abs(s.d - d) < 1e-9))
+  const st = steps[i]
   const peak = rad.storm_2024.peak_uGy_day
   const latest = rad.latest.dose_rate_uGy_day
-  const how = (rate: string) => `60 × D_allow / Ḋ (config/conditions.yaml leash.formula), D_allow = ${d} mGy, Ḋ = ${rate} from ${F}`
+  const how = (rate: string) => `60 × D_allow / Ḋ (config/conditions.yaml leash.formula), D_allow = ${st.d} mGy, Ḋ = ${rate} from ${F}`
+  const k = (f: string) => `rad.leash.table.${st.rowIndex}.${f}`
   return (
     <div class="leash-slider">
       <label>
         Dose allowance per EVA{' '}
-        <input type="range" min={0} max={stops.length - 1} step={1} value={i} aria-label="Dose allowance per EVA" onInput={(e) => setD(stops[+(e.target as HTMLInputElement).value])} />{' '}
-        <b>{d} mGy</b> <AssumedTag note="Dose allowance per EVA: our assumption (D9), adjustable" />
+        <input
+          type="range"
+          min={0}
+          max={steps.length - 1}
+          step={1}
+          value={i}
+          aria-label="Dose allowance per EVA"
+          aria-valuetext={`${st.d} mGy`}
+          onInput={(e) => setD(steps[+(e.target as HTMLInputElement).value].d)}
+        />{' '}
+        <b>{st.row ? <Num v={st.row.D_allow_mGy} units="mGy" file={F} k={k('D_allow_mGy')} /> : `${st.d} mGy`}</b>{' '}
+        <AssumedTag note="Dose allowance per EVA: our assumption (D9), adjustable" />
       </label>
       <dl class="leash-out">
         <dt>Time on the allowance at the storm peak</dt>
         <dd class="strong">
-          {atDefault ? (
-            <Num v={rad.leash.tau_min_at_peak} units="min" file={F} k="rad.leash.tau_min_at_peak" />
-          ) : (
-            <DerivedNum v={roundTenth(tauMin(d, peak))} units="min" how={how('storm peak')} />
-          )}
+          {st.row ? <Num v={st.row.tau_min_at_peak} units="min" file={F} k={k('tau_min_at_peak')} /> : <DerivedNum v={roundTenth(tauMin(st.d, peak))} units="min" how={how('storm peak')} />}
         </dd>
         <dt>… at the latest measured rate</dt>
         <dd>
-          <DerivedNum v={roundTenth(tauMin(d, latest))} units="min" how={how('latest rate')} />
+          {st.row ? (
+            <Num v={st.row.tau_min_at_latest} units="min" file={F} k={k('tau_min_at_latest')} />
+          ) : (
+            <DerivedNum v={roundTenth(tauMin(st.d, latest))} units="min" how={how('latest rate')} />
+          )}
         </dd>
       </dl>
       <p class="caption">
-        At the default allowance the value is the pipeline's (rad.json); other allowances are computed in the browser from the same backed rate.
+        Range <CfgNum v={`${CONFIG.dAllowRangeMgy[0]}–${CONFIG.dAllowRangeMgy[1]}`} units="mGy" source="config/conditions.yaml: leash.d_allow_range_mgy" /> in{' '}
+        <CfgNum v={CONFIG.dAllowStepMgy} units="mGy" source="config/conditions.yaml: leash.d_allow_step_mgy" /> steps; each value is the pipeline's (rad.json leash table)
+        {steps.some((s) => !s.row) ? '; steps missing from the table are computed in the browser from the same backed rate and marked so' : ''}.
       </p>
     </div>
   )
@@ -148,12 +156,12 @@ function Context() {
           <h3>
             Mars clock and sun <StatusTag kind="modelled" />
           </h3>
-          {clock ? <LooseTable value={clock} file="conditions/clock.json" /> : <p class="muted">conditions/clock.json not available yet (WS4).</p>}
+          {clock ? <ClockView c={clock} /> : <p class="muted">conditions/clock.json not available yet (WS4).</p>}
 
           <h3>
             Weather (REMS same-season climatology) <StatusTag kind="real" />
           </h3>
-          {rems ? <LooseTable value={rems} file="conditions/rems.json" /> : <p class="muted">conditions/rems.json not available yet (WS4).</p>}
+          {rems ? <RemsTable r={rems} /> : <p class="muted">conditions/rems.json not available yet (WS4).</p>}
           <p class="caption">
             The REMS feed is stale since <CfgNum v={CITED.remsStaleSince.value} source={CITED.remsStaleSince.source} />.
           </p>
@@ -237,3 +245,98 @@ function ConditionsView() {
 }
 
 export const view = preactView(() => <ConditionsView />)
+
+const CF = 'conditions/clock.json'
+
+/** WS4 clock.json: the simulated EVA window and daylight, and Mars time at H0 (structure from WS4). */
+function ClockView({ c }: { c: Record<string, unknown> }) {
+  const eva = c.eva as Record<string, unknown> | undefined
+  const h0 = c.h0 as Record<string, unknown> | undefined
+  if (!eva || !h0) return <LooseTable value={c} file={CF} />
+  const n = (o: Record<string, unknown>, f: string) => (typeof o[f] === 'number' || typeof o[f] === 'string' ? (o[f] as number | string) : null)
+  return (
+    <>
+      <dl class="kv-grid">
+        <dt>
+          Simulated EVA <span class="tag tag-simulated">simulated</span>
+        </dt>
+        <dd>
+          sol <Num v={n(eva, 'msl_sol')} file={CF} k="clock.eva.msl_sol" />, start <Num v={n(eva, 'start_lmst')} file={CF} k="clock.eva.start_lmst" /> LMST (
+          <Num v={n(eva, 'start_utc')} file={CF} k="clock.eva.start_utc" fmt={utcLabel} />) to <Num v={n(eva, 'end_utc')} file={CF} k="clock.eva.end_utc" fmt={utcLabel} />,{' '}
+          <Num v={n(eva, 'eva_min')} units="min" file={CF} k="clock.eva.eva_min" />
+        </dd>
+        <dt>Daylight left at EVA start</dt>
+        <dd>
+          <b>
+            <Num v={n(eva, 't_dark_min')} units="min" file={CF} k="clock.eva.t_dark_min" />
+          </b>{' '}
+          (sunset on a flat horizon <Num v={n(eva, 'sunset_flat_utc')} file={CF} k="clock.eva.sunset_flat_utc" fmt={utcLabel} />)
+        </dd>
+        <dt>Mars time at H0</dt>
+        <dd>
+          sol <Num v={n(h0, 'msl_sol')} file={CF} k="clock.h0.msl_sol" />, LMST <Num v={n(h0, 'lmst')} file={CF} k="clock.h0.lmst" />, Ls{' '}
+          <Num v={n(h0, 'ls_deg')} units="deg" file={CF} k="clock.h0.ls_deg" />, Mars year <Num v={n(h0, 'mars_year')} file={CF} k="clock.h0.mars_year" />; one-way light time{' '}
+          <Num v={n(h0, 'light_time_min')} units="min" file={CF} k="clock.h0.light_time_min" />
+        </dd>
+      </dl>
+      {typeof eva.note === 'string' && <p class="caption">{eva.note}</p>}
+      {typeof c.algorithm === 'string' && <p class="caption">Clock: {c.algorithm}.</p>}
+    </>
+  )
+}
+
+interface RemsVar {
+  name: string
+  units: string | null
+  n_sols?: number
+  daily_min?: { median: number | null; p10: number | null; p90: number | null }
+  daily_max?: { median: number | null; p10: number | null; p90: number | null }
+}
+
+/** WS4 rems.json: same-season climatology per variable (median and P10-P90 of daily min and max). */
+function RemsTable({ r }: { r: Record<string, unknown> }) {
+  const RF = 'conditions/rems.json'
+  const vars = Array.isArray(r.variables) ? (r.variables as RemsVar[]) : null
+  if (!vars) return <LooseTable value={r} file={RF} />
+  const cell = (i: number, which: 'daily_min' | 'daily_max', st?: { median: number | null; p10: number | null; p90: number | null }, units?: string | null) =>
+    st ? (
+      <>
+        <Num v={st.median} units={units} file={RF} k={`rems.variables.${i}.${which}.median`} />{' '}
+        <span class="muted">
+          (<Num v={st.p10} file={RF} k={`rems.variables.${i}.${which}.p10`} /> to <Num v={st.p90} file={RF} k={`rems.variables.${i}.${which}.p90`} />)
+        </span>
+      </>
+    ) : (
+      <span class="num-unknown">unknown</span>
+    )
+  return (
+    <>
+      <table class="mini">
+        <thead>
+          <tr>
+            <th>Variable</th>
+            <th class="r">Daily minimum, median (P10 to P90)</th>
+            <th class="r">Daily maximum, median (P10 to P90)</th>
+          </tr>
+        </thead>
+        <tbody>
+          {vars.map((v, i) => (
+            <tr>
+              <td>{v.name}</td>
+              <td class="r">{cell(i, 'daily_min', v.daily_min, v.units)}</td>
+              <td class="r">{cell(i, 'daily_max', v.daily_max, v.units)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <p class="caption">
+        {typeof r.sols_used === 'number' ? (
+          <>
+            <Num v={r.sols_used} file={RF} k="rems.sols_used" /> sols in the same season
+          </>
+        ) : null}
+        {typeof r.source === 'string' ? ` · ${r.source}` : ''}.
+      </p>
+    </>
+  )
+}

@@ -73,6 +73,74 @@ def test_points_off_grid_are_dropped_not_filled():
     assert res["n_used_at_best"] == len(x) - 1
 
 
+# -------------------------------------------------- CTX far-field band onto dem_1m (WS3 band step)
+
+
+def _ctx_case(dx=60.0, dy=-40.0, dz=15.0):
+    """A 5 m 'fine' reference over the centre of a 20 m 'coarse' item; the item shows the same
+    terrain displaced by (dx, dy) and raised by dz (as the canonical CTX vs dem_1m)."""
+    from pipeline.terrain import farfield
+
+    n = 1600  # 8 km at 5 m
+    rng = np.random.default_rng(11)
+    zf = gaussian_filter(rng.normal(0, 1, (n, n)), 40) * 3000
+    zf += 0.08 * 5 * np.arange(n)[:, None]  # regional slope rising to the south (rows)
+    gf = Grid(x0=0.0, y0=8000.0, res=5.0, width=n, height=n)
+    gc = Grid(x0=0.0, y0=8000.0, res=20.0, width=400, height=400)
+    rr, cc = np.mgrid[0:gc.height, 0:gc.width]
+    x, y = gc.xy_of_rc(rr, cc)
+    # item(x, y) = truth(x - dx, y - dy) + dz: content displaced by (+dx, +dy)
+    item = (coreg.sample_bilinear(farfield.block_mean(zf, 4), gc, x - dx, y - dy)
+            + dz).astype(np.float32)
+    ref = zf.copy()
+    ref[:, :400] = np.nan  # reference covers only part of the item (overlap ring)
+    ref[:, 1200:] = np.nan
+    ref[:400, :] = np.nan
+    ref[1200:, :] = np.nan
+    return item, gc, ref.astype(np.float32), gf, farfield
+
+
+def test_block_mean_aligned_and_nan_propagates():
+    from pipeline.terrain import farfield
+
+    a = np.arange(16, dtype=np.float32).reshape(4, 4)
+    assert np.allclose(farfield.block_mean(a, 2), [[2.5, 4.5], [10.5, 12.5]])
+    a[0, 0] = np.nan
+    b = farfield.block_mean(a, 2)
+    assert np.isnan(b[0, 0]) and np.isfinite(b[1, 1])
+
+
+def test_ctx_coregistration_recovers_shift_and_offset():
+    item, gc, ref, gf, farfield = _ctx_case(dx=60.0, dy=-40.0, dz=15.0)
+    fit = farfield.coregister_to_reference(item, gc, ref, gf, search_m=200, step_m=20,
+                                           n_sample=8000, min_cells=500, seed=0)
+    assert fit is not None
+    assert fit["dx"] == pytest.approx(60.0, abs=1e-6) and fit["dy"] == pytest.approx(-40.0,
+                                                                                    abs=1e-6)
+    assert fit["offset_m"] == pytest.approx(15.0, abs=0.5)
+    assert fit["after"]["mad_m"] < fit["before"]["mad_m"]
+    corr = farfield.apply_fit(item, gc, fit)
+    # corrected item agrees with the reference in the overlap (median ~0)
+    d = corr - farfield.reference_on(gc, ref, gf)
+    assert abs(float(np.nanmedian(d))) < 0.5
+
+
+def test_ctx_coregistration_zero_on_identical_item():
+    item, gc, ref, gf, farfield = _ctx_case(dx=0.0, dy=0.0, dz=0.0)
+    fit = farfield.coregister_to_reference(item, gc, ref, gf, search_m=100, step_m=20,
+                                           n_sample=8000, min_cells=500, seed=0)
+    assert (fit["dx"], fit["dy"]) == (0.0, 0.0)
+    assert fit["offset_m"] == pytest.approx(0.0, abs=0.05)
+    assert np.allclose(farfield.apply_fit(item, gc, fit), item, equal_nan=True, atol=1e-3)
+
+
+def test_ctx_coregistration_without_overlap_returns_none():
+    item, gc, ref, gf, farfield = _ctx_case()
+    fit = farfield.coregister_to_reference(item, gc, np.full_like(ref, np.nan), gf, search_m=100,
+                                           step_m=20, n_sample=8000, min_cells=500, seed=0)
+    assert fit is None
+
+
 # -------------------------------------------------- web shape, contracts v1.0.0 (F1, F16)
 
 

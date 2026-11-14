@@ -1,5 +1,5 @@
-// TypeScript shapes of the web-facing files, from contracts/*.schema.json v1.0.0 (SPEC §6, §6.1,
-// §6.2). The loader validates every file against its schema before these types are trusted.
+// TypeScript shapes of the web-facing files, from contracts/*.schema.json v1.1.x (SPEC §6, §6.1,
+// §6.2). Optional members are producer extras that open schemas allow (noted per field). The loader validates every file against its schema before these types are trusted.
 import type { Feature, FeatureCollection, LineString, MultiLineString, MultiPolygon, Point, Polygon } from 'geojson'
 
 export type Variant = 'optimistic' | 'nominal' | 'conservative'
@@ -41,17 +41,57 @@ export interface Station {
   t_home_min: Record<string, number | null>
   in_partner_line: boolean | null
   card: string
+  /** WS2 extras (access-cell rule, user 11:40; open stations schema): per scenario. */
+  access_radius_m?: number
+  access?: Record<string, StationAccess>
+}
+
+/** Walk-in from the access cell to the science point: straight line, not modelled (WS2). */
+export interface WalkIn {
+  dist_m: number | null
+  modelled?: boolean
+  rise_m?: number | null
+  mean_slope_deg?: number | null
+  max_slope_deg?: number | null
+  max_terrain_slope_deg?: number | null
+}
+
+/** Access cell of a station in one scenario; lon/lat null when no access cell exists (reason says why). */
+export interface StationAccess {
+  lon: number | null
+  lat: number | null
+  dist_m: number | null
+  t_home_min?: number | null
+  o2_home_L?: number | null
+  reason: string | null
+  walk_in: WalkIn | null
+  radius_m?: number
+  rule?: string
 }
 
 export interface Card {
   dummy?: boolean
-  navcam: { sol: number | null; image_id: string | null; url_local: string | null; overlay_png: string | null }
+  navcam: { sol: number | null; image_id: string | null; url_local: string | null; overlay_png: string | null; credit?: string; dist_to_observer_m?: number }
   skyline_error_deg: { near: number | null; mid: number | null; far: number | null }
   panorama_png: string | null
-  landmarks: { name: string; bearing_deg: number; dist_km: number }[]
+  landmarks: { name: string; bearing_deg: number; dist_km: number; kind?: string; above_skyline?: boolean }[]
   timeline: { arrive: number | null; leave: number | null; turn_back: number | null }
-  margin_binding: 'O2' | 'daylight' | 'dose'
+  /** null when the station has no route (contract v1.1.1; WS2 Q11). */
+  margin_binding: 'O2' | 'daylight' | 'dose' | null
   contingency: string
+  // Extras merged by make web (WS3 fragment + WS2 timeline part; C 11:42):
+  station?: string
+  scenario?: string
+  on_route?: boolean
+  margin_min?: number | null
+  t_home_min?: number | null
+  o2_home_L?: number | null
+  science?: { lon: number; lat: number }
+  access?: StationAccess
+  landmarks_note?: string
+  skyline_error_scope?: string
+  provisional?: boolean
+  observer?: { position?: string; note?: string; lon?: number; lat?: number; [k: string]: unknown }
 }
 
 export interface TimelineEvent {
@@ -101,7 +141,82 @@ export interface Rad {
     onset_utc: string | null
     tripwire_utc: string | null
   }
-  leash: { D_allow_mGy: number | null; tau_min_at_peak: number | null }
+  leash: {
+    D_allow_mGy: number | null
+    tau_min_at_peak: number | null
+    // v1.1.0 (optional): one table row per D9 slider step.
+    tau_min_at_latest?: number | null
+    formula?: string
+    D_allow_note?: string
+    table?: LeashRow[]
+    d_allow_range_mgy?: [number, number]
+    d_allow_step_mgy?: number
+  }
+}
+
+export interface LeashRow {
+  D_allow_mGy: number
+  tau_min_at_peak: number | null
+  tau_min_at_latest: number | null
+}
+
+/** tiles/basemap/tilejson.json (v1.1.0). Tile URLs are relative to the data root. */
+export interface TileJson {
+  dummy?: boolean
+  tilejson: '3.0.0'
+  scheme: 'xyz'
+  format?: string
+  tileSize: number
+  tiles: string[]
+  minzoom: number
+  maxzoom: number
+  bounds: [number, number, number, number]
+  attribution?: string
+  zoom_bounds?: Record<string, [number, number, number, number]>
+}
+
+/** terrain/cellstate.json (v1.1.0): F1 cell states, PNG alpha 0 = unknown. */
+export interface CellState {
+  dummy?: boolean
+  image: string
+  bounds: [number, number, number, number]
+  width: number
+  height: number
+  res_m: number
+  variant?: string
+  codes?: Record<string, string>
+  pct?: Record<string, number | null>
+}
+
+export interface Localisation {
+  true: { lon: number; lat: number }
+  recovered: { lon: number; lat: number }
+  error_m: number | null
+  rms_deg: number | null
+  sigma_m?: number | null
+  [k: string]: unknown
+}
+
+export interface Fix {
+  t_eva_min: number
+  station: string | null
+  type: string
+  sigma_m: number | null
+  error_m: number | null
+  image_id: string | null
+}
+
+export interface VoDriftRow {
+  sol: number
+  drive: number
+  length_m: number
+  endpoint_error_m: number | null
+  drift_pct: number | null
+  heading_drift_deg: number | null
+  label?: string
+  status?: string
+  truth?: string
+  [k: string]: unknown
 }
 
 export interface ManifestEntry {

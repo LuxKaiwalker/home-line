@@ -6,7 +6,7 @@ import type { Card, Station, TimelineEvent } from '../data/types'
 import { DummyNote, SimulatedLabel } from '../components/labels'
 import { Num } from '../components/Num'
 import { CONFIG } from '../config'
-import { MARGIN_LABEL } from './station'
+import { marginLabel } from './station'
 import { preactView, Show, useLoad } from './page'
 
 interface CuffData {
@@ -96,22 +96,22 @@ function Cuff() {
                   <dl>
                     <dt>Arrive</dt>
                     <dd>
-                      <Num v={c?.timeline.arrive ?? null} units="min" file={s.card} k={`arrive_min.${s.id}`} />
+                      <Num v={c?.timeline.arrive ?? null} units="min" file={s.card} k={`card.${s.id}.timeline.arrive`} />
                     </dd>
                     <dt>Leave</dt>
                     <dd>
-                      <Num v={c?.timeline.leave ?? null} units="min" file={s.card} k={`leave_min.${s.id}`} />
+                      <Num v={c?.timeline.leave ?? null} units="min" file={s.card} k={`card.${s.id}.timeline.leave`} />
                     </dd>
                     <dt class="strong">TURN BACK BY</dt>
                     <dd class="strong">
-                      <Num v={c?.timeline.turn_back ?? null} units="min" file={s.card} k={`turn_back_min.${s.id}`} />
+                      <Num v={c?.timeline.turn_back ?? null} units="min" file={s.card} k={`card.${s.id}.timeline.turn_back`} />
                     </dd>
                     <dt>Home from here</dt>
                     <dd>
                       <Num v={s.t_home_min[d.scenario] ?? null} units="min" file="stations.json" k={`t_home_min.${s.id}.${d.scenario}`} />
                     </dd>
                     <dt>Binding limit</dt>
-                    <dd>{c ? (MARGIN_LABEL[c.margin_binding] ?? c.margin_binding) : 'unknown'}</dd>
+                    <dd>{c ? marginLabel(c.margin_binding) : 'unknown'}</dd>
                   </dl>
                   <p class="cuff-contingency">{c ? c.contingency : 'Station card file not available yet.'}</p>
                   <ul>

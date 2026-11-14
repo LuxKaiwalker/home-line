@@ -6,6 +6,7 @@ import type { ExpressionSpecification, FilterSpecification, StyleSpecification }
 import 'maplibre-gl/dist/maplibre-gl.css'
 import workerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?url'
 import { CONFIG } from '../config'
+import { accessFor, walkInLines } from '../data/access'
 import type { AnyFC, BandsFC, EdgesFC, IsochroneFC, PartnerFC, RouteFC, Station } from '../data/types'
 import { THEME } from '../theme'
 import type { BasemapSource } from './basemap'
@@ -36,7 +37,7 @@ const GROUP_LAYERS: Record<LayerGroup, string[]> = {
   bands: ['band-opt', 'band-con', 'band-lines'],
   unknown: ['unknown-hatch'],
   edges: ['edges-line'],
-  stations: [],
+  stations: ['walkin-line', 'access-pts'],
   slider: ['iso-fill', 'iso-lines', 'iso-current'],
   route: ['route-line'],
   partner: ['partner-line'],
@@ -64,6 +65,7 @@ export class ConsoleMap {
   private padMarker?: Marker
   private edgeMarkers: Marker[] = []
   private hasBasemap = false
+  private groupLayers: Record<LayerGroup, string[]> = Object.fromEntries(Object.entries(GROUP_LAYERS).map(([k, v]) => [k, [...v]])) as Record<LayerGroup, string[]>
   private readonly onStation: (id: string) => void
 
   constructor(container: HTMLElement, onStation: (id: string) => void) {
@@ -93,7 +95,7 @@ export class ConsoleMap {
 
   private initLayers(): void {
     const m = this.map
-    for (const id of ['bands', 'iso', 'edges', 'partner', 'route']) m.addSource(id, { type: 'geojson', data: EMPTY })
+    for (const id of ['bands', 'iso', 'edges', 'partner', 'route', 'walkin', 'access']) m.addSource(id, { type: 'geojson', data: EMPTY })
 
     const { max } = CONFIG.isochroneMinutes
     const isoColor = stepColorExpression('minutes', binEdges(max, THEME.isoBinStepMin), [...THEME.isoRamp]) as ExpressionSpecification
@@ -139,16 +141,33 @@ export class ConsoleMap {
       layout: { 'line-cap': 'round', 'line-join': 'round' },
       paint: { 'line-color': THEME.route, 'line-width': 2.5, 'line-dasharray': [1, 1.5] },
     })
+    // Access-cell rule (user 11:40): straight walk-in line science -> access cell, and the access cell.
+    m.addLayer({ id: 'walkin-line', type: 'line', source: 'walkin', paint: { 'line-color': THEME.station, 'line-width': 1.5, 'line-dasharray': [1, 1] } })
+    m.addLayer({
+      id: 'access-pts',
+      type: 'circle',
+      source: 'access',
+      paint: { 'circle-radius': 4, 'circle-color': THEME.mapBackground, 'circle-stroke-color': THEME.station, 'circle-stroke-width': 2 },
+    })
     this.applyFilters()
     this.applyVisibility()
   }
 
-  /** Basemap raster source (once WS1's tile layout is in the contract), under every other layer. */
-  async setBasemap(src: BasemapSource | null): Promise<void> {
+  /** Basemap raster sources (tilejson.json, see basemap.ts), under every other layer. */
+  async setBasemap(sources: BasemapSource[]): Promise<void> {
     await this.ready
-    if (!src || this.hasBasemap) return
-    this.map.addSource('basemap', { type: 'raster', tiles: src.tiles, tileSize: src.tileSize, minzoom: src.minzoom, maxzoom: src.maxzoom, bounds: src.bounds })
-    this.map.addLayer({ id: 'basemap', type: 'raster', source: 'basemap', paint: { 'raster-opacity': THEME.basemapOpacity } }, 'iso-fill')
+    if (!sources.length || this.hasBasemap) return
+    const ids: string[] = []
+    sources.forEach((src, i) => {
+      const id = `basemap-${i}`
+      this.map.addSource(id, { type: 'raster', tiles: src.tiles, tileSize: src.tileSize, minzoom: src.minzoom, maxzoom: src.maxzoom, bounds: src.bounds, attribution: src.attribution })
+      this.map.addLayer(
+        { id, type: 'raster', source: id, ...(src.layerMinzoom !== undefined ? { minzoom: src.layerMinzoom } : {}), paint: { 'raster-opacity': THEME.basemapOpacity, 'raster-fade-duration': 0 } },
+        'iso-fill',
+      )
+      ids.push(id)
+    })
+    this.groupLayers.basemap = ids
     this.hasBasemap = true
     this.applyVisibility()
   }
@@ -189,20 +208,35 @@ export class ConsoleMap {
     this.applyVisibility()
   }
 
-  setStations(stations: Station[]): void {
+  /** Station science points (markers), access cells and walk-in lines for one scenario. */
+  async setStations(stations: Station[], scenarioId: string): Promise<void> {
     this.stationMarkers.forEach((m) => m.remove())
     this.stationMarkers = stations.map((s) => {
+      const a = accessFor(s, scenarioId)
       const el = document.createElement('button')
       el.type = 'button'
-      el.className = 'station-marker'
+      el.className = `station-marker${a.state === 'none' ? ' no-access' : ''}`
       el.textContent = s.id
-      el.title = `${s.name}: open the station card`
+      const acc =
+        a.state === 'access'
+          ? `access cell ${a.dist_m} m from the science point`
+          : a.state === 'none'
+            ? `no access cell within ${a.radius_m ?? '?'} m${a.reason ? ` (${a.reason})` : ''}`
+            : 'access cell: no data'
+      el.title = `${s.name} (science point; ${acc}): open the station card`
       el.addEventListener('click', (ev) => {
         ev.stopPropagation()
         this.onStation(s.id)
       })
       return new Marker({ element: el }).setLngLat([s.lon, s.lat]).addTo(this.map)
     })
+    await this.ready
+    ;(this.map.getSource('walkin') as GeoJSONSource).setData(walkInLines(stations, scenarioId))
+    const pts = stations.flatMap((s) => {
+      const a = accessFor(s, scenarioId)
+      return a.access ? [{ type: 'Feature' as const, geometry: { type: 'Point' as const, coordinates: [a.access.lon, a.access.lat] }, properties: { station: s.id } }] : []
+    })
+    ;(this.map.getSource('access') as GeoJSONSource).setData({ type: 'FeatureCollection', features: pts })
     this.applyVisibility()
   }
 
@@ -258,7 +292,7 @@ export class ConsoleMap {
 
   private applyVisibility(): void {
     const m = this.map
-    for (const [g, ids] of Object.entries(GROUP_LAYERS) as [LayerGroup, string[]][]) {
+    for (const [g, ids] of Object.entries(this.groupLayers) as [LayerGroup, string[]][]) {
       for (const id of ids) if (m.getLayer(id)) m.setLayoutProperty(id, 'visibility', this.visible[g] ? 'visible' : 'none')
     }
     for (const mk of this.stationMarkers) mk.getElement().hidden = !this.visible.stations
