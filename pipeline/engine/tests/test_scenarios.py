@@ -389,6 +389,11 @@ def test_main_on_synthetic_terrain(tmp_path):
     assert json.loads((pub / "pad.json").read_text()) == pj
     assert (pub / "stations.json").stat().st_mtime_ns == before
     assert json.loads((out / "summary.json").read_text())["siting"]["pad"] == pj["pad"]
+    # --stations-only (D44) right after a full run: names already current, nothing rewritten
+    snap = {p: p.read_bytes() for p in pub.rglob("*") if p.is_file()}
+    assert scenarios.main(["--terrain", str(terr), "--out", str(out), "--stations-only"]) == 0
+    assert {p: p.read_bytes() for p in pub.rglob("*") if p.is_file()} == snap
+    assert json.loads((out / "summary.json").read_text())["stations_names_patch"]["written"] == []
 
 
 def test_main_d21_on_synthetic_terrain(tmp_path, monkeypatch):

@@ -40,6 +40,27 @@ def load_ws1_stations(path: Path) -> tuple[list[dict], list[str]]:
     return have, missing
 
 
+NAME_KEYS = ("name", "name_base", "name_suffix")
+
+
+def name_fields(s: dict) -> dict:
+    """The station-name fields of a WS1 station, in order: ``name``, plus ``name_base`` and
+    ``name_suffix`` where WS1 has them (D44 same-name suffix)."""
+    return {k: s[k] for k in NAME_KEYS if k == "name" or k in s}
+
+
+def with_names(rec: dict, s: dict) -> dict:
+    """``rec`` with its name fields replaced by WS1 station ``s``'s, placed where ``name`` was;
+    every other key and its order unchanged."""
+    out: dict = {}
+    for k, v in rec.items():
+        if k == "name":
+            out.update(name_fields(s))
+        elif k not in NAME_KEYS:
+            out[k] = v
+    return out
+
+
 def attach_cells(grid: Grid, stations: list[dict]) -> list[dict]:
     for s in stations:
         s["rc"] = grid.rc_of_xy(*xy_of_lonlat(s["lon"], s["lat"], grid.crs))
@@ -100,7 +121,7 @@ def station_records(stations: list[dict], fields: dict[str, Field],
                 else load("stations")["placement"]["unreachable_label"],
             }
         out.append({
-            "id": s["id"], "name": s["name"],
+            "id": s["id"], **name_fields(s),
             "lon": round(float(s["lon"]), 6), "lat": round(float(s["lat"]), 6),
             "value": s.get("value"),
             "objective": s.get("objective", ""),
