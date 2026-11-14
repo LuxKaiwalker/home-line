@@ -48,3 +48,18 @@
 .mp-maps-legend li { display: flex; align-items: center; gap: 5px; }
 .mp-swatch { width: 12px; height: 12px; border-radius: 2px; flex: none; display: inline-block; }
 .mp-maps-note { display: block; color: var(--muted); font-size: 11px; }
+/* Waypoint editor: stop time, tags, note */
+.mp-wpe { margin: 0.25rem 0 0.1rem 1.9rem; font-size: 0.82rem; }
+.mp-wpe summary { cursor: pointer; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mp-wpe[open] summary { white-space: normal; }
+.mp-wpe-stop { display: flex; align-items: center; gap: 0.4rem; margin: 0.4rem 0; }
+.mp-wpe-stop span:first-child { color: var(--muted); }
+.mp-wpe input, .mp-wpe textarea { background: var(--bg); color: var(--ink); border: 1px solid var(--line); border-radius: 6px; padding: 3px 6px; font: inherit; }
+.mp-wpe input { width: 4.5rem; font-variant-numeric: tabular-nums; }
+.mp-wpe textarea { width: 100%; box-sizing: border-box; resize: vertical; margin-top: 0.35rem; }
+.mp-wpe input:focus, .mp-wpe textarea:focus { outline: none; border-color: var(--accent); }
+.mp-tags { display: flex; flex-wrap: wrap; gap: 4px; }
+.mp-tags button { background: transparent; color: var(--muted); border: 1px solid var(--line); border-radius: 999px; padding: 1px 8px; cursor: pointer; font-size: 0.75rem; }
+.mp-tags button:hover { border-color: var(--accent); }
+.mp-tags button.on { background: var(--accent); border-color: var(--accent); color: #1a120e; }
+.mp-wp-noted { box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.6), 0 0 0 4px var(--accent, #e8925a); }

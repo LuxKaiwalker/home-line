@@ -3,7 +3,8 @@
 // and consumption, then the waypoint list and the boundary picker. Click the map to add a
 // waypoint; each leg is routed in the browser (src/mission/router.ts), the way home from the last
 // waypoint is WS2's (pointer field, T_home, O2 home).
-// Later (PDF "Mission Planer"): O2 / radiation budget dropdown, reachable foundries, Maps, Save.
+// Each waypoint carries a note, quick tags and a planned stop time (station work: EVA time + O2).
+// Later (PDF "Mission Planer"): O2 / radiation budget dropdown, reachable foundries, Save.
 import '../mission/mission.css'
 import { render } from 'preact'
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks'
@@ -11,11 +12,11 @@ import { CITED, CONFIG } from '../config'
 import { DataProblem, DummyNote } from '../components/labels'
 import { BASEMAP_CREDIT, basemapSources } from '../map/basemap'
 import { dataUrl } from '../env'
-import { missionBudget, type MissionBudget } from '../mission/budget'
+import { BUDGET_CONSTANTS, missionBudget, stopMinutes, type MissionBudget } from '../mission/budget'
 import { loadMissionData, type MissionData } from '../mission/data'
 import { MissionMap } from '../mission/missionMap'
 import { MapsControl } from '../mission/MapsControl'
-import { boundaryOptions, defaultBoundary, legPairs, moveWaypoint, removeWaypoint, replaceWaypoint, routeLegs, type LonLat, type Waypoint } from '../mission/plan'
+import { boundaryOptions, defaultBoundary, legPairs, moveWaypoint, removeWaypoint, replaceWaypoint, routeLegs, toggleTag, WAYPOINT_TAGS, type LonLat, type Waypoint } from '../mission/plan'
 import { LegRouter, type Leg } from '../mission/router'
 import { ensureManifest } from './common'
 import type { View } from './types'
@@ -109,7 +110,7 @@ function MissionPanel({ mmap, handlers, mapsEl }: { mmap: MissionMap; handlers: 
   handlers.onAdd = (lon, lat) => {
     const cell = snap(lon, lat)
     if (cell === null) return
-    setWps((w) => [...w, { id: nextId.current++, lon, lat, cell }])
+    setWps((w) => [...w, { id: nextId.current++, lon, lat, cell, note: '', tags: [], stopMin: 0 }])
   }
   handlers.onMove = (i, lon, lat) => {
     const cell = snap(lon, lat)
@@ -126,25 +127,29 @@ function MissionPanel({ mmap, handlers, mapsEl }: { mmap: MissionMap; handlers: 
     return routeLegs(legPairs(padCell, wps), (a, b) => router.route(a, b), cache.current)
   }, [router, padCell, wps])
 
-  const last = wps[wps.length - 1]
+  // Keyed on the cell only: editing a note or stop time must not recompute the way home.
+  const lastCell = wps.length ? wps[wps.length - 1].cell : null
   const home = useMemo(() => {
     if (!d) return { tHomeMin: null, o2HomeL: null, path: null as { coords: LonLat[]; reachesPad: boolean } | null }
-    if (!last) return { tHomeMin: 0, o2HomeL: 0, path: null }
-    const ll = d.tHome.lonLatOf(Math.floor(last.cell / d.tHome.width), last.cell % d.tHome.width)
+    if (lastCell === null) return { tHomeMin: 0, o2HomeL: 0, path: null }
+    const ll = d.tHome.lonLatOf(Math.floor(lastCell / d.tHome.width), lastCell % d.tHome.width)
     const w = d.pointer?.pathFrom(ll[0], ll[1], [d.pad.lon, d.pad.lat]) ?? null
     return {
       tHomeMin: d.tHome.valueAt(ll[0], ll[1]),
       o2HomeL: d.o2Home ? d.o2Home.valueAt(ll[0], ll[1]) : null,
       path: w && w.startKnown && w.coords.length > 1 ? { coords: w.coords as LonLat[], reachesPad: w.reachesPad } : null,
     }
-  }, [d, last])
+  }, [d, lastCell])
 
-  const budget = useMemo(() => missionBudget(legs.map((l) => (l ? { timeMin: l.timeS / 60, o2L: l.o2L } : null)), home), [legs, home])
+  const budget = useMemo(
+    () => missionBudget(legs.map((l) => (l ? { timeMin: l.timeS / 60, o2L: l.o2L } : null)), home, wps.map((w) => w.stopMin)),
+    [legs, home, wps],
+  )
 
   // Draw.
   useEffect(() => {
     if (!d) return
-    mmap.setWaypoints(wps.map((w, i) => ({ lon: w.lon, lat: w.lat, bad: legs[i] === null })))
+    mmap.setWaypoints(wps.map((w, i) => ({ lon: w.lon, lat: w.lat, bad: legs[i] === null, info: waypointInfo(w) })))
     const toLL = (c: number): LonLat => d.tHome.lonLatOf(Math.floor(c / d.tHome.width), c % d.tHome.width)
     void mmap.setRoute(
       legs.map((l) => (l ? l.cells.map(toLL) : [])),
@@ -205,7 +210,7 @@ function MissionPanel({ mmap, handlers, mapsEl }: { mmap: MissionMap; handlers: 
             , <code>{d.files.o2Home}</code>
           </>
         ) : null}
-        ). O₂ capacity: primary supply per <code>{CITED.o2PrimaryL.source}</code> (computed from its formula); reserve: {CITED.o2ReserveMinAtEffortCap.value} min at the effort cap; EVA limit: {CITED.evaH.value} h. No time at waypoints yet.
+        ). O₂ capacity: primary supply per <code>{CITED.o2PrimaryL.source}</code> (computed from its formula); reserve: {CITED.o2ReserveMinAtEffortCap.value} min at the effort cap; EVA limit: {CITED.evaH.value} h. Planned time at a waypoint is station work at the station task rate (<code>crew.yaml</code> <code>o2_margin.station_task_rate_btu_h</code>, {BUDGET_CONSTANTS.stationRateLMin.toFixed(3)} L/min); tags and notes are labels only.
         {credit ? ` Basemap: ${credit}.` : ''}
       </p>
     </div>
@@ -236,10 +241,12 @@ function Estimates({ b, n }: { b: MissionBudget; n: number }) {
     <div class="mp-est">
       <Row k={n ? `Time home from #${n}` : 'Time home'} v={fmtMin(b.tHomeMin)} title="WS2 T_home at the last waypoint (fastest walk back to the pad)" />
       <Row k="Walk out (all legs)" v={fmtMin(b.walkMin)} />
+      <Row k="Time at waypoints" v={fmtMin(b.stopMin)} title="Sum of the planned stop times" />
       <Row k="EVA total" v={b.evaMin === null ? '–' : `${b.evaMin.toFixed(1)} of ${b.evaLimitMin} min`} />
       <Row k="Time margin" v={fmtMin(b.timeMarginMin)} cls={sign(b.timeMarginMin)} title="EVA limit − walk out − time home" />
       <div class="mp-sep" />
-      <Row k="O₂ left at the last waypoint" v={fmtL(b.o2LeftL)} title={`${b.o2CapacityL.toFixed(1)} L primary supply − ${fmtL(b.o2UsedL)} used on the legs`} />
+      <Row k="O₂ left at the last waypoint" v={fmtL(b.o2LeftL)} title={`${b.o2CapacityL.toFixed(1)} L primary supply − ${fmtL(b.o2UsedL)} used (legs + ${b.o2StopsL.toFixed(1)} L at stops)`} />
+      {b.stopMin > 0 && <Row k="O₂ for stops" v={fmtL(b.o2StopsL)} title={`${b.stopMin.toFixed(0)} min × ${BUDGET_CONSTANTS.stationRateLMin.toFixed(3)} L/min station task rate`} />}
       <Row k="O₂ needed (home + reserve)" v={b.o2NeedL === null ? '–' : `${b.o2NeedL.toFixed(1)} L`} title={`O₂ home ${fmtL(b.o2HomeL)} + reserve ${b.reserveL.toFixed(1)} L`} />
       <Row k="O₂ margin" v={b.o2MarginL === null ? '–' : `${b.o2MarginL.toFixed(1)} L · ${b.o2MarginMin!.toFixed(0)} min at max effort`} cls={sign(b.o2MarginL)} />
     </div>
@@ -281,6 +288,7 @@ function WaypointList({ wps, legs, setWps }: { wps: Waypoint[]; legs: (Leg | nul
                   <span class="mp-bad">no walkable route from the previous point</span>
                 )}
               </div>
+              <WaypointEditor w={w} n={i + 1} onChange={(nw) => setWps((x) => x.map((y) => (y.id === w.id ? nw : y)))} />
             </li>
           )
         })}
@@ -289,5 +297,53 @@ function WaypointList({ wps, legs, setWps }: { wps: Waypoint[]; legs: (Leg | nul
         Clear all
       </button>
     </>
+  )
+}
+
+/** Marker tooltip text: stop time, tags, note. */
+function waypointInfo(w: Waypoint): string {
+  const parts: string[] = []
+  if (w.stopMin > 0) parts.push(`stop ${w.stopMin} min`)
+  if (w.tags.length) parts.push(w.tags.join(', '))
+  if (w.note.trim()) parts.push(w.note.trim())
+  return parts.join(' · ')
+}
+
+function WaypointEditor({ w, n, onChange }: { w: Waypoint; n: number; onChange: (w: Waypoint) => void }) {
+  const summary = waypointInfo(w)
+  const o2 = w.stopMin * BUDGET_CONSTANTS.stationRateLMin
+  return (
+    <details class="mp-wpe">
+      <summary>{summary || <span class="muted">Add stop time, tags, note</span>}</summary>
+      <label class="mp-wpe-stop">
+        <span>Planned stop</span>
+        <input
+          type="number"
+          min={0}
+          step={5}
+          inputMode="numeric"
+          placeholder="0"
+          aria-label={`Planned stop time at waypoint ${n} in minutes`}
+          value={w.stopMin || ''}
+          onInput={(e) => onChange({ ...w, stopMin: stopMinutes(parseFloat((e.target as HTMLInputElement).value)) })}
+        />
+        <span>min</span>
+        {w.stopMin > 0 && <span class="muted">≈ {o2.toFixed(1)} L O₂</span>}
+      </label>
+      <div class="mp-tags" role="group" aria-label={`Tags for waypoint ${n}`}>
+        {WAYPOINT_TAGS.map((t) => (
+          <button type="button" key={t} class={w.tags.includes(t) ? 'on' : ''} aria-pressed={w.tags.includes(t)} onClick={() => onChange({ ...w, tags: toggleTag(w.tags, t) })}>
+            {t}
+          </button>
+        ))}
+      </div>
+      <textarea
+        rows={2}
+        placeholder="Note: resource, task, what to carry out here…"
+        aria-label={`Note for waypoint ${n}`}
+        value={w.note}
+        onInput={(e) => onChange({ ...w, note: (e.target as HTMLTextAreaElement).value })}
+      />
+    </details>
   )
 }

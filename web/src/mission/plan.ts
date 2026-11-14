@@ -11,6 +11,24 @@ export interface Waypoint {
   lat: number
   /** cell index on the routing grid */
   cell: number
+  /** free-text note: what is to be done there */
+  note: string
+  /** quick activity tags (labels only; they do not change any number) */
+  tags: string[]
+  /** planned time at the waypoint (min): station work at the station task rate (budget.ts) */
+  stopMin: number
+}
+
+/** Quick tags offered on every waypoint (UI labels, no numbers attached). */
+export const WAYPOINT_TAGS = ['Sample', 'Drill', 'Photo', 'Survey', 'Install', 'Inspect', 'Repair', 'Rest'] as const
+
+/** Toggle a tag on or off, keeping WAYPOINT_TAGS order. */
+export function toggleTag(tags: string[], tag: string): string[] {
+  const on = new Set(tags)
+  if (on.has(tag)) on.delete(tag)
+  else on.add(tag)
+  const known = WAYPOINT_TAGS.filter((t) => on.has(t))
+  return [...known, ...[...on].filter((t) => !(WAYPOINT_TAGS as readonly string[]).includes(t))]
 }
 
 /** Order list helpers: never mutate. */

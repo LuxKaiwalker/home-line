@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { BandsFC, EdgesFC, IsochroneFC } from '../data/types'
-import { boundaryOptions, defaultBoundary, legPairs, moveWaypoint, removeWaypoint, replaceWaypoint, routeLegs } from './plan'
+import { boundaryOptions, defaultBoundary, legPairs, moveWaypoint, removeWaypoint, replaceWaypoint, routeLegs, toggleTag } from './plan'
 import type { Leg } from './router'
 
 describe('waypoint list edits', () => {
@@ -59,5 +59,13 @@ describe('boundary options', () => {
   it('default is the 30-min nominal band (the Plan page default), else none', () => {
     expect(defaultBoundary(boundaryOptions(bands, iso, edges), 30)).toBe('band:30:nominal')
     expect(defaultBoundary(boundaryOptions(null, null, null), 30)).toBe('none')
+  })
+})
+
+describe('waypoint tags', () => {
+  it('toggle adds and removes, in the offered order', () => {
+    expect(toggleTag([], 'Photo')).toEqual(['Photo'])
+    expect(toggleTag(['Photo'], 'Sample')).toEqual(['Sample', 'Photo'])
+    expect(toggleTag(['Sample', 'Photo'], 'Sample')).toEqual(['Photo'])
   })
 })

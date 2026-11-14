@@ -55,4 +55,36 @@ describe('mission O2 / time budget (crew.yaml o2_budget, o2_margin; engine margi
     expect(b.timeMarginMin).toBe(-20)
     expect(b.o2MarginL!).toBeLessThan(0)
   })
+
+  it('station task rate is derived from 1,000 BTU/h at 21.0 J/mL (D29), as margin.station_task_rate_l_min', () => {
+    // 1000 x 1055.056 / 60 / 21.0 / 1000 = 0.837346 L/min (crew.yaml documents 0.84)
+    expect(BUDGET_CONSTANTS.stationRateLMin).toBeCloseTo(0.8373460, 6)
+  })
+
+  it('planned time at waypoints adds EVA time and O2 at the station task rate', () => {
+    const r = BUDGET_CONSTANTS.stationRateLMin
+    const b = missionBudget([{ timeMin: 20, o2L: 30 }, { timeMin: 10, o2L: 12.5 }], { tHomeMin: 25, o2HomeL: 35 }, [30, 15])
+    expect(b.walkMin).toBe(30)
+    expect(b.stopMin).toBe(45)
+    expect(b.o2StopsL).toBeCloseTo(45 * r, 12)
+    expect(b.evaMin).toBe(30 + 45 + 25)
+    expect(b.timeMarginMin).toBe(390 - 100)
+    expect(b.o2UsedL).toBeCloseTo(42.5 + 45 * r, 12)
+    expect(b.o2MarginL).toBeCloseTo(482.31131 - 42.5 - 45 * r - 35 - 40.5, 4)
+  })
+
+  it('no stop times given equals all zero; bad entries (negative, NaN) count as 0', () => {
+    const legs = [{ timeMin: 20, o2L: 30 }]
+    const home = { tHomeMin: 25, o2HomeL: 35 }
+    expect(missionBudget(legs, home, [0])).toEqual(missionBudget(legs, home))
+    expect(missionBudget(legs, home, [-5])).toEqual(missionBudget(legs, home))
+    expect(missionBudget(legs, home, [Number.NaN])).toEqual(missionBudget(legs, home))
+  })
+
+  it('stop time is known even when a leg is not: O2 and EVA still unknown', () => {
+    const b = missionBudget([null], { tHomeMin: 25, o2HomeL: 35 }, [10])
+    expect(b.stopMin).toBe(10)
+    expect(b.evaMin).toBeNull()
+    expect(b.o2UsedL).toBeNull()
+  })
 })

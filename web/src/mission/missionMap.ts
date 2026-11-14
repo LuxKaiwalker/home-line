@@ -169,13 +169,14 @@ export class MissionMap {
   }
 
   /** Waypoint markers, numbered from 1, draggable; a drag end moves that waypoint. */
-  setWaypoints(points: { lon: number; lat: number; bad: boolean }[]): void {
+  setWaypoints(points: { lon: number; lat: number; bad: boolean; info?: string }[]): void {
     this.markers.forEach((mk) => mk.remove())
     this.markers = points.map((p, i) => {
       const el = document.createElement('div')
       el.className = `mp-wp${p.bad ? ' mp-wp-bad' : ''}`
       el.textContent = String(i + 1)
-      el.title = `Waypoint ${i + 1}: drag to move`
+      el.title = `Waypoint ${i + 1}${p.info ? `: ${p.info}` : ''}\nDrag to move`
+      if (p.info) el.classList.add('mp-wp-noted')
       el.addEventListener('click', (e) => e.stopPropagation()) // a click on a marker never adds a waypoint
       const mk = new Marker({ element: el, draggable: true }).setLngLat([p.lon, p.lat]).addTo(this.map)
       mk.on('dragend', () => {
