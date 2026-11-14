@@ -736,23 +736,35 @@ Branch: `ws5-web`
   - D9 slider: range/step from `config/conditions.yaml leash.d_allow_range_mgy`/`d_allow_step_mgy`; τ at peak and latest from `rad.json leash.table` rows (manifest `rad.leash.table.{i}.*`); browser formula only for a step the table lacks (none now).
   - Scorecard: O₂ reserve row = `crew.o2_margin.reserve_min_at_effort_cap` 30 min (= 40.5 L at 1.35 L/min, computed and labelled) replacing `o2_reserve_frac`; station-task O₂ rate and access radius rows; **F22 finding** (station frames S1 788 m, S2 280 m, S4 966 m vs gate 10 m from nav.yaml `skyline_fix_gate.tolerance_from`: none pass → station fixes, fixes.json listed); **VO drift table** (rover analogue label, 5 drives); coverage, REMS and clock now proper tables (were generic leaf tables, now manifest-backed); KAT section reads `validation/kats.json` when WS6 publishes it.
 
+- 2026-11-14T14:10Z (session 3, commit b318ef4): D19, D20, D7, V1/KATs, F8 proposal, route legs, smoke-tested on a scratch real tree (`make_web.run` from today's interim into the scratchpad, with WS2's proposal pad.json removed per C 14:58; `web/public/data` untouched). vitest **417 pass, 11 skipped** on main's committed tree (10 session-3 real-tree KATs skip until C publishes); **427 pass, 1 skipped** on the scratch tree; `tsc` clean; build 2.5 MB without data.
+  - **D20 partner line**: layer label from `partner.geojson` `label` ("Partner line (cart haul, 60 min)"; fallback `config/haul.yaml partner_label`); drag-case features are never drawn (filter even on older trees). Drag note (card `drag_note` / `drag_finding.note` / `haul.yaml drag_note`) on the partner legend **and** the station card Contingency, with `haul.drag.flat.force_N` 398.454 N, `.traction_limit_N` 350.595 N, `.max_mass_kg` 157.5 kg via `<Num>` (per-suit keys `haul.drag.flat.nom_{suit}.*` for non-default files). No drag UI left.
+  - **D19**: top nav "Navigation (optional)"; `/nav` slot gets the banner "Optional add-on (not part of the core plan)" (core: F19 drift circle + fixes at the pad and surveyed stations); scorecard F22 and X8 moved to a separate "Navigation and visual odometry — Optional add-on" section. KAT: console, map, pad, partner, route modules read no nav/VO/localisation file.
+  - **D7 (user 15:01)**: "pending D7" removed. Station cards and scorecard quote near/mid V2 as measured; far class shown with its number via `<Num>` and labelled "not validated" with the D7 reason (haze hides the far rim in north-facing frames). The card scope string's "far class pending the D7 manual check" clause is dropped on display.
+  - **Headline**: 12.4 % [4.6 conservative, 17.5 optimistic] at 30 min, both ends `<Num>`; "pending V1" removed.
+  - **Scorecard V1**: n 290, bias +1.31°, RMSE 5.45°, r 0.50 (`<Num dp>`: display decimals, stored value kept in link/tooltip), both 2×2 confusion matrices (`v1.confusion.{t}.*`), `v1.svg`, sensitivities table (5 m, roll/pitch, all-in-DEM), conservative no-go 14.55° (`v1.conservative_nogo.nogo_deg`, 20° cited from site.yaml) with 58.75 % of the 30-min disc blocked (nominal 41.23 %, `terrain.conservative.*`). V2 is now a near/mid/far table on `v2.{class}.*`. **KATs**: summary keys + per-area table (counts labelled "counted in the browser") + every test in a collapsible list.
+  - **Trade**: science value 0.0 in all 6 cells explained: a table of each station's conservative walk home per suit from `stations.json` (S4 71.21/76.52/80.14 min; S1, S2 "no access cell" with WS2's reason).
+  - **F8 (C 14:58)**: the pad marker is the pad **in use**: `pad.json` when published (= pad_default), else `config/site.yaml pad_default`. The siting result is a proposal only: new layer "Pad siting proposal (F8)" (off by default) with `siting.png` on `siting_png.json` corners, a proposal marker only if `pad.json` gets an optional `proposal` block, and a panel text "pad_default is kept; S decides" + WS2's reasons (disc check null because the disc leaves the 3 m grid; top candidates tie). WS2's 137.4024, −4.7690 is not used anywhere. Scorecard pad line describes the pad in use.
+  - **Route legs** (WS6 audit): console route section has a leg table (walk, distance, O₂, walk-in) on `route.{sid}.leg.{i}.*`; station value cites `stations.{S}.value`.
+  - **Smoke test** (vite dev on the scratch tree, every route incl. /nav, /hud, /hud3d): **0 unbacked numbers on every view** (`/` 24 backed, S1 8, S2 32, S4 37, `/trade` 21, `/conditions` 50, `/scorecard` 123, `/cuff` 64, `/nav` 17), no data problems, no console errors; one console warning from WS7's HUD ("optional pad.json unavailable", expected while pad.json is unpublished).
+
 ### Doing
 
 - —
 
 ### Next
 
-- Re-check on each make web: con_* scenarios (range low end) once V1 lands; S3/S5 when S positions them; siting/pad.json.
+- Re-run the smoke test on C's session-3 `make web` (the session-3 real-tree KATs in `web/src/data/real.test.ts` switch on when `validation/v1.json` is in the tree).
 - HUD-on-card strip if WS7 is not green at G2; about page licences/SI text (needs the team).
 
 ### Blocked
 
 - (user) GitHub Pages: repo private and `gh` not logged in; `pages.yml` ready but cannot deploy yet.
-- (C / WS6) `.github/workflows/`: please review `pages.yml` and add `npm test` (vitest) to the `web` job in `ci.yml`.
-- (WS2) `stations.json value` (S1 0.8683, S2 0.7443, S4 0.475) has no manifest key: the card shows it flagged unbacked. Please record `station_value.{S}` (or say where it comes from). Route leg properties (`t_min`, `length_m`, `o2_L`) also have no keys, so the console shows stop times from the timeline only.
+- (C / WS6) `.github/workflows/ci.yml`: please add `npm test` (vitest) to the `web` job.
+- (WS2 / C) `pad.json` `proposal` block: shape assumed (`lon`, `lat`, `score`, `checks{assessed_pct_30min, max_slope_deg, rule_passed}`, `alternatives[]`, `rule`) and keys assumed `pad.proposal.{lon,lat,score,checks.*}`; please confirm in the contract. Without the block only the heatmap is shown.
+- (WS3) D7 wording: SPEC's "far rim (41–57 km) … in 21 north-facing frames" has no data field or manifest key, so the app says it without the numbers. Please add them to `validation/v2.json` (e.g. `far_note` or `far.rim_km`, `far.haze_frames`) with keys, and drop "far class pending the D7 manual check" from the card `skyline_error_scope`.
+- (WS3) `validation/v2.json n_frames_ok` has no key; the scorecard counts `frames[]` in the browser instead.
 - (S / WS2, content) Turn-back times (S4 438.55, S2 409.15 min) are after the 390-min EVA (`clock.eva.eva_min`); shown as written (WS2 question 13).
-- (WS6) V1 → con_* range low end and `validation/kats.json`: the console says "pending V1", the scorecard "not available yet".
-- Resolved this session: basemap layout (tilejson v1.1.0), D9 slider range (config), KAT contract (v1.1.0), cell states (v1.1.0), card null binding (v1.1.1).
+- Resolved this session: station value key (WS1), route-leg keys (WS2), V1 + KAT list (WS6), headline range low end (con_*).
 
 ### Assumptions added
 
@@ -762,6 +774,8 @@ Branch: `ws5-web`
 - D9 leash off the default allowance: τ is recomputed in the browser with `leash.formula` from config and the manifest-backed rate, labelled "computed in the browser"; at the default allowance the page shows rad.json's own value. KAT: recomputes 85.7 min at 0.5 mGy.
 - Session 2: the console takes access points from the card's access block when present, else `stations.json access[scenario]`; access lon/lat cite `access.{S}.{scenario}.lon/lat` (stations.json) because the card fragment records no lon/lat keys. Walk-in line drawn only when `dist_m` > 0. Station dwell shown from `config/stations.yaml dwell_min` when it matches.
 - Session 2: the F22 table uses each station card's Navcam frame (`navcam.image_id`) and `localisation/{id}.json error_m`; pass = error_m ≤ `skyline_fix.refine_grid_m` (nav.yaml gate, C 11:58).
+- Session 3: `<Num dp signed>` rounds only the display (V1/V2 statistics); the manifest link and tooltip carry the stored value. KAT area counts and the V2 frame count are computed in the browser and labelled so (`DerivedNum`).
+- Session 3: the D7 far-class text is a fixed string in `web/src/views/validation.ts` (no numbers) until WS3 puts the far note in the data.
 
 ## WS6 Provenance
 
