@@ -488,7 +488,7 @@ Branch: `ws9-nav`
 
 ### Done
 
-- 2026-11-14T10:25Z: M1 F21 dead-reckoning error model (`pipeline/navigation/deadreckon.py`: step scale
+- 2026-11-14T10:11Z: M1 F21 dead-reckoning error model (`pipeline/navigation/deadreckon.py`: step scale
   + per-step noise, psi0, gyro bias, heading random walk, slip above `slip_min_slope_deg`; fix events
   reset position to N(0, sigma) and heading to a new psi0) and Monte Carlo summaries
   (`pipeline/navigation/montecarlo.py`: 95% ellipses per minute, r95, r95(D) = a*D + b*D^2 NNLS fit,
@@ -498,7 +498,7 @@ Branch: `ws9-nav`
   config (500 runs, seed 20261114): zero-error = truth; heading-bias-only lateral error = analytic within
   1%; 95% ellipse covers 95.6 / 94.8 / 95.0% of runs at 10 / 30 / 60 min; error resets at fixes; slip
   only above 10 deg; contracts validate.
-- 2026-11-14T10:40Z: fix-interval map (`fixinterval.py`): margin radius, D_max = inverse r95 fit, 0
+- 2026-11-14T10:15Z: fix-interval map (`fixinterval.py`): margin radius, D_max = inverse r95 fit, 0
   outside the homeline, NaN where T_home is unknown; classes from `fix_interval.classes_m`;
   `nav/fix_interval_summary.json` (one file, `set` = nav.yaml `default_set`; other sets in the run
   report); `fields/fix_interval_{set}.png` (1 m per count) on the HUD field grid. KATs: D_max smaller near
@@ -506,13 +506,13 @@ Branch: `ws9-nav`
 - Real-route driver (`real.py`, `run.py`), `make nav` (= `run real`; `NAV_ARGS=--no-skyline` for the G2
   fallback). `run real --dry-run` lists inputs with owners. Writes to `data/interim/navigation/` (mirrors
   the web paths), refuses `web/public/`. End-to-end KAT on a tmp WS2/WS1-shaped tree.
-- 2026-11-14T10:55Z: `/nav` view (`web/src/nav/`) on data-dummy: fix-interval classes, estimated track
+- 2026-11-14T10:21Z: `/nav` view (`web/src/nav/`) on data-dummy: fix-interval classes, estimated track
   (truth behind "show truth"), 95% ellipses every 5 min, fix events, playback with the ellipse in force
   and the SPEC position line ("Odometry ±N m · next fix due in M m · last fix …"), headline from the
   summary, ellipse-size chart, method and parameter table from config. Exports for WS7's HUD:
   `navReading`, `navLine`, nav loader, D_max decoder, ellipse geometry. vitest 5 files / 33 nav tests;
   tsc + vite build clean.
-- 2026-11-14T11:05Z: F22 skyline fix (`skylinefix.py`: coarse 50 m grid / 1 deg rays / far field >=
+- 2026-11-14T10:26Z: F22 skyline fix (`skylinefix.py`: coarse 50 m grid / 1 deg rays / far field >=
   500 m, refine 10 m around the best 3, far-weighted RMS, sigma from the 1.5 x min-RMS region) and
   `run skyline` (every WS3 frame tried, standalone 300 m prior, `skyline_report.json` +
   `localisation/{image_id}.json`); `run real` turns frames paired with a route station into skyline fixes
