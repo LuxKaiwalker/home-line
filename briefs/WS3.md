@@ -29,7 +29,7 @@
 3. **H4–H8:** first real overlay at one station (MVP fallback frame), hand-checked by C.
 4. **H8–H12:** frame selection for ≥ 30 stops (skyline visible, in the focus area); sky detector; manual check of 20% (D7: switch to fully manual if the detector fails by 23:00).
 5. **Overnight:** horizons at stations, pads and all validation stops; V2 statistics by distance class; panoramas and overlays for every station card.
-6. **By H20:** hand the horizon engine API, sky detector and `navcam_frames.json` to WS9 for F22.
+6. **By H20:** hand the horizon engine API, sky detector and `navcam_frames.json` to WS9 for F22. _(2026-11-14, D19: F22 is an optional add-on, so this hand-off is optional too.)_
 
 ## Tests (write first)
 
