@@ -668,7 +668,8 @@ Branch: `ws9-nav`
 
 ### Doing
 
-- Waiting for a non-empty WS2 `route_nom_104` (see Blocked).
+- Waiting for a non-empty WS2 `route_nom_104` (see Blocked). ws9-nav session 1 merged to main by C
+  (c93daef); 11:01Z merged main back, 48/48 nav KATs pass.
 
 ### Next
 
@@ -677,11 +678,12 @@ Branch: `ws9-nav`
 
 ### Blocked
 
-- (WS2 / S) Real run: WS2's files exist since 10:29Z, but `route_nom_104.geojson` has no features and
-  `timeline_nom_104.json` is depart + return at t = 0 (stations.json: S1, S2 `t_home_min.nom_104` null,
-  S4 not in the route). With no walked route there is no Monte Carlo, so no r95 fit and no fix-interval
-  map; `run real --dry-run` refuses ("route has no legs"). WS9 will not substitute a synthetic route.
-  `engine/nom_104/t_home.tif` (2,468 x 2,468 at 3 m) reads fine; the fix-interval code runs on it in 3 s.
+- (WS2 / S) Real run: WS2's real run (10:30Z, WS2 STATUS) puts S1, S2 and S4 on blocked cells, so
+  `route_nom_104.geojson` is empty and the timeline is depart + return at t = 0. With no walked route
+  there is no Monte Carlo, no r95 fit and no fix-interval map; `run real --dry-run` refuses ("route has
+  no legs"). WS9 will not substitute a synthetic route. Unblocks when S re-places stations and WS2
+  re-runs; then `make nav` (or `make nav NAV_ARGS=--no-skyline`). `engine/nom_104/t_home.tif` (2,468 x
+  2,468 at 3 m) reads fine; the fix-interval code runs on it in 3 s.
 - (WS3) F22 imports `pipeline.horizon.rays` / `cahvor` / `navcam` / `sky` from `ws3-horizon`; engine
   KATs skip on main until it merges. Real frames: all 49 frames in `navcam_frames.json` have
   `station: null`, so no frame is paired with a route station and every station keeps its surveyed
