@@ -4,6 +4,7 @@
 //   VITE_LIVE=1          turn the live layer on (default off: no live code in the bundle path)
 //   VITE_API_BASE=<url>  origin of the live API, default http://localhost:8012 (api.prefix is appended)
 //   VITE_LIVE_MOCK=1     dev only: answer API calls from the contract-example mock (mock/fetch.ts)
+//   VITE_SIM_EXPORT=1    D76: show the "Send to simulator" slot on a loaded plan (default off)
 import backendRaw from '../../../config/backend.yaml'
 import { cfg } from '../config'
 
@@ -23,11 +24,20 @@ function posNum(path: string): number {
 export const LIVE_LABEL: string = str('labels.live')
 /** Kit rule 4: replaces the live controls when /health is unreachable or not ok. */
 export const OFFLINE_LABEL: string = str('labels.offline')
+/** D69/F35: label of a precomputed run record (origin precomputed, the official plan). */
+export const PRECOMPUTED_LABEL: string = str('labels.precomputed')
 /** Shown while /health answers ok but engine_warm is false (Numba warm-up). Not in config: UI text only. */
 export const WARMING_LABEL = 'Live planning is warming up · showing precomputed plans'
 
 /** contract_version of the backend family (config/backend.yaml), written into plan_inputs the pad tool sends. */
 export const BACKEND_CONTRACT_VERSION: string = str('contract_version')
+
+/** limits.upload_max_bytes: largest plan_inputs.json the import accepts (F28). */
+export const UPLOAD_MAX_BYTES: number = posNum('limits.upload_max_bytes')
+/** limits.title_max_chars: longest plan title the import accepts. */
+export const TITLE_MAX_CHARS: number = posNum('limits.title_max_chars')
+/** compute.hash.hex_chars: a result hash is this many lower-case hex characters. */
+export const HASH_HEX_CHARS: number = posNum('compute.hash.hex_chars')
 
 /** api.prefix, e.g. /api/v1. */
 export const API_PREFIX: string = str('api.prefix').replace(/\/+$/, '')
@@ -67,3 +77,5 @@ export function apiBaseFrom(value: EnvValue): string {
 
 export const LIVE_ENABLED: boolean = isLiveFlag(import.meta.env.VITE_LIVE)
 export const API_BASE: string = apiBaseFrom(import.meta.env.VITE_API_BASE)
+/** D76: "Send to simulator" slot (manifest files of kind sim_plan); off unless VITE_SIM_EXPORT is 1 or true. */
+export const SIM_EXPORT_ENABLED: boolean = isLiveFlag(import.meta.env.VITE_SIM_EXPORT)

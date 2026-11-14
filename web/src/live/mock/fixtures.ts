@@ -6,7 +6,9 @@ import jobQueuedExample from '../../../../contracts/backend/examples/job.queued.
 import jobRunningExample from '../../../../contracts/backend/examples/job.running.json'
 import planInputsOfficial from '../../../../contracts/backend/examples/plan_inputs.official.json'
 import runRecordLive from '../../../../contracts/backend/examples/run_record.live.json'
-import type { Health, Job, PlanInputs } from '../types'
+import { PRECOMPUTED_LABEL } from '../config'
+import type { Health, Job, PlanInputs, RunRecord } from '../types'
+import { MOCK_OFFICIAL_HASH } from './hashes'
 
 export const HEALTH_WARM: Health = { ok: true, engine_warm: true, queue_length: 0, heavy_jobs: 'on' }
 export const HEALTH_COLD: Health = { ok: true, engine_warm: false, queue_length: 0, heavy_jobs: 'on' }
@@ -50,3 +52,22 @@ export function failedJobScript(error = 'engine_error: no route within the walkb
 
 export const PLAN_INPUTS_OFFICIAL = planInputsOfficial as PlanInputs
 export const RUN_RECORD_LIVE: unknown = runRecordLive
+
+/**
+ * Derived: the run record of the official (precomputed) tree, as E3 synthesises it
+ * (server/engine/results.py precomputed_run_record): origin precomputed, labels.precomputed, the
+ * official inputs, no stages. Engine ids and hashes are the example's placeholders.
+ */
+export const RUN_RECORD_OFFICIAL: RunRecord = {
+  ...(runRecordLive as RunRecord),
+  hash: MOCK_OFFICIAL_HASH,
+  origin: 'precomputed',
+  label: PRECOMPUTED_LABEL,
+  inputs: { ...(planInputsOfficial as PlanInputs), stations: { mode: 'best' } },
+  stages: [],
+  files: [],
+  range_flags: [],
+  infeasible: null,
+  error: null,
+  dummy: false,
+}

@@ -2,7 +2,7 @@
 // rule D54: WS18 builds on it): one function per endpoint the live views use, every request with
 // a timeout, errors as ApiError. Jobs are submit + poll (jobs.ts); no request is held open.
 import { API_BASE, API_PREFIX, CLIENT } from './config'
-import type { ApiErrorBody, EngineVersion, Health, ImportResult, Job, JobRequest, LonLat, PadCheck, PadScreen, PlanInputs } from './types'
+import type { ApiErrorBody, EngineVersion, Health, ImportResult, Job, JobRequest, LonLat, PadCheck, PadScreen, PlanInputs, RunRecord } from './types'
 
 export type FetchLike = (input: string, init?: RequestInit) => Promise<Response>
 
@@ -52,6 +52,8 @@ export interface ApiClient {
   submitJob(req: JobRequest, opts?: RequestOptions): Promise<Job>
   getJob(id: string, opts?: RequestOptions): Promise<Job>
   importPlan(inputs: PlanInputs, opts?: RequestOptions): Promise<ImportResult>
+  /** GET /results/{hash}/provenance: the result's run record (F35). 404 = unknown result. */
+  provenance(hash: string, opts?: RequestOptions): Promise<RunRecord>
   /** Absolute base URL of a result tree for the loader (dataUrl(path, mode, base)). */
   resultBase(job: Pick<Job, 'hash' | 'result_url'>): string
 }
@@ -128,6 +130,7 @@ export function createApiClient(opts: ApiClientOptions = {}): ApiClient {
     submitJob: (req, o) => request<Job>('POST', '/jobs', req, o),
     getJob: (id, o) => request<Job>('GET', `/jobs/${encodeURIComponent(id)}`, undefined, o),
     importPlan: (inputs, o) => request<ImportResult>('POST', '/plans/import', inputs, o),
+    provenance: (hash, o) => request<RunRecord>('GET', `/results/${encodeURIComponent(hash)}/provenance`, undefined, o),
     resultBase(job) {
       // result_url is a server path (/api/v1/results/{hash}/); resolve it against the API origin.
       const rel = job.result_url ?? `${API_PREFIX}/results/${job.hash}/`

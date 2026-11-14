@@ -55,3 +55,34 @@
   color: var(--muted);
   font-style: italic;
 }
+
+/* Plan routes (#/plan, #/plan/{hash}[/provenance|/play]; F28, F35). */
+.live-plan[hidden] {
+  display: none;
+}
+.live-plan-map {
+  height: 360px;
+  border-bottom: 1px solid var(--line);
+}
+.live-plan-page .live-inputs {
+  max-height: 320px;
+  overflow: auto;
+  padding: 8px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  font-size: 0.8rem;
+}
+.live-prov-table th {
+  text-align: left;
+  padding-right: 12px;
+}
+.live-prov-table code {
+  word-break: break-all;
+}
+.live-actions .live-btn {
+  margin-right: 8px;
+}
+.live-notfound,
+.live-offline {
+  color: var(--warn);
+}

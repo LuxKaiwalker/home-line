@@ -86,3 +86,24 @@ export function mockResultDocs(): { stage: string; path: string; doc: unknown }[
 }
 
 export const MOCK_RESULT_SCENARIO = SCN
+
+// --- D76 "Send to simulator" slot: a manifest entry of kind sim_plan ---
+// The compiled-plan format for the simulator is open (D76), so the slot never assumes a file name or
+// schema: it lists whatever manifest entries carry kind "sim_plan". The path below is a neutral
+// placeholder for the mock only; the manifest contract allows extra entry fields (manifest.schema.json).
+
+/** Placeholder path of the mock's sim_plan file (not a format, not a real name). */
+export const MOCK_SIM_FILE = 'sim/mock_sim_export.dat'
+
+/** `m` plus one entry of kind sim_plan (a copy; `m` is unchanged). */
+export function withSimPlan(m: Manifest, file = MOCK_SIM_FILE): Manifest {
+  return { ...m, [`sim.${SCN}.export`]: { ...entry(null, null, file), kind: 'sim_plan' } } as unknown as Manifest
+}
+
+/** The complete mock tree (every stage done), optionally with a sim_plan manifest entry. */
+export function mockFinishedTree(sim: boolean): (path: string) => unknown | null {
+  return (path) => {
+    const doc = mockResultFile(path, MOCK_STAGES)
+    return sim && path === 'manifest.json' ? withSimPlan(doc as Manifest) : doc
+  }
+}
