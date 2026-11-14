@@ -1,10 +1,11 @@
-// Fallback simulated drift (F19, D12; used only if F21 misses G2). Mars has no GPS: the position
-// is an input with uncertainty. While walking, sigma grows at fallback_drift.pct_of_distance % of
-// the distance walked since the last fix, never below fallback_drift.sigma_floor_m; a fix resets
-// it: at the rover pad -> fix_sigma_m.rover, on arrival at a surveyed station ->
-// fix_sigma_m.station (config/hud.yaml). Assumption A-WS7-5 (STATUS.md):
-//   sigma(d) = fix sigma at d = 0, else max(fix sigma, floor, pct/100 * d)
-// so sigma never decreases between fixes. The marker stays on the planned route.
+// Drift circle (F19; the core position uncertainty since D19, the F21 ellipse is an optional
+// add-on). Mars has no GPS: the position is an input with uncertainty. The circle radius is
+// D39's rule, both numbers from config/hud.yaml fallback_drift:
+//   sigma(d) = max(sigma_floor_m (5 m), pct_of_distance (2 %) / 100 * d)
+// with d = distance walked since the last fix (rover pad at the start, then each surveyed station
+// on arrival). A fix resets d to 0; a fix sigma above the floor (fix_sigma_m) would still hold,
+// none is today (rover 2 m, station 5 m), so at a fix the circle is the 5 m floor. sigma never
+// decreases between fixes. The marker stays on the planned route.
 import type { HudConfig } from './config'
 import type { Plan } from './plan'
 import type { HudPosition } from './types'
@@ -31,10 +32,11 @@ export function lastFixAt(fixes: Fix[], t: number): Fix {
   return f
 }
 
+/** D39: max(floor, pct % of the distance since the last fix), never below the fix's own sigma. */
 export function driftSigma(cfg: HudConfig, fixSigmaM: number, distSinceFixM: number): number {
-  if (!(distSinceFixM > 0)) return fixSigmaM
   const { pctOfDistance, sigmaFloorM } = cfg.fallbackDrift
-  return Math.max(fixSigmaM, sigmaFloorM, (pctOfDistance / 100) * distSinceFixM)
+  const d = distSinceFixM > 0 ? distSinceFixM : 0
+  return Math.max(fixSigmaM, sigmaFloorM, (pctOfDistance / 100) * d)
 }
 
 /** Position object (source "drift") at EVA time t. */

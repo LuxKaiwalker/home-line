@@ -134,7 +134,7 @@ describe('wayHomeView (drag-anywhere frame)', () => {
 })
 
 // Real KAT (skipped without data/interim): WS2's nom_104 pointer exported by make fields; from
-// every vertex of WS2's route the drag path reaches the pad (WS1 grid.json pad).
+// every vertex of WS2's route the drag path reaches the pad in use (engine/public/pad.json, D21).
 const INTERIM = resolve(REPO, 'data/interim')
 const FIELDS = resolve(INTERIM, 'export')
 const SC = 'nom_104'
@@ -154,7 +154,12 @@ describe.skipIf(!haveReal)(`real ${SC} pointer: way home from the route`, () => 
         return new PointerField(new FieldGrid(fieldGrid(index, `${SC}/pointer`), decodeRGBA(rgba, width, height, meta.scale), meta.units), meta.stencil!)
       })()
     : (null as unknown as PointerField)
-  const padRaw = haveReal ? readJson<{ pad: { lon: number; lat: number } }>('terrain/grid.json', INTERIM).pad : { lon: 0, lat: 0 }
+  // the pad in use: WS2's pad.json (D21 official pad), else grid.json's pad_default (grid anchor)
+  const padRaw = !haveReal
+    ? { lon: 0, lat: 0 }
+    : existsSync(resolve(INTERIM, 'engine/public/pad.json'))
+      ? readJson<{ pad: { lon: number; lat: number } }>('engine/public/pad.json', INTERIM).pad
+      : readJson<{ pad: { lon: number; lat: number } }>('terrain/grid.json', INTERIM).pad
   const pad: LonLat = [padRaw.lon, padRaw.lat]
   const route = haveReal ? readJson<RouteFC>(`engine/public/route_${SC}.geojson`, INTERIM) : (null as unknown as RouteFC)
 
