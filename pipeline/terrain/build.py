@@ -1005,6 +1005,7 @@ def step_validation(out_dir: Path | None = None) -> dict:
     pchk = webout.pad_check(discs, min(radii), min_pct,
                             reading=site["coverage"].get("pad_check_reading"))
     rgba, legend = webout.coverage_map_rgba(st, g3, pad, list(radii.values()))
+    dst.mkdir(parents=True, exist_ok=True)
     png = dst / "coverage.png"
     tmp = png.with_name("coverage.tmp.png")
     Image.fromarray(rgba, "RGBA").save(tmp, format="PNG", optimize=True)
