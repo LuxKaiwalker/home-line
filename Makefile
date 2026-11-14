@@ -28,7 +28,7 @@ conditions-fetch:  ## WS4: download/refresh data/raw/conditions/ (needs NASA_API
 	$(PY) -m pipeline.conditions.fetch all
 nav:         ## WS9: F21 Monte Carlo + fix-interval map, F22 skyline fixes -> data/interim/navigation/
 	$(PY) -m pipeline.navigation.run real $(NAV_ARGS)
-fields:      ## WS7: HUD field PNGs + worst-case fields -> data/interim/export/fields/ (WS1 grid/slope, WS2 rasters; merges WS9 fields_index_nav.json)
+fields:      ## WS7: HUD field PNGs + worst-case fields + way-home pointers (own 3 m grid) -> data/interim/export/fields/ (WS1 grid/slope, WS2 rasters; merges WS9 fields_index_nav.json)
 	$(PY) -m pipeline.export.fields_png
 fp3d:        ## WS8: 3D near chunks, ortho textures, far mesh, index -> data/interim/export/fp3d/ (needs WS1 terrain, WS2 route, WS3 horizons)
 	$(PY) -m pipeline.export.terrain_chunks $(FP3D_ARGS)

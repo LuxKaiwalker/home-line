@@ -20,6 +20,8 @@ export interface PanelExtras {
   navLine?: string | null
   /** storm switch state (F18): tripwire fired on the EVA clock, minutes since, tau_dose */
   storm?: { on: boolean; fired: boolean; tauDoseMin: number | null; doseLeftMin: number | null } | null
+  /** sun / time-to-dark row (sun.ts sunRowText); null/undefined = no clock.json, row hidden */
+  sun?: { value: string; sub: string } | null
   /** way home from the dragged position: drawn on the map; false = no path known from here */
   wayHome?: { reachesPad: boolean; startKnown: boolean } | null
 }
@@ -111,6 +113,7 @@ export function createHudPanel(host: HTMLElement, cfg: HudConfig): HudPanel {
   const next = row(exp, 'NEXT STATION')
   const slope = row(exp, 'SLOPE / SPEED CAP')
   const partner = row(exp, 'PARTNER LINE')
+  const sun = row(exp, 'SUN / DARK IN')
   const dose = row(exp, 'DOSE RATE')
   const trip = row(exp, 'TRIPWIRE / LEASH')
   const expSlot = h('div', 'hl-hud-expslot')
@@ -135,7 +138,7 @@ export function createHudPanel(host: HTMLElement, cfg: HudConfig): HudPanel {
 
   const rows: Record<PanelRow, HTMLElement> = {
     tHome: tHome.row, margin: margin.row, o2: o2.row, binding: binding.row, turn: turn.row, rover: home.row,
-    next: next.row, slope: slope.row, partner: partner.row, dose: dose.row, trip: trip.row,
+    next: next.row, slope: slope.row, partner: partner.row, sun: sun.row, dose: dose.row, trip: trip.row,
   }
   let lastKeys = ''
 
@@ -227,6 +230,12 @@ export function createHudPanel(host: HTMLElement, cfg: HudConfig): HudPanel {
         slope.sub.textContent = 'slope cap only (crew.yaml v_safe)'
         partner.v.textContent = r.outsidePartner === null ? DASH : r.outsidePartner ? 'OUTSIDE' : 'inside'
         partner.row.dataset.band = r.outsidePartner ? 'info' : ''
+        sun.row.hidden = !x.sun
+        if (x.sun) {
+          sun.v.textContent = x.sun.value
+          sun.sub.textContent = x.sun.sub
+          sun.row.dataset.band = x.sun.value === 'DARK' ? 'red' : ''
+        }
         const lat = x.rad?.latest
         dose.v.textContent = lat ? fmt(lat.dose_rate_uGy_day, 0, 'µGy/day') : DASH
         dose.sub.textContent = lat?.lag_days != null ? `RAD, ${fmt(lat.lag_days, 0)} days old` : ''

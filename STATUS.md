@@ -892,34 +892,56 @@ Branch: `ws7-hud`
   `fields/fix_interval_{set}.png`), and "Take fix" jumps to the next fix event. KATs
   `navhud.test.ts` (6; exact ellipse/band crossing). Checked in the browser on data-dummy.
 
+- 2026-11-14T13:20Z (session 2): **Way-home pointer is now part of the default `make fields`** (contracts
+  v1.1.1; `--no-pointer` skips it). Every scenario's `fields/{sc}/pointer.png` sits on WS2's 3 m
+  route grid (2,468²) with its own bounds/width/height/res_m and the `stencil` from
+  `pointer_offsets.json`. Re-run on WS2's 11:55 rasters: **29 entries, 41.2 MB in
+  `data/interim/export/fields/`** (6 pointers = 12.8 MB, 2.0–2.3 MB each: 16 move codes over 6.1 M
+  px; compress level 9 or optimize gains 0 bytes) + WS9's 3 `fix_interval_*` PNGs 0.7 MB in
+  navigation/ = **41.9 MB in the web tree**. Every file < 50 MB. `fields/index.json` now carries
+  WS9's `fix_interval_{low,medium,high}` (the old index predated WS9's file). Index validates; the
+  manifest fragment gets `fields.{sc}/pointer.{sha256,max,known_pct}`. KAT on the real export:
+  a move exactly where WS2's T_home is finite and > 0; from 60 random reached cells the pointer
+  ends on the single T_home = 0 cell and T_home never rises along the way.
+- 2026-11-14T13:25Z: **Drag-anywhere draws the way-home path** (`wayhome.ts wayHomeView`): solid
+  line from the dragged spot to the rover when it reaches the pad, dashed when it ends short,
+  nothing on unreached ground ("no way home known from here"). The pad sits on a 3 m cell corner,
+  so "at the pad" = within one pixel of it (WS2's pad cell is (1234, 1233), pixelOf(pad) may be a
+  neighbour); the line ends on the pad itself. KATs: corner rule, view states, and every 10th
+  vertex of `route_nom_104` leads to the pad on the real pointer. Browser check on real data (pointer
+  copied into the web tree for the check, then restored): solid path, "way home drawn", no errors.
+- 2026-11-14T13:30Z: **Sun / time-to-dark row** (C decision 12:20; `sun.ts`, expanded panel "SUN /
+  DARK IN"): reads `conditions/clock.json` `eva.sun_series` (columns by name, linear, azimuth across
+  north, never extrapolated), `eva.t_dark_min` (dark in = t_dark − EVA clock, minutes floored) and
+  `eva.t_dark_min_by_observer` (range over the known WS3 horizons, nulls counted; the station's own
+  horizon when the HUD dwells at a station WS4 has). Real: "dark in 578 min · sun el 36.7°, az 75° ·
+  local horizons 523–571 min (52 stops)". Manifest keys on the row: `clock.eva.t_dark_min`,
+  `clock.eva.sun_series`, `clock.eva.t_dark_min_by_observer.{ids shown}`. Hidden without clock.json
+  (the dummy tree has none).
+- 2026-11-14T13:30Z: **turn_back**: WS2's STATUS describes the rows as "Turn-back (latest leave, O2
+  term)" = our reading, so they stay notes, not walk events. Whether to cap them at the EVA budget is
+  WS2's open question 13 for S. **con_\***: no rasters in `data/interim/engine/` yet (V1), so none
+  exported.
+- KATs: `tests/test_fields_png.py` 51 pass; `web/src/hud/*.test.ts` 93 pass (incl. real-data KATs);
+  whole web suite 388 pass, 1 skipped; `tsc --noEmit` clean.
+
 ### Doing
 
 - —
 
 ### Next
 
-- Bind the HUD to WS2's `route_nom_104` once `make web` publishes it (already works on data/interim).
+- C: `make web` to publish the pointers and the merged index (the HUD already runs on the real tree).
 - con_* fields when V1 lands (`make fields` again; worst-case + bearing unchanged).
 - 60 fps check at 60× on a real laptop (the automated browser here is throttled to ~15 fps even
   when the HUD is idle, so it measures nothing).
 
 ### Blocked
 
-- **Way-home path (F18 drag-anywhere), C:** the pointer field is **not in contracts v1.1.0**. A
-  pointer cannot be resampled to 5 m (moves are grid-relative), so it needs its own grid.
-  Proposal (implemented behind `--with-pointer`, off by default; TS follower `wayhome.ts` ready):
-  `fields/{scenario}/pointer.png`, `scale` 1, `units` "move", plus entry keys `bounds`, `width`,
-  `height`, `res_m` (WS2 route_3m grid) and `stencil` (WS2 `pointer_offsets.json`). nom_104 only,
-  ≈ 0.3–0.6 MB. Until then drag-anywhere shows the numbers but no path.
-- **Fields size, C:** all opt/nom suits = 28.4 MB (con_* will add ≈ 8 MB → ≈ 37 MB), over the
-  20 MB target, under 50 MB per file. PNG optimisation gains < 2 %; the scales are fixed by the
-  contract. The HUD reads only the active scenario (nom_104 + worst/bearing), its conservative
-  twin and slope (≈ 17 MB with opt_104/con_104). C to choose: all 9 scenarios (contract table) or
-  only the 104 kg suits in the web tree (`make fields --scenarios …`).
-- **WS2 question:** `turn_back` rows (t 409 / 439 min, after the return, margin 0, binding O₂)
-  are read as annotations "latest time to leave each station" and kept out of the walk; their
-  O₂ binding differs from the dose-bound margins of the same stations (storm τ 85.9 min). Confirm
-  the meaning.
+- **Fields size, C (info):** 41.9 MB in the web tree now (28.4 MB fields + 12.8 MB pointers + 0.7 MB
+  WS9); con_* will add ≈ 8 MB fields + ≈ 6 MB pointers (≈ 56 MB). The HUD reads one pointer (the
+  active scenario). If that is too much: `--no-pointer` and a nom_104-only pointer run (2.0 MB), or
+  pointers for the 104 kg suits only. Way-home path and pointer-field proposal: resolved (v1.1.1).
 
 ### Assumptions added
 
@@ -933,6 +955,9 @@ Branch: `ws7-hud`
 - A-WS7-4: storm switch puts the 2024 onset at the EVA minute the switch is turned on; the
   tripwire fires after the real onset→tripwire delay (rad.json); the dose budget then counts down
   from `leash.tau_min_at_peak`; alarm 2 when T_home ≥ budget left.
+- A-WS7-6: the pad is "reached" when the pointer path stops within one 3 m pixel of the pad
+  (pad on a cell corner). Sun row minutes are floored; outside WS4's series the sun position is
+  unknown (not extrapolated).
 - A-WS7-5: drift σ = fix σ at the fix, else max(fix σ, floor 5 m, 2 % of distance since the fix).
 - 5 m sampling: each 5 m pixel takes the 3 m cell under its centre (no ties on these grids);
   slope = the 1 m `slope_5m` cell at the 5 m pixel centre; `home_bearing` = geometric bearing to

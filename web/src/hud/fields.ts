@@ -30,7 +30,7 @@ export function decodeRGBA(rgba: ArrayLike<number>, width: number, height: numbe
 
 /**
  * The grid of field `key`: the index grid, overridden by the entry's own bounds/width/height/res_m
- * (only the {scenario}/pointer proposal has one: WS2's native route grid; not in contracts v1.1.0).
+ * (contracts v1.1.1: the {scenario}/pointer entry has one, WS2's native 3 m route grid).
  */
 export function fieldGrid(index: FieldsIndex, key: string): GridSpec {
   const meta = index.fields[key]
