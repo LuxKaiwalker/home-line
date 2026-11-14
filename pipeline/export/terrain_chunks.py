@@ -64,16 +64,43 @@ def load_config() -> dict[str, dict]:
 
 
 # ------------------------------------------------------------------------------ geography ----
-class Geo:
-    """Analysis-CRS metres <-> lon/lat on the Mars 2000 sphere (config/site.yaml ``crs``)."""
+PAD_JSON = REPO / "data" / "interim" / "engine" / "public" / "pad.json"
 
-    def __init__(self, site: dict):
+
+def official_pad(pad_json: str | Path = PAD_JSON) -> dict:
+    """The official pad (D21, user 2026-11-14 16:14): WS2 ``pad.json``'s top-level ``pad``.
+
+    Never ``site.yaml pad_default``, an ``alternatives`` entry or the ``proposal`` block. A
+    missing file, a dummy file or one without a top-level pad is refused (no silent fallback).
+    Returns {id, lon, lat, source, pad_source}."""
+    p = Path(pad_json)
+    doc = json.loads(p.read_text(encoding="utf-8"))  # FileNotFoundError when missing
+    if doc.get("dummy"):
+        raise ValueError(f"{p}: dummy pad.json refused (AGENTS rule 7)")
+    d = doc.get("pad") or {}
+    try:
+        lon, lat = float(d["lon"]), float(d["lat"])
+    except (KeyError, TypeError, ValueError) as e:
+        raise ValueError(f"{p}: no top-level pad with lon/lat (D21)") from e
+    return {"id": str(d.get("id", "pad")), "lon": lon, "lat": lat,
+            "source": f"WS2 {_repo_rel(p)} top-level pad (D21 official pad)",
+            "pad_source": d.get("source")}
+
+
+class Geo:
+    """Analysis-CRS metres <-> lon/lat on the Mars 2000 sphere (config/site.yaml ``crs``).
+
+    ``pad`` = the official pad ({lon, lat}, from :func:`official_pad`). Without it the pad is
+    ``site.yaml pad_default``: only the M0 dummy tree (built on pad_default) and tests use that;
+    ``make fp3d`` always passes the official pad (D21)."""
+
+    def __init__(self, site: dict, pad: dict | None = None):
         crs = site["crs"]
         geog = f"+proj=longlat +R={crs['mars_radius_m']} +no_defs"
         self.analysis_proj = crs["analysis_proj"]
         self._fwd = Transformer.from_crs(geog, self.analysis_proj, always_xy=True)
         self._inv = Transformer.from_crs(self.analysis_proj, geog, always_xy=True)
-        pad = site["pad_default"]
+        pad = pad if pad is not None else site["pad_default"]
         self.pad_lonlat = (float(pad["lon"]), float(pad["lat"]))
         self.pad_xy = self.xy(*self.pad_lonlat)
 
@@ -320,8 +347,9 @@ def validate_index(idx: dict) -> None:
 def build_index(grid: ChunkGrid, geo: Geo, near: list[dict], tex: list[dict], far: dict, *,
                 quantum_m: float, datum: str, eye_height_m: float, sources: dict,
                 ring_file: str | None = RING_FILE, skyline_check: dict | None = None,
-                texture_note: str | None = None) -> dict:
-    """fp3d/index.json (real data: ``dummy`` false), same shape as the M0 dummy index."""
+                texture_note: str | None = None, pad: dict | None = None) -> dict:
+    """fp3d/index.json (real data: ``dummy`` false), same shape as the M0 dummy index.
+    ``pad`` = the pad the grids are centred on (:func:`official_pad`), recorded as ``pad``."""
     tex_by = {(t["i"], t["j"]): t for t in tex}
     chunks = []
     for e in near:
@@ -375,6 +403,8 @@ def build_index(grid: ChunkGrid, geo: Geo, near: list[dict], tex: list[dict], fa
         idx["horizon_ring"] = ring_file
     if skyline_check is not None:
         idx["skyline_check"] = skyline_check
+    if pad is not None:
+        idx["pad"] = pad
     validate_index(idx)
     return idx
 
@@ -426,6 +456,19 @@ def skyline_reference(profiles: list, geo: Geo, cfg: dict | None = None, *, sour
         "pass_rule_note": "pass_rule true = in the F20 pass rule (pad and route stations, "
                           "C 12:35); false = reported only (excluded_reason)",
     }
+
+
+def check_pad_observer(profiles: list, geo: Geo) -> None:
+    """Refuse a WS3 ``pad`` horizon whose observer is not the official pad ``geo`` is centred on
+    (compared at pad.json's 6-decimal precision): a stale pad horizon is never compared."""
+    for sid, prof in profiles:
+        if sid != "pad":
+            continue
+        lon, lat = geo.lonlat(float(prof.observer["x"]), float(prof.observer["y"]))
+        if (round(lon, 6), round(lat, 6)) != (round(geo.pad_lonlat[0], 6),
+                                              round(geo.pad_lonlat[1], 6)):
+            raise ValueError(f"WS3 pad horizon observer ({lon:.6f}, {lat:.6f}) is not the "
+                             f"official pad {geo.pad_lonlat} (D21): re-run make horizons")
 
 
 def read_station_horizons(horizon_dir: Path, ids: list[str]) -> list:
@@ -508,12 +551,15 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--stations", type=Path,
                     default=REPO / "data/interim/engine/public/stations.json",
                     help="stations.json (ids for --station-horizons)")
+    ap.add_argument("--pad-json", type=Path, default=PAD_JSON,
+                    help="WS2 pad.json: its top-level pad is the official pad (D21)")
     ap.add_argument("--out", type=Path, default=DEFAULT_OUT)
     args = ap.parse_args(argv)
     cfg = load_config()
     far_sources_p = args.far_source or default_far_sources(cfg)
     f3 = cfg["fp3d"]
-    geo = Geo(cfg["site"])
+    pad = official_pad(args.pad_json)
+    geo = Geo(cfg["site"], pad=pad)
     grid = grid_from_config(geo, cfg)
     q = f3["height"]["quantum_m"]
     fc = json.loads(args.route.read_text())
@@ -547,10 +593,12 @@ def main(argv: list[str] | None = None) -> int:
     rel = _repo_rel
     sources = {"dem": rel(args.dem_1m),
                "far": [rel(args.dem_1m)] + [rel(p) for p in far_sources_p],
-               "ortho": rel(args.ortho), "route": rel(args.route)}
+               "ortho": rel(args.ortho), "route": rel(args.route),
+               "pad": rel(args.pad_json)}
     check = None
     ids = ["pad"] + [s["id"] for s in stations]
     profs = read_station_horizons(args.station_horizons, ids)
+    check_pad_observer(profs, geo)
     if profs:
         check = skyline_reference(profs, geo, cfg,
                                   source=f"WS3 horizon engine, {rel(args.station_horizons)}",
@@ -559,7 +607,8 @@ def main(argv: list[str] | None = None) -> int:
         grid, geo, near, tex, far, quantum_m=q, datum=args.datum,
         eye_height_m=cfg["hud"]["eye_height_m"], sources=sources, skyline_check=check,
         texture_note="WS1 HiRISE LRGB ortho (colour, greyscale where the mosaic is greyscale), "
-                     "JPEG per near chunk; no-ortho texels = horizon.yaml panorama.ground_rgb")
+                     "JPEG per near chunk; no-ortho texels = horizon.yaml panorama.ground_rgb",
+        pad=pad)
     out_index = args.out / "fp3d" / "index.json"
     out_index.write_text(json.dumps(idx, indent=1) + "\n", encoding="utf-8")
 
