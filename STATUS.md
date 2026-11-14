@@ -322,7 +322,7 @@ All numbers from today's fresh downloads (`data/raw/terrain/`, cache index `cach
 - 2026-11-14T11:36Z: **Provenance switched to WS6 `manifest.record`** (`pipeline/terrain/prov.py`
   is now a thin wrapper; NaN/inf -> None). All 36 previous keys re-recorded with the same values
   (new `utc`, clean commit) into `data/interim/manifest/pipeline__terrain__build.json`, plus
-  5 new pad-check keys (41 keys; last re-record 11:45Z at f70f3eb). Value changes: only
+  5 new pad-check keys (41 keys; last re-record 11:39Z at f70f3eb). Value changes: only
   `file.validation/coverage.json` (new hash); `validation.coverage.pad_check.pass` is true again
   after the 12:37 decision (it was null for a few minutes while the reading was open).
   **`data/interim/terrain/manifest_pending.json` is deleted. C: the make web bridge
@@ -361,7 +361,7 @@ All numbers from today's fresh downloads (`data/raw/terrain/`, cache index `cach
   - **Recommendation: switch to `ctx_20m_v2.tif`.** C decides; WS3 then points
     `config/horizon.yaml bands.ctx_20m.path` at `data/interim/terrain/ctx_20m_v2.tif`. Until then
     `ctx_20m.tif` stays canonical and unchanged.
-- 2026-11-14T11:35Z / 11:45Z: **Pad check shows both readings** (above); after the user's 12:37
+- 2026-11-14T11:35Z / 11:39Z: **Pad check shows both readings** (above); after the user's 12:37
   decision, `pass` follows `data_coverage`. `coverage.json` was written to
   `terrain/staged/` first and compared: `coverage.png` and `coreg.json` were byte-identical (not
   rewritten); `coverage.json` differs only in `pad_check` and the D3 status text, so only that file
