@@ -1245,7 +1245,7 @@ Branch: `ws7-hud`
   re-run at 1dbbff8 -> 96 `fields.*` keys, all clean, all citing `fields/...`; the 26 previous PNGs are
   byte-identical, +9 `con_{80,104,120}` fields (WS2's con rasters now exist), index gains only those.
 
-- 2026-11-14T16:50Z (session 4): **D39 storm placement** (`config/conditions.yaml storm_replay`):
+- 2026-11-14T15:45Z (session 4): **D39 storm placement** (`config/conditions.yaml storm_replay`):
   `storm.ts` is a TypeScript port of WS4's `pipeline/conditions/storm_replay.py`
   (`tripwireTargetMin`, `stormOffsetUtcMs`, `stormUtcAtMs`, `evaMinOf`, `stormReplay`;
   `parseStormReplayConfig` refuses any rule other than route_max_t_home / tripwire / min / first, as
@@ -1256,12 +1256,12 @@ Branch: `ws7-hud`
   `rad.storm_2024.tripwire_utc`, `.tripwire_halfwidth_label`, `rad.leash.tau_min_at_peak`,
   `fields.{sc}/t_home.sha256`. KATs `storm.test.ts` mirror all seven WS4 KATs (same inputs, same
   answers) + HUD placement, alarm 2 timing, ± label on the real rad.json.
-- 2026-11-14T16:50Z: **D39 drift radius**: the core circle (D19) is max(`fallback_drift.sigma_floor_m`
+- 2026-11-14T15:45Z: **D39 drift radius**: the core circle (D19) is max(`fallback_drift.sigma_floor_m`
   5 m, `pct_of_distance` 2 % of distance since the last fix), also at a fix (5 m at the rover pad;
   before: the fix's 2 m). The `sigma_floor_m: 5` key already existed; now cited as D39 in
   `config/hud.yaml`. The F21 ellipse is a separate optional toggle "Odometry (F21, set, optional)"
   shown only with WS9's files; "Drift" is always the D39 circle (before, WS9's files replaced it).
-- 2026-11-14T16:50Z: **D28 turn-back binding** (contracts v1.1.3): BINDING row and the turn-back
+- 2026-11-14T15:45Z: **D28 turn-back binding** (contracts v1.1.3): BINDING row and the turn-back
   sub-line show the term incl. **"EVA duration"** ("bound by EVA duration"); during a dwell the
   station's WS2 `turn_back` row adds e.g. "S2 latest leave T+6:22:10 (O₂)" (pre-D28 timeline). Read from the
   timeline (`margin_binding` of the row in force and of the `turn_back` rows); the card's
