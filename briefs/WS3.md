@@ -1,6 +1,6 @@
 # 🌄 WS3 brief — Horizon and camera
 
-**Mission:** point horizons, panoramas, CAHVOR projection of the predicted skyline onto Curiosity's Navcam frames, and the skyline validation V2. Also provides the horizon engine and sky detector that WS9 uses for the navigation fix.
+**Mission:** point horizons, panoramas, CAHVOR projection of the predicted skyline onto Curiosity's Navcam frames, and the skyline validation V2. Also provides the horizon engine and sky detector that WS9 uses for the navigation fix _(optional add-on since 2026-11-14, D19)_.
 
 **Human owner / reviewer:** C · **Features:** F12, F13 (V2) · **SPEC:** §2.2 F12/F13, §5.1 items 4, 5, 9
 
