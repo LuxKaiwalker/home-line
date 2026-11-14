@@ -109,25 +109,81 @@ Branch: `main`
 
 Branch: `ws1-terrain`
 
+### G0 report (DRAFT for S sign-off, 2026-11-14T09:58Z)
+
+All numbers from today's fresh downloads (`data/raw/terrain/`, cache index `cache_index.json`) and
+`data/interim/terrain/*.json`. Grids: analysis CRS (`site.yaml crs.analysis_proj`), pad = `pad_default`.
+
+- **DEM:** merged DEM v3 rows 35993-44194 pulled once as 21 full-width row bands (722 MB on the
+  wire), reprojected to `dem_1m.tif` (7,800 x 7,800 at 1 m, pad +/- 3,900 m), 100% valid.
+  Pad elevation -3627.74 m (D0 nearest pixel: -3627.68 m).
+- **Source mask (D3 = recommended default applied, AWAITING CONFIRMATION):** union of the STAC
+  `mro_hirise_socet_dtms` footprint quads of the 4 pairs the merged DEM's Astropedia page lists
+  (009149, 019698, 009650, 001488; 040770 is in STAC but not in the list). Quads cover 100% of the
+  planning extent: HiRISE 100%, CTX/HRSC 0%, nodata 0%.
+  - Evidence against over-trusting quads (quads are not valid-data outlines, D0 2.2): 1 m texture
+    (RMS of 9 m high-pass over 25 m) inside the quads has median 0.111 m, p5 0.035 m; an upsampled
+    CTX 20 m DEM has p95 0.055 m. **5.5% of the 30-min disc has texture below the CTX p95.** If
+    those cells were called non-HiRISE (option C), assessed coverage would be 93.8% (30-min) and
+    79.1% (60-min). Option B (all 5 STAC quads) = A (100%).
+- **Coverage (3 m cell states, flat discs at 0.98 m/s):**
+  | Disc | Radius | Assessed | Blocked (>20 deg) | Unknown |
+  | --- | --- | --- | --- | --- |
+  | 30 min | 1,764 m | 58.77% | 41.23% | 0.00% |
+  | 60 min | 3,528 m | 68.64% | 31.36% | 0.00% |
+- **Pad check:** known (assessed + blocked) = 100% of the 30-min disc >= 90%: **pass** under the
+  data-coverage reading. Under a strict "state 0 only" reading it is 58.77%: **fail**. S/C to say
+  which reading SPEC F1 means (see Blocked).
+- **Blocked share is high:** 24.2% of 1 m HiRISE cells exceed 20 deg (Horn 3x3); the 5 m plane fit
+  gives 23.7%, so it is not only 1 m noise. 17-20 deg ("beyond tested") is 9.1% of the 30-min disc.
+  Ridge cells (> 0.75 m above the 15 m median): 1.4% of 1 m cells.
+- **Co-registration** (grid search +/-200 m, 2 m, MAD, 537 MMGIS drive ends inside the window):
+  best shift **dx = 0, dy = 0 m** (frame check passes); residual median -0.000 m, **MAD 0.037 m**,
+  p5/p95 -0.128/+0.107 m. MAD rises to 0.13-0.15 m at +/-2 m, so the minimum is sharp.
+  Inference (not verified): residuals this small suggest MMGIS `elev_geoid` is itself sampled from
+  this DEM, so coreg is a frame check, not an independent accuracy check.
+- **HiRISE cross-check (never used for routing):** merged - HiRISE median **-14.54 m** (009149,
+  P90 |diff| 36.57 m) and **-9.43 m** (019698, P90 |diff| 15.34 m). Both HiRISE COGs also sit
+  horizontally offset from the merged DEM (best shift 009149: +68/+34 m, MAD 3.57 m; 019698: -26/+32 m,
+  MAD 1.41 m). D0 saw +11.6 m HiRISE - merged at the pad, same sign. The controlled HiRISE COGs are in
+  a different frame from the merged DEM; the merged DEM agrees with the rover.
+- **pad_default** (137.382, -4.806) is not reproduced by any centroid of the 176 drive ends with
+  sol >= 4410 (approx. 2025-01-01): mean 174.8 m away, median 83.1 m, in-focus (148) mean 265.0 m,
+  in-focus median 73.9 m. Not changed (C/user decide).
+
 ### Done
 
-- —
+- Started 09:47Z; KATs first (ported): `tests/test_coverage.py`, `tests/test_coreg.py`, 26 pass.
+- dem_1m, source_mask, coverage.json/.png, coreg.json, drive_ends_coreg.json, grid.json.
+- 3 m routing grids for **WS2**: `elev_3m.tif`, `maxslope_3m.tif`, `cellstate_3m.tif`,
+  `dataedge_3m.tif` (all 0: no unknown cells), `ridge_3m.tif`; plus `slope_1m.tif`, `slope_5m.tif`,
+  `roughness_5m.tif`, `ridge_index.tif` (WS6 V1 can use `slope_1m.tif`). 2,468 x 2,468 at 3 m.
+- `hirise_xcheck.json`; `crism_d2300_18m.tif`, `crism_sindex2_18m.tif` (89.2% valid).
+- Downloads: 909 MB total (DEM 722, HiRISE DTM windows 178, CRISM bands 9).
 
 ### Doing
 
-- —
+- Stations (S1, S2, S4), CTX/MOLA-HRSC windows for WS3, ortho + basemap tiles.
 
 ### Next
 
-- —
+- After V1 (WS6): `cellstate_3m_conservative.tif`.
 
 ### Blocked
 
-- —
+- D3 confirmation (user, G0): STAC quads applied; texture evidence above.
+- Pad-check reading (S/C): "assessed" = known data (pass, 100%) or state 0 only (fail, 58.77%)?
+- `pad_default`: keep 137.382, -4.806 or move to a stated centroid (numbers above)? User decides.
+- S3, S5 hand picks (S): positions not yet in `stations.yaml`.
+- Provenance: WS6 `manifest.py` not on main; entries go to
+  `data/interim/terrain/manifest_pending.json` via `pipeline/terrain/prov.py`; re-run when it lands.
 
 ### Assumptions added
 
-- —
+- `site.yaml`: `raw_fetch_margin_m` 200, `raw_fetch_chunk_rows` 400, `download_budget_bytes` 3 GB,
+  `texture_check` (D3 evidence only) - all `assumed: true`; `dem_window_buffer_m` 200 (brief).
+- Non-HiRISE valid cells are coded 2 (CTX and HRSC are not separable without footprints); code 3
+  is never assigned.
 
 ## WS2 Engine
 

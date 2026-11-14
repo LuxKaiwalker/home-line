@@ -319,7 +319,7 @@ def fetch_crism() -> dict[str, dict[str, Path]]:
     s = G.site()["d0_sources"]
     res: dict[str, dict[str, Path]] = {}
     for pid, url in s["crism_su_img"].items():
-        hdr = G.REPO / "data" / "raw" / "discovery" / f"crism_{pid}_su165j_mtr3.hdr"
+        hdr = G.REPO / "data" / "raw" / "discovery" / f"crism_{pid}_su.hdr"
         h = _envi_hdr(hdr)
         if h["data type"] != 4 or h["byte order"] != 0:
             raise RuntimeError(f"{pid}: unexpected ENVI type/order {h}")
@@ -352,24 +352,27 @@ def ctx_candidates() -> list[dict]:
     from shapely.geometry import shape
 
     disc_dir = G.REPO / "data" / "raw" / "discovery"
-    feats = json.loads((disc_dir / "stac_ctx_dtms_30km_bbox.json").read_text())["features"]
+    # D0 2.4: first 500 of the 3,263 items intersecting the pad (id, bbox, geometry only)
+    feats = json.loads((disc_dir / "stac_ctx_pad_point_idbbox.json").read_text())["features"]
     for p in sorted((G.RAW / "stac").glob("ctx_point_*.json")):  # extra point queries
         feats += json.loads(p.read_text())["features"]
     asset = G.site()["d0_sources"]["ctx_asset"]
+    suffix = {"geoid_adjusted_dem": "-DEM-geoid-adj.tif"}[asset]
     out, seen = [], set()
     for f in feats:
-        if f["id"] in seen:
+        if f["id"] in seen or f.get("geometry") is None:
             continue
         seen.add(f["id"])
-        if asset not in f["assets"] or f.get("geometry") is None:
-            continue
+        href = (f.get("assets", {}).get(asset, {}).get("href")
+                or f"{CTX_BASE}/{f['id']}/{f['id']}{suffix}")  # pattern verified on D0 items
         geom = shapely.transform(shape(f["geometry"]), lambda c: np.column_stack(
             G.xy_of_lonlat(c[:, 0], c[:, 1])))
-        out.append({"id": f["id"], "href": f["assets"][asset]["href"], "poly": geom})
+        out.append({"id": f["id"], "href": href, "poly": geom})
     return out
 
 
 STAC_SEARCH = "https://stac.astrogeology.usgs.gov/api/search"
+CTX_BASE = "https://astrogeo-ard.s3-us-west-2.amazonaws.com/mars/mro/ctx/controlled/usgs"
 
 
 def stac_ctx_point(lon: float, lat: float, limit: int = 100) -> Path:

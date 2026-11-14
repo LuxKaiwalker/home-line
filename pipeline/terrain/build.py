@@ -615,7 +615,7 @@ def step_crism() -> dict:
             raw = fetch.cached(f"crism_{pid}_{idx_name}_b{band}")
             if raw is None:
                 raise FileNotFoundError(f"{pid}: run `python -m pipeline.terrain.fetch crism`")
-            h = fetch._envi_hdr(DISC / f"crism_{pid}_su165j_mtr3.hdr")
+            h = fetch._envi_hdr(DISC / f"crism_{pid}_su.hdr")
             a = np.fromfile(raw, "<f4").reshape(h["lines"], h["samples"]).copy()
             a[(a == ign) | ~np.isfinite(a)] = np.nan
             mi = h["map info"]  # [proj, ref_x, ref_y, easting, northing, dx, dy, ...]
