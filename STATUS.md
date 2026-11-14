@@ -233,6 +233,35 @@ Branch: `c-integration` (merged to `main` by the orchestrator)
     `parsePadSummary` match the final shape (rows under `pads`, `official` on every row,
     headline object keyed "30"/"60" with `budget_min`).
 
+- 2026-11-14T18:20Z (session 5): **simulator bundle contracts v1.0.0 (D41), frozen 20:00 CET**
+  (`contracts/bundle/`, README there; versioned apart from the web 1.1.x line):
+  - `plan.schema.json` (plan id, pad official/picker/custom, scenario variant + suit, station
+    order, EVA start D31, storm replay D39 incl. t* and the storm UTC at EVA start, engine commit,
+    config hash, contract version, created UTC, origin precomputed / computed_live + D40 label,
+    world version) and `bundle.schema.json` (the zips' `index.json`, kind plan / world: frame,
+    bounds, every file with media type, bytes, sha256, role, frame, units, contract, `.f32` grid
+    header, source path + sha256 + transform, status). Derived-file schemas: `route_local`
+    (1 m route), `points`, `sun`, `storm`, `config_snapshot`.
+  - Frame: pad-local metres, origin at the official pad, x = E, y = N, z = up (z = areoid height -
+    pad elev); projection + pad_xy in every index; Unity = (x, z, y). Grids: raw LE float32,
+    row 0 = north, header in index.json (shape, NW-corner origin, cell, nodata -9999, units,
+    z_to_frame_m for heights); nearest-cell sampling for fields. Entry point named `index.json`
+    as on the handover page (validated by `bundle.schema.json`).
+  - `tools/make_bundle.py` + `make bundle` / `bundle-fixture` / `bundle-check`: builds both zips
+    from data/interim through make_web's rules (web/public/data fallback); deterministic
+    (fixed zip time, sorted, index.json first); validates every file + the manifest and
+    round-trips each zip. KATs first: `tests/test_make_bundle.py` (19).
+  - **Fixture** `contracts/bundle/fixtures/official_pad_v1/` (main 70b1136 inputs: WS2 s8/s9
+    golden + D44 names, WS8 s4 fp3d, WS1 s5): `plan_bundle.zip` 38.8 MB (52 entries, rank1 /
+    nom_104, stations S7 S6 S1 S4, t* 44.39 min), `world_pack.zip` 19.0 MB (123 entries, full,
+    not cropped, world-dcd8def207c7), `plan.json`, `fixture.json`. CI: round trip + schema
+    validation + repack byte-identical (bytes compared when zlib matches 1.3.1); the full rebuild
+    is byte-identical locally (skipped where data/interim is absent).
+- 2026-11-14T17:15Z (session 5): **contracts v1.1.5** (additive): `golden.schema.json` +
+  `SCHEMA_MAP` `physio/golden.json` (both validators) + make web rule (WS2); `scenarios_index`
+  `headline_60`; `pads_index` rows / `pad_summary` `feasible`; `trade_table` cell `in_data_pct`.
+  WS2's real interim files validate (0 errors besides the never-published card parts).
+
 ### Doing
 
 - —
