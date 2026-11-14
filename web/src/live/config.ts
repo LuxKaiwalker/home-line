@@ -2,7 +2,7 @@
 // build flags and the API base URL are read here and nowhere else (kit rule 4: static first).
 //
 //   VITE_LIVE=1          turn the live layer on (default off: no live code in the bundle path)
-//   VITE_API_BASE=<url>  origin of the live API, default http://localhost:8000 (api.prefix is appended)
+//   VITE_API_BASE=<url>  origin of the live API, default http://localhost:8012 (api.prefix is appended)
 //   VITE_LIVE_MOCK=1     dev only: answer API calls from the contract-example mock (mock/fetch.ts)
 import backendRaw from '../../../config/backend.yaml'
 import { cfg } from '../config'
@@ -59,9 +59,9 @@ export function isLiveFlag(value: EnvValue): boolean {
   return value === true || value === '1' || value === 'true'
 }
 
-/** VITE_API_BASE parsing: trailing slashes dropped, default http://localhost:8000. */
+/** VITE_API_BASE parsing: trailing slashes dropped, default http://localhost:8012. */
 export function apiBaseFrom(value: EnvValue): string {
-  const v = typeof value === 'string' && value.trim() ? value.trim() : 'http://localhost:8000'
+  const v = typeof value === 'string' && value.trim() ? value.trim() : 'http://localhost:8012'
   return v.replace(/\/+$/, '')
 }
 

@@ -20,9 +20,9 @@ describe('live config', () => {
     expect(CLIENT.pollMaxMs).toBeLessThan(CLIENT.requestTimeoutMs)
   })
 
-  it('VITE_API_BASE: default http://localhost:8000, trailing slash dropped', () => {
-    expect(apiBaseFrom(undefined)).toBe('http://localhost:8000')
-    expect(apiBaseFrom('  ')).toBe('http://localhost:8000')
+  it('VITE_API_BASE: default http://localhost:8012, trailing slash dropped', () => {
+    expect(apiBaseFrom(undefined)).toBe('http://localhost:8012')
+    expect(apiBaseFrom('  ')).toBe('http://localhost:8012')
     expect(apiBaseFrom('https://api.example.org/')).toBe('https://api.example.org')
   })
 
