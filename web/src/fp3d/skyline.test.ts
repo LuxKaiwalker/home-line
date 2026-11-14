@@ -43,6 +43,9 @@ interface CheckStation {
   x_m: number
   y_m: number
   elevation_deg: (number | null)[]
+  /** false: reported, not in the F20 pass rule (C 12:35: no access cell, the camera never stands there) */
+  pass_rule?: boolean
+  excluded_reason?: string
 }
 interface SkylineCheck {
   tolerance_deg: number
@@ -210,7 +213,8 @@ function runCheck(root: string, check: SkylineCheck, label: string) {
     rows.push(
       `${st.id}: n ${cmp.n}, max |d| ${cmp.maxAbsDeg.toFixed(3)} deg at az ${cmp.atAzDeg}, mean ${cmp.meanAbsDeg.toFixed(3)}, rms ${cmp.rmsDeg.toFixed(3)}`,
     )
-    return { id: st.id, cmp }
+    if (st.pass_rule === false) rows[rows.length - 1] += ` (reported, not in the pass rule: ${st.excluded_reason ?? 'excluded'})`
+    return { id: st.id, cmp, inRule: st.pass_rule !== false }
   })
   console.log(`[F20 skyline check, ${label}] ring: ${ring?.note ?? 'none'}; tolerance ${check.tolerance_deg} deg\n  ${rows.join('\n  ')}`)
   return results
@@ -257,7 +261,10 @@ describe('SPEC F20: rendered skyline within 0.5 deg of the computed horizon', ()
   it.skipIf(!real?.skyline_check || !process.env.FP3D_REAL_CHECK)('real data: every station within tolerance (fp3d/index.json skyline_check)', () => {
     // the ring is WS3's file; before make web it sits in data/interim/horizon/public/fp3d/
     const res = runCheck(realRoot!, real!.skyline_check!, 'real')
-    for (const r of res) expect(r.cmp.maxAbsDeg).toBeLessThanOrEqual(real!.skyline_check!.tolerance_deg)
+    // pass rule (C 12:35): the pad and the route stations; excluded stations are only reported
+    const inRule = res.filter((r) => r.inRule)
+    expect(inRule.map((r) => r.id)).toContain('pad')
+    for (const r of inRule) expect(r.cmp.maxAbsDeg).toBeLessThanOrEqual(real!.skyline_check!.tolerance_deg)
   })
 })
 

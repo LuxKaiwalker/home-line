@@ -648,3 +648,26 @@ def test_skyline_reference_resamples_and_keeps_unknown(geo):
     assert st["elevation_deg"][90] == pytest.approx(1.0, abs=1e-4)
     assert st["elevation_deg"][2] is None
     assert (st["lon"], st["lat"]) == pytest.approx(geo.pad_lonlat, abs=1e-6)
+
+
+def test_skyline_pass_rule_excludes_stations_without_access_cell(geo):
+    """C 12:35: the F20 pass rule covers the pad and the route stations; a station with no
+    access cell (WS2 stations.json access_lon null, e.g. S1) is reported but excluded."""
+    from pipeline.horizon.rays import HorizonProfile
+
+    stations = [{"id": "S1", "access_lon": None, "access_lat": None},
+                {"id": "S2", "access_lon": 137.38, "access_lat": -4.77},
+                {"id": "S9"}]  # no access keys at all (older stations.json): kept in the rule
+    excl = terrain_chunks.skyline_exclusions(stations)
+    assert set(excl) == {"S1"} and "access cell" in excl["S1"]
+    az = np.arange(360) * 1.0
+    prof = HorizonProfile(az_deg=az, elevation_deg=np.zeros(360), distance_m=np.full(360, 1e3),
+                          source=["dem_1m"] * 360, observer={"x": geo.pad_xy[0],
+                                                             "y": geo.pad_xy[1], "z": 0.0},
+                          eye_height_m=1.7, az_step_deg=1.0)
+    ref = terrain_chunks.skyline_reference([("pad", prof), ("S1", prof), ("S2", prof)], geo,
+                                           source="t", excluded=excl)
+    by = {s["id"]: s for s in ref["stations"]}
+    assert by["pad"]["pass_rule"] is True and by["S2"]["pass_rule"] is True
+    assert by["S1"]["pass_rule"] is False and by["S1"]["excluded_reason"] == excl["S1"]
+    assert "pass_rule" in ref["pass_rule_note"]

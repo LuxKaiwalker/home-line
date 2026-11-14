@@ -379,11 +379,25 @@ def build_index(grid: ChunkGrid, geo: Geo, near: list[dict], tex: list[dict], fa
 
 
 # ---------------------------------------------------------------------- skyline check ----
-def skyline_reference(profiles: list, geo: Geo, cfg: dict | None = None, *, source: str) -> dict:
+NO_ACCESS_REASON = ("no access cell in WS2 stations.json: not on the route, the camera never "
+                    "stands there (C decision 2026-11-14 12:35)")
+
+
+def skyline_exclusions(stations: list[dict]) -> dict[str, str]:
+    """Stations reported but outside the F20 pass rule (C 12:35: the rule covers the pad and the
+    route stations): those WS2 gives no access cell (``access_lon`` present and null)."""
+    return {s["id"]: NO_ACCESS_REASON for s in stations
+            if "access_lon" in s and s["access_lon"] is None}
+
+
+def skyline_reference(profiles: list, geo: Geo, cfg: dict | None = None, *, source: str,
+                      excluded: dict[str, str] | None = None) -> dict:
     """fp3d/index.json ``skyline_check``: the computed horizon (WS3 HorizonProfile) at each
     station, resampled to ``fp3d.skyline_check.az_step_deg``, for the SPEC F20 acceptance check
     (rendered skyline within ``tolerance_deg``). ``profiles`` = [(station_id, HorizonProfile)].
-    Unknown elevations stay null."""
+    Unknown elevations stay null. ``excluded`` = {id: reason} for stations reported but not in
+    the pass rule (``pass_rule`` false)."""
+    excluded = excluded or {}
     cfg = load_config() if cfg is None else cfg
     chk = cfg["fp3d"]["skyline_check"]
     step = float(chk["az_step_deg"])
@@ -398,6 +412,8 @@ def skyline_reference(profiles: list, geo: Geo, cfg: dict | None = None, *, sour
             "x_m": round(x, 3), "y_m": round(y, 3),
             "eye_height_m": float(prof.eye_height_m),
             "elevation_deg": [None if not np.isfinite(v) else round(float(v), 4) for v in el],
+            "pass_rule": sid not in excluded,
+            **({"excluded_reason": excluded[sid]} if sid in excluded else {}),
         })
     return {
         "source": source,
@@ -406,6 +422,8 @@ def skyline_reference(profiles: list, geo: Geo, cfg: dict | None = None, *, sour
         "azimuth_convention": "deg clockwise from grid north (analysis CRS); index k = k * step",
         "curvature": "drop = d^2 / (2 R), R = config/site.yaml crs.mars_radius_m",
         "stations": stations,
+        "pass_rule_note": "pass_rule true = in the F20 pass rule (pad and route stations, "
+                          "C 12:35); false = reported only (excluded_reason)",
     }
 
 
@@ -514,7 +532,8 @@ def main(argv: list[str] | None = None) -> int:
     profs = read_station_horizons(args.station_horizons, ids)
     if profs:
         check = skyline_reference(profs, geo, cfg,
-                                  source=f"WS3 horizon engine, {rel(args.station_horizons)}")
+                                  source=f"WS3 horizon engine, {rel(args.station_horizons)}",
+                                  excluded=skyline_exclusions(stations))
     idx = build_index(
         grid, geo, near, tex, far, quantum_m=q, datum=args.datum,
         eye_height_m=cfg["hud"]["eye_height_m"], sources=sources, skyline_check=check,
