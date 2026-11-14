@@ -558,7 +558,7 @@ Branch: `ws9-nav`
   (lowest RMS, never lowest error). KATs: synthetic DEM with a known observer recovered within one
   10 m grid step, every frame reported, contracts. Verified against `origin/ws3-horizon` (92d2f61) in a
   temp worktree: all 47 nav KATs pass there; on main the 4 engine KATs skip until WS3 merges.
-- `tests/test_nav.py`: 43 pass + 4 skipped (WS3) on this branch; full suite and ruff green.
+- `tests/test_nav.py`: 44 pass + 4 skipped (WS3) before the main merge; full suite and ruff green.
 - 2026-11-14T10:31Z: merged `origin/main` (WS3 now on main): all 48 nav KATs pass, none skipped
   (F22 synthetic-DEM KAT included); full pytest, ruff, tsc, vitest (212), validate_contracts green.
 
