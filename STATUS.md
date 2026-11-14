@@ -542,14 +542,20 @@ Branch: `ws2-engine`
   - Route nom_104 unchanged: pad -> S4 -> S2 -> pad, 209.7 min; binding dose, lowest 14.89 min at S2.
   - **Sizes** (public tree, 9 scenarios, excl. card fragments): **108.4 MB raw, 16.7 MB gz**; largest file 9.95 MB (opt_80 isochrones); con_* isochrones 8.0-8.6 MB raw (1.19-1.27 gz), con_* edges 0.6 MB; bands 4.9-5.4 MB raw (0.70-0.78 gz, now with con bands). opt_80 isochrones are 1.53 MB gz on the 2-min fallback (0.03 over the 1.5 budget; other 8 within). Every file < 50 MB.
 - D19 (14:19): no engine change. Q13 (turn-back cap) stays open for S.
+- 2026-11-14T14:24Z (session 5): **pad.json writer fixed** (C 14:58, contract pad v1.1.2), KATs first (`pipeline/engine/tests/test_siting_trade.py`: pad equals `pad_default`, proposal never adopted (and the contract refuses `adopted: true`), file validates, manifest keys; `test_scenarios.py` CLI e2e). Commit 9ae1ca7; full suite 763 pass.
+  - **Shape:** `pad` = the pad **in use**: `pad_default` lon/lat exactly (137.382, -4.806), `source` "config/site.yaml pad_default (kept by the user, 14 Nov 11:24)", and the F8 rule evaluated there: elev -3627.8 m, **score 0.0** (no station within conservative 30 min: S4 is the only con_104 station), `checks` {assessed_pct_30min **100.0**, max_slope_deg **28.06** (steepest cell of the 21 m square centred on the pad, the F8 block test; the pad cell itself is 6.4 deg), rule_passed **false**}. Top-level `alternatives` and `hop_options` are `[]` (they belong to the proposal); `site_rule_version` = the rule text.
+  - **`proposal`** {`adopted`: false, `note` "... pad_default is kept; S decides ...", `pad` 137.402443, -4.769028 (score 0.475, max slope 3.95, disc check null), `alternatives` ranks 1-3 (all 0.475), `hop_options` [], `site_rule_version`, `tie` {top_score 0.475, n_blocks_at_top_score 5, n_candidate_blocks 742, tiebreak, note}, `stations` ["S4"], `no_access` {S1, S2 reasons}, `checks_note` (the 1,764 m disc leaves the 3 m grid; the proposed pad is 1,510 m from the edge)}.
+  - **Manifest keys** (all `file: pad.json`, script siting.py, commit 9ae1ca7): `pad.{lon,lat,elev_m,score}`, `pad.checks.{assessed_pct_30min,max_slope_deg,rule_passed}`; `pad.proposal.{lon,lat,elev_m,score}`, `pad.proposal.checks.max_slope_deg` (null checks unrecorded), `pad.proposal.alternatives.{rank}.{lon,lat,elev_m,score}`, `pad.proposal.tie.{top_score,n_blocks_at_top_score,n_candidate_blocks}`, `file.pad.json`.
+  - **Re-run only F8 + pad:** new `python -m pipeline.engine.scenarios --siting-only` (con_104 return field in memory, access cells, siting; no other product touched; patches `summary.json` `siting`). Run from clean 9ae1ca7: `pad.json`, `siting.png`, `siting_png.json`, `siting.tif` rewritten (siting output unchanged).
+  - **For C / WS5 (shape differs):** WS5's `web/src/map/pad.ts padProposal()` and `types.ts PadProposalBlock` read `proposal.lon/lat/score/checks/rule`; contract v1.1.2 (and this file) has `proposal.pad.{lon,lat,score,checks}` and `proposal.site_rule_version`. As is, `padProposal()` returns null (no proposal marker; the panel shows its fallback text). The manifest key names WS5 cites (`pad.proposal.{lon,lat,score}`, `pad.proposal.checks.{max_slope_deg,assessed_pct_30min}`, `pad.checks.*`) match. Fix belongs in WS5 (read `b.pad.*`, `b.site_rule_version`; optionally `checks_note`, `tie`).
 
 ### Doing
 
-- Waiting for S (S3/S5 positions, S1 access, pad proposal, questions) and C (make web with con_*, pad.json, siting).
+- Waiting for S (S3/S5 positions, S1 access, pad proposal, questions) and C (make web: lift the `pad.json` withhold, publish siting).
 
 ### Next
 
-- C: `make web` publishes con_* (isochrones, edges), new bands, `pad.json`, `siting.png`, `siting_png.json`, cart-only partner files and the new keys.
+- C: drop `pad.json` from `WITHHELD` (writer fixed, 9ae1ca7) and `make web`; WS5 to read `proposal.pad.*`.
 - Once S3/S5 have positions (or S1 gets an access cell): re-run for a 3-station nom_104 route and F8 with more than one station.
 - WS7/WS9: real rasters are ready in `data/interim/engine/{sid}/`.
 
