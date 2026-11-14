@@ -828,44 +828,78 @@ Branch: `ws9-nav`
 - 2026-11-14T10:31Z: merged `origin/main` (WS3 now on main): all 48 nav KATs pass, none skipped
   (F22 synthetic-DEM KAT included); full pytest, ruff, tsc, vitest (212), validate_contracts green.
 
+- 2026-11-14T11:20Z (session 2): **real run `make nav`** on WS2's `route_nom_104` (pad -> S4 -> S2 ->
+  pad, 209.74 min, 6,215 m, slope known on 100 % of steps), 500 runs per set, seed 20261114, 2 min 14 s
+  (F22 over 49 frames included). Fix events: rover at the pad (0, 209.74 min, sigma 2 m), station
+  fixes at S4 (48.44 min) and S2 (108.73 min, sigma 5 m); no skyline fix passed the gate (below).
+  Outputs in `data/interim/navigation/` at the contracts/README web paths; `validate_contracts --data
+  data/interim/navigation` OK (0 errors); manifest fragments `pipeline__navigation__{montecarlo,
+  fixinterval,skylinefix}.json`.
+  - **r95(D) fit (NNLS, no intercept), b = 0 in all sets** (pure linear on this route): low a =
+    0.0376, medium **a = 0.1323 (132 m per km since the last fix)**, high a = 0.3697; fit RMSE 5.0 /
+    29.9 / 169.6 m.
+  - **r95 along the route (medium)**: EVA t = 30 min (1,681 m since the pad fix) **187 m**; 60 min of
+    walking after the S2 fix (t = 199 min, 1,718 m since it) **268 m**; largest just before the
+    return fix (2,099 m since S2) 358 m. Low: 60 / 66 m; high: 392 / 889 m at the same points.
+    At t = 60 min the crew is dwelling at S4 just after its fix (12.3 m in every set).
+  - **Fix-interval headline (medium, nom_104, 30-min homeline; `nav/fix_interval_summary.json`)**:
+    D_max median **50.7 m**, edge p10 **22.7 m**; area inside the homeline by class: < 100 m 76.9 %,
+    100-300 m 20.1 %, 300-1,000 m 3.0 %, > 1,000 m 0 % (134,557 cells). Low: median 178.5 m, high:
+    18.1 m (run report only). Reading: D_max = margin radius / a, so the median margin radius is
+    ~6.7 m: the reachable set (12.4 % of the disc, slope-limited, thousands of blocked holes) leaves
+    little room to the nearest over-limit cell. For N: "fix every ~50 m" is a property of the
+    fragmented reachable set as much as of the drift model.
+- 2026-11-14T11:20Z: **F22 on the real frames, station frames included** (C 11:58 gate, KAT
+  tolerance = `skyline_fix.refine_grid_m` 10 m). All 49 frames tried: 35 ran, 14 failed WS3's
+  clear-sky check ("no clear sky at the top of the frame"); error median **657 m** (p25-p75 452-815
+  m), min 257 m, **0 within 10 m, 0 within 100 m**, 4 within 300 m. Station frames (WS3 tags):
+
+  | Station | Frame | Frame to station | Error | RMS | sigma (score) | Gate |
+  | --- | --- | --- | --- | --- | --- | --- |
+  | S1 (not on route) | NLB_826633404 | 523 m | 788 m | 4.02 deg | 48.9 m | fail |
+  | S2 | NLB_789347468 | 925 m | 280 m | 2.84 deg | 48.9 m | fail |
+  | S4 | NLB_767161116 | 128 m | 966 m | 6.04 deg | 48.5 m | fail |
+
+  **No skyline fix becomes a position fix**; S4 and S2 keep their surveyed station fixes (sigma 5 m);
+  `run_report.json skyline.rejected` gives the reason per station. The score-surface sigma (~49 m)
+  understates the real error by 6-20x, so sigma alone must not gate a fix. The far-field skyline
+  barely constrains position here (lowest-RMS frames: 0.04 deg RMS at 401 m error). Even a passing
+  frame would localise the rover's drive end, 128-925 m from the station, not the station.
+  `localisation/{image_id}.json` for the 35 frames that ran (validation finding, not position fixes).
+- 2026-11-14T11:20Z: F22 now reads the horizon engine's bands from horizon.yaml `bands.*.path` (WS1
+  canonical `terrain/ctx_20m.tif`, `mola_hrsc_200m.tif`, C 11:15); nav.yaml `skyline_bands:
+  horizon.yaml`.
+- 2026-11-14T11:20Z: **nav.yaml `vo:` block** (WS10 request): `PENDING_VO_CONFIG` verbatim, `assumed:
+  true`; `vo.load_vo_config()` now returns "config/nav.yaml vo" (KAT: every key equals the pending
+  value). **`optional_sets.curiosity_vo_256`** (label "rover analogue: a rover is not an astronaut",
+  status pending N): sigma_s 0.00638, sigma_b 1.248 deg/h of rover driving (WS10 `vo_report.json`),
+  psi0 / psi_rw / slip null (not measured; `missing_terms_from: medium`). Not in `sets`, not the
+  default, not run by `make nav`.
+- Fields grid: WS7's canonical grid = WS1 `grid.json fields_5m` (1,480 x 1,480 at 5 m, pad +/- 3,700
+  m) is identical to WS9's `field_grid()` (WS7 KAT); `fields_index_nav.json` written on it. Nothing to
+  change.
+- KATs: `tests/test_nav.py` 54 pass (6 new: gate tolerance, gate pass/reject, rejected frame keeps the
+  station fix, canonical bands, vo keys, optional set); full pytest, ruff, tsc, vitest nav (33) green.
+
 ### Doing
 
-- Waiting for a non-empty WS2 `route_nom_104` (see Blocked). ws9-nav session 1 merged to main by C
-  (c93daef); 11:01Z merged main back, 48/48 nav KATs pass.
+- — (session 2 done; ws9-nav pushed for C)
 
 ### Next
 
-- `make nav` on the real route as soon as WS2's files exist; then the real fix-interval headline.
-- F22 on the real frames once WS3's V2 works (see Blocked).
+- Hand WS7 the nav outputs for the HUD (ellipse, "next fix due in M m"); `/nav` on the real files once
+  `make web` copies `data/interim/navigation/`.
+- If N approves the Curiosity set: wire `optional_sets` into a run (needs a rule for the unmeasured
+  terms). An all-sets fix-interval summary only after G1 (C 11:58).
 
 ### Blocked
 
-- (WS2 / S) Real run: WS2's real run (10:30Z, WS2 STATUS) puts S1, S2 and S4 on blocked cells, so
-  `route_nom_104.geojson` is empty and the timeline is depart + return at t = 0. With no walked route
-  there is no Monte Carlo, no r95 fit and no fix-interval map; `run real --dry-run` refuses ("route has
-  no legs"). WS9 will not substitute a synthetic route. Unblocks when S re-places stations and WS2
-  re-runs; then `make nav` (or `make nav NAV_ARGS=--no-skyline`). `engine/nom_104/t_home.tif` (2,468 x
-  2,468 at 3 m) reads fine; the fix-interval code runs on it in 3 s.
-- (WS3) F22 imports `pipeline.horizon.rays` / `cahvor` / `navcam` / `sky` from `ws3-horizon`; engine
-  KATs skip on main until it merges. Real frames: all 49 frames in `navcam_frames.json` have
-  `station: null`, so no frame is paired with a route station and every station keeps its surveyed
-  fix (sigma 5 m). Who pairs frames with stations (WS3 per its brief, or nearest-frame rule here)?
-  Also WS3's current V2 has a far-field residual median of -4.3 deg (v2.json), so skyline matches on
-  real frames are poor until the detector/V2 improves (SPEC: F22 runs only after V2 works).
-  Trial at 10:27Z (WS3 code 92d2f61 in a temp worktree, scratch output, no manifest, nothing
-  published): 35/49 frames ran, 14 failed WS3's clear-sky frame check; median error 617 m (p25-p75
-  448-815 m), none within 100 m. On the 6 frames with RMS < 1 deg the RMS at the true position is
-  close to the best candidate's (e.g. 0.137 vs 0.095 deg): the far-field skyline barely constrains
-  position over a few hundred metres here, and best candidates sit near the 1 km search-box edge. For C
-  to judge: present F22 as "does not localise better than ~0.5 km on these frames" unless V2 improves.
-- (C) `nav/fix_interval_summary.json` holds one set (contracts v1.0.0); `/nav` shows the headline only
-  for that set. An array or per-set files would need a contract bump.
-- (C / WS7) The fix-interval PNG grid is pad +/- `planning_radius_m` at 5 m = 1,480 x 1,480 px (edges at
-  pad +/- 3,700 m); the dummy grid is 1,481 px centred on the pad. WS7 owns `fields/index.json`: please
-  confirm the real grid (WS9 writes `fields_index_nav.json` with its grid and entries for the merge).
-- (D / C) Playback values on `/nav` (per-minute ellipse, r95, distance since fix) are rows of
-  `nav/montecarlo_{set}.json`; they are shown as "row" numbers citing the file, not one manifest key per
-  row (static numbers all have keys). OK, or record per-minute keys?
+- (N) Model review: `model_conventions`, `fix_interval_ws9.reserve_min` 0 (SPEC "budget minus
+  reserve" has no reserve defined), and whether sigma_b per hour of rover driving transfers to a
+  walker (WS10 Curiosity set).
+- (C) F22 presentation: all three station frames fail the gate (280-966 m), so F22 is a validation
+  finding only; the HUD/nav plan uses station fixes (per C 11:58). Nothing more for WS9 to do unless
+  WS3's detector / V2 changes.
 
 ### Assumptions added
 
@@ -883,6 +917,8 @@ Branch: `ws9-nav`
   station fix; frame pick = lowest RMS; standalone prior; unknown slope = no slip; field grid; DEM band
   paths for the horizon engine (WS1 dem_1m, WS3 `data/interim/horizon/bands/`).
 - Synthetic walking speed = crew.yaml anchor 0.98 m/s.
+- `config/nav.yaml real_run_ws9.skyline_fix_gate` (decided by C 11:58, tolerance from
+  `skyline_fix.refine_grid_m`); `vo:` (WS10's constants, assumed); `optional_sets` (pending N).
 
 ## WS10 Visual odometry
 
