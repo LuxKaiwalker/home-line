@@ -29,7 +29,7 @@ ist2:
 variants:
   optimistic:   {eta: 0.25,  V0: 5, a_mult: 1.0, nogo_deg: 25}
   nominal:      {eta: 0.225, V0: 6, a_mult: 1.0, nogo_deg: 20}
-  conservative: {eta: 0.20,  V0: 7, a_mult: 1.1, nogo_deg: "20 - v1_rmse_deg"}
+  conservative: {eta: 0.20,  V0: 7, a_mult: 1.1, nogo_deg: 17}   # D23 (user 2026-11-14 16:20): 17 deg, replaces "20 - v1_rmse_deg"; V1 is a validation, not a margin
 scenarios:
   ids: [opt_80, opt_104, opt_120, nom_80, nom_104, nom_120, con_80, con_104, con_120]
   default: nom_104
@@ -46,7 +46,20 @@ route:                             # added by WS2 2026-11-14 (values from SPEC F
   budget: "crew.eva_h"             # SPEC F9: sum(walk + dwell) <= 6.5 h
   o2_margin: "crew.o2_margin"      # S review 2026-11-14: margin formula, effort rate, task rate and reserve (sourced there)
   assumed: true                    # o2_checkpoint_min and budget read from SPEC text
-  access_radius_m: 50              # added by WS2 2026-11-14 (assumed: true): user chose the access-cell rule 2026-11-14 11:40; radius assumed. Route to the nearest walkable cell (assessed + reachable) within this radius of the science point; walk-in leg not modelled
+  eva_term: "crew.eva_h * 60 - t - T_home"   # D28 (user 16:20): turn-back = min over all constraints incl. EVA budget - T_home; binding term "EVA duration"
+  dose_timing: "conditions.storm_replay"     # D39 (user 16:20): dose term tau_dose(t) - T_home with tau_dose(t) = 60 D_allow / Ddot(storm series shifted so the tripwire fires at the route's max-T_home minute)
+  access_radius_m: 50              # added by WS2 2026-11-14 (assumed: true; D27 user 16:20 keeps 50 m, still labelled assumed): user chose the access-cell rule 2026-11-14 11:40. Route to the nearest walkable cell (assessed + reachable) within this radius of the science point; walk-in leg not modelled
+d21:                               # added by WS2 2026-11-14 (D21, user 16:14 + 16:16): official pad = most feasible EVAs, plus the pad picker
+  candidates: "site.siting"        # F8 candidate blocks (block_m, max_slope_deg, require_assessed) plus site.pad_default
+  require_disc_in_grid_min: 30     # D21 16:16: drop candidates whose flat 30-min disc (crew.anchor.speed_ms x 30 min = 1,764 m) leaves the routing grid
+  scenario: nom_104                # D21: nominal, 104 kg (screening, full runs, picker)
+  subset_budget: "crew.eva_h"      # D21: a subset counts if a route through it fits <= 6.5 h incl. dwell
+  top_full_runs: 5                 # D21: exact DP with margin >= 0 on every leg for the top 5
+  tiebreak_budget_min: 30          # D21 tiebreak 1: reachable % of the assessed flat 30-min disc (D25 denominator)
+  picker_n: 3                      # D21: next 3 candidates (+ pad_default if not chosen)
+  screening_order: "feasible-subset count desc, then tiebreak 1 desc, then pad-cell elevation asc"   # WS2 (assumed: true): tiebreak 1 computed in the screening too (30-min bounded return field per candidate) so the top 5 are chosen by the full D21 order
+  elevation: "pad cell (3 m) elevation"   # WS2 (assumed: true): tiebreak 2 uses the elevation of the pad cell (block representative cell)
+  assumed: [screening_order, elevation]
 numerics:                          # added by WS2 2026-11-14; numerical resolution, not a model parameter
   grade_table_step_deg: 0.01       # router pace/O2 lookup table step (linear interpolation; KAT rel err < 1e-4)
   assumed: true

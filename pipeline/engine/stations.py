@@ -94,6 +94,10 @@ def station_records(stations: list[dict], fields: dict[str, Field],
                 "access_dist_m": None if d is None or d.dist_m is None else round(d.dist_m, 1),
                 "access_reason": None if d is None else d.reason,
                 "access": {sid: a.to_json() for sid, a in acc.items()},
+                # D26: a station no scenario can reach stays on the map with this label
+                "reachable_on_foot": any(a.rc is not None for a in acc.values()),
+                "reachability_label": None if any(a.rc is not None for a in acc.values())
+                else "not reachable on foot",
             }
         out.append({
             "id": s["id"], "name": s["name"],
