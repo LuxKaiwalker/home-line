@@ -854,13 +854,14 @@ Branch: `ws5-web`
 - Re-run the smoke test on C's next `make web` with pad.json (the session-4 pad KATs in `web/src/data/real.test.ts` switch on when `pad.json` is in the tree).
 - D21: smoke-test the picker on WS2's real `scenarios/pads/` after C's contract rows; adjust `parsePadsIndex`/`parsePadSummary` if the final shape differs from the provisional one (see Assumptions).
 - D21: when WS2 rewrites pad.json for the official pad, the session-4 pad KATs in `real.test.ts` (pad = pad_default, fails the F8 rule; `proposal` block) must be updated.
+- Follow-ups from D22–D39 (16:16/16:20) for the web app, e.g. D27 access radius 50 m is now decided (drop the "assumed" tag), D33 hidden-landmark ticks, D35 "± 8 min" on tripwire times: not started this session.
 - HUD-on-card strip if WS7 is not green at G2; about page licences/SI text (needs the team).
 
 ### Blocked
 
 - (C) D21 SCHEMA_MAP rows (`tools/validate_contracts.py` + `web/src/data/contracts.ts`): `scenarios/pads/index.json` (new contract), `scenarios/pads/*/summary.json` (new contract), `scenarios/pads/*/bands_*.geojson` → bands, `scenarios/pads/*/edges.geojson` → edges, `scenarios/pads/*/partner.geojson` → partner, `scenarios/pads/*/route_*.geojson` → route, `scenarios/pads/*/timeline_*.json` → timeline (list in `web/src/data/pads.ts PAD_SCHEMA_PATTERNS`). Until then the picker stays hidden.
 
-- (user) GitHub Pages: repo private and `gh` not logged in; `pages.yml` ready but cannot deploy yet.
+- Resolved 16:28 (C): GitHub Pages live, deploys after green CI on main.
 - (C / WS6) `.github/workflows/ci.yml`: please add `npm test` (vitest) to the `web` job.
 - (WS3) D7 wording: SPEC's "far rim (41–57 km) … in 21 north-facing frames" has no data field or manifest key, so the app says it without the numbers. Please add them to `validation/v2.json` (e.g. `far_note` or `far.rim_km`, `far.haze_frames`) with keys, and drop "far class pending the D7 manual check" from the card `skyline_error_scope`.
 - (WS3) `validation/v2.json n_frames_ok` has no key; the scorecard counts `frames[]` in the browser instead.
