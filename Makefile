@@ -15,6 +15,7 @@ terrain:     ## WS1: fetch raw (cached) then build data/interim/terrain/
 	$(PY) -m pipeline.terrain.fetch lrgb
 	$(PY) -m pipeline.terrain.build all
 	$(PY) -m pipeline.terrain.build farfield_v2
+	$(PY) -m pipeline.terrain.build conservative validation  # conservative needs V1 (WS6); skipped without it
 engine:      ## WS2: return fields, isochrones, bands, edges, partner, stations, route, trade
 	$(PY) -m pipeline.engine.scenarios
 horizons:    ## WS3: band check, Navcam frames + stop horizons, V2 + manual-check sheet, pad/station horizons, ring, cards (needs WS1 bands, WS2 stations.json)

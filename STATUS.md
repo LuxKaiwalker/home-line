@@ -374,6 +374,52 @@ All numbers from today's fresh downloads (`data/raw/terrain/`, cache index `cach
   `farfield_v2.json`; **replaced** `coverage.json` (pad_check + D3 text only); **deleted**
   `manifest_pending.json`. No raster that WS2/WS3/WS8/WS9 read was rewritten.
 
+#### Session 3 (started 13:20Z)
+
+- 2026-11-14T13:36Z: **`cellstate_3m_conservative.tif` (brief task 8, F1/F2)**, new file in
+  `data/interim/terrain/` (+ summary `cellstate_3m_conservative.json`); `cellstate_3m.tif` and
+  every other raster untouched. No-go = `site.yaml slope.nogo_deg.conservative` "20 - v1_rmse_deg"
+  with WS6 `v1.json rmse_deg` 5.447021 -> **14.553 deg**. Rule (`routing.restate`): unknown stays
+  unknown; a known 3 m cell is blocked iff its max 1 m slope (`maxslope_3m.tif`) > 14.553 deg.
+  Same grid/CRS as `cellstate_3m.tif`, uint8, nodata 255, codes 0/1/2.
+  | Disc | Nominal blocked (> 20 deg) | Conservative blocked (> 14.55 deg) | Newly blocked | Unknown |
+  | --- | --- | --- | --- | --- |
+  | 30 min (1,764 m) | 41.23 % | **58.75 %** | 17.52 % | 0 % |
+  | 60 min (3,528 m) | 31.36 % | **46.31 %** | 14.95 % | 0 % |
+  | Whole 3 m grid | 31.22 % | 45.86 % | | 0 % |
+  Checked on the real rasters: conservative blocked is a superset of nominal blocked, and
+  conservative assessed equals WS2's `passable_mask(cellstate_3m, maxslope_3m, 14.553...)` cell
+  by cell.
+  - **WS2: the path does not matter to you.** `pipeline/engine` never opens a conservative
+    cellstate: `Grid.with_nogo` re-derives passability from `maxslope_3m.tif` with the variant's
+    limit (`physio.resolve_nogo` + `v1.json`), using `cellstate_3m.tif` only for unknown cells.
+    The new raster is the same rule, for display and checks; your con_* runs need nothing new.
+  - C: `make web` publishes only `cellstate_3m.tif` (`terrain/cellstate.json variant: nominal`).
+    If the app should hatch the conservative states, a second rule from
+    `terrain/cellstate_3m_conservative.tif` works as is (`write_cellstate` already sets
+    `variant: conservative` from the file name) but needs its own web path; your call.
+  - `make terrain` now ends with `build conservative validation` (conservative is skipped with a
+    message while `v1.json` is missing, so in `make clean all` V1 must run before it for con_*).
+- 2026-11-14T13:36Z: **WS6 audit 1 fixed: every WS1 manifest key now cites a web path** (53 keys,
+  all at clean commit bc1af57, 13:35:52Z; `data/interim/manifest/pipeline__terrain__build.json`).
+  - `stations.{S1,S2,S4}.value` -> `stations.json` (WS2's `engine/public/stations.json`, which
+    `make web` publishes; same values 0.8683 / 0.7443 / 0.475).
+  - `terrain.xcheck.{009149,019698}.{median,p90_abs}` (4), `terrain.slope_compare.median_abs_diff`,
+    `terrain.blocked_pct.{30,60}min` -> `validation/coverage.json`, which now carries these numbers
+    in a new block **`terrain_checks`** (`hirise_xcheck`, `slope_compare`,
+    `blocked_pct_of_known`, `conservative`). Nothing else in `coverage.json` changed (staged and
+    compared; `coverage.png` and `coreg.json` byte-identical, not rewritten).
+  - New keys (same file): `terrain.nogo_conservative_deg` 14.553, `terrain.conservative.v1_rmse_deg`
+    5.447, `terrain.conservative.disc_{30,60}.{assessed,blocked,unknown,nominal_blocked,
+    newly_blocked}_pct`.
+  - KAT: every WS1 key's `file` is a web path and its value appears in that file. Trial merge of
+    all fragments: 941 keys, no duplicates; `check_h0 --fragments` OK. Reaches the public tree
+    at C's next `make web`. WS5: the scorecard can cite `terrain.conservative.*` by name.
+- D19 (navigation): nothing in WS1 depends on navigation; no change.
+- KATs first: 8 new (conservative formula, restate, superset/identity, WS2 agreement, disc
+  summary, web-path keys). WS1 KATs 41 pass (test_coverage + test_coreg); full suite 730
+  pass; ruff clean.
+
 ### Answers (WS1)
 
 - WS6 Blocked 2 (coreg sign): confirmed. `coreg.json (dx_m, dy_m)` is **added** to the MMGIS
@@ -382,19 +428,16 @@ All numbers from today's fresh downloads (`data/raw/terrain/`, cache index `cach
 
 ### Doing
 
-- Waiting for G0 sign-off (S) and the decisions below.
+- Waiting for G0 sign-off (S).
 
 ### Next
 
-- After V1 (WS6): `cellstate_3m_conservative.tif`.
+- If V1's RMSE changes: `python -m pipeline.terrain.build conservative validation manifest`
+  (validation refuses a conservative summary made from another RMSE).
 
 ### Blocked
 
-- CTX band switch (C): `ctx_20m_v2.tif` recommended (above); WS3 changes its band path.
 - S3, S5 hand picks (S): positions not yet in `stations.yaml`.
-- `cellstate_3m_conservative.tif`: waits for the real V1 RMSE (WS6; footprint 3 m decided 12:37,
-  `data/interim/validation/v1.json` not there yet). Then `python -m pipeline.terrain.build
-  conservative`.
 
 ### Assumptions added
 
