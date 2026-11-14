@@ -13,3 +13,45 @@
 .live-status[data-tone='warn'] {
   color: var(--warn);
 }
+
+/* Pad tool panel (F24). */
+.live-pad {
+  margin: 12px 0;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  background: var(--panel);
+}
+.live-pad h2,
+.live-pad h3 {
+  margin: 0 0 6px;
+  font-size: 1rem;
+}
+.live-label {
+  margin: 0 0 8px;
+  font-size: 0.8rem;
+  color: var(--warn);
+}
+.live-card {
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px solid var(--line);
+}
+.live-reason,
+.live-failed {
+  color: var(--bad);
+}
+.live-btn {
+  margin-left: 4px;
+}
+.live-errors {
+  color: var(--bad);
+  font-size: 0.85rem;
+}
+.num-screen {
+  text-decoration: underline dashed var(--muted);
+  text-underline-offset: 3px;
+}
+.num-withheld {
+  color: var(--muted);
+  font-style: italic;
+}

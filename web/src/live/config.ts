@@ -26,6 +26,9 @@ export const OFFLINE_LABEL: string = str('labels.offline')
 /** Shown while /health answers ok but engine_warm is false (Numba warm-up). Not in config: UI text only. */
 export const WARMING_LABEL = 'Live planning is warming up · showing precomputed plans'
 
+/** contract_version of the backend family (config/backend.yaml), written into plan_inputs the pad tool sends. */
+export const BACKEND_CONTRACT_VERSION: string = str('contract_version')
+
 /** api.prefix, e.g. /api/v1. */
 export const API_PREFIX: string = str('api.prefix').replace(/\/+$/, '')
 /** api.health_timeout_s in ms (F23: 2 s). */
