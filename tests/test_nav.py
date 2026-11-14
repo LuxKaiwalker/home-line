@@ -525,9 +525,8 @@ def _band(source, res, half):
 def sky_world():
     if not HAS_WS3:
         pytest.skip("WS3 horizon engine (pipeline.horizon.rays) not merged yet")
-    from pipeline.horizon.rays import HorizonEngine
-
     from pipeline.horizon import config as hcfg
+    from pipeline.horizon.rays import HorizonEngine
     engine = HorizonEngine([_band("dem_1m", 10.0, 4500.0), _band("ctx_20m", 20.0, 4500.0)])
     h = hcfg.load()["navcam_height_m"]
     # the "detected" skyline: the true horizon sampled at column azimuths off the ray grid
