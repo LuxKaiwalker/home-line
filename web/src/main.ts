@@ -118,4 +118,6 @@ async function render(): Promise<void> {
 }
 
 window.addEventListener('hashchange', () => void render())
-void render()
+// DESIGN U6 (M10): ?capture=<id> / ?demo=1 set up story mode (virtual time, route) before the first render.
+const storyBoot = /[?&](capture|demo)=/.test(location.search + location.hash) ? import('./story/boot').then((m) => m.boot()) : Promise.resolve()
+void storyBoot.catch((e) => console.error(e)).then(() => render())

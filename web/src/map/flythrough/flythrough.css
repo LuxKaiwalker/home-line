@@ -1,0 +1,21 @@
+/* WS16 task 10 (M10): the Flythrough button and its speed control (DESIGN U6). Tokens only. */
+.maplibregl-ctrl-group.hl-fly { display: flex; }
+.maplibregl-ctrl-group .hl-fly-btn {
+  width: auto;
+  padding: 0 var(--space-2);
+  color: var(--color-text);
+  font-family: var(--font-text);
+  font-size: var(--font-size-small);
+  font-weight: var(--font-weight-label);
+  white-space: nowrap;
+}
+.maplibregl-ctrl-group .hl-fly-btn[hidden] { display: none; }
+.maplibregl-ctrl-group .hl-fly-speed { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+.maplibregl-ctrl-group .hl-fly-btn:focus-visible {
+  outline: var(--line-focus-ring) solid var(--color-select);
+  outline-offset: var(--line-focus-ring);
+}
+.maplibregl-ctrl-group .hl-fly-btn[aria-pressed='true'] {
+  outline: var(--line-focus-ring) solid var(--color-select);
+  outline-offset: calc(-1 * var(--line-focus-ring));
+}
