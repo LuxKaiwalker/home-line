@@ -1,0 +1,13 @@
+/* Edit-route opener at the map edge (L3, D111). Live builds only (imported by ui/shell/editroute.tsx,
+   which only the VITE_LIVE chunks load). Tokens only (kit rule 2). The host takes no box of its own, so
+   the drawer and the edge slot are positioned against the map container (position: relative). */
+.hl-editroute { display: contents; }
+/* bottom-right, above the map attribution; lifted by the bottom drawer's height (inline margin) */
+.hl-editroute__edge {
+  position: absolute; right: var(--space-2); bottom: var(--space-6); z-index: 3;
+  display: flex; flex-direction: column; align-items: flex-end; gap: var(--space-1);
+  max-width: calc(100% - var(--space-7));
+}
+.hl-editroute__edge:empty { display: none; }
+/* Q8 (L0): the live aside is not shown while it has nothing to show (API down, checking, warming) */
+.console-live:empty { display: none; }
