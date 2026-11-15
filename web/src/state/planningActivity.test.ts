@@ -151,7 +151,7 @@ describe('one timeline with H1 (the plan in use)', () => {
     let key = 'A'
     const s = createPlanningStore()
     const src = trackedPlanningUndoSource(s, () => key)
-    s.setStorm(true)
+    s.setStorm(!s.doc.peek().route.storm) // whatever the default (D143: on)
     key = 'B'
     s.setPad('rank2')
     expect(src.store.undoTag()).toBe('B')
