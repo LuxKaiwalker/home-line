@@ -5,8 +5,8 @@
   ``pipeline.engine.plan.build_plan`` call into a fresh out_dir with its own manifest_dir.
   No D21 pick and no F8 siting: those are batch-only steps (padpick.run feeds the batch's pad;
   F33 siting on demand is a separate stretch job).
-  >>> E8: when the job runner lands, make ``server_build`` call the runner's own
-  >>> inputs -> build_plan function, so parity tests exactly what the server runs.
+  ``server_build`` calls the plan job's own inputs -> build_plan function
+  (server.engine.plan_job.build, E8), so parity tests exactly what the server runs.
 - BATCH PATH: ``scenarios.main`` (what ``make engine`` runs) on the synthetic world, or the
   published tree web/public/data (real data, ``make parity``).
 - FILE LIST (kit K8, STATUS.md WS2 2026-11-14T19:44Z): ``SERVER_FILES`` = the public files
@@ -26,8 +26,6 @@ import numpy as np
 
 from pipeline.engine import provenance, scenarios
 from pipeline.engine.config import load
-from pipeline.engine.graph import load_ws1_grid
-from pipeline.engine.plan import build_plan
 
 REPO = Path(__file__).resolve().parents[2]
 PUBLISHED = REPO / "web" / "public" / "data"
@@ -86,26 +84,15 @@ def server_build(
     conditions: bool = True,
     rad_json: Path = REAL_RAD,
 ) -> dict:
-    """Server path for the default inputs: one build_plan call. Returns the run summary.
+    """Server path: the plan job's own inputs -> build_plan function
+    (server.engine.plan_job.build, E8), so parity tests exactly what the server runs. For the
+    official pad it keeps the full official scenario set (D81). Returns the run summary.
+    ``conditions``: WS4 margin inputs on (real data) or off (synthetic world, as the batch's
+    --no-conditions)."""
+    from server.engine.plan_job import build
 
-    Only the defaults are mapped here (they are the config values the engine reads itself, so
-    crew=None and the scenarios.yaml/conditions.yaml defaults apply); custom inputs are E8's
-    mapping. ``conditions``: WS4 margin inputs on (real data) or off (synthetic world, as the
-    batch's --no-conditions)."""
-    if {k: v for k, v in inputs.items() if k != "pad"} != \
-            {k: v for k, v in default_inputs().items() if k != "pad"}:  # fmt: skip
-        raise NotImplementedError("parity maps only the default plan_inputs (custom: E8)")
-    grid = load_ws1_grid(terrain_dir)
-    sids, skipped = scenarios.runnable(scenario_ids(), None)
-    # plan_inputs conditions.storm "2024-05-20" = the D39 timed storm replay (--dose storm)
-    cond = scenarios.conditions_inputs(None, None, "storm", conditions)
-    dose_fn = scenarios.storm_timing(cond, rad_json)
-    return build_plan(grid, pad_lonlat=(inputs["pad"]["lon"], inputs["pad"]["lat"]),
-                      scenario_ids=sids, settings=scenarios.settings_from_config(None),
-                      out_dir=out_dir, public_dir=out_dir / "public", terrain_dir=terrain_dir,
-                      cond=cond, dose_fn=dose_fn, partner=True, siting=False, d21=None,
-                      skipped=skipped, rmse=None, manifest_dir=manifest_dir,
-                      verbose=False)  # fmt: skip
+    return build(inputs, terrain_dir=terrain_dir, out_dir=out_dir, public_dir=out_dir / "public",
+                 manifest_dir=manifest_dir, conditions=conditions, rad_json=rad_json)
 
 
 def manifest_entries(fragment_dir: Path) -> dict:
