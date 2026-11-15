@@ -2,7 +2,8 @@
 // shows the static console's numbers; unknown hash -> not found; API down -> offline message, no
 // crash; export -> import round trip byte for byte; import refuses unknown fields and oversize files;
 // the provenance view shows the label of the result's origin; the simulator slot appears only with
-// VITE_SIM_EXPORT on and a sim_plan manifest entry; "Play this plan" mounts the HUD on the result tree.
+// VITE_SIM_EXPORT on and offers the plan's mission.json (D110: the sim_plan entry, else
+// results/{hash}/mission.json; 404 -> "not available"); "Play this plan" mounts the HUD on the result tree.
 import { existsSync, readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -298,7 +299,7 @@ describe('D76 "Send to simulator" slot', () => {
     expect(SIM_EXPORT_ENABLED).toBe(false)
   })
 
-  it('hidden without a sim_plan entry, hidden with the flag off, lists the file with both', async () => {
+  it('hidden with the flag off; offers the sim_plan file (mission.json); without one, results/{hash}/mission.json, and 404 says so', async () => {
     const withSim = setup({ trees: { [LIVE_HASH]: mockFinishedTree(true) } })
     const withoutSim = setup()
     const a = (await loadPlan(withSim.client, LIVE_HASH, { loaderFor: withSim.loaderFor })) as Ok
@@ -307,18 +308,26 @@ describe('D76 "Send to simulator" slot', () => {
     expect(simPlanFiles(a.tree.manifest)).toEqual([{ key: 'sim.nom_104.export', file: MOCK_SIM_FILE }])
     expect(simPlanFiles(b.tree.manifest)).toEqual([])
 
-    expect(toHtml(<SimSlot enabled={false} manifest={a.tree.manifest} base={a.base} />)).toBe('')
-    expect(toHtml(<SimSlot enabled={true} manifest={b.tree.manifest} base={b.base} />)).toBe('')
-    expect(toHtml(<SimSlot enabled={true} manifest={null} base={b.base} />)).toBe('')
-    const html = toHtml(<SimSlot enabled={true} manifest={a.tree.manifest} base={a.base} />)
+    expect(toHtml(<SimSlot enabled={false} manifest={a.tree.manifest} base={a.base} origin="computed_live" />)).toBe('')
+    expect(toHtml(<SimSlot enabled={true} manifest={null} base={b.base} />)).toBe('') // no plan
+    const html = toHtml(<SimSlot enabled={true} manifest={a.tree.manifest} base={a.base} origin="computed_live" />)
     expect(html).toContain('Send to simulator')
     expect(html).toContain(`href="${a.base}/${MOCK_SIM_FILE}"`)
-    expect(html).toContain('download="mock_sim_export.dat"')
+    expect(html).toContain('download="mission.json"')
+    expect(html).toContain('data-sim-export="checking"')
+    expect(html).toContain('data-origin="computed_live"')
 
-    // in the page: only with both
+    // no sim_plan entry: the conventional path, and a 404 there is said plainly (no link)
+    expect(toHtml(<SimSlot enabled={true} manifest={b.tree.manifest} base={b.base} origin="computed_live" />)).toContain(`href="${b.base}/mission.json"`)
+    const missing = toHtml(<SimSlot enabled={true} manifest={b.tree.manifest} base={b.base} origin="computed_live" probe={{ state: 'missing' }} />)
+    expect(missing).toContain('Simulator file not available for this plan')
+    expect(missing).toContain('data-sim-export="missing"')
+    expect(missing).not.toContain('href=')
+
+    // in the page: only with the flag
     expect(pageText(a, false)).not.toContain('Send to simulator')
-    expect(pageText(b, true)).not.toContain('Send to simulator')
-    expect(pageText(a, true)).toContain('Send to simulator')
+    expect(pageText(b, true)).toContain('Send to simulator')
+    expect(pageText(a, true)).toContain(`href="${a.base}/${MOCK_SIM_FILE}"`)
   })
 
   it('every sim_plan entry is listed once, other kinds are ignored', () => {

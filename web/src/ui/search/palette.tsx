@@ -14,29 +14,28 @@ import { Badge, ChipMark, cx, Icon } from '../components'
 import { t } from '../copy'
 import { runShortcut, type ShortcutAction } from '../shell/keys'
 import { isMapMode, modeHash, openSidebar } from '../shell/store'
-import { commandItems, GROUP_LABEL, loadObjectIndex, rank, type SearchItem } from './search'
+import { expandedIndex, resetExpandedIndex } from './index/lazy'
+import { commandItems, GROUP_LABEL, loadObjectIndex, rank, type RunEnv, type SearchItem } from './search'
 import './search.css'
 
 /** Shown text of an item: the file's name for objects, copy.json for commands. */
 export const labelOf = (i: SearchItem): string => (i.label ? t(i.label) : i.name)
 
 let cached: Promise<SearchItem[]> | null = null
-/** Objects (static files, loader-cached) + commands. One build per page load. */
+/** Objects (static files, loader-cached) + the expanded index (built here on first open) + commands. */
 export function searchIndex(L: Loader = data()): Promise<SearchItem[]> {
-  return (cached ??= loadObjectIndex(L).then((objs) => [...objs, ...commandItems()]))
+  return (cached ??= Promise.all([loadObjectIndex(L), expandedIndex(L)]).then(([objs, more]) => [...objs, ...more, ...commandItems()]))
 }
 /** Tests: forget the built index. */
-export const resetSearchIndex = (): void => void (cached = null)
+export const resetSearchIndex = (): void => void ((cached = null), resetExpandedIndex())
 
-export interface RunEnv {
-  navigate: (hash: string) => void
-  win?: Window
-}
+export type { RunEnv }
 
 /** Enter on a result. Objects: select(ref, 'search'), the same call a map or list click makes, so the
  *  sidebar shows the same card; outside PLAN/FLY the sidebar is hidden, so PLAN opens first. Commands:
  *  the §4.4 shortcut, through the shell's runner (other packages may handle it via `hl:shortcut`). */
 export function runItem(item: SearchItem, env: RunEnv): void {
+  if (item.run) return item.run(env) // layers, clock, scenarios, report routes (index/sources.ts)
   if (item.ref) {
     if (!isMapMode(ui.mode.peek() ?? 'plan')) env.navigate(modeHash('plan'))
     select(item.ref, 'search')
@@ -195,7 +194,10 @@ export function Palette({ onClose, loader, navigate = defaultNavigate, win = typ
           >
             <Icon name={item.icon} />
             {item.code && <Badge>{item.code}</Badge>}
-            <span class="hl-search__name">{labelOf(item)}</span>
+            <span class="hl-search__name">
+              {labelOf(item)}
+              {item.hint && <span class="hl-search__kind"> · {t(item.hint)}</span>}
+            </span>
             <span class="hl-search__kind">{t(GROUP_LABEL[item.group])}</span>
             {item.chip && <ChipMark kind={item.chip} />}
             {item.keys?.map((k) => (
