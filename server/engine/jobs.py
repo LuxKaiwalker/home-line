@@ -29,6 +29,15 @@ Rules (every limit from config/backend.yaml ``compute``, read through server.set
   never cut off). On success the worker writes ``run_record.json`` last (validated against
   run_record.schema.json); a tree is complete exactly when its run record says done. On error or
   timeout the supervisor removes the temp dir and the partial public tree.
+- **Temp dir owner (H1-1).** Several server processes may share one $HL_SERVER_DATA (a demo
+  server, a test server, a Docker stack). Each temp dir starts with ``.owner.json`` (pid, hostname,
+  boot id, pid namespace, process start time, created_at, job timeout). A cleanup (at start-up,
+  or any later periodic one: ``clean_stale_temp_dirs``) removes a temp dir only when its owner
+  process is gone (pid not alive on this host, or reused: another start time or boot) or when it is
+  older than 2 x the job timeout (the owner's or ours, the longer). It never removes the dir of a
+  live owner younger than that. A dir without a readable owner file (a server from before this
+  rule, or one created a moment ago) and an owner on another host or pid namespace are judged by
+  age only.
 - **Kill switch.** ``heavy_jobs_off()`` reads the ``deploy.kill_switch_env`` variable
   (HL_HEAVY_JOBS_OFF); ``set_heavy_jobs_off()`` flips it in-process (E8, O3). While it is on, new
   heavy jobs are refused (route: 503 heavy_jobs_off); attaching and cached results still answer.
@@ -51,6 +60,7 @@ import os
 import secrets
 import shutil
 import signal
+import socket
 import threading
 import time
 from collections import deque
@@ -71,6 +81,10 @@ JOB_SCHEMA = results.BACKEND_CONTRACTS / "job.schema.json"
 JOB_TYPE_NAMES: tuple[str, ...] = tuple(
     json.loads(JOB_SCHEMA.read_text(encoding="utf-8"))["properties"]["type"]["enum"])
 TMP_PREFIX = ".job-"  # hidden: never served (server.engine.results.safe_parts)
+OWNER_FILE = ".owner.json"  # in each temp dir, written first; hidden: never published
+# A temp dir older than this many job timeouts cannot belong to a running job (a job is killed at
+# its timeout), whatever its owner looks like (H1-1, pid reuse guard).
+STALE_AFTER_TIMEOUTS = 2
 TEST_JOBS_ENV = "HL_TEST_JOBS"  # test flag: register the shipped test job type as "plan"
 
 # Process management (not product limits): how long to wait for a worker to exit after a stop
@@ -265,6 +279,139 @@ def _worker_main(conn, initializer: Callable[[], object] | None) -> None:
             conn.send(("error", job_id, f"{type(e).__name__}: {e}"))
 
 
+# ---------------------------------------------------------------- temp dir owner (H1-1) ----
+def _read_text(path: str) -> str | None:
+    try:
+        with open(path, encoding="ascii", errors="replace") as f:
+            return f.read().strip()
+    except OSError:
+        return None
+
+
+def _boot_id() -> str | None:
+    return _read_text("/proc/sys/kernel/random/boot_id")
+
+
+def _pid_ns() -> str | None:
+    try:
+        return os.readlink("/proc/self/ns/pid")
+    except OSError:
+        return None
+
+
+def _proc_stat(pid: int) -> tuple[str, int] | None:
+    """(state, start time in clock ticks since boot) of ``pid`` from /proc, or None."""
+    stat = _read_text(f"/proc/{pid}/stat")
+    if not stat:
+        return None
+    fields = stat[stat.rfind(")") + 2:].split()  # the command name may hold spaces or ')'
+    try:
+        return fields[0], int(fields[19])  # stat(5): field 3 state, field 22 starttime
+    except (IndexError, ValueError):
+        return None
+
+
+def owner_record(job_timeout_s: float) -> dict:
+    """The ``.owner.json`` of a temp dir created now by this process."""
+    stat = _proc_stat(os.getpid())
+    return {
+        "pid": os.getpid(),
+        "hostname": socket.gethostname(),
+        "boot_id": _boot_id(),
+        "pid_ns": _pid_ns(),
+        "start_ticks": stat[1] if stat else None,
+        "created_at": utc_now(),
+        "created_unix": time.time(),
+        "job_timeout_s": job_timeout_s,
+    }
+
+
+def owner_alive(owner: dict) -> bool | None:
+    """Is the process that wrote ``owner`` still running? None: it cannot be checked from here
+    (another host or pid namespace)."""
+    if owner.get("hostname") != socket.gethostname() or owner.get("pid_ns") != _pid_ns():
+        return None
+    boot = owner.get("boot_id")
+    if boot is not None and _boot_id() is not None and boot != _boot_id():
+        return False  # written before a reboot
+    pid = owner.get("pid")
+    if not isinstance(pid, int) or isinstance(pid, bool) or pid <= 0:
+        return None
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:  # alive, another user's
+        pass
+    except OSError:
+        return None
+    stat = _proc_stat(pid)
+    if stat is not None:
+        state, ticks = stat
+        if state in ("Z", "X"):
+            return False  # exited, not reaped yet
+        if owner.get("start_ticks") is not None and owner["start_ticks"] != ticks:
+            return False  # the pid was reused by another process
+    return True
+
+
+def write_owner(tmp: Path, job_timeout_s: float) -> None:
+    """Write the owner file of a fresh temp dir (atomically: a reader sees all of it or none)."""
+    part = tmp / f"{OWNER_FILE}.part"
+    part.write_text(json.dumps(owner_record(job_timeout_s)) + "\n", encoding="utf-8")
+    os.replace(part, tmp / OWNER_FILE)
+
+
+def _read_owner(tmp: Path) -> dict | None:
+    try:
+        doc = json.loads((tmp / OWNER_FILE).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    return doc if isinstance(doc, dict) else None
+
+
+def _num(v: Any) -> float | None:
+    return float(v) if isinstance(v, int | float) and not isinstance(v, bool) else None
+
+
+def temp_dir_stale(tmp: Path, job_timeout_s: float, now: float | None = None) -> bool:
+    """True when the temp dir ``tmp`` cannot belong to a running job (see the module docstring):
+    its owner is gone, or it is older than 2 x the job timeout (the owner's or ours, the longer)."""
+    now = time.time() if now is None else now
+    owner = _read_owner(tmp)
+    limit = job_timeout_s
+    created = None
+    if owner is not None:
+        limit = max(limit, _num(owner.get("job_timeout_s")) or 0.0)
+        created = _num(owner.get("created_unix"))
+        if owner_alive(owner) is False:
+            return True
+    if created is None:  # no readable owner: the dir's own time
+        try:
+            created = tmp.stat().st_mtime
+        except OSError:
+            return False  # gone already
+    return now - created > STALE_AFTER_TIMEOUTS * limit
+
+
+def clean_stale_temp_dirs(results_dir: Path, job_timeout_s: float,
+                          now: float | None = None) -> list[Path]:
+    """Remove the stale ``.job-*`` temp dirs of ``results_dir`` (start-up, or any periodic
+    cleanup). A partial public tree (no done run record) stays until its hash is computed again
+    (dispatch replaces it). Returns the removed dirs."""
+    if not results_dir.is_dir():
+        return []
+    removed = []
+    for p in sorted(results_dir.iterdir()):
+        if not p.name.startswith(TMP_PREFIX) or p.is_symlink() or not p.is_dir():
+            continue
+        if temp_dir_stale(p, job_timeout_s, now):
+            log.info("removing stale job temp dir %s", p)
+            shutil.rmtree(p, ignore_errors=True)
+            removed.append(p)
+    return removed
+
+
 # ------------------------------------------------------------------------ server side ----
 class QueueFull(Exception):
     def __init__(self, retry_after_s: int, waiting: int):
@@ -420,7 +567,7 @@ class JobRunner:
         with self._lock:
             if self._thread is not None:
                 raise RuntimeError("JobRunner.start called twice")
-            self._clean_stale()
+            self.clean_stale()
             self._thread = threading.Thread(target=self._supervise, args=(ready,),
                                             name="job-supervisor", daemon=True)
             self._thread.start()
@@ -478,6 +625,24 @@ class JobRunner:
             job = self._jobs.get(job_id)
             return None if job is None else self._view(job)
 
+    def lookup(self, h: str, identity: results.IdentityProvider = results.engine_identity
+               ) -> str | None:
+        """What a submit of hash ``h`` would find, read-only (O3b: attaches and cached results
+        pass the per-IP limit): "running" or "queued" (a job of this runner), "done" (a complete
+        result tree: the precomputed official tree, or a cache tree whose run record says done),
+        or None (a submit would start a new job). No job is made, nothing is reserved or
+        written."""
+        with self._lock:
+            jid = self._active.get(h)
+            if jid is not None:
+                return self._jobs[jid].status
+        return DONE if result_done(h, identity) else None
+
+    def clean_stale(self) -> list[Path]:
+        """Remove the temp dirs no running job can own (start-up, or any periodic cleanup): owner
+        gone, or older than 2 x job_timeout_s. Never the dir of a live owner (H1-1)."""
+        return clean_stale_temp_dirs(self._results_dir(), self.job_timeout_s)
+
     # ----------------------------------------------------------------------- helpers ----
     def _new_id(self) -> str:
         while (jid := f"j_{secrets.token_hex(8)}") in self._jobs:
@@ -498,16 +663,6 @@ class JobRunner:
             os.write(self._wake_w, b"x")
         except (BlockingIOError, OSError):  # already pending, or closed at shutdown
             pass
-
-    def _clean_stale(self) -> None:
-        """Remove temp dirs left by a crashed process. A partial public tree (no done run record)
-        stays until its hash is computed again (dispatch replaces it)."""
-        rd = self._results_dir()
-        if not rd.is_dir():
-            return
-        for p in rd.iterdir():
-            if p.name.startswith(TMP_PREFIX) and p.is_dir() and not p.is_symlink():
-                shutil.rmtree(p, ignore_errors=True)
 
     # -------------------------------------------------------------------- supervisor ----
     def _supervise(self, ready: Callable[[float], bool] | None) -> None:
@@ -566,8 +721,9 @@ class JobRunner:
                 rd.mkdir(parents=True, exist_ok=True)
                 self._remove_public(rd / job.hash)  # an incomplete leftover (done() said no)
                 job.tmp = rd / f"{TMP_PREFIX}{job.id}"
-                shutil.rmtree(job.tmp, ignore_errors=True)
+                shutil.rmtree(job.tmp, ignore_errors=True)  # our own fresh id: never another's
                 job.tmp.mkdir()
+                write_owner(job.tmp, self.job_timeout_s)  # first, before any job file
                 jt = self.job_types[job.type]
                 slot.conn.send(("run", job.id, jt.run, job.inputs, str(job.tmp),
                                 str(rd / job.hash), job.record, jt.stages))
