@@ -143,6 +143,17 @@ html[data-story-chrome='hide'] .hl-shell .hl-dock, html[data-story-chrome='hide'
   position: absolute; top: 0; bottom: 0; left: 0; z-index: 20; width: var(--layout-left-rail);
   box-shadow: 0 0 24px var(--color-bg);
 }
+/* L2 (D111): on desktop, Plan and Fly use the same icon column + sheet as the tablet (data-railmode set
+   by Shell.tsx), so the map keeps the width; the sidebar column stays on the right. */
+.hl-shell[data-bp=desktop][data-railmode=sheet] .hl-shell__body {
+  grid-template-columns: var(--layout-left-rail-collapsed) minmax(0, 1fr) auto;
+}
+.hl-shell[data-bp=desktop][data-railmode=sheet] .hl-rail { width: var(--layout-left-rail-collapsed); }
+.hl-shell[data-bp=desktop][data-railmode=sheet][data-rail=open] .hl-rail {
+  position: absolute; top: 0; bottom: 0; left: 0; z-index: 30; width: var(--layout-left-rail);
+  box-shadow: 0 0 24px var(--color-bg);
+}
+.hl-shell[data-bp=tablet][data-rail=open] .hl-rail { z-index: 30; }
 .hl-shell[data-bp=tablet][data-dock=open] .hl-dock { height: calc(var(--layout-timeline) - var(--space-5)); }
 .hl-shell[data-bp=tablet] .hl-sidebar {
   grid-area: main; justify-self: end; position: relative; z-index: 20; width: min(var(--layout-sidebar), 100%);
