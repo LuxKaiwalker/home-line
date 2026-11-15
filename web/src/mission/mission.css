@@ -135,3 +135,11 @@
 /* MapLibre's icons are dark SVGs: invert them to the light text colour */
 .mission-map .maplibregl-ctrl-top-left .maplibregl-ctrl-group:not(.hl-terrain-ctrl) .maplibregl-ctrl-icon { filter: invert(0.92) sepia(0.15); }
 .mission-map .maplibregl-ctrl-top-left .maplibregl-ctrl-group:not(.hl-terrain-ctrl) button:disabled .maplibregl-ctrl-icon { opacity: 0.35; }
+
+/* Send to MARVIS: the primary action of the export card (mission.tsx sendToMarvis) */
+.mp-send { display: block; width: 100%; min-height: 40px; margin-bottom: 0.5rem; padding: 0.45rem 0.9rem; background: var(--accent); color: var(--bg); border: 1px solid var(--accent); border-radius: 8px; font: inherit; font-weight: 700; cursor: pointer; }
+.mp-send:disabled { opacity: 0.45; cursor: default; }
+.mp-send[aria-busy='true'] { opacity: 0.8; cursor: progress; }
+.mp-send:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+.mp-send-msg { margin: 0 0 0.5rem; padding: 4px 8px; border: 1px solid var(--line); border-radius: 6px; font-size: 0.85rem; overflow-wrap: anywhere; }
+.mp-send-err { border-color: var(--bad); }
