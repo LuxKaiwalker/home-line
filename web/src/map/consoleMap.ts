@@ -19,6 +19,7 @@ import { MarsScaleControl } from './scale'
 import { effect, ui } from '../state'
 import { collapseFade, collapseHeadline, collapseQuery, padGridMetres, playCollapse, setCollapse } from './field/collapse'
 import { CollapseHeadlineOverlay, CollapseToggle } from './field/collapseUi'
+import { MapFurniture, MARKER_LAYERS, ROUTE_LAYERS } from './furniture'
 import { activeField, BINDING_LABEL, driveMargin, FIELD_TRUST, fieldModeQuery, fieldRequested, loadFieldData, loadFieldLayer, setActiveField, VARIANT_OF, webgl2Available, zeroEdgeLabels, type FieldData, type MarginState } from './field'
 
 /** The GPU field layer handle (field/layer.ts, loaded lazily). */
@@ -50,9 +51,9 @@ const GROUP_LAYERS: Record<LayerGroup, string[]> = {
   bands: ['band-opt', 'band-con', 'band-lines'],
   unknown: ['unknown-hatch'],
   edges: ['edges-line'],
-  stations: ['walkin-line', 'access-pts'],
+  stations: ['walkin-line', 'access-pts', ...MARKER_LAYERS],
   slider: ['iso-fill', 'iso-lines', 'iso-current'],
-  route: ['route-line'],
+  route: ROUTE_LAYERS, // WS16 task 5: route draw-on, done / coming legs, turn-back ticks (furniture)
   partner: ['partner-line'],
   siting: ['siting-img'],
 }
@@ -107,6 +108,8 @@ export class ConsoleMap {
   private collapseQueryDone = false
   /** k < 1: the real band's edge causes (lines, labels) are hidden; they belong to k = 1 */
   private collapseHidesEdges = false
+  // WS16 task 5: thread home, route draw-on, markers, compass, cursor readout (U4)
+  private furniture: MapFurniture | null = null
 
   constructor(container: HTMLElement, onStation: (id: string) => void) {
     this.onStation = onStation
@@ -177,13 +180,6 @@ export class ConsoleMap {
         'line-width': THEME.edgeLineWidth,
       },
     })
-    m.addLayer({
-      id: 'route-line',
-      type: 'line',
-      source: 'route',
-      layout: { 'line-cap': 'round', 'line-join': 'round' },
-      paint: { 'line-color': THEME.route, 'line-width': 2.5, 'line-dasharray': [1, 1.5] },
-    })
     // Access-cell rule (user 11:40): straight walk-in line science -> access cell, and the access cell.
     m.addLayer({ id: 'walkin-line', type: 'line', source: 'walkin', paint: { 'line-color': THEME.station, 'line-width': 1.5, 'line-dasharray': [1, 1] } })
     m.addLayer({
@@ -192,6 +188,8 @@ export class ConsoleMap {
       source: 'access',
       paint: { 'circle-radius': 4, 'circle-color': THEME.mapBackground, 'circle-stroke-color': THEME.station, 'circle-stroke-width': 2 },
     })
+    this.furniture = new MapFurniture(m)
+    this.furniture.setRouteVisible(this.visible.route)
     this.applyFilters()
     this.applyVisibility()
   }
@@ -266,6 +264,7 @@ export class ConsoleMap {
       this.showField(fd)
       this.stopMargin ??= driveMargin(() => this.fieldData?.suitKg ?? null, (s) => this.setMargin(s), fieldModeQuery(location.search, location.hash))
       this.setMargin(this.margin)
+      void this.furniture?.setScenario(entry.id)
       await this.syncCollapse(fd, entry.id)
     } catch (e) {
       this.fieldError(e)
@@ -323,6 +322,7 @@ export class ConsoleMap {
   private showField(fd: FieldData | null): void {
     this.fieldOn = fd !== null && this.fieldLayer !== null
     if (!fd && this.fieldData && activeField() === this.fieldData) setActiveField(null)
+    if (!fd) void this.furniture?.setScenario(null)
     if (!fd) this.headline?.setHeadline(null) // the collapse headline belongs to the published field
     const c = this.map.getContainer()
     c.setAttribute(FIELD_TRUST.renderAttr, this.fieldOn ? 'gpu' : 'polygons')
@@ -369,6 +369,7 @@ export class ConsoleMap {
   async setRoute(route: RouteFC | null): Promise<void> {
     await this.ready
     ;(this.map.getSource('route') as GeoJSONSource).setData(route ?? EMPTY)
+    await this.furniture?.setRoute(route)
   }
 
   /** Hatched unknown cells from a field alpha (A = 0 unknown), placed on the field-index bounds. */
@@ -411,9 +412,11 @@ export class ConsoleMap {
         ev.stopPropagation()
         this.onStation(s.id)
       })
-      return new Marker({ element: el }).setLngLat([s.lon, s.lat]).addTo(this.map)
+      // the ring is a map layer (furniture); this button is its label, to the right of the ring
+      return new Marker({ element: el, anchor: 'left', offset: [12, 0] }).setLngLat([s.lon, s.lat]).addTo(this.map)
     })
     await this.ready
+    this.furniture?.setStations(stations)
     ;(this.map.getSource('walkin') as GeoJSONSource).setData(walkInLines(stations, scenarioId))
     const pts = stations.flatMap((s) => {
       const a = accessFor(s, scenarioId)
@@ -502,6 +505,7 @@ export class ConsoleMap {
 
   setVisible(group: LayerGroup, on: boolean): void {
     this.visible[group] = on
+    if (group === 'route') this.furniture?.setRouteVisible(on)
     this.applyVisibility()
   }
 
@@ -562,6 +566,7 @@ export class ConsoleMap {
   }
 
   destroy(): void {
+    this.furniture?.destroy()
     this.stopCollapse?.()
     this.headline?.destroy()
     this.stopMargin?.()
