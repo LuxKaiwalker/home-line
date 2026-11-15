@@ -8,11 +8,15 @@
 // functions here (a lazy chunk); live/route/route.test.tsx allow-lists these entry modules.
 import { data } from '../data/loader'
 import type { Station } from '../data/types'
+import { install as installBasemaps } from '../map/basemaps'
 import { install as installCuriosity } from '../map/overlays/curiosity'
+import { install as installSlope } from '../map/overlays/slope'
+import { overlayOn, setOverlay } from '../map/overlays/state'
 import { install as installRoutes } from '../map/routes'
-import { padService } from '../pads'
+import { loadPadIndex, padService, prefetchPads } from '../pads'
 import { encodeRouteParam, parsePlanningHash, planning, ROUTE_PARAM, type PlanningDoc, type PlanningStore } from '../state/planning'
 import { installRoutePanel } from '../ui/route-panel'
+import { install as installExport } from '../ui/route-panel/export'
 
 let installed = false
 const stationById = new Map<string, Station>()
@@ -31,6 +35,10 @@ export function installPlanPort(): void {
     stationName: (id) => stationById.get(id)?.name ?? null,
   })
   installCuriosity() // L1b: off by default, no request until turned on
+  installSlope() // L1a: replaces the U7 slope-classes overlay (its row is hidden, it stays off)
+  if (overlayOn.peek().slopeClass) setOverlay('slopeClass', false)
+  installBasemaps() // L1c: satellite (default) / topography / material, map-edge switcher
+  installExport() // U4: Send to MARVIS / Download mission.json + share link (Route panel section)
   void data()
     .stations()
     .then((list) => list.forEach((s) => stationById.set(s.id, s)))
@@ -82,6 +90,12 @@ export function mountPlanPort(store: PlanningStore = planning): () => void {
   const offSync = store.doc.subscribe(write)
   // R1: the planning runner (worker + route results). Lazy: the route core is its own chunk (§7b).
   let stopRunner: (() => void) | null = null
+  // P1: after first paint, prefetch the picker pads with routing fields in idle time (never evicts a used pad)
+  const prefetch = setTimeout(() => {
+    void loadPadIndex()
+      .then((pads) => alive && prefetchPads(pads.filter((p) => !p.official && p.hasRoutingFields).map((p) => p.id)))
+      .catch(() => {})
+  }, 0)
   void import('../edit/route/browser/runner')
     .then(({ startPlanningRunner }) => {
       if (alive) stopRunner = startPlanningRunner(store, padService()).stop
@@ -89,6 +103,7 @@ export function mountPlanPort(store: PlanningStore = planning): () => void {
     .catch((e) => console.warn('planning runner unavailable', e))
   return () => {
     alive = false
+    clearTimeout(prefetch)
     window.removeEventListener('hashchange', onHash)
     offSync()
     stopRunner?.()

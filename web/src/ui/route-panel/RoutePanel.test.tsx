@@ -50,6 +50,8 @@ const flush = () => act(async () => void (await new Promise((r) => setTimeout(r,
 const fire = (n: FakeNode, type: string) => act(() => void n.dispatch(type, {}))
 const text = (n: FakeNode) => n.textContent.replace(/\s+/g, ' ').trim()
 const attr = (a: string, v?: string) => all(root, (n) => n.hasAttribute(a) && (v === undefined || n.getAttribute(a) === v))
+/** the status line (PORT I1: the [data-estimates] card mirrors the results' status for the e2e, Q1) */
+const statusLine = (v: string) => attr('data-status', v).filter((n) => !n.hasAttribute('data-estimates'))
 const btn = (name: string) => one(all(root, (n) => n.localName === 'button' && (n.getAttribute('aria-label') === name || n.textContent.trim() === name)), `button "${name}"`)
 const drawer = () => one(attr('id', 'hl-lay-route-panel'), 'drawer')
 const hidden = (n: FakeNode) => n.hasAttribute('hidden') && n.getAttribute('hidden') !== 'false'
@@ -264,14 +266,16 @@ describe('Route panel: estimates from the route results (§9)', () => {
     openRoutePanel()
     mount(<RoutePanel store={store} loader={loader} />)
     act(() => publishRouteResults({ ...MOCK_ROUTE_RESULTS, status: 'computing' }))
-    expect(text(one(attr('data-status', 'computing')))).toBe('Computing the route…')
+    expect(text(one(statusLine('computing')))).toBe('Computing the route…')
     act(() => publishRouteResults({ ...MOCK_ROUTE_RESULTS, status: 'partial', legs: MOCK_ROUTE_RESULTS.legs.slice(0, 1), firstInfeasibleLeg: null }))
-    expect(text(one(attr('data-status', 'partial')))).toBe('1 of 3 legs in; the rest follow…')
+    expect(text(one(statusLine('partial')))).toBe('1 of 3 legs in; the rest follow…')
     act(() => publishRouteResults({ ...MOCK_ROUTE_RESULTS, status: 'error', error: 'worker failed' }))
-    expect(text(one(attr('data-status', 'error')))).toBe('The route could not be computed: worker failed')
+    expect(text(one(statusLine('error')))).toBe('The route could not be computed: worker failed')
     act(() => publishRouteResults({ ...MOCK_ROUTE_RESULTS, padId: 'rank2', totalMinutes: 99 }))
-    expect(one(attr('data-status', 'computing'))).toBeTruthy()
+    expect(one(statusLine('computing'))).toBeTruthy()
     expect(text(one(attr('data-estimates')))).not.toContain('99')
+    expect(one(attr('data-estimates')).getAttribute('data-pad')).toBe('rank2') // Q1 e2e hooks
+    expect(one(attr('data-estimates')).getAttribute('data-status')).toBe('ready')
     expect(attr('data-infeasible-leg')).toHaveLength(0)
   })
 

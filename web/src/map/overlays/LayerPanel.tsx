@@ -6,6 +6,7 @@ import { useSignalValue } from '../../state/signal'
 import { Slider, Tag, Toggle, TrustChip } from '../../ui/components'
 import { t } from '../../ui/copy'
 import { colorVar } from '../../ui/tokens'
+import { replacedOverlays } from '../extensions'
 import { OPACITY, OVERLAY_CFG, OVERLAY_GROUPS, overlayById, OVERLAYS, type LegendItem, type OverlayDef } from './catalog'
 import { capNotice, overlayOn, overlayOpacity, setOverlay, setOverlayOpacity } from './state'
 import './overlays.css'
@@ -55,6 +56,8 @@ function OverlayRow({ o }: { o: OverlayDef }) {
 export function LayerPanel() {
   const on = useSignalValue(overlayOn)
   const notice = useSignalValue(capNotice)
+  // PORT I1: a built-in overlay replaced by a registered one (L1a slope replaces slopeClass) has no row
+  const replaced = useSignalValue(replacedOverlays)
   const any = OVERLAYS.some((o) => on[o.id])
   return (
     <div class="hl-ovl">
@@ -66,7 +69,7 @@ export function LayerPanel() {
         <section class="hl-ovl__group" data-group={g}>
           <h3 class="hl-ovl__group-title">{t(`layers.groups.${g}`)}</h3>
           <ul class="hl-ovl__layers" role="list">
-            {OVERLAYS.filter((o) => o.group === g).map((o) => (
+            {OVERLAYS.filter((o) => o.group === g && !replaced.has(o.id)).map((o) => (
               <OverlayRow o={o} />
             ))}
           </ul>

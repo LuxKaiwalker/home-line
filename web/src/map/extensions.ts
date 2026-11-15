@@ -147,7 +147,19 @@ function add<K extends keyof Registered>(k: K, v: Registered[K][number]): Dispos
 export const registerPadEnvironment = (h: PadEnvironmentHandler): Dispose => add('pad', h)
 export const registerRouteLayer = (s: RouteLayerSpec): Dispose => add('routes', s)
 export const registerEditHandlers = (h: EditHandlers): Dispose => add('edit', h)
-export const registerOverlay = (s: OverlaySpec): Dispose => add('overlays', s)
+const replaced = signal<ReadonlySet<string>>(new Set())
+const syncReplaced = () => void (replaced.value = new Set(reg.overlays.flatMap((o) => (o.replaces ? [o.replaces] : []))))
+export function registerOverlay(s: OverlaySpec): Dispose {
+  const off = add('overlays', s)
+  syncReplaced()
+  return () => {
+    off()
+    syncReplaced()
+  }
+}
+/** PORT I1: the built-in overlay ids (map/overlays/catalog.ts) replaced by a registered overlay (`replaces`,
+ *  e.g. L1a's slope → 'slopeClass'): the layer manager hides their rows and keeps them off. */
+export const replacedOverlays: ReadSignal<ReadonlySet<string>> = replaced
 export const registerBasemap = (s: BasemapSpec): Dispose => add('basemaps', s)
 export function registerMapControl(c: MapControlSpec): Dispose {
   controls.value = [...controls.peek().filter((x) => x.id !== c.id), c].sort((a, b) => a.order - b.order)
@@ -161,6 +173,7 @@ export const mapControlsIn = (slot: MapControlSlot): MapControlSpec[] => control
 export function resetMapExtensions(): void {
   for (const k of Object.keys(reg) as (keyof Registered)[]) reg[k].length = 0
   controls.value = []
+  replaced.value = new Set()
 }
 
 // ---- host (used by ConsoleMap only) ------------------------------------------------------------
