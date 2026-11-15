@@ -13,6 +13,10 @@
  */
 import { expect, test, type Page } from 'playwright/test'
 
+// 3D in software GL (CI): every frame of the terrain is slow, and each input event waits for one
+// (issue #131); the interactions themselves are checked with their usual timeouts
+test.describe.configure({ timeout: 180_000 })
+
 const card = (page: Page) => page.locator('.hl-sidebar__body')
 const cam = (page: Page) => page.locator('[data-camera-center]').first()
 const mapEl = (page: Page) => page.locator('.maplibregl-map').first()
@@ -111,7 +115,6 @@ test.describe('L13: planning interactions in 3D (?view=3d, open pose)', () => {
     await page.mouse.up()
     expect(await center(page)).toBe(before) // the map did not move
     await expect(card(page)).toContainText('What this change costs', { timeout: 15_000 })
-    await page.keyboard.press('Escape')
   })
 
   test('a right drag pans (the ground follows the pointer)', async ({ page }) => {
