@@ -495,7 +495,31 @@
       "unknownStop": "Not a station code",
       "tooManyStops": "Too many stops for one route",
       "withinRange": "Above the longest time that can be searched",
-      "nothingToOpen": "Nothing to open"
+      "nothingToOpen": "Nothing to open",
+      "noPad": "The pad position is not loaded",
+      "planningRadius": "Beyond the planning radius",
+      "nothingSelected": "Nothing selected: select a place first",
+      "noTimeline": "The plan's timeline is not loaded",
+      "mapLater": "Not on the map yet"
+    },
+    "coords": {
+      "row": "Go to {input}: {lonlat}",
+      "metresRow": "Go to {input} from the official pad: {lonlat}",
+      "hint": "coordinates: decimal, degrees minutes seconds, or x and y metres from the official pad"
+    },
+    "timeHome": {
+      "row": "Time home at {place}",
+      "here": "Time home here",
+      "unknown": "Time home at {place}: unknown",
+      "noRoute": "Time home at {place}: no route home",
+      "hint": "time home here, or time home then coordinates"
+    },
+    "margin": {
+      "row": "{time} {event}: margin",
+      "none": "No timeline row with a margin of {n} min or less",
+      "mapLater": "Map highlight comes later",
+      "hint": "margin below a number of minutes: the timeline rows at or under it",
+      "events": { "leave": "Departure", "o2Checkpoint": "Oxygen checkpoint" }
     }
   },
 
