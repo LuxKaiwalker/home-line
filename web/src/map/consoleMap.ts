@@ -26,6 +26,7 @@ import type { MapLabel } from './labels/model'
 import { TerrainController } from './terrain'
 import type { RoverHandle } from '../edit/roverMap'
 import { FlythroughControl } from './flythrough/control'
+import { installStorm } from './storm'
 import { storyParams, storyRequest } from '../story/query'
 import { CameraController, type ControllerMap } from './camera'
 import { MapSelection, SELECT_ROUTE_HIT, type SelectMap, type SelectSources } from './select'
@@ -130,6 +131,8 @@ export class ConsoleMap {
   private rover: RoverHandle | null = null
   // WS16 task 10 (M10): U6 flythrough button and story mode (intro, ?demo=1, ?capture=; lazy)
   private stopStory: (() => void) | null = null
+  // WS16 task 12 (M12): U9 storm mode switch (visuals load lazily on first switch-on)
+  private stopStorm: (() => void) | null = null
   // WS16 task 9 (M9): map clicks/hover -> A5 selection store, highlight, isolation; camera presets and focus (U14, U16)
   private selectMap: MapSelection | null = null
   private camera: CameraController | null = null
@@ -236,6 +239,7 @@ export class ConsoleMap {
     this.applyVisibility()
     void this.initLabels()
     this.map.addControl(new FlythroughControl(), 'top-right')
+    this.stopStorm = installStorm(this.map)
     this.selectMap = new MapSelection(m as unknown as SelectMap, this.selectSources, { setSelectedLabel, marker: (el) => new Marker({ element: el }) })
     this.selectMap.addLayers()
     this.groupLayers.route.push(SELECT_ROUTE_HIT)
@@ -673,6 +677,7 @@ export class ConsoleMap {
   destroy(): void {
     this.destroyed = true
     this.stopStory?.()
+    this.stopStorm?.()
     this.camera?.destroy()
     this.selectMap?.destroy()
     this.terrain?.destroy()
