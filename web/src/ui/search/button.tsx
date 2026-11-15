@@ -12,6 +12,19 @@ type PaletteC = ComponentType<PaletteProps>
 let loaded: PaletteC | null = null
 export const loadPalette = (): Promise<PaletteC> => import('./palette').then((m) => (loaded = m.Palette))
 
+const defaultNavigate = (hash: string): void => {
+  if (location.hash !== hash) location.hash = hash
+}
+let commandsInstalled: Promise<void> | null = null
+/** S2: install the command registry (ui/commands, its own lazy chunk) once per page. The button is always in
+ *  the shell's top bar, so this is the one install point; it is never uninstalled (focus mode, re-renders). */
+export function installCommandsOnce(win: Window, navigate: (hash: string) => void = defaultNavigate): Promise<void> {
+  return (commandsInstalled ??= import('../commands').then(
+    (m) => m.installCommands(win, navigate),
+    () => void (commandsInstalled = null), // chunk failed to load: the next mount retries
+  ))
+}
+
 /** Warm the palette chunk when the pointer or focus reaches the button (never on page load: perf test). */
 const prefetch = (): void => void (loaded || loadPalette().catch(() => {}))
 
@@ -27,6 +40,7 @@ export function SearchButton({ win = typeof window === 'undefined' ? undefined :
   // L12: the expanded index builds in an idle callback after the intro has started (index/idle.ts), or on first open
   const pl = palette?.loader
   useEffect(() => scheduleIndexBuild({ win, loader: pl && (() => pl) }), [])
+  useEffect(() => void (win && installCommandsOnce(win)), [])
   useEffect(() => {
     if (!win) return
     // §4.4: Ctrl+K and / arrive as the shell's cancelable `hl:shortcut` action 'search' (keys.ts).

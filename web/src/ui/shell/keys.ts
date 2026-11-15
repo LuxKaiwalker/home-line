@@ -7,6 +7,7 @@
 import type { Route } from '../../router'
 import type { ClockDriver } from '../../state/clock'
 import { ui, type Mode } from '../../state/ui'
+import { commandForShortcut, runCommand } from '../commands/registry'
 import type { CopyKey } from '../copy'
 import { modeHash, shell } from './store'
 
@@ -101,6 +102,16 @@ export const HELP_ROWS: readonly HelpRow[] = [
   { keys: ['Touch'], label: 'shortcuts.touch', ready: true },
 ]
 
+const ROW: Record<ShortcutAction['action'], string> = { search: 'search', camera: 'cameraPresets', focusMode: 'focusMode', playPause: 'playPause', scrub: 'scrub', escape: 'escape', undo: 'undoRedo', redo: 'undoRedo', history: 'history', mode: 'modes', toggle3d: 'toggle3d', help: 'help' }
+/** Display keys of `a`, read from HELP_ROWS (search block S2: shown beside each command in the palette). */
+export function keysForAction(a: ShortcutAction): string[] {
+  const keys = HELP_ROWS.find((r) => r.label === `shortcuts.${ROW[a.action]}`)?.keys ?? []
+  if (a.action === 'camera') return keys.length ? [String(a.preset)] : []
+  const i = a.action === 'mode' ? Object.values(MODE_KEYS).indexOf(a.mode) : a.action === 'redo' || (a.action === 'history' && a.step > 0) || (a.action === 'scrub' && a.minutes > 0) ? 1 : 0
+  if (a.action === 'scrub' && Math.abs(a.minutes) >= 10) return [`Shift+${keys[i]}`]
+  return ['mode', 'undo', 'redo', 'history', 'scrub'].includes(a.action) ? keys.slice(i, i + 1) : [...keys]
+}
+
 /** Views that handle a key themselves: the shell leaves it to them (the HUD's Space toggles the same clock). */
 const VIEW_KEYS: Partial<Record<Route['name'], readonly ShortcutAction['action'][]>> = { hud: ['playPause'] }
 
@@ -148,8 +159,10 @@ export function runShortcut(a: ShortcutAction, env: ShortcutEnv): boolean {
       if (!fly) return false
       void (env.clock ?? lazyClock)().then((c) => c.seek(c.t + a.minutes))
       return true
-    default:
-      return false // search, camera, undo/redo, history: announced only until their packages land
+    default: {
+      const c = commandForShortcut(a) // announced first; unhandled, a registered non-shell command runs (S2)
+      return c && c.owner !== 'shell' ? runCommand(c.id, 'shortcut') : false
+    }
   }
 }
 

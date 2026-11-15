@@ -472,6 +472,54 @@
       "depart": "Departure from the rover",
       "arrive": "Arrival",
       "return": "Back at the rover"
+    },
+    "unavailable": "unavailable: {reason}",
+    "live": {
+      "unknown": "Needs the live server: not checked yet",
+      "offline": "Needs the live server: not reachable"
+    }
+  },
+
+  "commands": {
+    "timeline": {
+      "back": "Timeline: step back",
+      "forward": "Timeline: step forward"
+    },
+    "camera": {
+      "overhead": "Camera: overhead",
+      "isometric": "Camera: isometric",
+      "low": "Camera: low altitude",
+      "focus": "Camera: focus on the selection"
+    },
+    "followCrew": "Follow the crew (flythrough)",
+    "selection": {
+      "back": "Previous selection",
+      "forward": "Next selection"
+    },
+    "layer": {
+      "contours": "Layer: Contours",
+      "slopeClass": "Layer: Slope classes",
+      "rough": "Layer: Rough footing",
+      "mineralSulfate": "Layer: Sulfate hint",
+      "mineralClay": "Layer: Clay hint",
+      "ridges": "Layer: Ridges (boxwork)",
+      "mineralPatches": "Layer: Mineral hint",
+      "blocked": "Layer: Blocked area"
+    },
+    "layersReset": "Reset overlays",
+    "exaggeration": {
+      "more": "Terrain exaggeration: more",
+      "less": "Terrain exaggeration: less",
+      "reset": "Terrain exaggeration: default"
+    },
+    "storm": "Storm replay on / off",
+    "fullscreen": "Full screen on / off",
+    "reason": {
+      "mapOnly": "Only on the Plan and Fly maps",
+      "flyOnly": "Only in Fly",
+      "only3d": "Only in the 3D map view",
+      "noHistory": "No other selection to go to",
+      "reducedMotion": "Off while reduced motion is on"
     }
   },
 

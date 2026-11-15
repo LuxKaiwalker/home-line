@@ -9,10 +9,11 @@
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks'
 import { data, type Loader } from '../../data/loader'
 import { select } from '../../state/selection'
+import { useSignalValue } from '../../state/signal'
 import { ui } from '../../state/ui'
 import { Badge, ChipMark, cx, Icon } from '../components'
 import { t } from '../copy'
-import { runShortcut, type ShortcutAction } from '../shell/keys'
+import { commands, getCommand, reasonFor, runCommand } from '../commands/registry'
 import { isMapMode, modeHash, openSidebar, shell } from '../shell/store'
 import { expandedIndex, resetExpandedIndex } from './index/lazy'
 import { commandItems, GROUP_LABEL, loadObjectIndex, rank, type RunEnv, type SearchItem } from './search'
@@ -22,9 +23,17 @@ import './search.css'
 export const labelOf = (i: SearchItem): string => (i.label ? t(i.label) : i.name)
 
 let cached: Promise<SearchItem[]> | null = null
-/** Objects (static files, loader-cached) + the expanded index (built here on first open) + commands. */
+/** Objects (static files, loader-cached) + the expanded index (built here on first open). The palette adds
+ *  the registered commands (ui/commands) live, so commands registered later (live layer) and their state show. */
 export function searchIndex(L: Loader = data()): Promise<SearchItem[]> {
-  return (cached ??= Promise.all([loadObjectIndex(L), expandedIndex(L)]).then(([objs, more]) => [...objs, ...more, ...commandItems()]))
+  return (cached ??= Promise.all([loadObjectIndex(L), expandedIndex(L)]).then(([objs, more]) => [...objs, ...more]))
+}
+
+/** Why a command row cannot run now (null for objects and enabled commands). */
+export const disabledReason = (i: SearchItem): string | null => {
+  const c = i.commandId ? getCommand(i.commandId) : undefined
+  const r = c ? reasonFor(c) : null
+  return r && t(r)
 }
 /** Tests: forget the built index. */
 export const resetSearchIndex = (): void => void ((cached = null), resetExpandedIndex())
@@ -33,7 +42,7 @@ export type { RunEnv }
 
 /** Enter on a result. Objects: select(ref, 'search'), the same call a map or list click makes, so the
  *  sidebar shows the same card; outside PLAN/FLY the sidebar is hidden, so PLAN opens first. Commands:
- *  the §4.4 shortcut, through the shell's runner (other packages may handle it via `hl:shortcut`). */
+ *  runCommand (ui/commands), which does nothing while the command is disabled. */
 export function runItem(item: SearchItem, env: RunEnv): void {
   if (item.run) return item.run(env) // layers, clock, scenarios, report routes (index/sources.ts)
   if (item.ref) {
@@ -43,16 +52,7 @@ export function runItem(item: SearchItem, env: RunEnv): void {
     if (!(item.ref.kind === 'station' && shell.hosted.peek().includes('station'))) openSidebar()
     return
   }
-  if (item.command) {
-    const win = env.win
-    const announce = (a: ShortcutAction): boolean => {
-      if (!win) return false
-      const ev = new CustomEvent('hl:shortcut', { detail: a, cancelable: true })
-      win.dispatchEvent(ev)
-      return ev.defaultPrevented
-    }
-    runShortcut(item.command, { navigate: env.navigate, announce })
-  }
+  if (item.commandId) runCommand(item.commandId, 'palette')
 }
 
 export interface PaletteProps {
@@ -61,7 +61,7 @@ export interface PaletteProps {
   loader?: Loader
   navigate?: (hash: string) => void
   win?: Window
-  /** Tests: a ready index instead of loading one. */
+  /** Tests: a ready object index instead of loading one (registered commands are always added). */
   items?: SearchItem[]
 }
 
@@ -103,12 +103,15 @@ export function Palette({ onClose, loader, navigate = defaultNavigate, win = typ
     }
   }, [])
 
-  const results = useMemo(() => (items ? rank(items, q, labelOf) : []), [items, q])
+  const cmds = useSignalValue(commands)
+  const all = useMemo(() => (items ? [...items, ...commandItems(cmds)] : null), [items, cmds])
+  const results = useMemo(() => (all ? rank(all, q, labelOf) : []), [all, q])
   const cur = Math.min(active, Math.max(results.length - 1, 0))
+  const why = results.map(({ item }) => disabledReason(item)) // read at render: a disabled command row says why
   const optId = (i: number) => `hl-search-opt-${i}`
 
   const choose = (item: SearchItem | undefined) => {
-    if (!item) return
+    if (!item || disabledReason(item)) return // a disabled command row says why and does nothing
     onClose()
     runItem(item, { navigate, win })
   }
@@ -187,6 +190,9 @@ export function Palette({ onClose, loader, navigate = defaultNavigate, win = typ
             id={optId(i)}
             role="option"
             aria-selected={i === cur ? 'true' : 'false'}
+            aria-disabled={why[i] ? 'true' : undefined}
+            aria-describedby={why[i] ? `${optId(i)}-why` : undefined}
+            aria-keyshortcuts={item.keys?.length ? item.keys.join(' ') : undefined}
             class={cx('hl-search__opt', i === cur && 'is-active')}
             data-id={item.id}
             onMouseDown={(e) => e.preventDefault() /* keep focus in the input */}
@@ -199,7 +205,13 @@ export function Palette({ onClose, loader, navigate = defaultNavigate, win = typ
               {labelOf(item)}
               {item.hint && <span class="hl-search__kind"> · {t(item.hint)}</span>}
             </span>
-            <span class="hl-search__kind">{t(GROUP_LABEL[item.group])}</span>
+            {why[i] ? (
+              <span id={`${optId(i)}-why`} class="hl-search__kind">
+                {t('search.unavailable', { reason: why[i]! })}
+              </span>
+            ) : (
+              <span class="hl-search__kind">{t(GROUP_LABEL[item.group])}</span>
+            )}
             {item.chip && <ChipMark kind={item.chip} />}
             {item.keys?.map((k) => (
               <kbd key={k} aria-hidden="true">

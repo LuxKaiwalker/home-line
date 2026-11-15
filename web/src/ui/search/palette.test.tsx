@@ -6,7 +6,9 @@
 //  - ARIA: dialog > combobox (aria-expanded, aria-controls, aria-activedescendant) + listbox/option;
 //    focus starts in the input and Tab / Shift+Tab stay inside the dialog;
 //  - Ctrl+K and / (the shell's `hl:shortcut` 'search') open and toggle it from the top-bar button;
-//  - empty, results and no-results states; no network request.
+//  - empty, results and no-results states; no network request;
+//  - S2 (search block): the commands group comes from the registry (ui/commands) with its keys; a disabled
+//    command row is aria-disabled with its reason and Enter does nothing; typing runs no command.
 import { existsSync, readFileSync } from 'node:fs'
 import { readFile } from 'node:fs/promises'
 import { resolve } from 'node:path'
@@ -21,12 +23,15 @@ import { selectFromMap } from '../../state/selectionAdapter'
 import { ui } from '../../state/ui'
 import { SelectionCard } from '../cards/cards'
 import { ensureFor, loadCardData, type CardData, type CellLookup } from '../cards/data'
+import { installCommands } from '../commands'
+import { commands, getCommand } from '../commands/registry'
+import { setCommandEnv } from '../commands/shell'
 import { t } from '../copy'
 import { hostIn, shell } from '../shell/store'
-import { byClass, byRole, byTag, installDom, one, type FakeDocument, type FakeNode } from '../testing/dom'
+import { all, byClass, byRole, byTag, installDom, one, type FakeDocument, type FakeNode } from '../testing/dom'
 import { SearchButton } from './button'
 import { labelOf, Palette, resetSearchIndex, runItem, searchIndex } from './palette'
-import type { SearchItem } from './search'
+import { commandItems, type SearchItem } from './search'
 
 const REAL = resolve(__dirname, '../../../public/data')
 const HAVE = existsSync(resolve(REAL, 'manifest.json'))
@@ -80,6 +85,8 @@ function key(k: string, init: Record<string, unknown> = {}, on: FakeNode = input
   return ev!
 }
 const activeId = () => input().getAttribute('aria-activedescendant')
+const cmd = (id: string) => commandItems().find((i) => i.commandId === id)!
+const rowId = (id: string) => cmd(id).id
 const activeOpt = () => options().find((o) => o.getAttribute('aria-selected') === 'true')!
 
 describe.skipIf(!HAVE)('search palette (real data)', () => {
@@ -87,6 +94,7 @@ describe.skipIf(!HAVE)('search palette (real data)', () => {
     vi.stubGlobal('fetch', fetchSpy)
     setManifest(JSON.parse(readFileSync(resolve(REAL, 'manifest.json'), 'utf8')) as Manifest)
     d = await loadCardData(L, cell)
+    installCommands(new EventTarget() as unknown as Window, () => {})
     items = await searchIndex(L)
     for (const i of items) if (i.ref) await ensureFor(L, d, i.ref)
   })
@@ -239,14 +247,89 @@ describe.skipIf(!HAVE)('search palette (real data)', () => {
     expect(selection.selected.value).toEqual({ kind: 'station', id: 'S7' })
   })
 
-  it('commands run the §4.4 action (2D/3D toggles the view; a mode command navigates)', () => {
+  it('commands run their registry command (2D/3D toggles the view; a mode command navigates)', () => {
     ui.view.value = '2d'
-    runItem(items.find((i) => i.id === 'cmd:toggle3d')!, { navigate: () => {} })
+    runItem(cmd('view.toggle3d'), { navigate: () => {} })
     expect(ui.view.value).toBe('3d')
     const nav = vi.fn()
-    runItem(items.find((i) => i.id === 'cmd:mode:evidence')!, { navigate: nav })
+    setCommandEnv({ navigate: nav })
+    runItem(cmd('mode.evidence'), { navigate: () => {} })
     expect(nav).toHaveBeenCalledTimes(1)
-    expect(labelOf(items.find((i) => i.id === 'cmd:mode:evidence')!)).toBe(t('modes.evidence.label'))
+    expect(labelOf(cmd('mode.evidence'))).toBe(t('modes.evidence.label'))
+  })
+
+  it('commands group: every registered command can be found, with its keys beside it', () => {
+    mount(<Palette items={items} onClose={() => {}} navigate={() => {}} />)
+    for (const c of commands.value) {
+      type(t(c.label))
+      const row = options().find((o) => o.getAttribute('data-id') === rowId(c.id))
+      expect(row, c.id).toBeDefined()
+      expect(text(row!), c.id).toContain(t(c.label))
+    }
+    type('3d')
+    expect(activeOpt().getAttribute('data-id')).toBe(rowId('view.toggle3d'))
+    expect(byTag(activeOpt(), 'kbd').map(text)).toEqual(['T'])
+    expect(activeOpt().getAttribute('aria-keyshortcuts')).toBe('T')
+    type('layer')
+    const layerRows = options().filter((o) => o.getAttribute('data-id')!.startsWith('cmd:map.layer'))
+    expect(layerRows.length).toBeGreaterThanOrEqual(8)
+    type('undo')
+    expect(byTag(activeOpt(), 'kbd').map(text)).toEqual(['Ctrl+Z'])
+  })
+
+  it('a disabled command row says why (aria-disabled + description) and Enter or a click does nothing', () => {
+    ui.mode.value = 'report'
+    const c = getCommand('camera.low')!
+    const run = vi.spyOn(c, 'run')
+    const onClose = vi.fn()
+    mount(<Palette items={items} onClose={onClose} navigate={() => {}} />)
+    type('camera low')
+    const row = activeOpt()
+    expect(row.getAttribute('data-id')).toBe(rowId('camera.low'))
+    expect(row.getAttribute('aria-disabled')).toBe('true')
+    const why = one(byRole(root, 'listbox').flatMap((l) => all(l, (n) => n.getAttribute('id') === row.getAttribute('aria-describedby'))), 'reason')
+    expect(text(why)).toBe(t('search.unavailable', { reason: t('commands.reason.mapOnly') }))
+    expect(text(row)).toContain(t('commands.reason.mapOnly'))
+    key('Enter')
+    act(() => void row.dispatch('click'))
+    expect(run).not.toHaveBeenCalled()
+    expect(onClose).not.toHaveBeenCalled()
+    expect(byTag(root, 'dialog')).toHaveLength(1)
+    // enabled again in a map mode: Enter runs it once
+    ui.mode.value = 'plan' // (the mode cannot change while the modal palette is open: re-type to re-render)
+    type('camera')
+    type('camera low')
+    expect(activeOpt().getAttribute('aria-disabled')).toBeNull()
+    key('Enter')
+    expect(run).toHaveBeenCalledTimes(1)
+    run.mockRestore()
+  })
+
+  it('typing and arrowing run no command; Enter runs exactly one', () => {
+    const spies = commands.value.map((c) => vi.spyOn(c, 'run'))
+    mount(<Palette items={items} onClose={() => {}} navigate={() => {}} />)
+    for (const q of ['l', 'la', 'layer', 'layer ridges', '3', '3d', 'undo', 'storm', 'camera', 'help', 'mode', 'focus', 'exag']) {
+      type(q)
+      key('ArrowDown')
+      key('ArrowUp')
+    }
+    expect(spies.reduce((n, s) => n + s.mock.calls.length, 0)).toBe(0)
+    type('focus mode')
+    key('Enter')
+    expect(spies.reduce((n, s) => n + s.mock.calls.length, 0)).toBe(1)
+    shell.focusMode.value = false
+    for (const s of spies) s.mockRestore()
+  })
+
+  it('a11y: every row has a text name; command rows name their group or the reason they are off', () => {
+    mount(<Palette items={items} onClose={() => {}} navigate={() => {}} />)
+    for (const q of ['s', 'layer', 'camera', 'mode']) {
+      type(q)
+      for (const o of options()) {
+        expect(text(o).length, o.getAttribute('data-id')!).toBeGreaterThan(2)
+        if (o.getAttribute('data-id')!.startsWith('cmd:')) expect(text(o)).toMatch(new RegExp(`${t('search.groups.commands')}|${t('search.unavailable', { reason: '' }).trim()}`))
+      }
+    }
   })
 
   it('top-bar button: click opens; the shell\'s search shortcut (Ctrl+K, /) toggles; Escape closes', async () => {
