@@ -171,3 +171,9 @@
   .hl-shell__body { display: block; }
   .hl-skip, .hl-rail, .hl-sidebar, .hl-dock, .hl-shell__overlay { display: none !important; }
 }
+
+/* Legacy top bar inside the shell's legacy frame (e.g. /styleguide): token focus ring (U12 a11y-perf). */
+.hl-frame-legacy .topbar a:focus-visible {
+  outline: var(--line-focus-ring) solid var(--color-select);
+  outline-offset: var(--line-focus-ring);
+}
