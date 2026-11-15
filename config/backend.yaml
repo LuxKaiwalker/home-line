@@ -20,7 +20,7 @@ api:
 compute:
   workers: 2                       # section 4.1: process pool, CPU-bound Numba search
   queue_max_waiting: 20            # section 4.1
-  job_timeout_s: 180               # section 4.1 (WS2 timing measurement may force a revision: D57)
+  job_timeout_s: 600               # assumed: E8 measured 332 s for a custom pad (3 variants, D81); ~1.8x headroom
   hash:                            # F23
     algo: sha256
     hex_chars: 16
@@ -109,4 +109,4 @@ gates_local:                       # D50: backend starts Sat evening, gates shif
   freeze_ref: event.gates_local.freeze
 
 assumed: [limits.title_max_chars, limits.notes_max_chars, ranges.start_lmst_h, ranges.reserve_min,
-          sessions.message_max_chars, limits.proxy_max_body_bytes]
+          sessions.message_max_chars, limits.proxy_max_body_bytes, compute.job_timeout_s]

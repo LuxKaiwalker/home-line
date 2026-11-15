@@ -1,6 +1,7 @@
 // Health check and the live/offline state (F23, kit rule 4). /health must answer ok within
 // api.health_timeout_s (2 s) or the app stays static and shows OFFLINE_LABEL in place of the live
-// controls. While engine_warm is false the state is 'warming' and the check repeats.
+// controls. While engine_warm is false the state is 'warming'. The check repeats in every state
+// (watchHealth), so the banner follows a server that dies or returns mid-session.
 import type { ApiClient } from './client'
 import { CLIENT, HEALTH_TIMEOUT_MS, OFFLINE_LABEL, WARMING_LABEL } from './config'
 import type { Health } from './types'
@@ -41,31 +42,91 @@ export async function checkHealth(client: ApiClient, timeoutMs = HEALTH_TIMEOUT_
   return h.engine_warm ? { kind: 'ready', health: h } : { kind: 'warming', health: h }
 }
 
+/** The page's visibility (the global document): polling pauses while hidden. */
+export interface VisibilitySource {
+  readonly hidden: boolean
+  addEventListener(type: 'visibilitychange', fn: () => void): void
+  removeEventListener(type: 'visibilitychange', fn: () => void): void
+}
+
 export interface WatchOptions {
   timeoutMs?: number
   /** Re-check interval while warming (default CLIENT.warmPollMs). */
   warmPollMs?: number
+  /** Re-check interval while ready or offline (default CLIENT.healthPollMs). */
+  pollMs?: number
+  /** Default: the global document when there is one; null: always visible. */
+  visibility?: VisibilitySource | null
+}
+
+/** Stop function (call it on unmount) that can also ask for a check now. */
+export type HealthWatch = (() => void) & {
+  /** Check now instead of at the next poll (a live request just failed). */
+  check(): void
+}
+
+function pageVisibility(): VisibilitySource | null {
+  const d = (globalThis as { document?: Partial<VisibilitySource> }).document
+  return d && typeof d.addEventListener === 'function' && typeof d.removeEventListener === 'function' ? (d as VisibilitySource) : null
 }
 
 /**
- * Check health now and again every warmPollMs while the engine is warming; stops at 'ready' or
- * 'offline' (a page reload checks again). Returns a stop function (call it on unmount).
+ * Check health now and keep checking (kit rule 4, H2 step 3): every warmPollMs while warming,
+ * every pollMs while ready or offline, so a server that dies mid-session shows the offline banner
+ * within pollMs + timeoutMs and a server that comes back shows the controls again. Polling pauses
+ * while the page is hidden and checks at once when it is shown again. One check at a time; a
+ * check() during a check runs one more right after it.
  */
-export function watchHealth(client: ApiClient, onState: (s: LiveState) => void, opts: WatchOptions = {}): () => void {
-  const ctl = new AbortController()
+export function watchHealth(client: ApiClient, onState: (s: LiveState) => void, opts: WatchOptions = {}): HealthWatch {
+  const vis = opts.visibility === undefined ? pageVisibility() : opts.visibility
+  const timeoutMs = opts.timeoutMs ?? HEALTH_TIMEOUT_MS
+  let stopped = false
   let timer: ReturnType<typeof setTimeout> | undefined
-  const run = async () => {
-    const s = await checkHealth(client, opts.timeoutMs ?? HEALTH_TIMEOUT_MS, ctl.signal)
-    if (ctl.signal.aborted) return
+  let inflight: AbortController | null = null
+  let again = false
+
+  const run = async (): Promise<void> => {
+    clearTimeout(timer)
+    timer = undefined
+    if (stopped) return
+    if (inflight) {
+      again = true
+      return
+    }
+    const ctl = (inflight = new AbortController())
+    const s = await checkHealth(client, timeoutMs, ctl.signal)
+    if (inflight === ctl) inflight = null
+    if (stopped || ctl.signal.aborted) return
     onState(s)
-    if (s.kind === 'warming') timer = setTimeout(run, opts.warmPollMs ?? CLIENT.warmPollMs)
+    if (again) {
+      again = false
+      return run()
+    }
+    if (vis?.hidden) return
+    timer = setTimeout(run, s.kind === 'warming' ? (opts.warmPollMs ?? CLIENT.warmPollMs) : (opts.pollMs ?? CLIENT.healthPollMs))
   }
+  const onVisibility = () => {
+    if (!vis || stopped) return
+    if (vis.hidden) {
+      clearTimeout(timer)
+      timer = undefined
+    } else void run()
+  }
+
+  vis?.addEventListener('visibilitychange', onVisibility)
   onState({ kind: 'checking' })
   void run()
-  return () => {
-    ctl.abort()
+  const stop = () => {
+    stopped = true
+    inflight?.abort()
     clearTimeout(timer)
+    vis?.removeEventListener('visibilitychange', onVisibility)
   }
+  return Object.assign(stop, {
+    check() {
+      void run()
+    },
+  })
 }
 
 export interface Banner {
