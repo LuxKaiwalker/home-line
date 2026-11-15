@@ -29,6 +29,7 @@ import { FlythroughControl } from './flythrough/control'
 import { installStorm } from './storm'
 import { storyParams, storyRequest } from '../story/query'
 import { CameraController, type ControllerMap } from './camera'
+import { installOverlays } from './overlays'
 import { MapSelection, SELECT_ROUTE_HIT, type SelectMap, type SelectSources } from './select'
 import { activeField, BINDING_LABEL, driveMargin, FIELD_TRUST, fieldModeQuery, fieldRequested, loadFieldData, loadFieldLayer, setActiveField, VARIANT_OF, webgl2Available, zeroEdgeLabels, type FieldData, type MarginState } from './field'
 
@@ -146,6 +147,8 @@ export class ConsoleMap {
     route: this.lastRoute,
     edges: this.edges,
   })
+  // WS16 task 11 (M11): U7 overlays + layer manager (all off by default)
+  private stopOverlays: (() => void) | null = null
   private destroyed = false
 
   constructor(container: HTMLElement, onStation: (id: string) => void) {
@@ -245,6 +248,7 @@ export class ConsoleMap {
     this.selectMap.addLayers()
     this.groupLayers.route.push(SELECT_ROUTE_HIT)
     this.camera = new CameraController(m as unknown as ControllerMap, this.selectSources)
+    this.stopOverlays = installOverlays(m as never, { marker: (el) => new Marker({ element: el }) }, !!m.getContainer().closest('.hl-shell'))
     const legacy = !!this.map.getContainer().closest('.hl-frame-legacy')
     const story = storyRequest(storyParams(location.search, location.hash), { reduced: ui.reducedMotion.peek(), introSeen: ui.introSeen.peek(), legacy })
     if (story) void import('../story/attach').then((m) => !this.destroyed && (this.stopStory = m.attachStory(this, story)))
@@ -693,6 +697,7 @@ export class ConsoleMap {
     this.stopStory?.()
     this.stopStorm?.()
     this.camera?.destroy()
+    this.stopOverlays?.()
     this.selectMap?.destroy()
     this.terrain?.destroy()
     this.labels?.destroy()
