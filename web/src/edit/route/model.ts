@@ -189,6 +189,31 @@ export function stopNames(r: PlanRoute): string[] {
   return r.stops.map((s) => (isStationStop(s) ? s.station : `W${++w}`))
 }
 
+/** Row ids of the stop list in route order (checked stations and free points W1, W2, … first, then the
+ *  unchecked stations in stations.json order): the layout after an explicit reorder, undo or redo. */
+export function rowIds(r: PlanRoute, stations: readonly { id: string }[]): string[] {
+  const ids = stopNames(r)
+  for (const s of stations) if (!ids.includes(s.id)) ids.push(s.id)
+  return ids
+}
+
+/**
+ * WP12 (L6 W-7): `ids` laid out as `layout` says (a tick never moves a row under the pointer). Ids the
+ * layout does not know (a new free point) go right after the last checked row of the layout; ids no
+ * longer present are dropped. null layout = ids as they are.
+ */
+export function layoutIds(ids: readonly string[], layout: readonly string[] | null, checked: (id: string) => boolean): string[] {
+  if (!layout) return [...ids]
+  const kept = layout.filter((id) => ids.includes(id))
+  const extra = ids.filter((id) => !kept.includes(id))
+  if (!extra.length) return kept
+  let at = 0
+  kept.forEach((id, i) => {
+    if (checked(id)) at = i + 1
+  })
+  return [...kept.slice(0, at), ...extra, ...kept.slice(at)]
+}
+
 /** Legs of an ordered route: leg 0 = pad -> stops[0], leg i = stops[i-1] -> stops[i], last = back to the pad. */
 export function routeLegs(r: PlanRoute): { leg: number; from: string; to: string }[] {
   if (r.mode !== 'ordered' || !r.stops.length) return []

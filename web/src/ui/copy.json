@@ -723,6 +723,16 @@
     }
   },
   "layout": {
+    "strip": {
+      "label": "Plan headline",
+      "reach": "{budget}-min reach",
+      "reachShort": "{budget} min",
+      "margin": "Tightest margin",
+      "marginShort": "Margin",
+      "scenario": "Scenario",
+      "budget": "Walkback budget",
+      "budgetValue": "{budget} min"
+    },
     "summary": {
       "loading": "Loading the route for {label}…",
       "noRoute": "No route for {label}",

@@ -87,7 +87,7 @@ for (const s of SCREENS) {
     const errors: string[] = []
     page.on('pageerror', (e) => errors.push(e.message))
     await page.clock.setFixedTime(new Date(FIXED_NOW))
-    await page.goto(s.hash)
+    await page.goto(`/?view=2d${s.hash}`) // L13: 3D is the Plan default; these baselines are the 2D view
     await settle(page, s.mask ?? [])
 
     if (s.optional) {

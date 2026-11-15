@@ -1,7 +1,12 @@
 // Pad tool panel (F24): validation feedback, instant preview card, full plan with staged results.
+// WP12 (L6 W-1): the card no longer starts a job of its own. Its numbers are labelled "Estimate"; its
+// one button hands the compute to the Edit-route panel (the one compute action: this spot + the crew
+// panel's changes + the route, one job, one progress, one result on the map).
 // Pure function components of PadToolState (no hooks), so tests render them without a DOM.
 // Every live view carries LIVE_LABEL and a provenance link (kit rule 6): #/plan/{hash} once a job
 // has a hash, before that the engine identity that answered (GET /engine/version).
+import { ROUTE_TEXT } from '../edit/route/text'
+import { t } from '../ui/copy'
 import { LIVE_LABEL } from './config'
 import { bannerFor } from './health'
 import { LiveNum, planHref, ScreenNum } from './num'
@@ -51,10 +56,27 @@ function CheckView({ check, actions }: { check: PadCheck; actions: PadToolAction
   )
 }
 
-function PreviewCard({ screen, canCompute, heavyOff, blocked, actions }: { screen: PadScreen; canCompute: boolean; heavyOff: boolean; blocked: string | null; actions: PadToolActions }) {
+/** What the card knows of the Edit-route panel (live/route/mount.tsx RouteHandle). */
+export interface RouteLinkView {
+  status: 'unavailable' | 'ready' | 'running'
+  compute(): void
+}
+
+const WHY_CARD = 'live-why-compute'
+
+function PreviewCard({ screen, route, heavyOff, blocked, ownCompute, actions }: { screen: PadScreen; route: RouteLinkView | null | undefined; heavyOff: boolean; blocked: string | null; ownCompute: boolean; actions: PadToolActions }) {
+  // D116: a build without the Edit-route panel (VITE_ROUTE_EDIT=0, route undefined) keeps the card's own
+  // "Compute full plan": still the one compute action of that build
+  const legacy = route === undefined
+  const running = legacy ? false : route?.status === 'running'
+  // a press while the job runs is allowed: it only brings the panel's progress into view
+  const why = legacy ? (heavyOff ? 'Full plans are switched off on the server right now.' : blocked) : running ? null : heavyOff ? 'Full plans are switched off on the server right now.' : blocked ? blocked : !route || route.status === 'unavailable' ? ROUTE_TEXT.cardNoRoute : null
   return (
-    <section class="live-card live-preview">
-      <h3>Instant preview</h3>
+    <section class="live-card live-preview" data-trust="estimate">
+      <h3>
+        Instant preview <span class="live-estimate" title={t('tags.estimate.explanation')}>Estimate</span>
+      </h3>
+      <p class="muted">{t('edit.previewNote')}</p>
       <p>
         Feasible EVAs (D21 score): <ScreenNum v={screen.feasible_evas} />
       </p>
@@ -90,13 +112,26 @@ function PreviewCard({ screen, canCompute, heavyOff, blocked, actions }: { scree
         <p class="muted">No route estimate.</p>
       )}
       <p class="muted">{screen.label}</p>
-      <button type="button" class="live-btn live-compute" disabled={!canCompute} onClick={() => actions.computePlan()}>
-        Compute full plan
-      </button>
-      {heavyOff ? <p class="muted">Full plans are switched off on the server right now.</p> : null}
-      {blocked ? (
-        <p class="live-failed" role="alert">
-          {blocked}
+      {legacy ? (
+        <button type="button" class="live-btn live-compute" disabled={!ownCompute} title={why ?? undefined} aria-describedby={why ? WHY_CARD : undefined} onClick={() => actions.computePlan()}>
+          Compute full plan
+        </button>
+      ) : (
+        <>
+          <p class="muted live-route-note">{ROUTE_TEXT.cardNote}</p>
+          <button type="button" class="live-btn live-compute" data-compute-in="route" disabled={!!why} title={why ?? undefined} aria-describedby={why ? WHY_CARD : undefined} onClick={() => route?.compute()}>
+            {ROUTE_TEXT.cardCompute}
+          </button>
+        </>
+      )}
+      {running ? (
+        <p class="muted live-route-running" role="status">
+          {ROUTE_TEXT.cardRunning}
+        </p>
+      ) : null}
+      {why ? (
+        <p id={WHY_CARD} class={blocked && !heavyOff ? 'live-failed' : 'muted'} role={blocked && !heavyOff ? 'alert' : 'status'}>
+          {why}
         </p>
       ) : null}
     </section>
@@ -178,12 +213,14 @@ export interface PadToolPanelProps {
   actions: PadToolActions
   /** Provenance before a job exists: the engine identity that answers (client.root + /engine/version). */
   engineHref: string
-  /** Why "Compute full plan" is blocked (the crew panel: a field is not a number), or null. */
+  /** Why the compute is blocked (the crew panel: a field is not a number), or null. */
   computeBlocked?: string | null
+  /** WP12: the Edit-route panel that computes the plan (null: not there yet; undefined: none in this build) */
+  route?: RouteLinkView | null
 }
 
 /** null while live planning is offline, warming or checking: the controls hide behind U1's banner. */
-export function PadToolPanel({ state, actions, engineHref, computeBlocked = null }: PadToolPanelProps) {
+export function PadToolPanel({ state, actions, engineHref, computeBlocked = null, route }: PadToolPanelProps) {
   const banner = bannerFor(state.live)
   if (!banner.controls) return null
   const { pad, check, preview, plan } = state
@@ -215,7 +252,14 @@ export function PadToolPanel({ state, actions, engineHref, computeBlocked = null
         </p>
       ) : null}
       {valid && preview.kind === 'done' ? (
-        <PreviewCard screen={preview.screen} canCompute={banner.heavyJobs && plan.kind !== 'running' && !computeBlocked} heavyOff={!banner.heavyJobs} blocked={computeBlocked} actions={actions} />
+        <PreviewCard
+          screen={preview.screen}
+          route={route}
+          heavyOff={!banner.heavyJobs}
+          blocked={computeBlocked}
+          ownCompute={banner.heavyJobs && plan.kind !== 'running' && !computeBlocked}
+          actions={actions}
+        />
       ) : null}
       {plan.kind !== 'idle' ? <PlanView plan={plan} record={state.record} actions={actions} /> : null}
     </section>
