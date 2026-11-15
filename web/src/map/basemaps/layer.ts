@@ -5,7 +5,7 @@
 //   again when another base map is chosen. Each install follows activeBasemap itself.
 import type { Map as MlMap } from 'maplibre-gl'
 import type { BasemapHandle, BasemapSpec, MapExtensionContext } from '../extensions'
-import { bt } from './copy'
+import { t } from '../../ui/copy'
 import { buildUnitField, renderRelief, ROCKS_FILE, type Relief, type ReliefMode, type Unit } from './relief'
 import type { ReliefSource } from './source'
 import { activeBasemap, setReliefStatus, type BasemapId } from './store'
@@ -118,6 +118,6 @@ export async function canvasUrl(r: Relief): Promise<string> {
   canvas.height = r.height
   canvas.getContext('2d')!.putImageData(new ImageData(new Uint8ClampedArray(r.rgba), r.width, r.height), 0, 0)
   const blob = await new Promise<Blob | null>((res) => canvas.toBlob(res, 'image/png'))
-  if (!blob) throw new Error(bt('basemaps.encodeError'))
+  if (!blob) throw new Error(t('route.basemaps.encodeError'))
   return URL.createObjectURL(blob)
 }

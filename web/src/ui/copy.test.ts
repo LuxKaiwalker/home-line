@@ -235,12 +235,9 @@ describe('copy.json: the Plan port strings (route.*, PORT I4)', () => {
   // Every route.* key is read somewhere in the app: as a literal 'route.…' key, or under the static prefix of
   // a template key (`route.panel.sections.${name}`). PENDING = seed keys whose package has not merged yet.
   const PENDING: string[] = [
-    'route.pads.loading', 'route.pads.planFromHere', // P2
+    'route.pads.planFromHere', // P2
     'route.strip.official', 'route.strip.pad', 'route.panel.open', // P3
     'route.list.empty', // U2
-    'route.settings.storm', // U3
-    'route.layers.slope.title', // L1a
-    'route.basemaps.title', // L1c
   ]
   const SRC = join(UI, '..')
   const files = (dir: string): string[] =>

@@ -1,7 +1,7 @@
 // Pad environment service API (W0a; P1: the real service, pads/service.ts + pads/load.ts). The functions
 // delegate to the active service. Tests: setPadService(createMockPadService()) from pads/mock.ts.
 import { subscribePlanning } from '../state/planning'
-import { padCopy } from './load'
+import { t } from '../ui/copy'
 import { createPadService, type RealPadService } from './service'
 import type { LoadPadOptions, PadEnv, PadId, PadInfo, PadLoadState, PadService, PlanProducts } from './types'
 
@@ -53,10 +53,10 @@ export function loadPadPlanProducts(padId: PadId): Promise<PlanProducts> {
 
 /** The status line of a pad: "Loading pad P3…" while it loads, the error line after a failure, else null. */
 export function padStatusText(info: Pick<PadInfo, 'label'>, s: PadLoadState | undefined): string | null {
-  if (s?.state === 'loading') return padCopy('loading', { pad: info.label })
-  if (s?.state === 'error') return padCopy('error', { pad: info.label })
+  if (s?.state === 'loading') return t('route.pads.loading', { pad: info.label })
+  if (s?.state === 'error') return t('route.pads.error', { pad: info.label })
   return null
 }
 
 export { createPadService, type PadServiceDeps, type RealPadService } from './service'
-export { isAbortError, PadError, padCopy } from './load'
+export { isAbortError, PadError } from './load'

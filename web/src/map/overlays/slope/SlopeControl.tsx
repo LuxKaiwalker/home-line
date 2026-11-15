@@ -6,14 +6,12 @@ import { getManifest } from '../../../prov/store'
 import { formatValue } from '../../../prov/provenance'
 import { useSignalValue } from '../../../state/signal'
 import { Slider, Toggle, TrustChip } from '../../../ui/components'
-import { copyFrom } from '../../../ui/copy'
+import { t } from '../../../ui/copy'
 import { SLOPE_COLORS, SLOPE_OPACITY, slopeClasses, slopeColorVar, type SlopeClass, type SlopeLimits } from './classes'
-import copyJson from './copy.L1a.json'
 import { setSlopeOn, setSlopeOpacity, slopeError, slopeFile, slopeOn, slopeOpacity, slopeStatus } from './state'
 import '../overlays.css'
 import './slope.css'
 
-const tl = copyFrom(copyJson)
 
 /** Manifest entry backing the slope raster (pipeline/export/fields_png.py). */
 export const SLOPE_PROV_KEY = 'fields.slope.sha256'
@@ -27,27 +25,27 @@ const deg = (v: number): string => formatValue(v, 'deg')
 
 /** "under 5°", "5° to 17°", "25° and steeper" (numbers from config). */
 export function rangeText(c: SlopeClass): string {
-  if (c.minDeg <= 0) return tl('range.below', { max: deg(c.maxDeg) })
-  if (!Number.isFinite(c.maxDeg)) return tl('range.above', { min: deg(c.minDeg) })
-  return tl('range.between', { min: deg(c.minDeg), max: deg(c.maxDeg) })
+  if (c.minDeg <= 0) return t('route.layers.slope.range.below', { max: deg(c.maxDeg) })
+  if (!Number.isFinite(c.maxDeg)) return t('route.layers.slope.range.above', { min: deg(c.minDeg) })
+  return t('route.layers.slope.range.between', { min: deg(c.minDeg), max: deg(c.maxDeg) })
 }
 
 export function SlopeLegend({ limits }: { limits?: SlopeLimits }) {
   const classes = slopeClasses(limits)
   return (
-    <ul class="hl-ovl__legend hl-slope__legend" role="list" aria-label={tl('title')}>
+    <ul class="hl-ovl__legend hl-slope__legend" role="list" aria-label={t('route.layers.slope.title')}>
       {classes.map((c) => (
-        <li class="hl-legend-row hl-ovl__legend-row" data-slope-class={c.id} title={tl('edgeSource', { source: c.source })}>
+        <li class="hl-legend-row hl-ovl__legend-row" data-slope-class={c.id} title={t('route.layers.slope.edgeSource', { source: c.source })}>
           <span class="hl-swatch hl-swatch--fill" style={{ '--sw': slopeColorVar(c.id) }} data-recipe={JSON.stringify(SLOPE_COLORS[c.id])} aria-hidden="true" />
           <span class="hl-legend-row__label">
-            {tl(`classes.${c.id}`)} <span class="hl-slope__range">{rangeText(c)}</span>
+            {t(`route.layers.slope.classes.${c.id}`)} <span class="hl-slope__range">{rangeText(c)}</span>
           </span>
         </li>
       ))}
       <li class="hl-legend-row hl-ovl__legend-row" data-slope-class="unknown">
         <span class="hl-swatch hl-swatch--none" aria-hidden="true" />
         <span class="hl-legend-row__label">
-          {tl('classes.unknown')} <span class="hl-slope__range">{tl('range.clear')}</span>
+          {t('route.layers.slope.classes.unknown')} <span class="hl-slope__range">{t('route.layers.slope.range.clear')}</span>
         </span>
       </li>
     </ul>
@@ -65,29 +63,26 @@ export function SlopeControl({ limits }: { limits?: SlopeLimits } = {}) {
   const status = useSignalValue(slopeStatus)
   const err = useSignalValue(slopeError)
   const file = useSignalValue(slopeFile) ?? SLOPE_FILE_DEFAULT
-  const name = tl('title')
+  const name = t('route.layers.slope.title')
   return (
     <div class="hl-ovl__layer hl-slope" data-overlay="slope" data-chip="modelled" data-status={status}>
       <div class="hl-ovl__head">
         <Toggle label={name} checked={on} onChange={setSlopeOn} />
         <TrustChip kind="modelled" prov={{ key: SLOPE_PROV_KEY, file, value: manifestValue(SLOPE_PROV_KEY) }} align="end" />
       </div>
-      <p class="hl-ovl__what">{tl('what')}</p>
-      {on && status === 'loading' && (
-        <p class="hl-ovl__what hl-slope__status" role="status">
-          {tl('loading')}
-        </p>
-      )}
-      {err && (
-        <p class="hl-ovl__what hl-slope__error" role="alert">
-          {tl('error', { error: err })}
-        </p>
-      )}
+      <p class="hl-ovl__what">{t('route.layers.slope.what')}</p>
+      {/* live regions stay mounted (PORT I4 a11y); only their text changes */}
+      <div role="status" data-live="slope">
+        {on && status === 'loading' && <p class="hl-ovl__what hl-slope__status">{t('route.layers.slope.loading')}</p>}
+      </div>
+      <div role="alert" data-live="slope-error">
+        {err && <p class="hl-ovl__what hl-slope__error">{t('route.layers.slope.error', { error: err })}</p>}
+      </div>
       <SlopeLegend limits={limits} />
       {on && (
-        <Slider label={tl('opacity')} min={pct(SLOPE_OPACITY.min)} max={pct(SLOPE_OPACITY.max)} step={pct(SLOPE_OPACITY.step)} value={pct(op)} units="%" onChange={(v) => setSlopeOpacity(v / 100)} />
+        <Slider label={t('route.layers.slope.opacity')} min={pct(SLOPE_OPACITY.min)} max={pct(SLOPE_OPACITY.max)} step={pct(SLOPE_OPACITY.step)} value={pct(op)} units="%" onChange={(v) => setSlopeOpacity(v / 100)} />
       )}
-      <p class="hl-ovl__what hl-slope__note">{tl('note', { file, site: SLOPE_SITE_FILE })}</p>
+      <p class="hl-ovl__what hl-slope__note">{t('route.layers.slope.note', { file, site: SLOPE_SITE_FILE })}</p>
     </div>
   )
 }

@@ -28,13 +28,14 @@ import {
   slopeColorVar,
   type SlopeLimits,
 } from './classes'
-import copyJson from './copy.L1a.json'
+import copyDeck from '../../../ui/copy.json'
 import { install } from './index'
 import { corners, installSlopeLayer, SLOPE_LAYER_ID, SLOPE_OVERLAY_ID, SLOPE_SOURCE_ID, SLOPE_TITLE_KEY, slopeFieldKey, slopeOverlaySpec, type SlopeDeps, type SlopeRaster } from './layer'
 import { rangeText, SlopeControl } from './SlopeControl'
 import { resetSlope, setSlopeOn, setSlopeOpacity, slopeError, slopeFile, slopeOn, slopeOpacity, slopeStatus } from './state'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
+const copyJson = copyDeck.route.layers.slope
 const REPO = join(HERE, '..', '..', '..', '..', '..')
 
 /** Fixture limits (not the real ones) so the test proves edges come from the limits passed in. */
@@ -325,20 +326,8 @@ describe('SlopeControl', () => {
   })
 })
 
-describe('copy.L1a.json follows the copy.json rules', () => {
-  const leaves: [string, string][] = []
-  const walk = (n: unknown, p: string) => (typeof n === 'string' ? leaves.push([p, n]) : Object.entries(n as object).forEach(([k, v]) => walk(v, p ? `${p}.${k}` : k)))
-  walk(copyJson, '')
-  it('no digits outside placeholders, no emoji, no "waypoint", nothing empty', () => {
-    for (const [p, s] of leaves) {
-      expect(s.replace(/\{[a-z][a-z0-9_]*\}/g, ''), p).not.toMatch(/\d/)
-      expect(s, p).not.toMatch(/\p{Extended_Pictographic}/u)
-      expect(s.toLowerCase(), p).not.toContain('waypoint')
-      expect(s.trim().length, p).toBeGreaterThan(0)
-    }
-  })
-  it('title matches the seed route.layers.slope.title', async () => {
-    const seed = JSON.parse(readFileSync(join(HERE, '..', '..', '..', 'ui', 'copy.json'), 'utf8'))
-    expect(copyJson.title).toBe(seed.route.layers.slope.title)
+describe('copy (route.layers.slope in ui/copy.json)', () => {
+  it('title is the seed "Slope"', () => {
+    expect(copyJson.title).toBe('Slope')
   })
 })

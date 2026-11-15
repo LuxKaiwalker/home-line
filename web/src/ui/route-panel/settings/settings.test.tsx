@@ -1,6 +1,6 @@
 // PORT U3 known answers: the EVA start round trip on the planning store (LMST <-> UTC with the
 // clock.json fixtures of mission/marstime.test.ts), the storm switch -> setStorm, the boundary list
-// (Mission tab's ids and order) -> setBoundary, and the copy rules for copy.U3.json.
+// (Mission tab's ids and order) -> setBoundary, and the copy (route.settings).
 import { render, type VNode } from 'preact'
 import { act } from 'preact/test-utils'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
@@ -11,11 +11,12 @@ import { fieldUniforms, mission } from '../../../state/mission'
 import { createPlanningStore, type PlanningStore } from '../../../state/planning'
 import { all, byRole, byTag, installDom, one, type FakeNode } from '../../testing/dom'
 import { boundaryFromValue, boundaryOptions, boundaryValue } from './boundary'
-import copy from './copy.U3.json'
+import copyDeck from '../../copy.json'
 import { CLOCK, formatHms, lmstH, mslSol } from './marstime'
 import { useRoutePanelSection, resetRoutePanelSections } from '../sections'
 import { BoundarySettings, install, register, RouteSettings, StartTimeSettings, STORM_REPLAY_DATE, StormSettings, sunSiteFor, useBoundaryOptions } from './RouteSettings'
 import { DEFAULT_START_MS, fromUtcInput, hoursOf, isDefaultStart, MAX_START_MS, MIN_START_MS, startMsOf, startUtcFor, startUtcForSolLmst, toUtcInput } from './startTime'
+const copy = copyDeck.route.settings
 
 /** clock.json: start_utc of the simulated EVA (09:00 LMST, sol 5074; mission/marstime.test.ts) */
 const EVA_ROUNDED = '2026-11-14T10:51:18Z'
@@ -291,17 +292,7 @@ describe('section + registration', () => {
   })
 })
 
-describe('copy.U3.json rules', () => {
-  const strings: string[] = []
-  const walk = (o: unknown) => (typeof o === 'string' ? strings.push(o) : Object.values(o as object).forEach(walk))
-  walk(copy)
-  it('no digits outside placeholders, no empty strings, no emoji', () => {
-    for (const s of strings) {
-      expect(s.trim()).not.toBe('')
-      expect(s.replace(/\{\w+\}/g, '')).not.toMatch(/\d/)
-      expect(s).not.toMatch(/\p{Extended_Pictographic}/u)
-    }
-  })
+describe('copy (route.settings in ui/copy.json)', () => {
   it('storm label = D143 wording (date via placeholder: copy holds no digits)', () => {
     expect(copy.storm).toBe('Include solar storm replay ({date}) in the margin')
   })

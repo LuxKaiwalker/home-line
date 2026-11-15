@@ -12,12 +12,8 @@ import { DATA_MODE, dataUrl, type DataMode } from '../env'
 import { decodeRGBA, FieldGrid, fieldGrid } from '../hud/fields'
 import type { FieldsIndex } from '../hud/types'
 import { PointerField } from '../hud/wayhome'
-import { copyFrom, t } from '../ui/copy'
-import copyP1 from './copy.P1.json'
+import { t } from '../ui/copy'
 import { OFFICIAL_PAD_ID, type PadEnv, type PadEnvFiles, type PadId, type PadInfo, type PlanProducts, type RoutingFields } from './types'
-
-/** route.pads.* strings of this package (I4 merges them into copy.json). */
-export const padCopy = copyFrom(copyP1)
 
 export type Rgba = { rgba: ArrayLike<number>; width: number; height: number }
 
@@ -118,9 +114,9 @@ export function padFieldKeys(official: boolean, sourceId: string, scenario: stri
 export function padLabelOf(id: string, official: boolean, rank: number | null): string {
   if (official) return t('route.pads.official')
   const m = /^rank(\d+)$/.exec(id)
-  if (m) return padCopy('pickerLabel', { rank: m[1] })
-  if (id === 'pad_default') return padCopy('defaultPad')
-  return rank !== null ? padCopy('pickerLabel', { rank }) : id
+  if (m) return t('route.pads.pickerLabel', { rank: m[1] })
+  if (id === 'pad_default') return t('route.pads.defaultPad')
+  return rank !== null ? t('route.pads.pickerLabel', { rank }) : id
 }
 
 export interface PadIndexData {

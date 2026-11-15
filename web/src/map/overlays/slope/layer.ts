@@ -9,13 +9,11 @@ import { dataUrl } from '../../../env'
 import { loadField } from '../../../hud/fields'
 import type { FieldsIndex as HudFieldsIndex } from '../../../hud/types'
 import { effect } from '../../../state/signal'
-import { copyFrom } from '../../../ui/copy'
+import { t } from '../../../ui/copy'
 import type { MapExtensionContext, OverlayHandle, OverlaySpec } from '../../extensions'
 import { renderSlope, REPLACES, SLOPE_DEFAULT_ON, slopeClasses, type SlopeLimits } from './classes'
-import copyJson from './copy.L1a.json'
 import { setSlopeOn, setSlopeOpacity, slopeError, slopeFile, slopeOn, slopeOpacity, slopeStatus } from './state'
 
-const tl = copyFrom(copyJson)
 
 export const SLOPE_OVERLAY_ID = 'slope'
 export const SLOPE_SOURCE_ID = 'l1a-slope'
@@ -68,7 +66,7 @@ export function slopeFieldKey(fi: { fields: Record<string, unknown> }): string |
 async function loadRasterFromData(): Promise<SlopeRaster> {
   const fi = (await data().fieldsIndex()) as unknown as HudFieldsIndex
   const key = slopeFieldKey(fi)
-  if (!key) throw new Error(tl('noField'))
+  if (!key) throw new Error(t('route.layers.slope.noField'))
   const g = await loadField(fi, key, (p) => dataUrl(p))
   return { width: g.data.width, height: g.data.height, counts: g.data.counts, known: g.data.known, scale: g.data.scale, w: g.w, s: g.s, e: g.e, n: g.n, file: fi.fields[key].file }
 }
@@ -78,10 +76,10 @@ async function rgbaToObjectUrl(rgba: Uint8ClampedArray, w: number, h: number): P
   canvas.width = w
   canvas.height = h
   const c2d = canvas.getContext('2d')
-  if (!c2d) throw new Error(tl('encodeError'))
+  if (!c2d) throw new Error(t('route.layers.slope.encodeError'))
   c2d.putImageData(new ImageData(new Uint8ClampedArray(rgba), w, h), 0, 0)
   const blob = await new Promise<Blob | null>((res) => canvas.toBlob(res, 'image/png'))
-  if (!blob) throw new Error(tl('encodeError'))
+  if (!blob) throw new Error(t('route.layers.slope.encodeError'))
   return URL.createObjectURL(blob)
 }
 

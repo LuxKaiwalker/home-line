@@ -5,7 +5,7 @@
 .hl-curiosity__live { display: inline-flex; align-items: center; gap: var(--space-1); color: var(--color-live); font-size: var(--font-size-label); line-height: var(--line-height-label); font-weight: var(--font-weight-label); white-space: nowrap; }
 .hl-curiosity__live .hl-chip__mark { width: var(--space-3); height: var(--space-3); }
 .hl-curiosity__what, .hl-curiosity__privacy, .hl-curiosity__muted, .hl-curiosity__rule, .hl-curiosity__note, .hl-curiosity__meta { margin: 0; font-size: var(--font-size-small); line-height: var(--line-height-small); color: var(--color-text-muted); }
-.hl-curiosity__privacy { color: var(--color-text-faint); }
+.hl-curiosity__privacy { color: var(--color-text-muted); }
 .hl-curiosity__unavailable { margin: 0; font-size: var(--font-size-small); line-height: var(--line-height-small); color: var(--color-text); }
 .hl-curiosity__unavailable p { margin: 0 0 var(--space-1); }
 .hl-curiosity__more { align-self: flex-start; padding: var(--space-1) var(--space-2); font: inherit; font-size: var(--font-size-small); color: var(--color-text); background: transparent; border: 1px solid var(--color-card-border); border-radius: var(--radius-input); cursor: pointer; }

@@ -14,12 +14,11 @@ import type { Station } from '../../../data/types'
 import { decodeRGBA, FieldGrid, fieldGrid } from '../../../hud/fields'
 import { readPngRGBA, REPO } from '../../../hud/testutil'
 import type { FieldsIndex } from '../../../hud/types'
-import { copyFrom } from '../../../ui/copy'
+import { t } from '../../../ui/copy'
 import { accessCell, cellOf, routeGridOf, sampleElevation } from '../map/grid'
 import { codecOf, decodeHeights, farOrigin, gunzipIfNeeded, HeightGrid, lonLatToXY, parseEqc, parseIndex } from '../map/heights'
 import { gradeModel, scenarioParams, type GradeModel } from '../map/physio'
 import { LegRouter, type RouteGrid } from '../map/router'
-import copyR2 from './copy.R2.json'
 import {
   createLegSearch,
   createRefineSearch,
@@ -69,8 +68,8 @@ describe('config and label', () => {
     expect(() => heuristicWeightOf({ route: { heuristic_weight: 'x' } })).toThrow()
   })
 
-  it('the UI label is the honesty label (copy.R2.json fast = seed route.panel.fast)', () => {
-    expect(copyFrom(copyR2)('fast')).toBe('Fast route · may not be the fastest')
+  it('the UI label is the honesty label (route.panel.fast; copy.R2.json merged there by I4)', () => {
+    expect(t('route.panel.fast')).toBe('Fast route · may not be the fastest')
   })
 })
 

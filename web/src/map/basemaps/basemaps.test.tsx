@@ -7,9 +7,10 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { installMapExtensions, mapControlsIn, resetMapExtensions, type MapExtensionContext } from '../extensions'
 import { FieldGrid } from '../../hud/fields'
 import { byRole, installDom, type FakeNode } from '../../ui/testing/dom'
-import own from './copy.L1c.json'
+import copyJson from '../../ui/copy.json'
 import { install } from './install'
 import { reliefLayerId, reliefSourceId, resetReliefCache, type ReliefDeps } from './layer'
+const own = { basemaps: copyJson.route.basemaps }
 import { activeBasemap, DEFAULT_BASEMAP, reliefStatus, resetBasemaps, setBasemap } from './store'
 
 function fakeMap() {

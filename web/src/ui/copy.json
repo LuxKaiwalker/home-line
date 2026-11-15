@@ -1090,7 +1090,14 @@
     }
   },
   "route": {
-    "pads": { "official": "Official pad", "loading": "Loading pad {pad}…", "planFromHere": "Plan from here" },
+    "pads": {
+      "official": "Official pad",
+      "loading": "Loading pad {pad}…",
+      "planFromHere": "Plan from here",
+      "pickerLabel": "P{rank}",
+      "defaultPad": "Default pad",
+      "error": "Pad {pad} could not be loaded. The map keeps the current pad."
+    },
     "strip": { "official": "Official", "pad": "Pad {pad}" },
     "panel": {
       "title": "Route",
@@ -1137,7 +1144,50 @@
       }
     },
     "list": { "empty": "Click the map to add a point, or add a station from its card." },
-    "settings": { "storm": "Include solar storm replay ({date}) in the margin" },
+    "settings": {
+      "storm": "Include solar storm replay ({date}) in the margin",
+      "title": "Settings",
+      "stormOn": "On: your route's four-term margin includes the dose term, with the storm at your route's worst moment; the official plan's numbers stay as published.",
+      "stormOff": "Off: your route's margin drops the dose term; the official plan's numbers stay as published.",
+      "start": {
+        "title": "EVA start",
+        "earth": "Earth (UTC)",
+        "sol": "Mars sol",
+        "lmst": "LMST",
+        "localTime": "Local time at Gale",
+        "localTimeValue": "Sol {sol}, {lmst} LMST",
+        "utc": "UTC",
+        "utcValue": "{utc} UTC",
+        "season": "Season",
+        "seasonTitle": "Areocentric solar longitude (season) and Mars year",
+        "seasonValue": "Ls {ls}°, MY {year}",
+        "sun": "Sun at start",
+        "sunTitle": "Sun's centre at {site}, no refraction ({ref})",
+        "sunSite": "the pad ({lat}°, {lon}°E)",
+        "sunValue": "{elevation}° up, az {azimuth}°",
+        "sunset": "Sunset",
+        "sunsetTitle": "Flat horizon at {deg}° (config clock.sun_horizon_elevation_deg)",
+        "sunsetUtc": "{utc} UTC",
+        "sunsetLmst": "{utc} UTC · {lmst} LMST",
+        "daylight": "Daylight left",
+        "daylightTitle": "Minutes from EVA start until the sun sets on a flat horizon: the margin's daylight term",
+        "daylightValue": "{min} min",
+        "sunDown": "sun is down",
+        "sunDownNotice": "The sun is below the horizon at this start: the daylight margin is negative from the first minute.",
+        "isDefault": "Default: {lmst} LMST on the sol of {date} (clock.json).",
+        "changed": "Changed from the default {lmst} LMST, sol of {date}.",
+        "custom": "custom start · outside the validated scenario",
+        "reset": "Reset"
+      },
+      "boundary": {
+        "selectLabel": "Boundary shown on the map",
+        "none": "No boundary",
+        "band": "{budget}-min walk home, {variant}",
+        "edges": "{budget}-min edge, coloured by cause",
+        "iso": "{minutes}-min isochrone",
+        "caption": "The area from which the crew can walk back to the pad within that time."
+      }
+    },
     "export": {
       "marvis": "Send to MARVIS",
       "download": "Download mission.json",
@@ -1168,7 +1218,26 @@
       "stopInfeasible": "Stop {n}: {name} · not reachable in time"
     },
     "layers": {
-      "slope": { "title": "Slope" },
+      "slope": {
+        "title": "Slope",
+        "what": "Ground slope in the engine's own classes; class edges come from config/site.yaml",
+        "opacity": "Slope layer opacity",
+        "loading": "Loading slope…",
+        "error": "Slope layer unavailable: {error}",
+        "noField": "fields/index.json has no slope field",
+        "encodeError": "Could not draw the slope image",
+        "note": "Cell slope from {file}; class edges from {site}. Ground without data is left clear.",
+        "edgeSource": "Edge from {source}",
+        "classes": {
+          "padFlat": "Pad-flat",
+          "walkable": "Walkable",
+          "beyondTested": "Beyond the tested range",
+          "nogoNominal": "No-go in the nominal case",
+          "nogoAlways": "No-go always",
+          "unknown": "No data"
+        },
+        "range": { "below": "under {max}", "between": "{min} to {max}", "above": "{min} and steeper", "clear": "left clear" }
+      },
       "curiosity": {
         "title": "Curiosity route and photos",
         "live": "live NASA data",
@@ -1209,6 +1278,19 @@
         }
       }
     },
-    "basemaps": { "title": "Maps" }
+    "basemaps": {
+      "label": "Map type",
+      "satellite": "Satellite",
+      "topo": "Topography",
+      "material": "Material",
+      "rendering": "Rendering the {type} map…",
+      "error": "The {type} map could not be drawn ({reason}). Satellite is still available.",
+      "encodeError": "could not encode the relief image",
+      "topoLegend": "Contours every {step} m (bold every {bold} m) · {low} to {high} m (MOLA areoid), {res_m} m terrain heights",
+      "topoNote": "Drawn in your browser from the same terrain heights the route estimates use. For orientation, not a survey.",
+      "materialTitle": "Mineral units",
+      "noUnit": "No rocks on this terrain.",
+      "materialNote": "Same layer as the Unity EVA map in MARVIS: the dominant class of the {count} field rocks nearby (Gaussian, {sigma_m} m). Not a mineral survey."
+    }
   }
 }

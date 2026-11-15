@@ -4,12 +4,12 @@
 // material: simulated, the Unity scene's rock population, not a mineral survey).
 import { useSignalValue } from '../../state/signal'
 import { Segmented, TrustChip, type Option } from '../../ui/components'
-import { bt } from './copy'
+import { t } from '../../ui/copy'
 import { ROCKS_FILE, UNIT_SIGMA_M, type Relief, type Unit } from './relief'
 import { activeBasemap, BASEMAP_IDS, reliefStatus, setBasemap, type BasemapId } from './store'
 import './basemaps.css'
 
-const label = (id: BasemapId) => bt(`basemaps.${id}`)
+const label = (id: BasemapId) => t(`route.basemaps.${id}`)
 /** Unit colour (Unity MapPalette data colour, not a design token) as a CSS colour string. */
 export const unitColor = (rgb: readonly number[]) => '#' + rgb.map((v) => v.toString(16).padStart(2, '0')).join('')
 
@@ -20,17 +20,12 @@ export function BasemapControl() {
   const s = cur === 'satellite' ? null : st[cur]
   return (
     <div class="hl-basemaps" data-basemap={cur}>
-      <Segmented label={bt('basemaps.label')} options={options} value={cur} onChange={setBasemap} />
-      {s?.kind === 'rendering' && (
-        <p class="hl-basemaps__muted" role="status">
-          {bt('basemaps.rendering', { type: label(cur).toLowerCase() })}
-        </p>
-      )}
-      {s?.kind === 'error' && (
-        <p class="hl-basemaps__error" role="status">
-          {bt('basemaps.error', { type: label(cur).toLowerCase(), reason: s.message })}
-        </p>
-      )}
+      <Segmented label={t('route.basemaps.label')} options={options} value={cur} onChange={setBasemap} />
+      {/* one live region that stays mounted (PORT I4 a11y): an inserted region is often not announced */}
+      <div role="status" data-live="basemap">
+        {s?.kind === 'rendering' && <p class="hl-basemaps__muted">{t('route.basemaps.rendering', { type: label(cur).toLowerCase() })}</p>}
+        {s?.kind === 'error' && <p class="hl-basemaps__error">{t('route.basemaps.error', { type: label(cur).toLowerCase(), reason: s.message })}</p>}
+      </div>
       {s?.kind === 'ready' && cur === 'topo' && <TopoLegend r={s.relief} resM={s.elevationResM} />}
       {s?.kind === 'ready' && cur === 'material' && <MaterialLegend r={s.relief} units={s.units} />}
     </div>
@@ -41,10 +36,10 @@ function TopoLegend({ r, resM }: { r: Relief; resM: number }) {
   return (
     <div class="hl-basemaps__legend" data-legend="topo">
       <div class="hl-basemaps__head">
-        <span>{bt('basemaps.topoLegend', { step: r.contourM, bold: r.contourM * 5, low: Math.round(r.minE), high: Math.round(r.maxE), res_m: resM })}</span>
+        <span>{t('route.basemaps.topoLegend', { step: r.contourM, bold: r.contourM * 5, low: Math.round(r.minE), high: Math.round(r.maxE), res_m: resM })}</span>
         <TrustChip kind="modelled" />
       </div>
-      <p class="hl-basemaps__muted">{bt('basemaps.topoNote')}</p>
+      <p class="hl-basemaps__muted">{t('route.basemaps.topoNote')}</p>
     </div>
   )
 }
@@ -54,7 +49,7 @@ function MaterialLegend({ r, units }: { r: Relief; units: Unit[] }) {
   return (
     <div class="hl-basemaps__legend" data-legend="material">
       <div class="hl-basemaps__head">
-        <b>{bt('basemaps.materialTitle')}</b>
+        <b>{t('route.basemaps.materialTitle')}</b>
         <TrustChip kind="simulated" />
       </div>
       <ul class="hl-basemaps__units">
@@ -66,11 +61,11 @@ function MaterialLegend({ r, units }: { r: Relief; units: Unit[] }) {
             </li>
           ))
         ) : (
-          <li>{bt('basemaps.noUnit')}</li>
+          <li>{t('route.basemaps.noUnit')}</li>
         )}
       </ul>
       <p class="hl-basemaps__muted" title={ROCKS_FILE.source}>
-        {bt('basemaps.materialNote', { count: ROCKS_FILE.rocks.length.toLocaleString('en'), sigma_m: UNIT_SIGMA_M })}
+        {t('route.basemaps.materialNote', { count: ROCKS_FILE.rocks.length.toLocaleString('en'), sigma_m: UNIT_SIGMA_M })}
       </p>
     </div>
   )
