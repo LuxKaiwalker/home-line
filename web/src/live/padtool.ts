@@ -9,18 +9,23 @@ import { BACKEND_CONTRACT_VERSION } from './config'
 import { bannerFor, type LiveState } from './health'
 import { startJob, type JobHandle, type JobOptions } from './jobs'
 import type { MapPort } from './mapPort'
+import { canonicalJson } from './planio'
+import { validateRunRecord } from './schemacheck'
 import { loadStage, type LoaderFor, type StageResult } from './stage'
-import type { Job, LonLat, PadCheck, PadScreen, PlanInputs } from './types'
+import type { Job, LonLat, PadCheck, PadScreen, PlanInputs, RunRecord } from './types'
 import type { BandsFC, EdgesFC, IsochroneFC, PartnerFC } from '../data/types'
 
 export type CheckState = { kind: 'idle' } | { kind: 'checking' } | { kind: 'done'; result: PadCheck } | { kind: 'error'; message: string }
 export type PreviewState = { kind: 'idle' } | { kind: 'loading' } | { kind: 'done'; screen: PadScreen } | { kind: 'error'; message: string }
 export type PlanState =
   | { kind: 'idle' }
-  | { kind: 'running'; job: Job | null; result: StageResult | null }
-  | { kind: 'done'; job: Job; result: StageResult | null }
+  | { kind: 'running'; job: Job | null; result: StageResult | null; attached?: boolean }
+  | { kind: 'done'; job: Job; result: StageResult | null; attached?: boolean }
   | { kind: 'failed'; job: Job | null; error: string; retryAfterS: number | null; result: StageResult | null }
   | { kind: 'cancelled'; job: Job | null; result: StageResult | null }
+
+/** The finished job's run record (GET /results/{hash}/provenance): range flags of the result (F26). */
+export type RecordState = { kind: 'idle' } | { kind: 'loading' } | { kind: 'done'; record: RunRecord } | { kind: 'error'; message: string }
 
 export interface PadToolState {
   live: LiveState
@@ -28,6 +33,7 @@ export interface PadToolState {
   check: CheckState
   preview: PreviewState
   plan: PlanState
+  record: RecordState
 }
 
 export interface PadToolActions {
@@ -50,6 +56,12 @@ export interface PadToolOptions {
   port: MapPort
   /** Plan inputs other than the pad (crew, EVA ...); default: only contract_version, the server fills defaults. */
   inputs?: PlanInputs
+  /**
+   * Inputs the full plan job adds at submit time (the crew panel: only the changed crew fields),
+   * on top of `inputs`. null blocks the job (a crew field is not a number). The instant preview
+   * never gets them: POST /pads/screen plans the default crew only (E6).
+   */
+  jobInputs?: () => PlanInputs | null
   /** Default liveLoader (the one rendering path); the dev mock passes a loader over the mock fetch. */
   loaderFor?: LoaderFor
   /** Poll timing overrides (tests). */
@@ -69,9 +81,14 @@ export function planInputsFor(pad: LonLat, base: PlanInputs = {}): PlanInputs {
   return { contract_version: BACKEND_CONTRACT_VERSION, ...rest, pad: { lon: pad.lon, lat: pad.lat } }
 }
 
+/** The job's plan_inputs in canonical key order (the same order as U3's JSON export, planio.ts). */
+export function jobPlanInputs(pad: LonLat, base: PlanInputs = {}, extra: PlanInputs = {}): PlanInputs {
+  return JSON.parse(canonicalJson(planInputsFor(pad, { ...base, ...extra }))) as PlanInputs
+}
+
 export function createPadTool(opts: PadToolOptions): PadTool {
   const { client, port } = opts
-  let state: PadToolState = { live: { kind: 'checking' }, pad: null, check: { kind: 'idle' }, preview: { kind: 'idle' }, plan: { kind: 'idle' } }
+  let state: PadToolState = { live: { kind: 'checking' }, pad: null, check: { kind: 'idle' }, preview: { kind: 'idle' }, plan: { kind: 'idle' }, record: { kind: 'idle' } }
   const subs = new Set<(s: PadToolState) => void>()
   let seq = 0 // the click a pending answer belongs to; stale answers are dropped
   let req: AbortController | null = null
@@ -101,7 +118,7 @@ export function createPadTool(opts: PadToolOptions): PadTool {
     const ctl = (req = new AbortController())
     if (drawn) resetMap()
     port.setLivePad({ ...pad, valid: null })
-    set({ pad, check: { kind: 'checking' }, preview: { kind: 'idle' }, plan: { kind: 'idle' } })
+    set({ pad, check: { kind: 'checking' }, preview: { kind: 'idle' }, plan: { kind: 'idle' }, record: { kind: 'idle' } })
     let result: PadCheck
     try {
       result = await client.validatePad(pad, { signal: ctl.signal })
@@ -139,26 +156,49 @@ export function createPadTool(opts: PadToolOptions): PadTool {
     }
   }
 
+  /** The run record is written last (E7), so it is read once the job is done: range flags (F26). */
+  async function loadRecord(hash: string, my: number) {
+    set({ record: { kind: 'loading' } })
+    let rec: unknown
+    try {
+      rec = await client.provenance(hash)
+    } catch (e) {
+      if (my === seq) set({ record: { kind: 'error', message: message(e) } })
+      return
+    }
+    if (my !== seq) return
+    const errs = validateRunRecord(rec)
+    set({ record: errs.length ? { kind: 'error', message: `run record breaks run_record.schema.json: ${errs[0]}` } : { kind: 'done', record: rec as RunRecord } })
+  }
+
   function computePlan() {
     const pad = state.pad
     const ok = state.check.kind === 'done' && state.check.result.valid
     if (!pad || !ok || !controls() || !bannerFor(state.live).heavyJobs) return
     if (state.plan.kind === 'running') return
+    const extra = opts.jobInputs ? opts.jobInputs() : {}
+    if (extra === null) return // a crew field is not a number; the crew panel says which
     const my = seq
     let latest: StageResult | null = null
     // Stage snapshots are read in order; a slow read never overwrites a newer one.
     let chain = Promise.resolve()
-    const planPatch = (p: Partial<{ job: Job | null; result: StageResult | null }>) => {
+    let attached: boolean | undefined // from the submit answer (E7: same inputs attach to the existing run)
+    const planPatch = (p: Partial<{ job: Job | null; result: StageResult | null; attached: boolean }>) => {
       if (my !== seq || state.plan.kind !== 'running') return
       set({ plan: { ...state.plan, ...p } })
     }
-    set({ plan: { kind: 'running', job: null, result: null } })
+    set({ plan: { kind: 'running', job: null, result: null }, record: { kind: 'idle' } })
     job = startJob(
       client,
-      { type: 'plan', inputs: planInputsFor(pad, opts.inputs) },
+      { type: 'plan', inputs: jobPlanInputs(pad, opts.inputs, extra) },
       {
         ...opts.job,
-        onUpdate: (j) => planPatch({ job: j }),
+        onUpdate: (j) => {
+          if (attached === undefined) {
+            attached = j.attached === true
+            planPatch({ job: j, ...(attached ? { attached } : {}) })
+          } else planPatch({ job: j })
+        },
         onStage: (_stage, j, base) => {
           const stages = [...j.stages_done]
           chain = chain.then(async () => {
@@ -181,7 +221,8 @@ export function createPadTool(opts: PadToolOptions): PadTool {
         const r = latest && latest.stages.length === out.job.stages_done.length ? latest : await loadStage(out.resultBase, out.job.stages_done, opts.loaderFor)
         if (my !== seq) return
         await draw(r)
-        set({ plan: { kind: 'done', job: out.job, result: r } })
+        set({ plan: { kind: 'done', job: out.job, result: r, ...(attached ? { attached } : {}) } })
+        void loadRecord(out.job.hash, my)
       } else if (out.status === 'failed') set({ plan: { kind: 'failed', job: out.job, error: out.error, retryAfterS: out.retryAfterS, result: latest } })
       else set({ plan: { kind: 'cancelled', job: out.job, result: latest } })
     })
@@ -199,7 +240,7 @@ export function createPadTool(opts: PadToolOptions): PadTool {
         req?.abort()
         stopJob()
         if (state.pad) resetMap()
-        set({ pad: null, check: { kind: 'idle' }, preview: { kind: 'idle' }, plan: { kind: 'idle' } })
+        set({ pad: null, check: { kind: 'idle' }, preview: { kind: 'idle' }, plan: { kind: 'idle' }, record: { kind: 'idle' } })
       }
     },
     subscribe(fn) {
@@ -224,7 +265,7 @@ export function createPadTool(opts: PadToolOptions): PadTool {
       req?.abort()
       stopJob()
       resetMap()
-      set({ pad: null, check: { kind: 'idle' }, preview: { kind: 'idle' }, plan: { kind: 'idle' } })
+      set({ pad: null, check: { kind: 'idle' }, preview: { kind: 'idle' }, plan: { kind: 'idle' }, record: { kind: 'idle' } })
     },
     dispose() {
       seq++
