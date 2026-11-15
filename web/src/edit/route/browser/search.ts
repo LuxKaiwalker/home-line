@@ -13,7 +13,9 @@
 // marked timedOut and switches to a greedy key (w = GREEDY_WEIGHT, the open list re-keyed) for up to
 // GREEDY_EXTRA x capMs more, so a leg that has a path gets one (labelled "may not be the fastest").
 // refineLeg (w = 1, no greedy fallback) is meant for idle time: the caller replaces a leg only when
-// isBetterLeg says the refined one is faster.
+// isBetterLeg says the refined one is faster. In a single-threaded worker use beginRefine on a
+// createRefineSearch searcher: it runs in slices (job.step(sliceMs)), so an edit arriving meanwhile is
+// read between two slices instead of waiting for the whole exact search.
 //
 // No Worker API here: R1's worker.ts calls it (and tests call it directly).
 import designRaw from '../../../../../config/design.yaml'
@@ -56,6 +58,13 @@ export interface SearchOpts {
   fallback?: boolean
   /** clock, ms (default performance.now; tests inject a fake one) */
   now?: () => number
+}
+
+/** A sliced refine (LegSearch.beginRefine). */
+export interface RefineJob {
+  /** run at most about `sliceMs` more (checks every 512 expansions); null = not finished yet */
+  step(sliceMs: number): SearchResult | null
+  readonly done: boolean
 }
 
 export interface SearchResult {
@@ -168,7 +177,8 @@ export class LegSearch {
   /** allowed moves per cell, filled lazily: bit k = move k allowed (LegRouter.target), bit 16 = known */
   private readonly moves: Uint32Array
 
-  constructor(grid: RouteGrid, model: GradeModel) {
+  /** `shareMovesWith`: another LegSearch of the same grid whose (immutable) move mask is reused. */
+  constructor(grid: RouteGrid, model: GradeModel, shareMovesWith?: LegSearch) {
     const n = grid.width * grid.height
     if (grid.elev.length !== n || grid.passable.length !== n) throw new Error('RouteGrid arrays do not match width x height')
     this.grid = grid
@@ -177,32 +187,68 @@ export class LegSearch {
     this.parent = new Int32Array(n)
     this.stamp = new Uint32Array(n)
     this.closed = new Uint32Array(n)
-    this.moves = new Uint32Array(n)
+    this.moves = shareMovesWith && shareMovesWith.grid === grid ? shareMovesWith.moves : new Uint32Array(n)
     this.unit = Float64Array.from(OFFSETS, ([a, b]) => Math.hypot(a, b) * grid.resM)
   }
 
   /** Fast leg: weighted A* (default w = HEURISTIC_WEIGHT), capped, greedy finish after the cap. */
   searchLeg(from: number, to: number, opts: SearchOpts = {}): SearchResult {
-    return this.run(from, to, opts.weight ?? HEURISTIC_WEIGHT, opts.capMs ?? LEG_CAP_MS, opts.fallback ?? true, opts.signal, opts.now ?? now0)
+    return this.begin(from, to, opts.weight ?? HEURISTIC_WEIGHT, opts.capMs ?? LEG_CAP_MS, opts.fallback ?? true, opts.signal, opts.now ?? now0)(Infinity)!
   }
 
   /** Idle refine: exact A* (w = 1), cap REFINE_CAP_MS by default, no greedy finish (null when capped). */
   refineLeg(from: number, to: number, opts: Omit<SearchOpts, 'weight'> = {}): SearchResult {
-    return this.run(from, to, 1, opts.capMs ?? REFINE_CAP_MS, opts.fallback ?? false, opts.signal, opts.now ?? now0)
+    return this.begin(from, to, 1, opts.capMs ?? REFINE_CAP_MS, opts.fallback ?? false, opts.signal, opts.now ?? now0)(Infinity)!
   }
 
-  private run(from: number, to: number, weight: number, capMs: number, fallback: boolean, signal: SearchOpts['signal'], now: () => number): SearchResult {
-    if (!(weight >= 1) || !Number.isFinite(weight)) throw new Error(`search: weight must be a finite number >= 1, got ${weight}`)
-    const t0 = now()
-    const { width: W, passable, elev } = this.grid
-    const done = (leg: Leg | null, extra: Partial<SearchResult>, expanded: number, wMax: number): SearchResult => {
-      const timedOut = extra.timedOut ?? false
-      const aborted = extra.aborted ?? false
-      return { leg, cost: leg ? leg.timeS : Infinity, exact: wMax === 1 && !timedOut && !aborted, timedOut, aborted, expanded, ms: now() - t0, weight: wMax }
+  /**
+   * Sliced idle refine for a single-threaded worker: the exact search (w = 1) runs in slices,
+   * `job.step(sliceMs)` returns null while it is not finished, so the worker can yield between slices
+   * and read the next edit. capMs counts busy time only (default REFINE_CAP_MS; over it: leg null,
+   * timedOut). The job owns this LegSearch's buffers: any other search on it in between ends the job
+   * (step returns aborted). Use a separate searcher for refining: createRefineSearch.
+   */
+  beginRefine(from: number, to: number, opts: Omit<SearchOpts, 'weight' | 'fallback'> = {}): RefineJob {
+    const step = this.begin(from, to, 1, opts.capMs ?? REFINE_CAP_MS, false, opts.signal, opts.now ?? now0)
+    const now = opts.now ?? now0
+    let result: SearchResult | null = null
+    return {
+      get done() {
+        return result !== null
+      },
+      step(sliceMs: number): SearchResult | null {
+        if (result === null) result = step(now() + sliceMs)
+        return result
+      },
     }
-    if (!passable[from] || !passable[to]) return done(null, {}, 0, weight)
-    if (from === to) return done({ cells: [from], timeS: 0, o2L: 0, distM: 0, tauS: [0], o2CumL: [0] }, {}, 0, weight)
-    if (signal?.aborted) return done(null, { aborted: true }, 0, weight)
+  }
+
+  /**
+   * Set up one search; the returned stepper runs it until `sliceEnd` (clock ms) and returns null
+   * there, or the result once finished. A stepper whose buffers were taken by a newer search returns
+   * aborted.
+   */
+  private begin(from: number, to: number, weight: number, capMs: number, fallback: boolean, signal: SearchOpts['signal'], now: () => number): (sliceEnd: number) => SearchResult | null {
+    if (!(weight >= 1) || !Number.isFinite(weight)) throw new Error(`search: weight must be a finite number >= 1, got ${weight}`)
+    const { width: W, passable, elev } = this.grid
+    let busyMs = 0
+    let w = weight
+    let wMax = weight
+    let timedOut = false
+    let expanded = 0
+    const done = (leg: Leg | null, aborted = false): SearchResult => ({
+      leg,
+      cost: leg ? leg.timeS : Infinity,
+      exact: wMax === 1 && !timedOut && !aborted,
+      timedOut,
+      aborted,
+      expanded,
+      ms: busyMs,
+      weight: wMax,
+    })
+    const t0 = now()
+    if (!passable[from] || !passable[to]) return () => ((busyMs = now() - t0), done(null))
+    if (from === to) return () => ((busyMs = now() - t0), done({ cells: [from], timeS: 0, o2L: 0, distM: 0, tauS: [0], o2CumL: [0] }))
     if (++this.gen === 0xffffffff) {
       this.stamp.fill(0)
       this.closed.fill(0)
@@ -213,11 +259,6 @@ export class LegSearch {
     const tr = Math.floor(to / W)
     const tc = to % W
     const hf = model.minPace * this.grid.resM
-    let w = weight
-    let wMax = weight
-    let timedOut = false
-    const deadline = t0 + capMs
-    const hardDeadline = deadline + GREEDY_EXTRA * capMs
     const keyOf = (node: number) => {
       const r = Math.floor(node / W)
       return cost[node] + w * (Math.hypot(r - tr, node - r * W - tc) * hf)
@@ -227,50 +268,66 @@ export class LegSearch {
     parent[from] = -1
     stamp[from] = gen
     heap.push(w * (Math.hypot(Math.floor(from / W) - tr, (from % W) - tc) * hf), from)
-    let expanded = 0
-    while (heap.size > 0) {
-      const i = heap.pop()
-      if (closed[i] === gen) continue
-      closed[i] = gen
-      if (i === to) return done(this.build(from, to), { timedOut }, expanded, wMax)
-      expanded++
-      if ((expanded & (CHECK_EVERY - 1)) === 0) {
-        if (signal?.aborted) return done(null, { aborted: true, timedOut }, expanded, wMax)
-        const t = now()
-        if (!timedOut && t >= deadline) {
-          timedOut = true
-          if (!fallback) return done(null, { timedOut }, expanded, wMax)
-          w = Math.max(w, GREEDY_WEIGHT)
-          wMax = w
-          heap.rekey(keyOf) // node i is still expanded below, with the new weight
-        } else if (timedOut && t >= hardDeadline) return done(null, { timedOut }, expanded, wMax)
-      }
-      const r = Math.floor(i / W)
-      const c = i - r * W
-      const ci = cost[i]
-      const ei = elev[i]
-      let mv = moves[i]
-      if (mv === 0) mv = moves[i] = this.movesOf(r, c)
-      for (let k = 0; k < 16; k++) {
-        if (!(mv & (1 << k))) continue
-        const r2 = r + dr[k]
-        const c2 = c + dc[k]
-        const j = r2 * W + c2
-        if (closed[j] === gen) continue
-        // LegRouter.edge
-        const len = unit[k]
-        const pace = model.lookup(Math.atan((elev[j] - ei) / len)).pace
-        if (pace === Infinity) continue
-        const cj = ci + len * pace
-        if (stamp[j] !== gen || cj < cost[j]) {
-          stamp[j] = gen
-          cost[j] = cj
-          parent[j] = i
-          heap.push(cj + w * (Math.hypot(r2 - tr, c2 - tc) * hf), j)
+    let first = true
+    let ticks = 0
+    return (sliceEnd: number): SearchResult | null => {
+      const s0 = first ? t0 : now()
+      first = false
+      const busy0 = busyMs
+      if (this.gen !== gen) return done(null, true)
+      if (signal?.aborted) return (busyMs = busy0 + now() - s0), done(null, true)
+      while (heap.size > 0) {
+        // clock, abort, cap and slice checks before the pop, so a yield leaves the open list untouched
+        if ((++ticks & (CHECK_EVERY - 1)) === 0) {
+          const t = now()
+          busyMs = busy0 + t - s0
+          if (signal?.aborted) return done(null, true)
+          if (!timedOut && busyMs >= capMs) {
+            timedOut = true
+            if (!fallback) return done(null)
+            w = Math.max(w, GREEDY_WEIGHT)
+            wMax = w
+            heap.rekey(keyOf)
+          } else if (timedOut && busyMs >= (1 + GREEDY_EXTRA) * capMs) return done(null)
+          else if (t >= sliceEnd) return null
+        }
+        const i = heap.pop()
+        if (closed[i] === gen) continue
+        closed[i] = gen
+        if (i === to) {
+          const leg = this.build(from, to)
+          busyMs = busy0 + now() - s0
+          return done(leg)
+        }
+        expanded++
+        const r = Math.floor(i / W)
+        const c = i - r * W
+        const ci = cost[i]
+        const ei = elev[i]
+        let mv = moves[i]
+        if (mv === 0) mv = moves[i] = this.movesOf(r, c)
+        for (let k = 0; k < 16; k++) {
+          if (!(mv & (1 << k))) continue
+          const r2 = r + dr[k]
+          const c2 = c + dc[k]
+          const j = r2 * W + c2
+          if (closed[j] === gen) continue
+          // LegRouter.edge
+          const len = unit[k]
+          const pace = model.lookup(Math.atan((elev[j] - ei) / len)).pace
+          if (pace === Infinity) continue
+          const cj = ci + len * pace
+          if (stamp[j] !== gen || cj < cost[j]) {
+            stamp[j] = gen
+            cost[j] = cj
+            parent[j] = i
+            heap.push(cj + w * (Math.hypot(r2 - tr, c2 - tc) * hf), j)
+          }
         }
       }
+      busyMs = busy0 + now() - s0
+      return done(null)
     }
-    return done(null, { timedOut }, expanded, wMax)
   }
 
   /** LegRouter.target for all 16 moves of (r, c): bit k = in bounds, target and crossed cells passable; bit 16 set. */
@@ -326,6 +383,21 @@ export function createLegSearch(grid: RouteGrid, model: GradeModel): LegSearch {
   if (s && s.model === model) return s
   const n = new LegSearch(grid, model)
   searchers.set(grid, n)
+  return n
+}
+
+const refiners = new WeakMap<RouteGrid, LegSearch>()
+
+/**
+ * A second LegSearch of the grid for the sliced idle refine (beginRefine): own buffers, so a fast
+ * search for a new edit does not end the refine job; shares the move mask with createLegSearch's.
+ * Memory: about 8 + 4 + 4 + 4 bytes per cell (~40 MB on the 1480 x 1480 grid); make it for the active pad only.
+ */
+export function createRefineSearch(grid: RouteGrid, model: GradeModel): LegSearch {
+  const s = refiners.get(grid)
+  if (s && s.model === model) return s
+  const n = new LegSearch(grid, model, createLegSearch(grid, model))
+  refiners.set(grid, n)
   return n
 }
 

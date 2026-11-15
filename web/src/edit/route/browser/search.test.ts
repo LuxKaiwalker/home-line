@@ -3,7 +3,7 @@
 //    (official pad nom_104 + the picker pads' routing fields), incl. the long 2.4-3.4 km legs (D137);
 // 2. w > 1: cost <= w x fastest (weighted A* bound), and it expands fewer nodes;
 // 3. the cap: a path is still returned (greedy finish, timedOut), refine gives null when capped,
-//    abort stops at once;
+//    abort stops at once; the sliced refine (beginRefine) yields and still ends with the exact leg;
 // 4. timings fast vs exact on the long legs (printed; the fast leg stays inside the 150 ms cap).
 /// <reference types="node" />
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
@@ -22,6 +22,7 @@ import { LegRouter, type RouteGrid } from '../map/router'
 import copyR2 from './copy.R2.json'
 import {
   createLegSearch,
+  createRefineSearch,
   GREEDY_WEIGHT,
   HEURISTIC_WEIGHT,
   heuristicWeightOf,
@@ -214,6 +215,50 @@ describe('per-leg cap, refine and abort', () => {
     expect(savedSeconds(fast.leg, exact)).toBeCloseTo(Math.max(0, fast.cost - exact.cost), 9)
   })
 
+  it('sliced refine (beginRefine): yields between slices and ends with the exact LegRouter leg', () => {
+    const want = new LegRouter(g, model).route(a, b)
+    const s = new LegSearch(g, model)
+    // every clock read advances 1 ms and a slice is 1 ms: the job yields at every check
+    const job = s.beginRefine(a, b, { now: fakeClock(1), capMs: 1e9 })
+    let slices = 0
+    let r: SearchResult | null = null
+    while (!(r = job.step(1))) slices++
+    expect(slices).toBeGreaterThan(3)
+    expect(job.done).toBe(true)
+    expect(r.leg).toEqual(want)
+    expect(r.exact).toBe(true)
+    expect(job.step(1)).toBe(r) // finished: same result again
+  })
+
+  it('a search on the same searcher ends a sliced refine (aborted); createRefineSearch keeps its own buffers', () => {
+    const s = new LegSearch(g, model)
+    const job = s.beginRefine(a, b, { now: fakeClock(1), capMs: 1e9 })
+    expect(job.step(1)).toBeNull()
+    s.searchLeg(b, a)
+    const r = job.step(1e9)!
+    expect(r.aborted).toBe(true)
+    expect(isBetterLeg(null, r)).toBe(false)
+
+    const fast = createLegSearch(g, model)
+    const ref = createRefineSearch(g, model)
+    expect(ref).not.toBe(fast)
+    expect(createRefineSearch(g, model)).toBe(ref)
+    const job2 = ref.beginRefine(a, b, { now: fakeClock(1), capMs: 1e9 })
+    expect(job2.step(1)).toBeNull()
+    fast.searchLeg(b, a) // the next edit, between two slices
+    let r2: SearchResult | null = null
+    while (!(r2 = job2.step(1)));
+    expect(r2.leg).toEqual(new LegRouter(g, model).route(a, b))
+  })
+
+  it('sliced refine counts busy time only: over capMs it ends with null (timedOut)', () => {
+    const job = new LegSearch(g, model).beginRefine(a, b, { now: fakeClock(1), capMs: 3 })
+    let r: SearchResult | null = null
+    while (!(r = job.step(1)));
+    expect(r.leg).toBeNull()
+    expect(r.timedOut).toBe(true)
+  })
+
   it('createLegSearch reuses one searcher per grid and model', () => {
     expect(createLegSearch(g, model)).toBe(createLegSearch(g, model))
     expect(createLegSearch(g, gradeModel(scenarioParams('con_104')))).not.toBe(createLegSearch(g, model))
@@ -391,6 +436,23 @@ describe.skipIf(!existsSync(PUB))('real grids: parity, bound and timing (officia
     if (process.env.R2_TIMING_OUT) writeFileSync(process.env.R2_TIMING_OUT, JSON.stringify({ sum, timings }, null, 1))
     console.log(`[R2 timing] long legs 2.4-3.4 km, cap ${LEG_CAP_MS} ms, w = ${HEURISTIC_WEIGHT}: ${JSON.stringify(sum)}`)
   }, 400_000)
+
+  it('real long leg: sliced refine (20 ms slices) ends with the LegRouter leg; no slice runs long', () => {
+    const r = grids[0]
+    const t = longTargets(r)[0]
+    const want = new LegRouter(r.grid, r.model).route(r.pad, t)
+    const job = createRefineSearch(r.grid, r.model).beginRefine(r.pad, t, { capMs: 1e9 })
+    let res: SearchResult | null = null
+    let slices = 0
+    while (!res) {
+      res = job.step(20)
+      slices++
+      createLegSearch(r.grid, r.model).searchLeg(r.pad, t) // an edit's fast search between slices
+    }
+    expect(res.leg).toEqual(want)
+    expect(res.exact).toBe(true)
+    console.log(`[R2 timing] sliced refine of a ${distKm(r, r.pad, t).toFixed(2)} km leg: ${slices} slices of 20 ms, busy ${res.ms.toFixed(0)} ms`)
+  }, 120_000)
 
   it('a real long leg cut by the cap still returns a path (greedy finish), flagged timedOut', () => {
     const r = grids[0]
