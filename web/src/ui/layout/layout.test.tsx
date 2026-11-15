@@ -302,12 +302,15 @@ describe('persistence per viewer', () => {
     ['no storage at all', () => null],
     ['unreadable JSON', () => ({ getItem: () => '{not json', setItem: () => {} })],
   ] as [string, () => StorageLike | null][])('%s: the defaults hold and the containers still work', async (_, get) => {
-    bindLayoutStorage(get)
-    resetLayout()
-    mount(app(await import('./index')))
-    expect([isOpen('edit'), isOpen('bottom'), isOpen('crew')]).toEqual([false, false, false])
-    act(() => openContainer('edit', null))
-    expect(isOpen('edit')).toBe(true)
+    const S = await import('./index') // the module instance the reload test left (same as the app's)
+    S.bindLayoutStorage(get)
+    S.resetLayout()
+    mount(app(S))
+    expect([S.isOpen('edit'), S.isOpen('bottom'), S.isOpen('crew')]).toEqual([false, false, false])
+    act(() => S.openContainer('edit', null))
+    expect(S.isOpen('edit')).toBe(true)
+    act(() => S.closeContainer('edit'))
+    expect(S.isOpen('edit')).toBe(false)
     expect(one(byClass(root, 'hl-lay-bottom__summary')).textContent).toBe('summary table')
   })
 

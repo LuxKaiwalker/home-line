@@ -27,6 +27,19 @@ export interface PopoverProps {
   class?: string
 }
 
+const FOCUSABLE = new Set(['button', 'a', 'input', 'select', 'textarea'])
+/** First focusable descendant in document order (walks child nodes; no selector engine needed). */
+function firstFocusable(el: Node): HTMLElement | null {
+  for (const c of Array.from(el.childNodes)) {
+    if (c.nodeType !== 1) continue
+    const h = c as HTMLElement
+    if (FOCUSABLE.has(h.localName) && !h.hasAttribute('disabled') && (h.localName !== 'a' || h.hasAttribute('href'))) return h
+    const d = firstFocusable(h)
+    if (d) return d
+  }
+  return null
+}
+
 export function Popover({ id, icon, label, title, edge = 'top-right', children, defaultOpen, class: cls }: PopoverProps) {
   const open = useContainer({ id, kind: 'popover', defaultOpen })
   const reduced = useSignalValue(ui.reducedMotion)
@@ -46,7 +59,7 @@ export function Popover({ id, icon, label, title, edge = 'top-right', children, 
 
   // focus the first control inside when it opens (not when open at mount)
   useLayoutEffect(() => {
-    if (open && !was.current) panel.current?.querySelector<HTMLElement>('button, [href], input, select, textarea')?.focus()
+    if (open && !was.current && panel.current) firstFocusable(panel.current)?.focus()
     was.current = open
   }, [open])
 
