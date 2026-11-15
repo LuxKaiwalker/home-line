@@ -25,7 +25,7 @@
 import './live.css'
 import { createApiClient, type ApiClient, type FetchLike } from './client'
 import { dataUrl } from '../env'
-import { SIM_EXPORT_ENABLED } from './config'
+import { ROUTE_EDIT_ENABLED, SIM_EXPORT_ENABLED } from './config'
 import { bannerFor, watchHealth, type LiveState } from './health'
 import { consoleMapPort as basePort, type ConsoleMapLike, type MapPort } from './mapPort'
 import type { RouteConsoleMap } from './route/map'
@@ -35,7 +35,7 @@ import { mountPlanRoute, resultDataUrl } from './planmount'
 import { mockLiveLoader } from './result'
 
 export { ApiError, createApiClient, type ApiClient, type ApiClientOptions } from './client'
-export { API_BASE, LIVE_ENABLED, LIVE_LABEL, OFFLINE_LABEL, WARMING_LABEL } from './config'
+export { API_BASE, LIVE_ENABLED, LIVE_LABEL, OFFLINE_LABEL, ROUTE_EDIT_ENABLED, WARMING_LABEL } from './config'
 export { bannerFor, checkHealth, watchHealth, type Banner, type HealthWatch, type LiveState } from './health'
 export { startJob, type JobCallbacks, type JobHandle, type JobOptions, type JobOutcome } from './jobs'
 export { liveLoader } from './result'
@@ -132,11 +132,12 @@ function planRoute(app: HTMLElement, client: ApiClient): () => void {
  */
 export function padTool(panel: Element, port: MapPort, client: ApiClient = liveClient()): () => void {
   const loader = USE_MOCK ? { loaderFor: mockLiveLoader(lazyMockFetch) } : {}
-  // R5 (D97): the Edit-route panel in the Plan rail, on the same console map (lazy, live builds only)
+  // R5 (D97): the Edit-route panel in the Plan rail, on the same console map (lazy, live builds only).
+  // D116: VITE_ROUTE_EDIT=0 skips it, and with it the map waypoints the panel installs (WP6).
   let offRoute: (() => void) | null = null
   let gone = false
   const cmap = (port as MapPort & { consoleMap?: RouteConsoleMap }).consoleMap ?? null
-  void import('./route/mount').then((m) => !gone && (offRoute = m.mountRoutePanel({ client, onLiveState, cmap, ...loader })))
+  if (ROUTE_EDIT_ENABLED) void import('./route/mount').then((m) => !gone && (offRoute = m.mountRoutePanel({ client, onLiveState, cmap, ...loader })))
   const off = mountPadTool(panel, port, { client, onLiveState, ...loader }).cleanup
   return () => {
     gone = true
