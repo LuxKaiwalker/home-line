@@ -16,6 +16,12 @@
 //             _route_dose_check): leg i departs at t = walk + dwell so far and fails when t is later
 //             than its latest departure (O2 used bounded by the effort-cap rate x t, as the DP);
 //             the FIRST failing leg is the answer, never reordered (contract run_record.feasibility).
+//             I1c: every leg row carries this check's own number (checkMin = latest departure - departure,
+//             checkBinding, checkOk) and feasibility is read off the rows, so the headline and the row of
+//             the failing leg show the same minutes. The check charges the O2 used before a leg at the
+//             effort cap (1.35 L/min x elapsed time, dwell included), as the engine's DP; marginMin is the
+//             walked margin (dwell at the station task rate), so a leg can fail the check while its walked
+//             margin is still >= 0 (pads/index.json counts these as excluded_by_effort_cap_rule).
 import { CONFIG } from '../../../config'
 import { CUSTOM_START_LABEL } from './start'
 import { distanceM, isStationStop, stopNames, type RouteStop } from '../model'
@@ -57,6 +63,14 @@ export interface BrowserLegRow {
   /** lowest margin on this leg (dwell before it included) and its binding term; null = unknown */
   marginMin: number | null
   binding: Term | null
+  /**
+   * I1c: the ordered-route check of this leg (the engine's rule, see the header): latest departure minus
+   * the departure (min; negative = the leg fails by that much), the term that binds it, and whether the
+   * leg passes. The headline (feasibility) is the first row with checkOk false. null = unknown.
+   */
+  checkMin: number | null
+  checkBinding: Term | null
+  checkOk: boolean | null
   /** the walked line (lon/lat): router cells, or the pointer path home; straight when unrouted */
   coords: LonLat[]
 }
@@ -238,6 +252,17 @@ function latestDeparture(v: LegVerts, tDarkMin: number | null): Partial<Record<T
 
 const round2 = (x: number) => Math.round(x * 100) / 100
 
+/** I1c: one leg's ordered-route check (latest departure - departure, its binding term, pass/fail). */
+interface LegCheck {
+  min: number
+  binding: Term
+  ok: boolean
+}
+
+function rowCheck(c: LegCheck | undefined): Pick<BrowserLegRow, 'checkMin' | 'checkBinding' | 'checkOk'> {
+  return c ? { checkMin: c.min, checkBinding: c.binding, checkOk: c.ok } : { checkMin: null, checkBinding: null, checkOk: null }
+}
+
 /**
  * The browser estimate of an ordered route: legs, totals, tightest margin and feasibility.
  * Pure and synchronous; the leg cache in `d.legCache` is reused and updated (moving one stop re-routes
@@ -310,6 +335,7 @@ export function computeBrowserRoute(d: BrowserRouteData, padLonLat: LonLat | { l
 
   // feasibility: traverse._route_order, then the timed dose check on the walked track
   let feasibility: BrowserFeasibility | null = null
+  const checks: LegCheck[] = []
   if (known) {
     const ids = ['pad', ...names]
     const fail = (i: number, limit: Term, short: number): BrowserFeasibility => ({
@@ -323,6 +349,7 @@ export function computeBrowserRoute(d: BrowserRouteData, padLonLat: LonLat | { l
     })
     const budgetMin = BUDGET_CONSTANTS.evaLimitMin
     let t = 0
+    let firstFail: number | null = null
     for (let i = 0; i <= n; i++) {
       let v: LegVerts
       if (i < n) {
@@ -335,20 +362,21 @@ export function computeBrowserRoute(d: BrowserRouteData, padLonLat: LonLat | { l
       const terms = latestDeparture(v, d.tDarkMin)
       let bind: Term = 'O2'
       for (const k of ['O2', 'daylight', EVA] as Term[]) if (terms[k] !== undefined && terms[k]! < terms[bind]!) bind = k
-      if (!(t <= terms[bind]!)) {
-        feasibility = fail(i, bind, t - terms[bind]!)
-        break
-      } else if (i && t > budgetMin) {
-        feasibility = fail(i, EVA, t - budgetMin)
-        break
-      } else if (i === n && t + v.t > budgetMin + 1e-9) {
-        feasibility = fail(i, EVA, t + v.t - budgetMin)
-        break
+      // the engine's order of the three conditions (_route_order); a passing leg shows its least slack
+      let c: LegCheck
+      if (!(t <= terms[bind]!)) c = { min: Number.isFinite(terms[bind]!) ? terms[bind]! - t : -Infinity, binding: bind, ok: false }
+      else if (i && t > budgetMin) c = { min: budgetMin - t, binding: EVA, ok: false }
+      else if (i === n && t + v.t > budgetMin + 1e-9) c = { min: budgetMin - t - v.t, binding: EVA, ok: false }
+      else {
+        c = { min: terms[bind]! - t, binding: bind, ok: true }
+        const evaSlack = i === n ? budgetMin - t - v.t : i ? budgetMin - t : Infinity
+        if (evaSlack < c.min) c = { min: evaSlack, binding: EVA, ok: true }
       }
+      checks.push(c)
+      if (!c.ok && firstFail === null) firstFail = i
       t = t + v.t + (i < n ? dwellMin[i] : 0)
     }
-    feasibility ??= { feasible: true }
-    if (feasibility.feasible && margin?.dose) {
+    if (firstFail === null && margin?.dose) {
       const pts = margin.points
       const bad = pts.findIndex((p) => p.terms.dose !== undefined && p.terms.dose < 0)
       if (bad >= 0) {
@@ -359,13 +387,16 @@ export function computeBrowserRoute(d: BrowserRouteData, padLonLat: LonLat | { l
           if (tf <= hi + 1e-9 || i === n) {
             const on = pts.filter((p) => (i ? p.tMin > lo - 1e-9 : true) && p.tMin <= hi + 1e-9 && p.terms.dose !== undefined)
             const short = on.length ? -Math.min(...on.map((p) => p.terms.dose!)) : -pts[bad].terms.dose!
-            feasibility = fail(i, 'dose', short)
+            checks[i] = { min: -Math.max(0, short), binding: 'dose', ok: false }
+            firstFail = i
             break
           }
           lo = hi
         }
       }
     }
+    // one source of truth: the headline is the first row whose check fails, with that row's number
+    feasibility = firstFail === null ? { feasible: true } : fail(firstFail, checks[firstFail].binding, -checks[firstFail].min)
   }
 
   // leg rows, with the lowest margin on each leg
@@ -387,14 +418,14 @@ export function computeBrowserRoute(d: BrowserRouteData, padLonLat: LonLat | { l
       const l = routerLegs[i]
       row = {
         leg: i, kind: 'out', from, to, routed: !!l, dwellBeforeMin: dwell, departMin: depart, walkMin: walk, arriveMin: arrive,
-        distM: l ? l.distM : null, o2L: l ? l.o2L : null, marginMin: null, binding: null,
+        distM: l ? l.distM : null, o2L: l ? l.o2L : null, marginMin: null, binding: null, ...rowCheck(checks[i]),
         coords: l && l.cells.length > 1 ? l.cells.map((c) => lonLatOfCell(d.tHome, c)) : straight,
       } // prettier-ignore
     } else {
       row = {
         leg: i, kind: 'home', from, to, routed: homeReachesPad, dwellBeforeMin: dwell, departMin: depart, walkMin: walk, arriveMin: arrive,
         distM: homePath ? homePath.reduce((s, p, k) => (k ? s + d.tHome.distanceM(homePath![k - 1], p) : 0), 0) : null,
-        o2L: home.o2HomeL, marginMin: null, binding: null, coords: homePath ?? straight,
+        o2L: home.o2HomeL, marginMin: null, binding: null, ...rowCheck(checks[i]), coords: homePath ?? straight,
       } // prettier-ignore
     }
     if (margin && arrive !== null) {

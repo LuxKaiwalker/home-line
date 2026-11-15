@@ -38,6 +38,7 @@ export default defineConfig(({ mode }) => {
     // Relative base so the build works under a GitHub Pages project path (hash routing).
     base: './',
     plugins: [yamlPlugin(), pruneDataDirs(dataMode)],
+    worker: { format: 'es', plugins: () => [yamlPlugin()] }, // J1h: mission/legsWorker.ts imports physio.ts (config/*.yaml)
     server: { fs: { allow: ['..'] } }, // config/ and contracts/ live one level up
     build: { chunkSizeWarningLimit: 1200 }, // maplibre-gl is ~1 MB minified, lazy-loaded on "/"
     test: { include: ['src/**/*.test.ts', 'src/**/*.test.tsx'], environment: 'node' },

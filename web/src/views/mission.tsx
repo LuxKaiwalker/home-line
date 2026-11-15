@@ -26,6 +26,8 @@ import { evaClock } from '../mission/marstime'
 import { daylightFor, DEFAULT_START_MS, isDefaultStart, StartTime } from '../mission/StartTime'
 import { boundaryOptions, defaultBoundary, legPairs, moveWaypoint, removeWaypoint, replaceWaypoint, routeLegs, toggleTag, WAYPOINT_TAGS, type LonLat, type Waypoint } from '../mission/plan'
 import { LegRouter, type Leg } from '../mission/router'
+import { scenarioParams } from '../mission/physio'
+import type { LegsReply, LegsRequest } from '../mission/legsRoute'
 import { decodePlan, encodePlan } from '../mission/share'
 import { stationWaypoint } from '../mission/stations'
 import { data } from '../data/loader'
@@ -157,6 +159,51 @@ function MissionPanel({ mmap, handlers, mapsEl, layersEl, initial }: { mmap: Mis
   const tDarkMin = customStart && clock ? Math.round(daylightFor(clock) * 100) / 100 : (d?.tDarkMin ?? null)
 
   const router = useMemo(() => (d ? new LegRouter(d.grid, d.model) : null), [d])
+  // J1h: legs are routed in a Web Worker (mission/legsWorker.ts, the same LegRouter), so an edit renders
+  // at once with the known legs and "routing…" for new ones; a result fills the leg cache and re-renders.
+  // No Worker (old browser, tests): route on the main thread as before.
+  const [legTick, setLegTick] = useState(0)
+  const legsWorker = useRef<{ w: Worker; asked: Set<string> } | null>(null)
+  useEffect(() => {
+    if (!d || typeof Worker === 'undefined') return
+    let w: Worker
+    try {
+      w = new Worker(new URL('../mission/legsWorker.ts', import.meta.url), { type: 'module' })
+    } catch {
+      return
+    }
+    const cache = caches.current.get(d.fieldsPad ?? null) ?? new Map<string, Leg | null>()
+    caches.current.set(d.fieldsPad ?? null, cache)
+    const asked = new Set<string>()
+    let alive = true
+    w.onmessage = (e: MessageEvent<LegsReply>) => {
+      if (!alive) return
+      const k = `${e.data.a}-${e.data.b}`
+      asked.delete(k)
+      cache.set(k, e.data.leg)
+      setLegTick((n) => n + 1)
+    }
+    w.onerror = () => {
+      // the worker failed: fall back to main-thread routing for what is left
+      if (!alive) return
+      alive = false
+      w.terminate()
+      if (legsWorker.current?.w === w) legsWorker.current = null
+      setLegTick((n) => n + 1)
+    }
+    // copies (the main thread keeps its own arrays), transferred to avoid a second copy
+    const elev = d.grid.elev.slice()
+    const passable = d.grid.passable.slice()
+    const init: LegsRequest = { type: 'init', grid: { width: d.grid.width, height: d.grid.height, resM: d.grid.resM, elev, passable }, params: scenarioParams(d.scenario.id) }
+    w.postMessage(init, [elev.buffer, passable.buffer])
+    legsWorker.current = { w, asked }
+    setLegTick((n) => n + 1)
+    return () => {
+      alive = false
+      w.terminate()
+      if (legsWorker.current?.w === w) legsWorker.current = null
+    }
+  }, [d])
   const padCell = useMemo(() => {
     if (!d) return -1
     const p = d.tHome.pixelOf(d.pad.lon, d.pad.lat)
@@ -279,12 +326,28 @@ function MissionPanel({ mmap, handlers, mapsEl, layersEl, initial }: { mmap: Mis
   }
 
   // Legs (cached) and the way home.
-  const legs = useMemo<(Leg | null)[]>(() => {
+  // undefined = still routing in the worker (J1h)
+  const legsNow = useMemo<(Leg | null | undefined)[]>(() => {
     if (!router || padCell < 0) return []
     const key = d?.fieldsPad ?? null
     if (!caches.current.has(key)) caches.current.set(key, new Map())
-    return routeLegs(legPairs(padCell, wps), (a, b) => router.route(a, b), caches.current.get(key)!)
-  }, [router, padCell, wps])
+    const cache = caches.current.get(key)!
+    const lw = legsWorker.current
+    if (!lw) return routeLegs(legPairs(padCell, wps), (a, b) => router.route(a, b), cache)
+    return legPairs(padCell, wps).map(([a, b]) => {
+      const k = `${a}-${b}`
+      if (cache.has(k)) return cache.get(k)!
+      if (!lw.asked.has(k)) {
+        lw.asked.add(k)
+        const req: LegsRequest = { type: 'route', a, b }
+        lw.w.postMessage(req)
+      }
+      return undefined
+    })
+  }, [router, padCell, wps, legTick])
+  const routingN = legsNow.filter((l) => l === undefined).length
+  // While a leg is routing, the rest of the panel sees it as unknown (null): no totals, margin or export.
+  const legs = useMemo<(Leg | null)[]>(() => legsNow.map((l) => l ?? null), [legsNow])
 
   // Keyed on the cell only: editing a note or stop time must not recompute the way home.
   const lastCell = wps.length ? wps[wps.length - 1].cell : null
@@ -318,7 +381,7 @@ function MissionPanel({ mmap, handlers, mapsEl, layersEl, initial }: { mmap: Mis
   }, [d, legs, wps, storm, tDarkMin])
 
   const exportMission = async () => {
-    if (!d || !wps.length) return
+    if (!d || !wps.length || routingN > 0) return // J1h: only with every leg routed
     const w = d.tHome.width
     const elevAt = (lon: number, lat: number) => {
       const p = d.tHome.pixelOf(lon, lat)
@@ -354,13 +417,13 @@ function MissionPanel({ mmap, handlers, mapsEl, layersEl, initial }: { mmap: Mis
   // Draw.
   useEffect(() => {
     if (!d) return
-    mmap.setWaypoints(wps.map((w, i) => ({ lon: w.lon, lat: w.lat, bad: legs[i] === null, info: waypointInfo(w) })))
+    mmap.setWaypoints(wps.map((w, i) => ({ lon: w.lon, lat: w.lat, bad: legsNow[i] === null, info: waypointInfo(w) })))
     const toLL = (c: number): LonLat => d.tHome.lonLatOf(Math.floor(c / d.tHome.width), c % d.tHome.width)
     void mmap.setRoute(
       legs.map((l) => (l ? l.cells.map(toLL) : [])),
       home.path,
     )
-  }, [d, wps, legs, home])
+  }, [d, wps, legs, legsNow, home])
 
   useEffect(() => void mmap.showBoundary(options.find((o) => o.id === boundary)), [boundary, options])
 
@@ -389,7 +452,7 @@ function MissionPanel({ mmap, handlers, mapsEl, layersEl, initial }: { mmap: Mis
 
       <section class="mp-card">
         <h3>{t('mission.estimates.title')}</h3>
-        <Estimates b={budget} n={wps.length} />
+        <Estimates b={budget} n={wps.length} routing={routingN} />
       </section>
 
       {clock && (
@@ -406,7 +469,7 @@ function MissionPanel({ mmap, handlers, mapsEl, layersEl, initial }: { mmap: Mis
           <summary>
             {t('mission.waypoints.title')} <span class="muted">{t('mission.waypoints.count', { n: wps.length })}</span>
           </summary>
-          <WaypointList wps={wps} legs={legs} setWps={setWps} />
+          <WaypointList wps={wps} legs={legsNow} setWps={setWps} />
           {wps.length > 0 && (
             <div class="mp-share">
               <button type="button" class="mp-clear" onClick={copyLink}>
@@ -434,7 +497,7 @@ function MissionPanel({ mmap, handlers, mapsEl, layersEl, initial }: { mmap: Mis
       </section>
 
       <section class="mp-card mp-export">
-        <button type="button" disabled={!wps.length} onClick={() => void exportMission()} title={t('mission.export.buttonTitle')}>
+        <button type="button" disabled={!wps.length || routingN > 0} onClick={() => void exportMission()} title={routingN > 0 ? t('mission.export.routingTitle') : t('mission.export.buttonTitle')}>
           {t('mission.export.button')}
         </button>
         {/* J1 (D132): the export labels its provenance (mission.json origin_label) */}
@@ -505,7 +568,8 @@ function Row({ k, v, cls, title }: { k: string; v: string; cls?: string; title?:
 
 const sign = (v: number | null) => (v === null ? '' : v < 0 ? 'mp-bad' : 'mp-ok')
 
-function Estimates({ b, n }: { b: MissionBudget; n: number }) {
+function Estimates({ b, n, routing }: { b: MissionBudget; n: number; routing: number }) {
+  if (routing > 0) return <p class="mp-notice">{t('mission.estimates.routing', { n: routing })}</p>
   if (!b.legsKnown) return <p class="mp-notice">{t('mission.estimates.notRouted')}</p>
   return (
     <div class="mp-est">
@@ -523,7 +587,7 @@ function Estimates({ b, n }: { b: MissionBudget; n: number }) {
   )
 }
 
-function WaypointList({ wps, legs, setWps }: { wps: Waypoint[]; legs: (Leg | null)[]; setWps: (f: (w: Waypoint[]) => Waypoint[]) => void }) {
+function WaypointList({ wps, legs, setWps }: { wps: Waypoint[]; legs: (Leg | null | undefined)[]; setWps: (f: (w: Waypoint[]) => Waypoint[]) => void }) {
   if (!wps.length) return <p class="muted mp-empty">{t('mission.waypoints.empty')}</p>
   return (
     <>
@@ -559,6 +623,8 @@ function WaypointList({ wps, legs, setWps }: { wps: Waypoint[]; legs: (Leg | nul
                   <>
                     {t('mission.waypoints.legStats', { minutes: (l.timeS / 60).toFixed(1), distance: fmtM(l.distM), o2: l.o2L.toFixed(1) })}
                   </>
+                ) : l === undefined ? (
+                  <span class="muted">{t('mission.waypoints.routing')}</span>
                 ) : (
                   <span class="mp-bad">{t('mission.waypoints.noRoute')}</span>
                 )}

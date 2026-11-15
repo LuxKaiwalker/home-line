@@ -435,6 +435,14 @@
     "notReady": "The mission timeline is not available yet"
   },
 
+  "planBottom": {
+    "label": "Plan details",
+    "expand": "Show the plan table and the timeline",
+    "collapse": "Hide the plan table and the timeline",
+    "planTable": "Plan table",
+    "timeline": "Timeline"
+  },
+
   "gauges": {
     "oxygen": "O₂",
     "oxygenUsed": "Used",
@@ -485,6 +493,104 @@
       "depart": "Departure from the rover",
       "arrive": "Arrival",
       "return": "Back at the rover"
+    },
+    "unavailable": "unavailable: {reason}",
+    "live": {
+      "unknown": "Needs the live server: not checked yet",
+      "offline": "Needs the live server: not reachable"
+    },
+    "answer": "Answer",
+    "disabled": "disabled: {reason}",
+    "time": {
+      "row": "Jump to mission time {time}",
+      "hint": "t then minutes, or at h:mm: jump the mission clock"
+    },
+    "route": {
+      "row": "Draft a route through {stops}",
+      "unknown": "Draft a route: no station called {code}",
+      "hint": "route then station codes in visiting order",
+      "unavailable": "Route drafting is not available in this build yet"
+    },
+    "within": {
+      "row": "{code} {name}: time home",
+      "none": "No station within {n} min",
+      "hint": "stations within a number of minutes of walk home"
+    },
+    "reason": {
+      "timeRange": "Outside the mission clock",
+      "offline": "Needs live planning, which is offline",
+      "routeEditOff": "Route editing is off in this build",
+      "unknownStop": "Not a station code",
+      "tooManyStops": "Too many stops for one route",
+      "withinRange": "Above the longest time that can be searched",
+      "nothingToOpen": "Nothing to open",
+      "noPad": "The pad position is not loaded",
+      "planningRadius": "Beyond the planning radius",
+      "nothingSelected": "Nothing selected: select a place first",
+      "noTimeline": "The plan's timeline is not loaded",
+      "mapLater": "Not on the map yet"
+    },
+    "coords": {
+      "row": "Go to {input}: {lonlat}",
+      "metresRow": "Go to {input} from the official pad: {lonlat}",
+      "hint": "coordinates: decimal, degrees minutes seconds, or x and y metres from the official pad"
+    },
+    "timeHome": {
+      "row": "Time home at {place}",
+      "here": "Time home here",
+      "unknown": "Time home at {place}: unknown",
+      "noRoute": "Time home at {place}: no route home",
+      "hint": "time home here, or time home then coordinates"
+    },
+    "margin": {
+      "row": "{time} {event}: margin",
+      "none": "No timeline row with a margin of {n} min or less",
+      "mapLater": "Map highlight comes later",
+      "hint": "margin below a number of minutes: the timeline rows at or under it",
+      "events": { "leave": "Departure", "o2Checkpoint": "Oxygen checkpoint" }
+    }
+  },
+
+  "commands": {
+    "timeline": {
+      "back": "Timeline: step back",
+      "forward": "Timeline: step forward"
+    },
+    "camera": {
+      "overhead": "Camera: overhead",
+      "isometric": "Camera: isometric",
+      "low": "Camera: low altitude",
+      "focus": "Camera: focus on the selection"
+    },
+    "followCrew": "Follow the crew (flythrough)",
+    "selection": {
+      "back": "Previous selection",
+      "forward": "Next selection"
+    },
+    "layer": {
+      "contours": "Layer: Contours",
+      "slopeClass": "Layer: Slope classes",
+      "rough": "Layer: Rough footing",
+      "mineralSulfate": "Layer: Sulfate hint",
+      "mineralClay": "Layer: Clay hint",
+      "ridges": "Layer: Ridges (boxwork)",
+      "mineralPatches": "Layer: Mineral hint",
+      "blocked": "Layer: Blocked area"
+    },
+    "layersReset": "Reset overlays",
+    "exaggeration": {
+      "more": "Terrain exaggeration: more",
+      "less": "Terrain exaggeration: less",
+      "reset": "Terrain exaggeration: default"
+    },
+    "storm": "Storm replay on / off",
+    "fullscreen": "Full screen on / off",
+    "reason": {
+      "mapOnly": "Only on the Plan and Fly maps",
+      "flyOnly": "Only in Fly",
+      "only3d": "Only in the 3D map view",
+      "noHistory": "No other selection to go to",
+      "reducedMotion": "Off while reduced motion is on"
     }
   },
 
@@ -712,6 +818,18 @@
     "independence": "Independent team project for the Space Apps Challenge; not affiliated with any space agency."
   },
 
+  "activity": {
+    "reason": {
+      "jobRunning": "A plan is still computing: its partial result cannot be played. Play, Flythrough and the intro are available when it is ready",
+      "jobBusy": "Another plan is already computing in this view: wait for it, or change the inputs to cancel it",
+      "busy": "Another player is running: stop it first"
+    },
+    "confirm": {
+      "inputChange": "A plan is still computing. Change the inputs and cancel that computation?"
+    },
+    "stormSetting": "Storm is a setting: Play replays the EVA with the storm on"
+  },
+
   "hints": {
     "badges": {
       "estimate": { "label": "Estimate", "explanation": "Instant estimate from the precomputed fields, not a computed route; compute the full plan for checked numbers." },
@@ -809,6 +927,7 @@
     "estimates": {
       "title": "Estimated times and consumption",
       "notRouted": "A leg could not be routed (see the waypoint list): times and O₂ are unknown until it is moved or removed.",
+      "routing": "Routing {n} new leg(s)… times and O₂ follow when the routes are in.",
       "timeHome": "Time home",
       "timeHomeFrom": "Time home from #{n}",
       "timeHomeTitle": "The engine's T_home at the last waypoint (fastest walk back to the pad)",
@@ -864,6 +983,7 @@
       "legFrom": "#{from} → #{to}",
       "legStats": "{minutes} min · {distance} · {o2} L O₂",
       "noRoute": "no walkable route from the previous point",
+      "routing": "routing…",
       "stationLink": "{id} details →",
       "stationLinkTitle": "Open the station card",
       "moveUp": "Move up",
@@ -896,6 +1016,7 @@
     "export": {
       "button": "Download mission.json",
       "buttonTitle": "mission.json for the EVA simulator (contracts/bundle/mission.schema.json)",
+      "routingTitle": "Wait until every leg is routed",
       "lowestMargin": "lowest margin {margin} min ({binding})",
       "storm": "Replay the {date} storm during this EVA",
       "stormTitle": "The storm series is shifted so its tripwire fires at the route's largest T_home; the dose term joins the margin",

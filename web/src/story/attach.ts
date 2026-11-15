@@ -9,6 +9,7 @@ import type { ConsoleMap } from '../map/consoleMap'
 import { loadLabels } from '../map/labels/layer'
 import { loadFlightPath } from '../map/flythrough/route'
 import { missionClock, ui } from '../state'
+import { end as endPlayer, start as startPlayer } from '../state/activity'
 import { Director, type DirectorState } from './director'
 import { storyParams, storyRequest, type StoryRequest } from './query'
 import { StoryStage, type ChromePolicy } from './stage'
@@ -277,6 +278,17 @@ function runCapture(stage: StoryStage, d: Director, sb: Storyboard): CaptureApi 
   return api
 }
 
+/**
+ * L13b (L12 <-> L13 hook, notes/L13.md): a played-out intro ends in Plan's default view (3D unless
+ * ?view=2d, the low-fps fallback or the viewer's choice says otherwise), eased. P4a: a skipped (or
+ * failed) intro lands there too, at once: StoryStage.restore() puts back the camera saved when the
+ * story began, usually before the 3D terrain had loaded, so untilted. The 2D/3D view itself is the
+ * same either way (restore() puts back the view planView() chose). Other stories: null (they restore).
+ */
+export function introLanding(kind: NonNullable<StoryRequest>['kind'], why: 'end' | 'cancel'): { animate: boolean } | null {
+  return kind === 'intro' ? { animate: why === 'end' } : null
+}
+
 /** Start the story the page asks for, if any; returns a stop function. */
 export function attachStory(cmap: ConsoleMap, req: StoryRequest = storyRequest(storyParams(location.search, location.hash), { reduced: ui.reducedMotion.peek(), introSeen: ui.introSeen.peek(), legacy: false })): () => void {
   const signal = { stopped: false }
@@ -288,6 +300,14 @@ export function attachStory(cmap: ConsoleMap, req: StoryRequest = storyRequest(s
   }
   if (req.kind === 'intro') ui.introSeen.value = true // in memory: once per page session (no browser storage)
   let stage: StoryStage | null = null
+  // P4a: the intro lands once at Plan's default view (introLanding); `null` = never (another player owns the camera)
+  let landed = false
+  const land = (why: 'end' | 'cancel' | null): void => {
+    if (landed) return
+    landed = true
+    const o = why && introLanding(req.kind, why)
+    if (o) cmap.applyDefaultView(o)
+  }
   // L12: 'Skip intro' on the loading screen stops the story wherever it is (loading, warm-up, playing)
   let skipped = (): void => undefined
   const onSkip = new Promise<void>((r) => (skipped = r))
@@ -311,6 +331,22 @@ export function attachStory(cmap: ConsoleMap, req: StoryRequest = storyRequest(s
       window.__capture = runCapture(stage, d, sb)
       return
     }
+    // L7c: the intro (and the kiosk loop) is a player of the activity store (state/activity.ts): another
+    // player, an edit or a mode switch stops it, the app restored at once (before that player starts)
+    const st = stage
+    // P4a: stopped by an edit, a mode switch or another player: the default view (tilt) at once, before
+    // that player starts and moves the camera itself; refused at the start (another player is already
+    // on): no landing, that player has the camera
+    const stopStory = (): void => {
+      signal.stopped = true
+      st.restore(false)
+      land('cancel')
+    }
+    st.onRestored = () => endPlayer('intro', stopStory)
+    if (!startPlayer('intro', stopStory).ok) {
+      land(null)
+      stopStory()
+    }
     // input during the warm-up skips the story like input during it: the app is restored in the
     // input's own microtasks, before its click lands (the click acts on the restored app, D9)
     for (const ev of INPUTS) window.addEventListener(ev, skip, { capture: true, passive: true })
@@ -320,21 +356,22 @@ export function attachStory(cmap: ConsoleMap, req: StoryRequest = storyRequest(s
     if (signal.stopped) {
       stage.restore(false)
       stage = null
+      land('cancel')
       if (req.kind === 'demo') dropStoryParams()
       return
     }
     const why = await playLive(stage, d, { loop: req.kind === 'demo', signal })
     stage.restore(why === 'end')
     stage = null
-    // L13b (L12 <-> L13 hook, notes/L13.md): a played-out intro ends in Plan's default view (3D unless
-    // ?view=2d, the low-fps fallback or the viewer's choice says otherwise); a skip keeps the restored view
-    if (req.kind === 'intro' && why === 'end') cmap.applyDefaultView({ animate: true })
+    land(why)
     if (req.kind === 'demo') dropStoryParams()
   })()
     .catch((e) => {
       console.warn('story unavailable:', e)
+      const restored = !!stage
       stage?.restore(false)
       stage = null
+      if (restored) land('cancel')
     })
     .finally(() => {
       unSkip()

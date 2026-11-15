@@ -6,10 +6,10 @@
  * the rail and the selection card stacked under the map.
  *   - Play takes a real click (Playwright actionability: visible, stable, receives the pointer), also
  *     while the descent intro (M10) hides the chrome, and pauses again while the clock runs.
- *   - Tablet (768–1279): the map region keeps the full width beside a 56 px icon rail and everything
- *     above the 96 px dock; the selection card overlays the map and never covers the dock or the rail.
+ *   - Tablet (768–1279): the map region keeps the full width beside a 56 px icon rail; the selection
+ *     card overlays the map and never covers the plan-bottom drawer (timeline; L2b) or the rail.
  *   - Desktop: 56 px icon rail in Plan (L2, D111: like the tablet; its toggle opens a sheet over the map)
- *     | map | 360 sidebar, 120 dock.
+ *     | map | 360 sidebar; in Plan the timeline is the plan-bottom drawer over the map (L2b), no dock.
  *   - L2d (D111): a station selection opens its marker card on the map (#hl-lay-station, "Open station"
  *     link), the sidebar stays closed. L2e: every other selection too (the official pad: #hl-lay-selection).
  * Run: cd web && npm run build && npx playwright test tests/visual/shell-layout.spec.ts
@@ -66,15 +66,16 @@ test.describe('shell layout (§4.3)', () => {
     await page.locator('.hl-tl__play').waitFor({ timeout: 30_000 })
     const main = await box(page, 'main.outlet')
     const rail = await box(page, '.hl-rail')
-    const dock = await box(page, '.hl-dock')
-    const dockH = tablet ? 96 : 120
     const railW = 56 // L2 (D111): the icon column in Plan at every size
     expect(Math.round(rail.width)).toBe(railW)
-    expect(Math.round(dock.height)).toBe(dockH)
+    // L2b (D111): the timeline is the plan-bottom drawer over the map (collapsed: one line), not the dock
+    await expect(page.locator('.hl-shell')).toHaveAttribute('data-dock', 'none')
+    const bottom = await box(page, '.plan-layout .plan-bottom')
     expect(Math.round(main.x)).toBe(railW)
     expect(Math.round(main.width)).toBe(vp.width - railW)
-    expect(Math.round(main.height)).toBe(vp.height - TOP_BAR - dockH)
-    expect(Math.round(dock.y)).toBe(vp.height - dockH)
+    expect(Math.round(main.height)).toBe(vp.height - TOP_BAR)
+    expect(Math.round(bottom.y + bottom.height)).toBe(vp.height)
+    expect(bottom.height).toBeLessThanOrEqual(48)
 
     // select station S7 through the search palette (U17: Enter opens the same card as a map click)
     await page.keyboard.press('Control+k')
@@ -89,8 +90,9 @@ test.describe('shell layout (§4.3)', () => {
     await expect(page.locator('.hl-shell')).toHaveAttribute('data-sidebar', 'closed')
     const m1 = await box(page, 'main.outlet')
     expect(Math.round(m1.width)).toBe(vp.width - railW) // the map keeps its size
-    // the card body loads lazily and grows: the card settles inside the map, clear of the dock
-    await expect.poll(async () => overlaps(await box(page, '#hl-lay-station'), await box(page, '.hl-dock')), { timeout: 5_000 }).toBe(false)
+    // the card body loads lazily and grows: the card settles inside the map, clear of the timeline
+    // (L2b: the plan-bottom drawer, not the dock)
+    await expect.poll(async () => overlaps(await box(page, '#hl-lay-station'), await box(page, '.plan-layout .plan-bottom')), { timeout: 5_000 }).toBe(false)
     const c = await box(page, '#hl-lay-station')
     expect(c.x).toBeGreaterThanOrEqual(m1.x - 1)
     expect(c.x + c.width).toBeLessThanOrEqual(m1.x + m1.width + 1)
@@ -108,7 +110,7 @@ test.describe('shell layout (§4.3)', () => {
     await padCard.locator('.hl-card').first().waitFor({ timeout: 30_000 })
     await expect(page.locator('.hl-shell')).toHaveAttribute('data-sidebar', 'closed')
     expect(Math.round((await box(page, 'main.outlet')).width)).toBe(vp.width - railW) // the map keeps its size
-    await expect.poll(async () => overlaps(await box(page, '#hl-lay-selection'), await box(page, '.hl-dock')), { timeout: 5_000 }).toBe(false)
+    await expect.poll(async () => overlaps(await box(page, '#hl-lay-selection'), await box(page, '.plan-layout .plan-bottom')), { timeout: 5_000 }).toBe(false) // never over the timeline (L2b)
     expect(overlaps(await box(page, '#hl-lay-selection'), await box(page, '.hl-rail'))).toBe(false)
     await page.keyboard.press('Escape')
     await expect(padCard).toHaveCount(0)

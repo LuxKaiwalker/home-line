@@ -28,6 +28,9 @@ export const INSTANT_TEXT = {
   legWalk: '{min} min',
   legNone: 'no path on the 5 m grid',
   legMargin: 'margin {min} min ({term})',
+  // I1c: the failing leg's row shows the check the headline quotes, and says why it differs from the walked margin
+  legCheck: 'fails the planning check by {min} min ({term})',
+  infeasibleRule: 'Planning check (the server’s rule): O₂ used before each leg counted at the effort cap. Leg margins are the walked estimate.',
   loading: 'Loading the browser fields…',
   offAuto: 'The instant estimate follows your order: switch to “My order”.',
   offEmpty: 'Tick stations or add waypoints: the route is estimated at once on every edit.',
@@ -71,6 +74,9 @@ function ResultBody({ r, ms }: { r: EstimateResult; ms: number }) {
           <p class="hl-route__infeasible-leg">
             {fill(f.shortMin === null ? INSTANT_TEXT.infeasibleNoMin : INSTANT_TEXT.infeasible, { n: f.leg + 1, from: nameOf(f.from), to: nameOf(f.to), term: f.term, min: n0(f.shortMin) })}
           </p>
+          <p class="hl-route__note" data-estimate-rule>
+            {INSTANT_TEXT.infeasibleRule}
+          </p>
         </div>
       )}
       <ol class="hl-route__est-legs" aria-label={INSTANT_TEXT.title}>
@@ -83,6 +89,12 @@ function ResultBody({ r, ms }: { r: EstimateResult; ms: number }) {
             <span>{fill(INSTANT_TEXT.leg, { from: nameOf(l.from), to: nameOf(l.to) })}</span>{' '}
             <span class="num">{l.walkMin === null ? INSTANT_TEXT.legNone : fill(INSTANT_TEXT.legWalk, { min: n0(l.walkMin) })}</span>
             {l.marginMin !== null && l.binding ? <span class="hl-route__est-legmargin num"> · {fill(INSTANT_TEXT.legMargin, { min: n0(l.marginMin), term: l.binding })}</span> : null}
+            {failing === l.leg && l.checkOk === false && l.checkBinding && f.feasible === false && f.shortMin !== null ? (
+              <span class="hl-route__est-legcheck num" data-check-min={f.shortMin}>
+                {' '}
+                · {fill(INSTANT_TEXT.legCheck, { min: n0(f.shortMin), term: l.checkBinding })}
+              </span>
+            ) : null}
           </li>
         ))}
       </ol>

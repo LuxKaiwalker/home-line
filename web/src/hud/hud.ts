@@ -12,6 +12,8 @@
 import './hud.css'
 import { PlaybackClock, type ClockDriver } from './clock'
 import { mission, missionClock } from '../state/mission'
+import { confirmInputChange, controlSignal } from '../state/activity'
+import { toggleReplay } from '../state/activityClock'
 import type { HudConfig } from './config'
 import { driftPosition, planFixes, type Fix } from './drift'
 import { decodeRGBA, FieldGrid, loadField, loadFieldRGBA } from './fields'
@@ -239,6 +241,8 @@ export async function mountHud(container: HTMLElement, opts: MountHudOptions): P
   let storm: StormReplay | null = null
   stormBtn.disabled = replay === null
   stormBtn.addEventListener('click', () => {
+    // L7c: the storm is a setting the playback honours (never a player); mid-job it asks first
+    if (!confirmInputChange()) return
     storm = storm ? null : replay
     stormBtn.textContent = storm ? `Storm replay: on (tripwire ${tripAt})` : 'Storm replay: off'
     stormBtn.classList.toggle('active', !!storm)
@@ -323,10 +327,23 @@ export async function mountHud(container: HTMLElement, opts: MountHudOptions): P
     dirty = true
   }
   backBtn.addEventListener('click', leaveDrag)
+  // L7c: Play is the replay player of the activity store (state/activity.ts); enabled / reason from it
+  const replayState = controlSignal('replay')
+  const showReplayState = (st: ReturnType<typeof replayState.peek>): void => {
+    if (clock !== missionClock) return
+    playBtn.disabled = !st.enabled
+    playBtn.title = st.enabled ? 'Play / pause' : st.title
+  }
+  showReplayState(replayState.peek())
+  const stopReplayState = replayState.subscribe(showReplayState)
+  const play = (): void => {
+    if (clock === missionClock && !replayState.peek().enabled) return
+    toggleReplay(clock)
+    dirty = true
+  }
   playBtn.addEventListener('click', () => {
     if (drag) leaveDrag()
-    clock.toggle()
-    dirty = true
+    play()
   })
   scrub.addEventListener('input', () => {
     clock.seek(Number(scrub.value))
@@ -338,8 +355,7 @@ export async function mountHud(container: HTMLElement, opts: MountHudOptions): P
   const onKey = (e: KeyboardEvent) => {
     if (e.key === ' ' && !(e.target instanceof HTMLInputElement || e.target instanceof HTMLButtonElement || e.target instanceof HTMLSelectElement)) {
       e.preventDefault()
-      clock.toggle()
-      dirty = true
+      play()
     }
   }
   window.addEventListener('keydown', onKey)
@@ -409,6 +425,7 @@ export async function mountHud(container: HTMLElement, opts: MountHudOptions): P
     destroy() {
       cancelAnimationFrame(raf)
       window.removeEventListener('keydown', onKey)
+      stopReplayState()
       ro.disconnect()
       panel.destroy()
       root.remove()

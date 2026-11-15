@@ -10,6 +10,7 @@ import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 import { createLoader, type TextFetcher } from '../../data/loader'
 import { refKey } from '../../state/selection'
 import { refFromLabel } from '../../state/selectionAdapter'
+import { installShellCommands } from '../commands/shell'
 import { t } from '../copy'
 import { buildObjectIndex, commandItems, loadObjectIndex, parseCoordinates, rank, scoreText, type SearchItem } from './search'
 
@@ -36,6 +37,7 @@ describe.skipIf(!HAVE)('search index (real data)', () => {
   beforeAll(async () => {
     vi.stubGlobal('fetch', fetchSpy)
     objs = await loadObjectIndex(createLoader(fsFetcher, 'real'))
+    installShellCommands() // S2: the commands come from the registry
     all = [...objs, ...commandItems()]
   })
   afterEach(() => fetchSpy.mockClear())

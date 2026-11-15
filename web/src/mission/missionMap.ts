@@ -15,7 +15,6 @@ import type { BasemapSource } from '../map/basemap'
 import { blankStyle } from '../map/consoleMap'
 import { MarsScaleControl } from '../map/scale'
 import { TerrainController } from '../map/terrain'
-import { ui } from '../state'
 import { THEME } from '../theme'
 import type { BoundaryOption, LonLat } from './plan'
 import { SLOPE_OPACITY } from './slope'
@@ -129,8 +128,11 @@ export class MissionMap {
       this.h.onAdd(e.lngLat.lng, e.lngLat.lat)
     })
     // Relief shading above the basemap / topography / slope rasters, under the boundary and the plan.
-    this.terrain = new TerrainController(m, 'band-fill', { position: 'bottom-right' }) // 2D/3D control styled in mission.css
-    ui.view.value = '3d'
+    // 2D/3D control styled in mission.css. P4a: opens like the Plan map (state/view.ts planView(): ?view=,
+    // else the viewer's choice, else 3D) and, in 3D, jumps straight to the default tilt
+    // (plan_view.pitch_deg): it used to set ui.view '3d' and ease the tilt in, and the pad fit
+    // (fitTo, a jump) cut that ease short, so the Planer could open flat or half tilted
+    this.terrain = new TerrainController(m, 'band-fill', { position: 'bottom-right', planView: true })
   }
 
   /** Slope overlay raster (corners NW, NE, SE, SW), just under the boundary layers. */
