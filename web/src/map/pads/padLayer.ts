@@ -14,6 +14,7 @@ import { motionMs, TOKENS } from '../../ui/tokens'
 import { containerSpec, openContainer, registerContainer, type CardMap } from '../../ui/layout'
 import { createEnvSwap, type EnvSwap, type SwapMap } from './swap'
 import { t } from '../../ui/copy'
+import { GROUND_ATTR, groundPointers } from '../labels/pointer'
 
 /** Layout-store id of the pad pop-up card (one card; its content follows padLayer.card). */
 export const PAD_CARD_ID = 'pad-card'
@@ -59,6 +60,7 @@ function markerEl(doc: Document, p: PadInfo): HTMLButtonElement {
   el.setAttribute('type', 'button')
   el.setAttribute('class', markerClass(p, null))
   el.setAttribute('data-pad-mark', p.id)
+  el.setAttribute(GROUND_ATTR, '') // F10: 3D leader line down to a ground dot
   el.appendChild(doc.createTextNode(markerLabel(p)))
   el.setAttribute('title', t('route.padmap.marker.title', { pad: markerLabel(p) }))
   el.setAttribute('aria-haspopup', 'dialog')
@@ -114,6 +116,8 @@ export function createPadEnvironmentHandler(opts: PadLayerOptions = {}): PadEnvi
       const doc = (ctx.map.getContainer?.()?.ownerDocument ?? globalThis.document) as Document
       let markers: { id: PadId; p: PadInfo; el: HTMLButtonElement; m: Marker }[] = []
       let alive = true
+      // F10: in 3D each label floats above its pad with a leader line down to a ground dot
+      const offGround = groundPointers(ctx.map)
 
       const draw = (list: readonly PadInfo[]) => {
         if (!alive) return
@@ -156,6 +160,7 @@ export function createPadEnvironmentHandler(opts: PadLayerOptions = {}): PadEnvi
       return () => {
         alive = false
         stopSync()
+        offGround()
         for (const x of markers) x.m.remove()
         markers = []
         swap?.dispose()

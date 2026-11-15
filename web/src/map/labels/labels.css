@@ -80,3 +80,32 @@
 /* overlay labels (edge causes, zero-margin bindings) yield to the pills (model.ts yieldOverlays): hidden
    here when no spot next to the pills is clear; visibility keeps the box so the next placement measures it */
 .edge-label.hl-label-yield { visibility: hidden; pointer-events: none; }
+
+/* PORT F10: ground pointers for the port's marker labels (pointer.ts groundPointers): the same leader
+   line as the station labels above, plus a small ground dot on the point. Tilted past the leader
+   pitch (map container .hl-tilted, --hl-leader = the lift), the label floats --hl-leader above its
+   point (its marker offset, --hl-ground-offset, taken back) and the line runs down to the dot. */
+.hl-tilted [data-hl-ground] {
+  translate: 0 calc(-50% - var(--hl-ground-offset, 0px) - var(--hl-leader));
+}
+.hl-tilted [data-hl-ground]::before,
+.hl-tilted [data-hl-ground]::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  pointer-events: none;
+}
+.hl-tilted [data-hl-ground]::before {
+  top: 100%;
+  width: 1px;
+  height: var(--hl-leader);
+  background: var(--color-select);
+}
+.hl-tilted [data-hl-ground]::after {
+  top: calc(100% + var(--hl-leader));
+  width: var(--space-1);
+  height: var(--space-1);
+  border-radius: var(--radius-chip);
+  background: var(--color-select);
+  translate: -50% -50%;
+}

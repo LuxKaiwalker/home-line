@@ -12,6 +12,7 @@ import { TOKENS } from '../../../ui/tokens'
 import type { MapPointer } from '../../../map/extensions'
 import { type PlanEditor } from './planEdit'
 import { t } from '../../../ui/copy'
+import { GROUND_ATTR, groundPointers } from '../../../map/labels/pointer'
 import './planEdit.css'
 
 export const R3_GHOST_SOURCE = 'hl-r3-ghost'
@@ -124,6 +125,7 @@ export function bindPlanEditMap(ed: PlanEditor, ctx: MapExtensionContext, o: Bin
   function makeHandle(id: string) {
     const el = doc.createElement('div') as El
     el.className = 'hl-r3-handle'
+    el.setAttribute(GROUND_ATTR, '') // F10: 3D leader line down to a ground dot
     el.setAttribute('data-r3-stop', id)
     el.setAttribute('role', 'button')
     el.tabIndex = 0
@@ -225,6 +227,7 @@ export function bindPlanEditMap(ed: PlanEditor, ctx: MapExtensionContext, o: Bin
     }),
   )
   offs.push(effect(() => void container.classList.toggle('hl-r3-editing', ed.editing.value)))
+  offs.push(groundPointers(map))
 
   // ---- Escape cancels a drag ------------------------------------------------------------------------
   const onKey = (e: Event) => {

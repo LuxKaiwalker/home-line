@@ -16,6 +16,7 @@ import { padService as appPadService, type PadId, type PadService } from '../../
 import { planning, type PlanningStore, type PlanStop } from '../../state/planning'
 import { t } from '../../ui/copy'
 import { TOKENS } from '../../ui/tokens'
+import { GROUND_ATTR, groundPointers } from '../labels/pointer'
 import type { MapExtensionContext, RouteLayerHandle, RouteLayerSpec } from '../extensions'
 import { captureKeys, EMPTY_FC, labelAt, mineView, officialLines, type LonLat, type StopMark } from './features'
 import { getRouteResults, subscribeRouteResults, type LegResult, type RouteResults } from '../../state/routeResults'
@@ -121,8 +122,11 @@ export function officialRouteLayer(deps: RouteLayerDeps = {}): RouteLayerSpec {
         },
         ctx.beforeId('route'),
       )
+      // F10: in 3D the labels float above their point with a leader line down to a ground dot
+      const offGround = groundPointers(m)
       const el = doc.createElement('div')
       el.setAttribute('class', 'hl-r4-label hl-r4-label--official')
+      el.setAttribute(GROUND_ATTR, '')
       el.setAttribute('data-route', 'official')
       setText(doc, el, t('route.map.official'))
       let label: Marker | null = null
@@ -190,6 +194,7 @@ export function officialRouteLayer(deps: RouteLayerDeps = {}): RouteLayerSpec {
           offView()
           label?.remove()
           label = null
+          offGround()
           removeAll(ctx, [OFFICIAL_LAYER], OFFICIAL_SOURCE)
         },
       }
@@ -230,8 +235,11 @@ export function mineRouteLayer(deps: RouteLayerDeps = {}): RouteLayerSpec {
       const pool: { el: HTMLElement; marker: Marker; at: LonLat | null; text: string; state: string; shown: boolean }[] = []
       // PORT I4 a11y: the infeasible part is not told by colour alone: a text label at the middle of the
       // first infeasible leg ("Not feasible from here on", the legend's words)
+      // F10: in 3D the stop badges and this label float above their point with a leader line to a ground dot
+      const offGround = groundPointers(m)
       const badEl = doc.createElement('div')
       badEl.setAttribute('class', 'hl-r4-label hl-r4-label--infeasible')
+      badEl.setAttribute(GROUND_ATTR, '')
       badEl.setAttribute('data-route', 'mine-infeasible')
       setText(doc, badEl, t('route.map.infeasible'))
       let bad: { marker: Marker; at: LonLat } | null = null
@@ -260,6 +268,7 @@ export function mineRouteLayer(deps: RouteLayerDeps = {}): RouteLayerSpec {
           if (!p) {
             const el = doc.createElement('div')
             el.setAttribute('class', 'hl-r4-stop')
+            el.setAttribute(GROUND_ATTR, '')
             el.setAttribute('data-route', 'mine')
             p = { el, marker: ctx.marker(el), at: null, text: '', state: '', shown: false }
             pool.push(p)
@@ -330,6 +339,7 @@ export function mineRouteLayer(deps: RouteLayerDeps = {}): RouteLayerSpec {
           for (const p of pool.splice(0)) p.marker.remove()
           bad?.marker.remove()
           bad = null
+          offGround()
           removeAll(ctx, MINE_LAYERS, MINE_SOURCE)
         },
       }

@@ -5,6 +5,7 @@
   color: var(--color-text); background: var(--color-label-pill);
   border: 1px solid var(--color-card-border); border-radius: var(--radius-pill);
   padding: 0 var(--space-1); cursor: pointer; white-space: nowrap;
+  --hl-ground-offset: var(--space-4); /* F10: the Marker offset in padLayer.ts, so the 3D pointer ends on the pad */
 }
 .hl-padmark:hover { border-color: var(--color-text-muted); }
 .hl-padmark:focus-visible { outline: var(--line-focus-ring) solid var(--color-select); outline-offset: 2px; }
