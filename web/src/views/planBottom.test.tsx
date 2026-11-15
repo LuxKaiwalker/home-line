@@ -7,9 +7,12 @@
 //    #hl-lay-plan-bottom-tab-{plan-table,timeline};
 //  - expanded: the plan-table tab shows the claimed section elements themselves (numbers unchanged: the
 //    same nodes move), the timeline tab shows the dock body (dockContent), one timeline at a time;
+//  - L7c: the slim Play is the replay player of the activity store (as the full timeline's Play): it
+//    stops a running flythrough / intro, is pressed only while the replay runs, disabled during a job;
 //  - the shell root gets the drawer height (--hl-plan-bottom) so an overlay side panel ends above it.
 import { act } from 'preact/test-utils'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { activity, beginJob, endJob, resetActivity, start } from '../state/activity'
 import { missionClock } from '../state/mission'
 import { ui } from '../state/ui'
 import { all, byClass, installDom, one, type FakeDocument, type FakeNode } from '../ui/testing/dom'
@@ -75,11 +78,14 @@ beforeEach(() => {
   reveals = new Map()
   missionClock.pause()
   missionClock.seek(0)
+  resetActivity()
   act(() => void (stop = mountPlanBottom(makeCtx())))
 })
 afterEach(() => {
   act(() => stop())
   setDockContent(undefined)
+  missionClock.pause()
+  resetActivity()
 })
 
 describe('plan-bottom drawer (L2b)', () => {
@@ -111,6 +117,40 @@ describe('plan-bottom drawer (L2b)', () => {
     expect(missionClock.playing).toBe(false)
     const range = one(all(line, (n) => n.localName === 'input' && n.getAttribute('type') === 'range'))
     expect(range.getAttribute('aria-label')).toBe('Mission timeline')
+  })
+
+  it('L7c: the slim Play is the replay player (stops the flythrough; pressed only for the replay; disabled during a job)', () => {
+    const play = () => one(byClass(one(byClass(bottom, 'plan-bottom__line')), 'hl-tl__play'))
+    const scrub = () => one(byClass(bottom, 'plan-scrub'))
+    // the flythrough drives the clock: the clock plays, the slim Play is not pressed
+    let flyStops = 0
+    act(() => {
+      start('flythrough', () => {
+        flyStops++
+        missionClock.pause()
+      })
+      missionClock.play()
+    })
+    expect(scrub().getAttribute('data-state')).toBe('playing')
+    expect(play().getAttribute('aria-pressed')).toBe('false')
+    // Play stops the flythrough and starts the replay (it does not just pause the clock)
+    act(() => void play().dispatch('click'))
+    expect(flyStops).toBe(1)
+    expect(activity.current.peek()).toBe('replay')
+    expect(missionClock.playing).toBe(true)
+    expect(play().getAttribute('aria-pressed')).toBe('true')
+    act(() => void play().dispatch('click'))
+    expect(activity.current.peek()).toBe(null)
+    expect(missionClock.playing).toBe(false)
+    expect(scrub().getAttribute('data-state')).toBe('paused')
+    // a compute job runs: Play is disabled with the store's reason and starts nothing
+    act(() => void beginJob('probe'))
+    expect(play().getAttribute('disabled')).not.toBe(null)
+    expect(play().getAttribute('data-activity-reason')).toBe('activity.reason.jobRunning')
+    act(() => void play().dispatch('click'))
+    expect(missionClock.playing).toBe(false)
+    act(() => endJob('probe'))
+    expect(play().getAttribute('data-activity-reason')).toBe(null)
   })
 
   it('expanded: the plan table shows the claimed section nodes; the timeline tab shows the dock body', () => {
