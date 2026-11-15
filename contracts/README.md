@@ -396,8 +396,9 @@ Checked against WS2 session 8's real interim files (`scenarios/index.json`, `sce
 ## Design contracts v1 (DESIGN §6; D3)
 
 A separate family for the design block (WS15–WS18), **v1.0.0, frozen at merge**: an additive change
-is a minor bump (1.1.0, …); a breaking change is human-gated. Each schema carries
-`"x-contract-version": "1.0.0"` and says "Design contracts v1" in its description. Producers: WS16
+is a minor bump (1.1.0, …); a breaking change is human-gated. Each schema carries its
+`"x-contract-version"` (1.0.0, except `terrain_tiles.schema.json` 1.1.0: optional
+`vertical_offset_m`, P2c) and says "Design contracts v1" in its description. Producers: WS16
 (`pipeline/export/labels.py`, `terrain_tiles.py`, `relief_lowzoom.py`, `highlights.py`; storyboards
 by hand). Tests: `tests/test_design_contracts.py`.
 
