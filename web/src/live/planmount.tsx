@@ -6,11 +6,13 @@
 // exact lines are in /tmp/hl-orch/notes/U3.md.
 import { render as preactRender, type ComponentChildren } from 'preact'
 import { dataUrl } from '../env'
-import type { ApiClient } from './client'
+import { probeMission } from '../ui/cards/simslot'
+import type { ApiClient, FetchLike } from './client'
 import type { LiveState } from './health'
 import type { ScenarioLayers } from './mapPort'
 import { importPlanFile, loadPlan, parsePlanRoute, permalink, type ImportState, type PlanLoad, type PlanRoute, type PlanTree } from './plan'
 import { ImportPage, PlanLoading, PlanPage, PlanProblem, PlayHeader, ProvenancePage } from './planview'
+import { missionTarget, type MissionProbe } from './simslot'
 import type { LoaderFor } from './stage'
 import type { RunOrigin } from './types'
 
@@ -69,6 +71,11 @@ export interface PlanRouteOptions {
   loaderFor?: LoaderFor
   /** SIM_EXPORT_ENABLED (VITE_SIM_EXPORT). */
   simEnabled: boolean
+  /**
+   * Fetch for the "Send to simulator" check of a plan's mission.json (D110), per URL. Default the
+   * global fetch; the dev mock answers the API's URLs (index.ts).
+   */
+  simFetch?: (url: string) => FetchLike
   /** Default: import('../hud'). */
   loadHud?: () => Promise<HudModule>
   /** HUD file URLs (default: the result base). */
@@ -103,6 +110,26 @@ export function mountPlanRoute(app: HTMLElement, opts: PlanRouteOptions): Cleanu
   let teardown: Cleanup | undefined
   let importState: ImportState = { kind: 'idle' }
   let importAbort: AbortController | undefined
+  /** mission.json checks per hash (D110); only a found file is kept, anything else is asked again. */
+  const probes = new Map<string, MissionProbe>()
+  const probeFor = (load: OkLoad): MissionProbe | undefined => {
+    if (!opts.simEnabled) return undefined
+    const have = probes.get(load.hash)
+    if (have) return have
+    const target = missionTarget(load.tree.manifest, load.base, load.record.origin)
+    if (!target) return undefined
+    const checking: MissionProbe = { state: 'checking' }
+    probes.set(load.hash, checking)
+    void probeMission(target.urls, opts.simFetch ?? (() => fetch))
+      .catch((e): MissionProbe => ({ state: 'failed', message: e instanceof Error ? e.message : String(e) }))
+      .then((p) => {
+        if (probes.get(load.hash) !== checking) return
+        probes.set(load.hash, p)
+        rerender?.()
+        if (p.state !== 'ok') probes.delete(load.hash)
+      })
+    return checking
+  }
 
   const getLoad = (hash: string) => {
     let p = loads.get(hash)
@@ -183,11 +210,12 @@ export function mountPlanRoute(app: HTMLElement, opts: PlanRouteOptions): Cleanu
       return
     }
     const link = permalink(load.hash, location)
+    let simProbe = probeFor(load)
     rerender = () =>
       render(
         <>
           {mountMap && <div class="live-plan-map" />}
-          <PlanPage load={load} permalink={link} simEnabled={opts.simEnabled} importState={importState} onImportFile={onFile} />
+          <PlanPage load={load} permalink={link} simEnabled={opts.simEnabled} simProbe={(simProbe = probes.get(load.hash) ?? simProbe)} importState={importState} onImportFile={onFile} />
         </>,
         box,
       )

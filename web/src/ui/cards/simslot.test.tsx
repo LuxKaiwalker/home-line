@@ -1,9 +1,11 @@
-// A5s acceptance (WS15, D76): the "Send to simulator" slot on the plan / route-summary card and the
-// Report view placeholder, behind VITE_SIM_EXPORT (default off).
+// A5s acceptance (WS15, D76) with the D110 mission.json export: the "Send to simulator" slot on the
+// plan / route-summary card and the Report view placeholder, behind VITE_SIM_EXPORT (default off).
 //  - flag off → nothing rendered, and the slot compiles to a few hundred bytes (its body is dropped);
-//  - flag on + no sim_plan manifest entry → nothing;
-//  - flag on + two sim_plan entries → two download links named from the manifest, no fetch of them;
-//  - format-agnostic: any path / extension is listed as the manifest gives it, nothing is parsed.
+//  - flag on, no props (the app's own tree = the official plan) → the official mission.json, WP9c's
+//    static sim/official/mission.json (the live layer's API copy first when registered); 404 → the
+//    "not available" message; the format version is read from the file, the plan is not parsed;
+//  - flag on + a result manifest: its sim_plan entries as download links, no fetch of them;
+//  - hooks for the WP8c harness: data-sim-export, data-origin.
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { render, type VNode } from 'preact'
@@ -18,7 +20,7 @@ import { t } from '../copy'
 import { all, byTag, installDom, type FakeNode } from '../testing/dom'
 import { RouteSummaryCard } from './cards'
 import type { CardData } from './data'
-import { SimSlot, simExportOn, simPlanFiles } from './simslot'
+import { officialMissionUrl, setOfficialMissionSource, SimSlot, simExportOn, simPlanFiles } from './simslot'
 
 const entry = (file: string, kind?: string) => ({ value: file, units: null, file, script: 'x', commit: 'c', utc: 'u', ...(kind ? { kind } : {}) })
 /** A result manifest with two sim_plan files (neutral names: the format is open), a duplicate and other kinds. */
@@ -46,6 +48,7 @@ afterEach(() => {
   vi.unstubAllEnvs()
   vi.unstubAllGlobals()
   setManifest(null)
+  setOfficialMissionSource(null)
 })
 
 describe('VITE_SIM_EXPORT off (default)', () => {
@@ -88,13 +91,10 @@ describe('VITE_SIM_EXPORT off (default)', () => {
 describe('VITE_SIM_EXPORT on', () => {
   beforeEach(() => vi.stubEnv('VITE_SIM_EXPORT', '1'))
 
-  it('no sim_plan entry (or no manifest) → nothing', () => {
+  it('a result manifest without a sim_plan entry (or a null one) → nothing', () => {
     expect(mount(<SimSlot manifest={NONE} />).childNodes).toEqual([])
     expect(mount(<SimSlot manifest={null} />).childNodes).toEqual([])
-    setManifest(NONE)
-    expect(mount(<SimSlot />).childNodes).toEqual([])
-    expect(mount(<ReportSimSlot />).childNodes).toEqual([])
-    expect(all(mount(<RouteSummaryCard d={NO_ROUTE} />), (x) => x.getAttribute('data-slot') === 'sim')).toEqual([])
+    expect(mount(<ReportSimSlot manifest={NONE} />).childNodes).toEqual([])
   })
 
   it('two sim_plan entries → two download links with the manifest file names, no fetch of their contents', () => {
@@ -106,24 +106,65 @@ describe('VITE_SIM_EXPORT on', () => {
     expect(a.map((x) => x.getAttribute('href'))).toEqual([dataUrl('first/plan.any'), dataUrl('z_second')])
     expect(a.map((x) => x.getAttribute('download'))).toEqual(['plan.any', 'z_second'])
     expect(a.map((x) => x.textContent.trim())).toEqual(['first/plan.any', 'z_second'])
+    expect(a.map((x) => x.getAttribute('data-sim-export'))).toEqual(['ready', 'ready'])
     expect(n.textContent).toContain(t('simulator.sendSlot'))
     expect(fetchSpy).not.toHaveBeenCalled()
   })
 
-  it('links point into the loaded result tree when a result base URL is given', () => {
+  it('links point into the loaded result tree when a result base URL is given (origin computed_live)', () => {
     const base = 'https://example.test/api/v1/results/abc123'
     const a = links(mount(<SimSlot manifest={TWO} base={base} />))
     expect(a.map((x) => x.getAttribute('href'))).toEqual([`${base}/first/plan.any`, `${base}/z_second`])
+    expect(a.map((x) => x.getAttribute('data-origin'))).toEqual(['computed_live', 'computed_live'])
   })
 
-  it('reads the loaded manifest by default, on the plan card and in the Report placeholder', () => {
-    setManifest(TWO)
-    expect(links(mount(<SimSlot />)).length).toBe(2)
-    expect(links(mount(<ReportSimSlot />)).length).toBe(2)
-    const card = mount(<RouteSummaryCard d={NO_ROUTE} />)
-    const slot = all(card, (x) => x.getAttribute('data-slot') === 'sim')
-    expect(slot.length).toBe(1)
-    expect(links(slot[0]).map((x) => x.getAttribute('download'))).toEqual(['plan.any', 'z_second'])
+  it('the official plan (no props, on the plan card and the Report placeholder): sim/official/mission.json with its format version', async () => {
+    const fetchSpy = vi.fn(async () => new Response(MISSION, { status: 200 }))
+    vi.stubGlobal('fetch', fetchSpy)
+    setManifest(NONE) // WP9c leaves the static manifest untouched: no sim_plan entry
+    for (const v of [<SimSlot />, <ReportSimSlot />, <RouteSummaryCard d={NO_ROUTE} />]) {
+      const n = mount(v)
+      const slot = all(n, (x) => x.getAttribute('data-slot') === 'sim')
+      expect(slot.length).toBe(1)
+      await settle()
+      const a = links(slot[0])
+      expect(a.length).toBe(1)
+      expect(a[0].getAttribute('href')).toBe(officialMissionUrl())
+      expect(a[0].getAttribute('href')).toBe(dataUrl('../sim/official/mission.json', 'real'))
+      expect(a[0].getAttribute('download')).toBe('mission.json')
+      expect(a[0].getAttribute('data-sim-export')).toBe('ready')
+      expect(a[0].getAttribute('data-origin')).toBe('precomputed')
+      expect(a[0].textContent).toContain('Download mission.json')
+      expect(slot[0].textContent).toContain('mission.json format 1.1.0')
+    }
+    expect(fetchSpy.mock.calls.map((c) => (c as unknown[])[0])).toContain(officialMissionUrl())
+  })
+
+  it('the official plan, file missing (404) → "Simulator file not available for this plan", no link', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => new Response('', { status: 404 })))
+    const n = mount(<SimSlot />)
+    await settle()
+    expect(links(n)).toEqual([])
+    const msg = all(n, (x) => x.getAttribute('data-sim-export') === 'missing')
+    expect(msg.length).toBe(1)
+    expect(msg[0].getAttribute('data-origin')).toBe('precomputed')
+    expect(n.textContent).toContain('Simulator file not available for this plan')
+  })
+
+  it('while the live layer registers the API copy, that is tried first, the static file after it', async () => {
+    const api = 'http://api.test/api/v1/results/0ff1c1a10ff1c1a1/mission.json'
+    const apiFetch = vi.fn(async () => new Response(MISSION, { status: 200 }))
+    vi.stubGlobal('fetch', vi.fn(async () => new Response('', { status: 404 })))
+    const n = mount(<SimSlot />)
+    await settle()
+    expect(n.textContent).toContain('Simulator file not available for this plan')
+    act(() => setOfficialMissionSource({ url: api, fetch: apiFetch }))
+    await settle()
+    expect(links(n)[0].getAttribute('href')).toBe(api)
+    expect(apiFetch).toHaveBeenCalled()
+    act(() => setOfficialMissionSource(null)) // offline again: the static file
+    await settle()
+    expect(links(n)).toEqual([])
   })
 
   it('is format-agnostic: lists exactly the kind/file pairs, ignores malformed entries', () => {
@@ -140,14 +181,22 @@ describe('VITE_SIM_EXPORT on', () => {
   })
 })
 
-describe('format-agnostic source (D76)', () => {
-  it('the slot never fetches, parses or names a compiled-plan file', () => {
+describe('reads no more of the file than needed (D110)', () => {
+  it('the slot reads the format version with a regex; it never JSON.parses the plan', () => {
     const src = readFileSync(resolve(__dirname, 'simslot.tsx'), 'utf8').replace(/^\s*(\/\/|\*|\/\*\*).*$/gm, '')
-    expect(src).not.toMatch(/fetch\(|JSON\.parse|\.json\b|route_package|compiled_plan|contracts\/sim/)
+    expect(src).not.toMatch(/JSON\.parse|\.json\(\)/)
   })
 })
 
 // ------------------------------------------------------------ helpers
+
+/** A mission.json body (contracts/bundle/examples/mission.mission_planer.json, as served). */
+const MISSION = readFileSync(resolve(__dirname, '../../../../contracts/bundle/examples/mission.mission_planer.json'), 'utf8')
+
+/** Let the slot's check (fetch → text) finish and re-render. */
+async function settle() {
+  for (let i = 0; i < 5; i++) await act(async () => await new Promise((r) => setTimeout(r, 0)))
+}
 
 /** Route summary card data with no route (the card's "no route" branch; enough to host the slot). */
 const NO_ROUTE = {

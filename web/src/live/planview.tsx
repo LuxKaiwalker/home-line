@@ -11,7 +11,7 @@ import { LiveNum } from './num'
 import { canonicalJson, exportPlanInputs } from './planio'
 import { planUrl, type ImportState, type PlanLoad, type PlanTree } from './plan'
 import { RangeFlags } from './rangeflags'
-import { SimSlot } from './simslot'
+import { SimSlot, type MissionProbe } from './simslot'
 import type { RunOrigin, RunRecord } from './types'
 
 /** The label of a result by origin, from config/backend.yaml labels. */
@@ -268,12 +268,14 @@ export interface PlanPageProps {
   permalink: string
   /** SIM_EXPORT_ENABLED. */
   simEnabled: boolean
+  /** planmount's check of the plan's mission.json (D110); omitted = still checking. */
+  simProbe?: MissionProbe
   importState: ImportState
   onImportFile: (file: File) => void
 }
 
 /** #/plan/{hash}: the result read-only. The map (when mounted) draws through ConsoleMap. */
-export function PlanPage({ load, permalink, simEnabled, importState, onImportFile }: PlanPageProps) {
+export function PlanPage({ load, permalink, simEnabled, simProbe, importState, onImportFile }: PlanPageProps) {
   const { hash, record, tree, base } = load
   const title = typeof record.inputs.title === 'string' ? record.inputs.title : null
   return (
@@ -297,7 +299,7 @@ export function PlanPage({ load, permalink, simEnabled, importState, onImportFil
       <PlanHeadline tree={tree} hash={hash} />
       <PlanRouteSection tree={tree} hash={hash} />
       <PlanActions record={record} hash={hash} permalink={permalink} />
-      <SimSlot enabled={simEnabled} manifest={tree.manifest} base={base} />
+      <SimSlot enabled={simEnabled} manifest={tree.manifest} base={base} origin={record.origin} probe={simProbe} />
       <ImportPanel state={importState} onFile={onImportFile} />
     </Page>
   )
