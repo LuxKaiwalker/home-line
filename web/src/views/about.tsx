@@ -19,6 +19,7 @@ const SOURCES: [string, string, string][] = [
 ]
 
 function About() {
+  if (import.meta.env.VITE_LIVE === '1') void import('../live').then((m) => m.mountPrivacy(document))
   return (
     <Page title="About HOMELINE">
       <p class="lead">Mars isn't flat: HOMELINE draws where a suited crew can really go and still get home, and checks it against Curiosity's own photos.</p>
