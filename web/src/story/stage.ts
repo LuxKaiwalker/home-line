@@ -91,7 +91,7 @@ export class StoryStage {
     this.map.getContainer().append(this.caption)
     document.documentElement.dataset.story = 'on'
     // L12 (D111): a live story fills the viewport (story.css) until its chrome is revealed or it ends
-    if (chrome === 'story') document.documentElement.dataset.storyFull = 'on'
+    if (chrome === 'story') this.startFullscreen()
     this.setChrome(chrome === 'shown' ? 'reveal' : chrome === 'hidden' ? 'hide' : undefined)
     // live runs only: a capture places the labels on every frame (frame-exact)
     this.paused = chrome === 'story'
@@ -123,9 +123,35 @@ export class StoryStage {
     if (was === 'hide' && this.chromeWant === 'show' && this.chrome === 'story') this.endFullscreen()
   }
 
+  private readonly onResize = (): void => this.markSlot()
+
+  /**
+   * L12 (D111): the map leaves its shell slot for the whole viewport. Its controls (zoom, Flythrough,
+   * scale) stay in the slot's corners (--hl-slot-*, story.css): the invisible chrome lies above the
+   * map, so a control under the top bar or the rail could not take the first click (D9).
+   */
+  private startFullscreen(): void {
+    this.markSlot()
+    window.addEventListener('resize', this.onResize)
+    document.documentElement.dataset.storyFull = 'on'
+  }
+
+  private markSlot(): void {
+    const slot = this.map.getContainer().closest('.outlet') ?? this.map.getContainer().parentElement
+    if (!slot) return
+    const r = slot.getBoundingClientRect()
+    const st = document.documentElement.style
+    st.setProperty('--hl-slot-top', `${r.top}px`)
+    st.setProperty('--hl-slot-left', `${r.left}px`)
+    st.setProperty('--hl-slot-width', `${r.width}px`)
+    st.setProperty('--hl-slot-height', `${r.height}px`)
+  }
+
   /** L12 (D111): the map goes back into the shell and the loading screen (with its buttons) goes. */
   private endFullscreen(): void {
+    window.removeEventListener('resize', this.onResize)
     delete document.documentElement.dataset.storyFull
+    for (const k of ['top', 'left', 'width', 'height']) document.documentElement.style.removeProperty(`--hl-slot-${k}`)
     loadingDone()
   }
 
