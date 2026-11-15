@@ -14,7 +14,7 @@ import { tx } from './richCopy'
 import { DEFAULT_START_MS, StartTime } from './StartTime'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
-const FILES = [join(HERE, '..', 'views', 'mission.tsx'), join(HERE, 'LayersControl.tsx'), join(HERE, 'MapsControl.tsx'), join(HERE, 'StartTime.tsx')]
+const FILES = [join(HERE, '..', 'views', 'mission.tsx'), join(HERE, 'LayersControl.tsx'), join(HERE, 'MapsControl.tsx'), join(HERE, 'StartTime.tsx'), join(HERE, 'PadPick.tsx'), join(HERE, 'pads.ts')] // J1d: the pad picker
 const SOURCES = FILES.map((f) => ({ f, src: readFileSync(f, 'utf8') }))
 
 function text(node: unknown): string {

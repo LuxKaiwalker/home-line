@@ -8,6 +8,8 @@ import type { FilterSpecification } from '@maplibre/maplibre-gl-style-spec'
 import 'maplibre-gl/dist/maplibre-gl.css'
 import workerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?url'
 import { CONFIG } from '../config'
+import { iconHref } from '../ui/icons/icons'
+import { t } from '../ui/copy'
 import type { AnyFC, BandsFC, EdgesFC, IsochroneFC } from '../data/types'
 import type { BasemapSource } from '../map/basemap'
 import { blankStyle } from '../map/consoleMap'
@@ -255,7 +257,7 @@ export class MissionMap {
     this.padMarker = new Marker({ element: el }).setLngLat([p.lon, p.lat]).addTo(this.map)
   }
 
-  /** Science stations: a click opens a popup with "Add as waypoint" and a link to the station card. */
+  /** Science stations: a click opens a popup with "Add to route" (J1d: the app's wording; appends the station) and a link to the station card. */
   setStations(list: { id: string; name: string; lon: number; lat: number; detailHref: string; inPlan: boolean }[], onAdd: (id: string) => void): void {
     this.stationMarkers.forEach((mk) => mk.remove())
     this.popup?.remove()
@@ -271,7 +273,18 @@ export class MissionMap {
       title.textContent = `${s.id} · ${s.name}`
       const add = document.createElement('button')
       add.type = 'button'
-      add.textContent = s.inPlan ? 'Already in the plan' : '+ Add as waypoint'
+      add.className = 'mp-add-route'
+      add.title = t('cards.station.addToRouteTip')
+      if (s.inPlan) add.textContent = 'Already in the plan'
+      else {
+        const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg')
+        svg.setAttribute('class', 'icon icon-plus')
+        svg.setAttribute('aria-hidden', 'true')
+        const use = document.createElementNS('http://www.w3.org/2000/svg', 'use')
+        use.setAttribute('href', iconHref('plus'))
+        svg.append(use)
+        add.append(svg, ` ${t('cards.station.addToRoute')}`)
+      }
       add.disabled = s.inPlan
       add.addEventListener('click', () => {
         this.popup?.remove()

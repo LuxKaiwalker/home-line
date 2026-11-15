@@ -3,7 +3,7 @@
 // live/route/route.test.tsx), while the tab ships in it. Those copies must give the same numbers as the
 // Edit-route estimate's ports (I1a/WP6: "numbers unchanged, import paths only"):
 //   - the code is the same, line for line, once comments and import lines are set aside;
-//   - the same inputs give the same outputs (margin profile, budget, mission.json except origin_label);
+//   - the same inputs give the same outputs (margin profile, budget, mission.json, origin_label included: J1d);
 //   - the EVA start constants are I3's (#177, edit/route/browser/start.ts).
 // Read-only: this test imports edit/route/ (tests are not in the build); it never edits it.
 /// <reference types="node" />
@@ -100,9 +100,12 @@ describe('the same plan gives the same numbers in the tab and in the Edit-route 
       }
       const tab = exp.buildMission(inp)
       const est = sharedExport.buildMission(inp)
-      expect({ ...tab, origin_label: est.origin_label }).toEqual(est)
+      // J1d (team lead 2026-11-15 16:57): the same origin and origin_label too (the app's "Estimate" label)
+      expect(tab).toEqual(est)
       expect(Object.keys(tab)).toEqual(Object.keys(est))
+      expect(exp.ORIGIN_LABEL).toBe(sharedExport.ORIGIN_LABEL)
       expect(tab.origin_label).toBe(exp.ORIGIN_LABEL)
+      expect(tab.origin).toBe('mission_planer')
       expect(exp.MISSION_SCHEMA_VERSION).toBe(sharedExport.MISSION_SCHEMA_VERSION)
     })
   }

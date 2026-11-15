@@ -15,7 +15,10 @@ import { DataProblem, DummyNote } from '../components/labels'
 import { BASEMAP_CREDIT, basemapSources } from '../map/basemap'
 import { dataUrl, DATA_MODE } from '../env'
 import { BUDGET_CONSTANTS, missionBudget, stopMinutes, type MissionBudget } from '../mission/budget'
-import { loadMissionData, type MissionData } from '../mission/data'
+import { missionData, type MissionData } from '../mission/data'
+import { addRefusal, MAX_STOPS, rememberPad, rememberPlan, startPad, startPlan } from '../mission/add'
+import { PadPick } from '../mission/PadPick'
+import type { MissionPad } from '../mission/pads'
 import { MissionMap } from '../mission/missionMap'
 import { MapsControl } from '../mission/MapsControl'
 import { LayersControl } from '../mission/LayersControl'
@@ -81,7 +84,10 @@ function MissionPanel({ mmap, handlers, mapsEl, layersEl, initial }: { mmap: Mis
   const [boundary, setBoundary] = useState('none')
   const [credit, setCredit] = useState<string | null>(null)
   const nextId = useRef(1)
-  const cache = useRef(new Map<string, Leg | null>())
+  // J1d: the pad (official / P2–P4); leg caches per pad (each pad has its own walkable area)
+  const [pad, setPad] = useState<MissionPad>(() => startPad(initial))
+  const caches = useRef(new Map<MissionPad, Map<string, Leg | null>>())
+  const mapReady = useRef(false)
   const restored = useRef(false)
   // The Waypoints card starts closed; it opens by itself when a waypoint is added (not on removal).
   const wpDetails = useRef<HTMLDetailsElement>(null)
@@ -98,32 +104,50 @@ function MissionPanel({ mmap, handlers, mapsEl, layersEl, initial }: { mmap: Mis
   /** EVA start instant (UTC ms); default = WS4's simulated EVA (D31); not stored (D97) */
   const [startMs, setStartMs] = useState(DEFAULT_START_MS)
 
-  // Load once.
+  // Load once per pad (J1d: mission/data.ts caches each (pad, scenario)).
   useEffect(() => {
     let alive = true
-    loadMissionData(undefined, (s) => alive && setStep(s)).then(
+    missionData(undefined, (s) => alive && setStep(s), pad).then(
       async (md) => {
         if (!alive) return
         setD(md)
         mmap.setPad({ lon: md.pad.lon, lat: md.pad.lat, title: md.pad.title })
+        await mmap.setBoundaryData(md)
+        setBoundary(defaultBoundary(boundaryOptions(md.bands, md.isochrones, md.edges), CONFIG.walkbackBudgetsMin[0]))
+        if (mapReady.current) return
+        mapReady.current = true
         mmap.fitTo([[md.pad.lon, md.pad.lat]])
         if (md.tilejson) {
           await mmap.setBasemap(basemapSources(md.tilejson, (p) => dataUrl(p)))
           setCredit(md.tilejson.attribution ?? BASEMAP_CREDIT)
         }
-        await mmap.setBoundaryData(md)
         // Maps switcher (bottom left of the map): satellite / topography / material.
         render(<MapsControl mmap={mmap} src={{ grid: md.tHome, elev: md.grid.elev, resM: md.grid.resM, hasBasemap: !!md.tilejson }} />, mapsEl)
         // Overlays (top right): slope classes, Curiosity's route and photos.
         render(<LayersControl mmap={mmap} bounds={[md.tHome.w, md.tHome.s, md.tHome.e, md.tHome.n]} />, layersEl)
-        setBoundary(defaultBoundary(boundaryOptions(md.bands, md.isochrones, md.edges), CONFIG.walkbackBudgetsMin[0]))
       },
       (e) => alive && setError(e),
     )
     return () => {
       alive = false
     }
-  }, [])
+  }, [pad])
+
+  // J1d: a pad switch keeps the waypoints that have a walk home from the new pad (cells snap again).
+  const dPad = useRef<MissionData | null>(null)
+  useEffect(() => {
+    if (!d || dPad.current === d) return
+    const first = dPad.current === null
+    dPad.current = d
+    if (first || !restored.current) return
+    const kept = wps.flatMap((w) => {
+      const c = cellAt(w.lon, w.lat)
+      return typeof c === 'number' ? [{ ...w, cell: c }] : []
+    })
+    const lost = wps.length - kept.length
+    setNotice(lost ? t(lost === 1 ? 'mission.notices.padLostOne' : 'mission.notices.padLostMany', { n: lost }) : null)
+    setWps(kept)
+  }, [d])
 
   // Mars clock at the chosen start; the sun is computed at the pad (D21, as clock.json).
   const clock = useMemo(() => (d ? evaClock(startMs, { lat: d.pad.lat, lon: d.pad.lon }) : null), [d, startMs])
@@ -181,7 +205,10 @@ function MissionPanel({ mmap, handlers, mapsEl, layersEl, initial }: { mmap: Mis
   const withStation = (list: Waypoint[], id: string): { list: Waypoint[]; msg: string } => {
     const s = stations?.find((x) => x.id === id)
     if (!s) return { list, msg: t('mission.notices.noStation', { id }) }
-    if (list.some((w) => w.station === id)) return { list, msg: t('mission.notices.stationInPlan', { id }) }
+    // J1d: no duplicate, at most route.max_stops (mission/add.ts)
+    const no = addRefusal(list, id)
+    if (no === 'inPlan') return { list, msg: t('mission.notices.stationInPlan', { id }) }
+    if (no === 'full') return { list, msg: t('mission.notices.routeFull', { id, n: MAX_STOPS }) }
     const w = stationWaypoint(s, d!.scenario.id)
     const c = w ? cellAt(w.lon, w.lat) : 'blocked'
     if (!w || typeof c !== 'number') return { list, msg: t('mission.notices.stationNoAccess', { id, scenario: d!.scenario.id }) }
@@ -198,7 +225,7 @@ function MissionPanel({ mmap, handlers, mapsEl, layersEl, initial }: { mmap: Mis
   useEffect(() => {
     if (!d || stations === undefined || restored.current) return
     restored.current = true
-    const src = initial.plan ?? ''
+    const src = startPlan(initial) ?? '' // J1d: an "Add to route" link adds to this page load's last plan
     const plan = decodePlan(src)
     if (plan === null && initial.plan) setNotice(t('mission.notices.planDamaged'))
     let out: Waypoint[] = []
@@ -223,10 +250,12 @@ function MissionPanel({ mmap, handlers, mapsEl, layersEl, initial }: { mmap: Mis
   const planStr = useMemo(() => encodePlan(wps), [wps])
   useEffect(() => {
     if (!restored.current) return
+    rememberPlan(planStr)
     const r: Route = planStr ? { name: 'mission', plan: planStr } : { name: 'mission' }
     history.replaceState(history.state, '', href(r))
     setCopied(false)
   }, [planStr])
+  useEffect(() => void (d && rememberPad(d.fieldsPad)), [d])
 
   const copyLink = () => {
     navigator.clipboard?.writeText(location.href).then(
@@ -252,7 +281,9 @@ function MissionPanel({ mmap, handlers, mapsEl, layersEl, initial }: { mmap: Mis
   // Legs (cached) and the way home.
   const legs = useMemo<(Leg | null)[]>(() => {
     if (!router || padCell < 0) return []
-    return routeLegs(legPairs(padCell, wps), (a, b) => router.route(a, b), cache.current)
+    const key = d?.fieldsPad ?? null
+    if (!caches.current.has(key)) caches.current.set(key, new Map())
+    return routeLegs(legPairs(padCell, wps), (a, b) => router.route(a, b), caches.current.get(key)!)
   }, [router, padCell, wps])
 
   // Keyed on the cell only: editing a note or stop time must not recompute the way home.
@@ -353,6 +384,8 @@ function MissionPanel({ mmap, handlers, mapsEl, layersEl, initial }: { mmap: Mis
     <div class="panel-body mp-body">
       <DummyNote />
       {notice && <p class="mp-notice">{notice}</p>}
+
+      <PadPick choices={d.padChoices} pad={pad} loaded={d.fieldsPad} onPick={setPad} />
 
       <section class="mp-card">
         <h3>{t('mission.estimates.title')}</h3>
@@ -455,9 +488,9 @@ function MissionPanel({ mmap, handlers, mapsEl, layersEl, initial }: { mmap: Mis
 }
 
 function boundaryFile(id: string, d: MissionData): string {
-  if (id.startsWith('band:')) return d.files.bands
-  if (id.startsWith('iso:')) return d.files.isochrones
-  if (id.startsWith('edges:')) return d.files.edges
+  if (id.startsWith('band:')) return d.files.bands ?? '–'
+  if (id.startsWith('iso:')) return d.files.isochrones ?? '–'
+  if (id.startsWith('edges:')) return d.files.edges ?? '–'
   return '–'
 }
 

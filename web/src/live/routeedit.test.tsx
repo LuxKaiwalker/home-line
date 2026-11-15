@@ -11,9 +11,9 @@ import { buildCatalog } from '../edit/options'
 import type { StationGeo, StopProbe } from '../edit/route/model'
 import { GHOST_LAYER_ID } from '../edit/route/map/layer'
 import { failureText } from '../edit/route/text'
-import { all, hasClass, installDom, type FakeNode } from '../ui/testing/dom'
+import { all, byTag, hasClass, installDom, type FakeNode } from '../ui/testing/dom'
 import { ApiError, createApiClient, type FetchLike } from './client'
-import { isRouteEditFlag } from './config'
+import { isEditorInDrawerFlag, isRouteEditFlag } from './config'
 import type { LiveState } from './health'
 import type { MapPort } from './mapPort'
 import { HEALTH_WARM } from './mock/fixtures'
@@ -79,6 +79,13 @@ describe('VITE_ROUTE_EDIT parsing', () => {
   })
 })
 
+describe('VITE_ROUTE_EDITOR_IN_DRAWER parsing (J1d)', () => {
+  it('off unless 1 or true', () => {
+    for (const v of [undefined, '', '0', 'false', 'yes', false]) expect(isEditorInDrawerFlag(v)).toBe(false)
+    for (const v of ['1', 'true', true]) expect(isEditorInDrawerFlag(v)).toBe(true)
+  })
+})
+
 describe('padTool and VITE_ROUTE_EDIT (D116)', () => {
   let root: FakeNode
   let panel: FakeNode
@@ -107,8 +114,9 @@ describe('padTool and VITE_ROUTE_EDIT (D116)', () => {
   })
 
   // index.ts, the shell store and preact from one fresh module graph (the flag is read at import)
-  async function mountWith(flag: string | undefined) {
+  async function mountWith(flag: string | undefined, editorInDrawer?: string) {
     if (flag !== undefined) vi.stubEnv('VITE_ROUTE_EDIT', flag)
+    if (editorInDrawer !== undefined) vi.stubEnv('VITE_ROUTE_EDITOR_IN_DRAWER', editorInDrawer)
     const live = await import('./index')
     const { railSections } = await import('../ui/shell/store')
     // L3 (D111): the panel registers into the Edit-route drawer (ui/shell/editroute.tsx), not the rail
@@ -130,9 +138,37 @@ describe('padTool and VITE_ROUTE_EDIT (D116)', () => {
     return { live, cmap, railSections, editRouteSection, tick, renderRail, unmount: () => step(() => draw(null, root as unknown as Element)) }
   }
 
-  it('unset: the Edit-route panel mounts as before (Edit-route entry, route DOM, map waypoint layer)', async () => {
+  // J1d (team lead 2026-11-15 16:57): by default the drawer hides the route editor and links to the Mission Planer
+  it('unset: the Edit-route panel mounts with the Mission Planer link, no stop list, no estimate, no map waypoints; Compute plan stays', async () => {
     const t = await mountWith(undefined)
     expect(t.live.ROUTE_EDIT_ENABLED).toBe(true)
+    expect(t.live.ROUTE_EDITOR_IN_DRAWER).toBe(false)
+    const has = () => t.editRouteSection.peek() !== undefined
+    await t.tick(400, has)
+    expect(spy).toHaveBeenCalledTimes(1)
+    expect(spy.mock.calls[0][0].editor).toBe(false)
+    expect(has()).toBe(true)
+    t.renderRail()
+    await t.tick(50, () => all(root, (n) => hasClass(n, 'hl-route__mission')).length > 0)
+    const link = all(root, (n) => hasClass(n, 'hl-route__mission'))
+    expect(link).toHaveLength(1)
+    const a = byTag(link[0], 'a')[0]
+    expect(a.getAttribute('href')).toBe('#/mission')
+    expect(a.textContent).toContain('Plan a route → Mission Planer')
+    expect(all(root, (n) => hasClass(n, 'hl-route__stop'))).toEqual([])
+    expect(all(root, (n) => hasClass(n, 'hl-route__stops'))).toEqual([])
+    expect(all(root, (n) => hasClass(n, 'hl-route__estimate'))).toEqual([])
+    expect(all(root, (n) => hasClass(n, 'hl-route__compute'))).toHaveLength(1)
+    await t.tick(20)
+    expect(t.cmap.layers.has(GHOST_LAYER_ID)).toBe(false)
+    expect(t.cmap.listeners).not.toContain('pointerdown')
+    t.unmount()
+  })
+
+  it('VITE_ROUTE_EDITOR_IN_DRAWER=1: the Edit-route panel mounts as before (Edit-route entry, route DOM, map waypoint layer)', async () => {
+    const t = await mountWith(undefined, '1')
+    expect(t.live.ROUTE_EDIT_ENABLED).toBe(true)
+    expect(t.live.ROUTE_EDITOR_IN_DRAWER).toBe(true)
     const has = () => t.editRouteSection.peek() !== undefined
     await t.tick(400, has)
     expect(spy).toHaveBeenCalledTimes(1)

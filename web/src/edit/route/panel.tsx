@@ -13,6 +13,9 @@
 // WP12 (L6 W-4): ticking a station while the engine chooses switches to "My order" (controller); every
 // control that stays disabled names its reason (title + aria-describedby on a visible or hidden note).
 // WP12 (L6 W-1): the one compute action; the inputs line says which pad and crew go with it.
+// J1d (team lead 2026-11-15 16:57): `editor` false (live/config.ts ROUTE_EDITOR_IN_DRAWER off, the default)
+// hides the route editor (instant estimate, mode, stop list, points, legs) and shows "Plan a route → Mission
+// Planer" (#/mission) instead; the inputs line, the server's Compute plan, its result and undo stay.
 import type { ComponentChildren } from 'preact'
 import { useEffect, useRef } from 'preact/hooks'
 import { signal, useSignalValue, type ReadSignal } from '../../state/signal'
@@ -26,6 +29,7 @@ import { AddPointButton, GhostSummary, PointRowBody } from './map/rows'
 import type { SharedUndo } from './undo'
 import type { RouteEstimate } from './instant/estimate'
 import { EstimateBox } from './instant/view'
+import { href } from '../../router'
 import './route.css'
 
 export interface RouteRow {
@@ -98,6 +102,19 @@ export interface RoutePanelViewProps {
   rootRef?: { current: HTMLDivElement | null }
   /** I1b (D128): the instant browser estimate (recomputed on every edit; Send to simulator); null = none */
   estimate?: RouteEstimate | null
+  /** J1d: show the route editor (default true); false = the Mission Planer link in its place */
+  editor?: boolean
+}
+
+/** J1d: the drawer's way to the Mission Planer tab while the route editor is hidden. */
+export function MissionPlanerLink() {
+  return (
+    <p class="hl-route__mission" data-mission-link>
+      <a class="hl-btn hl-btn--secondary" href={href({ name: 'mission' })} title={t('edit.planInMissionTip')}>
+        <Icon name="map" /> {t('edit.planInMission')}
+      </a>
+    </p>
+  )
 }
 
 /** ids of the reason notes the disabled controls point at (aria-describedby); one panel per page */
@@ -199,6 +216,7 @@ function ResultView({ c, slot }: { c: Extract<ComputeState, { kind: 'done' }>; s
 
 export function RoutePanelView(p: RoutePanelViewProps) {
   const { ctl, route, check, compute: c } = p
+  const editor = p.editor ?? true
   const ordered = route.mode === 'ordered'
   const rows = routeRows(route, ctl.stations, check, p.layout ?? null)
   const running = c.kind === 'running'
@@ -232,7 +250,8 @@ export function RoutePanelView(p: RoutePanelViewProps) {
   return (
     <div class="hl-route" ref={p.rootRef} data-mode={route.mode} data-state={c.kind} data-feasible={c.kind === 'done' && c.result.feasibility ? String(c.result.feasibility.feasible) : undefined}>
       {/* I1b (D128): the instant browser estimate first; the server's answer (R5-C) right below */}
-      {p.estimate ? <EstimateBox est={p.estimate} route={route} /> : null}
+      {!editor ? <MissionPlanerLink /> : null}
+      {editor && p.estimate ? <EstimateBox est={p.estimate} route={route} /> : null}
       {/* the answer first: visible without scrolling the rail (R5-C); details below */}
       {c.kind === 'done' ? <ResultView c={c} slot={p.resultSlot} /> : null}
       {c.kind === 'failed' ? (
@@ -245,6 +264,8 @@ export function RoutePanelView(p: RoutePanelViewProps) {
       ) : null}
       {c.kind === 'cancelled' ? <p class="hl-route__note">{T.cancelled}</p> : null}
       {c.kind === 'running' || c.kind === 'done' || c.kind === 'failed' ? <StageList c={c} /> : null}
+      {editor ? (
+        <>
       <div class="hl-route__mode" role="radiogroup" aria-label={T.modeLabel}>
         {(['auto', 'ordered'] as const).map((m) => (
           <button
@@ -263,9 +284,13 @@ export function RoutePanelView(p: RoutePanelViewProps) {
         ))}
       </div>
       <p class="hl-route__note">{ordered ? T.orderedNote : T.autoNote}</p>
+        </>
+      ) : null}
       <p class="hl-route__note hl-route__inputs" data-route-inputs>
         {inputsLine(ctl)}
       </p>
+      {editor ? (
+        <>
       {lockedWhy ? (
         <p class="hl-route__note hl-route__why" id={WHY_ID.locked} role="status">
           {lockedWhy}
@@ -364,6 +389,9 @@ export function RoutePanelView(p: RoutePanelViewProps) {
         </ol>
       ) : null}
 
+        </>
+      ) : null}
+
       <div class="hl-route__actions">
         <IconButton icon="undo-2" label={T.undo} class="hl-route__undo" disabled={!!undoWhy} title={undoWhy ?? T.undo} aria-describedby={undoWhy ? WHY_ID.undo : undefined} onClick={() => doUndo()} />
         <IconButton icon="redo-2" label={T.redo} class="hl-route__redo" disabled={!!redoWhy} title={redoWhy ?? T.redo} aria-describedby={redoWhy ? WHY_ID.redo : undefined} onClick={() => doRedo()} />
@@ -422,6 +450,7 @@ export function RoutePanel({
   undo,
   resultSlot,
   estimate,
+  editor,
 }: {
   ctl: RouteController
   live: ReadSignal<boolean>
@@ -429,6 +458,7 @@ export function RoutePanel({
   undo?: SharedUndo | null
   resultSlot?: ResultSlot | null
   estimate?: RouteEstimate | null
+  editor?: boolean
 }) {
   const why = useSignalValue(reason ?? NO_REASON)
   const rootRef = useRef<HTMLDivElement | null>(null)
@@ -449,6 +479,7 @@ export function RoutePanel({
     layout: useSignalValue(ctl.layout),
     resultSlot,
     estimate: estimate ?? null,
+    editor: editor ?? true,
   }
   useSignalValue(ctl.legs)
   useSignalValue(ctl.store.step) // the inputs line (pad, crew)

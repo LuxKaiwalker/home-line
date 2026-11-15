@@ -168,11 +168,12 @@ describe('the tab\'s mission.json: schema, origin, provenance label', () => {
     const doc = (await finalizeMission(buildMission(input([LEG])), new Date('2026-11-15T16:00:00Z'))) as Doc
     expect(doc.schema_version).toBe('1.1.0')
     expect(doc.origin).toBe('mission_planer')
-    expect(doc.origin_label).toBe('Mission Planer: browser estimate on the 5 m grid, not part of the validated scorecard')
+    // J1d (team lead 2026-11-15 16:57): the same origin and "Estimate" label as the app's Send to simulator
+    expect(doc.origin_label).toBe('Estimate · browser, 5 m grid · not part of the validated scorecard')
     expect(doc.label).toBe(CONFIG.simulatedLabel)
     const custom = (await finalizeMission(buildMission(input([LEG]), { customStart: true }))) as Doc
     expect(custom.origin_label).toBe(`${ORIGIN_LABEL} · ${CUSTOM_START_LABEL}`)
-    expect(originLabel(true)).toBe('Mission Planer: browser estimate on the 5 m grid, not part of the validated scorecard · custom start · outside the validated scenario')
+    expect(originLabel(true)).toBe('Estimate · browser, 5 m grid · not part of the validated scorecard · custom start · outside the validated scenario')
     const schema = JSON.parse(readFileSync(SCHEMA, 'utf8')) as { required: string[] }
     for (const k of schema.required) expect(doc, k).toHaveProperty(k)
     if (existsSync(PY)) {
@@ -180,6 +181,16 @@ describe('the tab\'s mission.json: schema, origin, provenance label', () => {
       expect(validate(custom)).toBe('OK')
       expect(validate(await finalizeMission(buildMission(input([null]))))).toBe('OK')
     }
+  })
+
+  // J1d: a picker pad P2–P4 (I2b): frame.pad kind 'picker' with its id and lon/lat; validates
+  it('a picker pad (P2) is frame.pad kind picker with its id and lon/lat; validates', async () => {
+    const inp = input([LEG])
+    inp.pad = { kind: 'picker', id: 'rank2', lon: PAD[0], lat: PAD[1], elevM: PAD_ELEV, source: 'scenarios/pads/index.json rank2 (D21 rank 2)' }
+    const doc = (await finalizeMission(buildMission(inp))) as Doc
+    expect(doc.frame.pad).toMatchObject({ kind: 'picker', id: 'rank2', lon: PAD[0], lat: PAD[1] })
+    expect(doc.origin_label).toBe(ORIGIN_LABEL)
+    if (existsSync(PY)) expect(validate(doc)).toBe('OK')
   })
 
   it('waypoint notes, tags and stop times stay in the tab\'s mission.json: no plan_inputs, no route hash', () => {

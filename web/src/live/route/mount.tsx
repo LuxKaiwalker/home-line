@@ -77,6 +77,12 @@ export interface MountRouteOptions {
   win?: UndoWindow | null
   /** I1b test seams of the browser estimate (compute core, frame scheduler, download) */
   estimate?: Pick<RouteEstimateOptions, 'core' | 'raf' | 'now' | 'save'>
+  /**
+   * J1d (team lead 2026-11-15 16:57): the route editor in the drawer (instant estimate, stop list, WP6 map
+   * waypoints). Default true here (unit tests); live/index.ts passes config ROUTE_EDITOR_IN_DRAWER (default
+   * off): the drawer then shows "Plan a route → Mission Planer" and keeps the server's Compute plan.
+   */
+  editor?: boolean
 }
 
 /** What the Live pad card may do with the route panel (W-1). */
@@ -184,6 +190,7 @@ function RouteDockNote({ hash }: { hash: string | null }) {
 /** Register the panel once its catalog is loaded; returns cleanup (also before the load finishes). */
 export function mountRoutePanel(o: MountRouteOptions): () => void {
   let alive = true
+  const editor = o.editor ?? true
   const offs: (() => void)[] = []
   const live = signal(false)
   const reason = signal<string | null>(ROUTE_TEXT.checkingLive)
@@ -308,10 +315,11 @@ export function mountRoutePanel(o: MountRouteOptions): () => void {
         modes: ['plan'],
         title: 'nav.rail.stationsRoute',
         icon: 'station',
-        render: () => h(RoutePanel, { ctl: c, live, reason, undo, resultSlot: o.resultSlot ?? null, estimate: est, key: ROUTE_TEXT.title }),
+        render: () => h(RoutePanel, { ctl: c, live, reason, undo, resultSlot: o.resultSlot ?? null, estimate: est, editor, key: ROUTE_TEXT.title }),
       })
-      // WP6: free waypoints (markers, click to add) and the ghost route (estimate) on the console map
-      const offMap = installWaypointMap(c, o.cmap)
+      // WP6: free waypoints (markers, click to add) and the ghost route (estimate) on the console map;
+      // J1d: part of the route editor, so none while it is hidden (the Mission Planer has the waypoints)
+      const offMap = editor ? installWaypointMap(c, o.cmap) : () => {}
       return () => {
         offMap()
         off()
