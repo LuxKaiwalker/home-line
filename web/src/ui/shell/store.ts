@@ -63,11 +63,19 @@ export const shell = {
   sidebarOpen: signal<boolean>(false),
   focusMode: signal<boolean>(false),
   helpOpen: signal<boolean>(false),
+  /** Tablet (768–1279) only: the rail is a 56 px icon column; its toggle opens the full rail as an
+   *  overlay sheet over the map. Kept apart from ui.panels.leftRail so the desktop preference stays. */
+  railSheet: signal<boolean>(false),
   /** Last hash visited per mode, so a mode tab returns to where the user was (e.g. a station). */
   lastHash: signal<Readonly<Record<Mode, string>>>(Object.fromEntries(MODES.map((m) => [m, canonicalHref(MODE_VIEWS[m][0].route)])) as Record<Mode, string>),
 }
 
 export const railCollapsed = (): boolean => ui.panels.leftRail.value === TOKENS.layout.leftRailCollapsed
+/** Whether the rail shows as icons only: on a tablet unless its sheet is open, on desktop when collapsed. */
+export const railIconOnly = (): boolean => {
+  const bp = shell.breakpoint.value
+  return bp === 'tablet' ? !shell.railSheet.value : bp === 'desktop' && railCollapsed()
+}
 export function setRailCollapsed(c: boolean): void {
   ui.panels.leftRail.value = c ? TOKENS.layout.leftRailCollapsed : TOKENS.layout.leftRail
 }
@@ -86,6 +94,7 @@ export function closeSidebar(): void {
 export function applyRoute(route: Route, hash: string): Mode {
   const mode = modeOf(route)
   shell.route.value = route
+  shell.railSheet.value = false // a rail link was followed (or the route changed): the sheet closes
   ui.mode.value = mode
   if (route.name !== 'notfound') shell.lastHash.value = { ...shell.lastHash.peek(), [mode]: hash.startsWith('#') ? hash : `#${hash}` }
   return mode

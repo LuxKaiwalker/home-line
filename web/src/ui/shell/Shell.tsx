@@ -21,6 +21,7 @@ import {
   MODE_VIEWS,
   modeHash,
   railCollapsed,
+  railIconOnly,
   railSections,
   setDockCollapsed,
   setRailCollapsed,
@@ -123,18 +124,29 @@ export function Rail() {
   const mode = useMode()
   const route = useSignalValue(shell.route)
   useSignalValue(ui.panels.leftRail)
+  const sheet = useSignalValue(shell.railSheet)
   const bp = useSignalValue(shell.breakpoint)
   const sections = useSignalValue(railSections).filter((s) => s.modes.includes(mode))
-  const collapsed = railCollapsed()
+  const tablet = bp === 'tablet'
+  // §4.3: desktop rail 320 collapsible to 56 (ui.panels.leftRail); tablet rail = 56 px icon column whose
+  // toggle opens the full rail as a sheet over the map (shell.railSheet), so the map keeps the width.
+  const collapsed = tablet ? !sheet : railCollapsed()
   const toggle = t(collapsed ? 'nav.rail.expand' : 'nav.rail.collapse')
-  const iconOnly = collapsed && bp === 'desktop'
+  const iconOnly = railIconOnly()
   return (
     <>
       <div class="hl-rail__head">
         {!iconOnly && <h2 class="hl-rail__title">{t(`modes.${mode}.label`)}</h2>}
-        <IconButton class="hl-rail__toggle" icon={bp === 'desktop' ? 'panel-left' : collapsed ? 'chevron-up' : 'chevron-down'} label={toggle} aria-expanded={collapsed ? 'false' : 'true'} aria-controls="hl-rail-body" onClick={() => setRailCollapsed(!collapsed)} />
+        <IconButton
+          class="hl-rail__toggle"
+          icon={bp === 'phone' ? (collapsed ? 'chevron-up' : 'chevron-down') : 'panel-left'}
+          label={toggle}
+          aria-expanded={collapsed ? 'false' : 'true'}
+          aria-controls="hl-rail-body"
+          onClick={() => (tablet ? (shell.railSheet.value = collapsed) : setRailCollapsed(!collapsed))}
+        />
       </div>
-      <div class="hl-rail__body" id="hl-rail-body" hidden={collapsed && bp !== 'desktop'}>
+      <div class="hl-rail__body" id="hl-rail-body" hidden={collapsed && bp === 'phone'}>
         <ul class="hl-rail__views" role="list">
           {MODE_VIEWS[mode].map((v) => {
             const on = sameView(route, v.route)
@@ -285,7 +297,7 @@ export function mountShell(frame: Frame, navigate: (hash: string) => void, win: 
     set('data-bp', bp)
     set('data-focus', shell.focusMode.value ? 'on' : 'off')
     set('data-sidebar', shell.sidebarOpen.value && isMapMode(mode) ? 'open' : 'closed')
-    set('data-rail', railCollapsed() ? 'collapsed' : 'open')
+    set('data-rail', (bp === 'tablet' ? !shell.railSheet.value : railCollapsed()) ? 'collapsed' : 'open')
     set('data-dock', isMapMode(mode) ? (dockCollapsed() ? 'collapsed' : 'open') : 'none')
     root.style.setProperty('--hl-rail-w', `${ui.panels.leftRail.value}px`)
     root.style.setProperty('--hl-side-w', `${ui.panels.sidebar.value}px`)
