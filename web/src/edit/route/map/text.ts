@@ -19,7 +19,7 @@ export const WAYPOINT_TEXT = {
   ghostLoading: 'Ghost route · estimate: loading the terrain grid…',
   ghostUnavailable: 'Ghost route · estimate: not available in this browser.',
   ghostTotal: '≈ {min} min walking (estimate)',
-  ghostTotalPartial: 'no estimate for every leg',
+  ghostTotalPartial: 'no total: a leg has no estimate',
   ghostLeg: '{from} → {to}',
   ghostLegTime: '≈ {min} min',
   ghostLegNone: 'no path on the browser grid',

@@ -92,11 +92,12 @@ class FakeMarker implements PointMarker {
 function fakeMap() {
   const sources = new Map<string, { data: unknown; setData(d: unknown): void }>()
   const layers = new Map<string, Record<string, unknown>>()
-  const clicks = new Set<(e: { lngLat: { lng: number; lat: number } }) => void>()
   const container = new FakeEl()
+  const canvas = Object.assign(new FakeEl(), { getBoundingClientRect: () => ({ left: 0, top: 0 }) })
   const map = {
-    on: (_t: 'click', fn: (e: { lngLat: { lng: number; lat: number } }) => void) => clicks.add(fn),
-    off: (_t: 'click', fn: (e: { lngLat: { lng: number; lat: number } }) => void) => clicks.delete(fn),
+    getCanvas: () => canvas as unknown as HTMLElement,
+    // 1 px = 1e-6 deg from (137, -4): the test clicks at lon/lat directly
+    unproject: ([x, y]: [number, number]) => ({ lng: 137 + x * 1e-6, lat: -4 - y * 1e-6 }),
     getSource: (id: string) => sources.get(id),
     addSource: (id: string, spec: { data: unknown }) => {
       const s = { data: spec.data, setData(d: unknown) { s.data = d } } // prettier-ignore
@@ -107,7 +108,9 @@ function fakeMap() {
     getContainer: () => container as unknown as HTMLElement,
   }
   const cm: WaypointConsoleMap = { map, whenReady: () => Promise.resolve() }
-  return { cm, sources, layers, container, click: (lon: number, lat: number) => [...clicks].forEach((f) => f({ lngLat: { lng: lon, lat: lat } })) }
+  /** a DOM click on the canvas at lon/lat; true when the point took it (MapLibre would not see it) */
+  const click = (lon: number, lat: number) => container.fire('click', { target: canvas, clientX: Math.round((lon - 137) * 1e6), clientY: Math.round((-4 - lat) * 1e6), preventDefault() {} })
+  return { cm, sources, layers, container, canvas, click }
 }
 
 function setup() {
@@ -146,11 +149,11 @@ describe('map binding: markers, armed click, ghost layer', () => {
     expect(fm.layers.get(GHOST_LAYER_ID)).toMatchObject({ type: 'line', source: GHOST_SOURCE_ID })
     // tokens only: the ghost line colours are token values (muted = estimate, unknown grey)
     expect(JSON.stringify(fm.layers.get(GHOST_LAYER_ID))).toContain(TOKENS.color.textMuted)
-    fm.click(137.404, -4.776) // not armed: nothing
+    expect(fm.click(137.404, -4.776)).toBe(false) // not armed: nothing, and MapLibre gets the click
     expect(store.route.value.stops).toHaveLength(0)
     ed.startAdd()
     expect(fm.container.classes.has('hl-route-adding')).toBe(true)
-    fm.click(137.404, -4.776)
+    expect(fm.click(137.404, -4.776)).toBe(true) // armed: taken before MapLibre (no selection, no live pad)
     expect(stopNames(store.route.value)).toEqual(['W1'])
     expect(fm.container.classes.has('hl-route-adding')).toBe(false)
     expect(made).toHaveLength(1)

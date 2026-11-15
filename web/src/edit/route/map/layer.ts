@@ -30,21 +30,18 @@ export interface PointMarker {
   remove(): unknown
 }
 
-interface ClickEvent {
-  lngLat: { lng: number; lat: number }
-}
 interface GeoJsonSourceLike {
   setData(d: unknown): unknown
 }
 /** The parts of maplibre-gl's Map used here. */
 export interface WaypointMlMap {
-  on(type: 'click', fn: (e: ClickEvent) => void): unknown
-  off(type: 'click', fn: (e: ClickEvent) => void): unknown
   getSource(id: string): unknown
   addSource(id: string, spec: { type: 'geojson'; data: FeatureCollection }): unknown
   addLayer(spec: Record<string, unknown>): unknown
   getLayer(id: string): unknown
   getContainer(): HTMLElement
+  getCanvas(): HTMLElement
+  unproject(p: [number, number]): { lng: number; lat: number }
 }
 export interface WaypointConsoleMap {
   readonly map: WaypointMlMap
@@ -91,8 +88,8 @@ export function attachWaypointMap(ed: WaypointEditor, cm: WaypointConsoleMap, o:
         paint: {
           // an estimate: muted and dashed; a leg without a path on the browser grid in the unknown grey
           'line-color': ['case', ['get', 'routed'], TOKENS.color.textMuted, TOKENS.color.unknown],
-          'line-width': TOKENS.line.threadPx,
-          'line-dasharray': [2, 2],
+          'line-width': TOKENS.line.threadPx * 1.5,
+          'line-dasharray': [2, 1.5],
         },
       })
     ghostReady = true
@@ -107,7 +104,7 @@ export function attachWaypointMap(ed: WaypointEditor, cm: WaypointConsoleMap, o:
   )
 
   // ---- markers --------------------------------------------------------------------------------
-  function makePointMarker(name: string): { m: PointMarker; el: HTMLElement; off: () => void } {
+  function makePointMarker(name: string, at: [number, number]): { m: PointMarker; el: HTMLElement; off: () => void } {
     const el = doc.createElement('div')
     el.className = 'hl-route-marker'
     el.dataset.point = name
@@ -115,6 +112,7 @@ export function attachWaypointMap(ed: WaypointEditor, cm: WaypointConsoleMap, o:
     el.tabIndex = 0
     el.setAttribute('role', 'button')
     const m = o.makeMarker(el)
+    m.setLngLat(at) // MapLibre needs the position before addTo
     m.setDraggable(true)
     let index = -1
     m.on('dragstart', () => {
@@ -178,7 +176,7 @@ export function attachWaypointMap(ed: WaypointEditor, cm: WaypointConsoleMap, o:
     const dragging = ed.dragging.peek()
     for (const p of pts) {
       let mk = markers.get(p.name)
-      if (!mk) markers.set(p.name, (mk = makePointMarker(p.name)))
+      if (!mk) markers.set(p.name, (mk = makePointMarker(p.name, [p.stop.lon, p.stop.lat])))
       if (dragging !== p.name) mk.m.setLngLat([p.stop.lon, p.stop.lat])
       const c = check.stops[p.index]
       mk.el.dataset.validity = !c ? 'unknown' : c.valid === false ? 'invalid' : c.valid ? 'valid' : 'unknown'
@@ -196,11 +194,22 @@ export function attachWaypointMap(ed: WaypointEditor, cm: WaypointConsoleMap, o:
   )
 
   // ---- add: the armed map click --------------------------------------------------------------
-  const onClick = (e: ClickEvent) => {
-    if (ed.adding.peek()) ed.add(e.lngLat.lng, e.lngLat.lat)
+  // Taken in the CAPTURE phase on the map container, before MapLibre turns it into a map click: the
+  // armed click places the point and nothing else (no selection card, no live pad from the pad tool).
+  const container = cm.map.getContainer()
+  const onDomClick = (e: Event): void => {
+    if (!ed.adding.peek()) return
+    const canvas = cm.map.getCanvas()
+    if (e.target !== canvas) return // controls, markers, popups keep their clicks
+    const me = e as MouseEvent
+    const r = canvas.getBoundingClientRect()
+    const ll = cm.map.unproject([me.clientX - r.left, me.clientY - r.top])
+    e.stopPropagation()
+    e.preventDefault()
+    ed.add(ll.lng, ll.lat)
   }
-  cm.map.on('click', onClick)
-  offs.push(() => cm.map.off('click', onClick))
+  container.addEventListener('click', onDomClick, true)
+  offs.push(() => container.removeEventListener('click', onDomClick, true))
   const onKey = (e: Event) => {
     if ((e as KeyboardEvent).key === 'Escape' && ed.adding.peek()) {
       ed.cancelAdd()
@@ -213,7 +222,7 @@ export function attachWaypointMap(ed: WaypointEditor, cm: WaypointConsoleMap, o:
   offs.push(
     effect(() => {
       const on = ed.adding.value
-      cm.map.getContainer().classList.toggle('hl-route-adding', on)
+      container.classList.toggle('hl-route-adding', on)
     }),
   )
 

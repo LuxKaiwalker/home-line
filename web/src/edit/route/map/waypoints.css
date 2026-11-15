@@ -39,7 +39,7 @@
 .hl-route__ghost-total { font-variant-numeric: tabular-nums; }
 .hl-route__ghost-legs { list-style: none; margin: 0; padding: 0; display: grid; gap: 0; }
 .hl-route__ghost-leg { display: flex; justify-content: space-between; gap: var(--space-2); }
-.hl-route__ghost-leg[data-routed='false'] .hl-route__ghost-time { color: var(--color-caution); }
+.hl-route__ghost-leg[data-routed='false'] .hl-route__ghost-time { font-style: italic; } /* unknown stays grey, never a warning colour */
 .hl-route__ghost-time { font-variant-numeric: tabular-nums; }
 
 /* map markers of free points (MapLibre Marker elements) */
