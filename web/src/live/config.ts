@@ -9,6 +9,8 @@
 //                                   (no API call; works with the live layer off or offline)
 //                        1|all|true the official plan and live results (manifest kind sim_plan)
 //                        unset/0/anything else: off. npm run dev:live-demo uses all.
+//   VITE_ROUTE_EDIT=0    D116: hide the Edit-route panel and its map waypoints (default on; the
+//                        published Pages build sets 0 until route editing is cleared for it)
 import backendRaw from '../../../config/backend.yaml'
 import { cfg } from '../config'
 
@@ -78,6 +80,11 @@ export function isLiveFlag(value: EnvValue): boolean {
   return value === true || value === '1' || value === 'true'
 }
 
+/** VITE_ROUTE_EDIT parsing: '0' or 'false' turns route editing off; anything else (or unset) is on. */
+export function isRouteEditFlag(value: EnvValue): boolean {
+  return !(value === false || value === '0' || value === 'false')
+}
+
 /** VITE_API_BASE parsing: trailing slashes dropped, default http://localhost:8012. */
 export function apiBaseFrom(value: EnvValue): string {
   const v = typeof value === 'string' && value.trim() ? value.trim() : 'http://localhost:8012'
@@ -99,3 +106,5 @@ export function simExportModeFrom(value: EnvValue): SimExportMode {
 export const SIM_EXPORT_MODE: SimExportMode = simExportModeFrom(import.meta.env.VITE_SIM_EXPORT)
 /** The slot is on in some mode (official or all); kept for boolean callers. */
 export const SIM_EXPORT_ENABLED: boolean = SIM_EXPORT_MODE !== 'off'
+/** D116: the Edit-route panel (and the map waypoints it installs); on unless VITE_ROUTE_EDIT is 0 or false. */
+export const ROUTE_EDIT_ENABLED: boolean = isRouteEditFlag(import.meta.env.VITE_ROUTE_EDIT)
