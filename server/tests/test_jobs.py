@@ -134,7 +134,7 @@ def test_runner_limits_come_from_config():
     c = settings().compute
     assert (r.workers, r.queue_max_waiting, r.job_timeout_s) == (c.workers, c.queue_max_waiting,
                                                                  c.job_timeout_s)
-    assert (c.workers, c.queue_max_waiting, c.job_timeout_s) == (2, 20, 600)  # spec §4.1; 600 s: D81
+    assert (c.workers, c.queue_max_waiting, c.job_timeout_s) == (2, 20, 600)  # spec §4.1; D81
 
 
 def test_job_types_are_the_contract_names():
