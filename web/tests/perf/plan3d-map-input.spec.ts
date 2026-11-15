@@ -164,14 +164,20 @@ test('L13: a left drag on the rover in 3D (?view=3d, open pose) moves it, with t
     const before = await center(page)
     const b = (await page.locator('.hl-edit-rover').boundingBox())!
     const at = { x: b.x + b.width / 2, y: b.y + b.height / 2 }
+    // drop on parking option 2 (its rank square marks the spot): the rover snaps to another pad, a real
+    // change at any framing (a fixed 60 px could land back on the official pad in the tilted view)
+    const p2 = await page.getByRole('button', { name: /^Rover parking option #2/ }).boundingBox()
+    const to = p2 ? { x: p2.x + p2.width / 2, y: p2.y + p2.height / 2 } : { x: at.x - 60, y: at.y + 10 }
     await page.mouse.move(at.x, at.y)
     await page.mouse.down()
-    await page.mouse.move(at.x - 60, at.y + 10, { steps: 12 })
+    await page.mouse.move(at.x + (to.x - at.x) / 3, at.y + (to.y - at.y) / 3, { steps: 6 })
     await expect(page.locator('.hl-edit-rover')).toHaveClass(/is-dragging/)
     await expect(page.locator('.hl-edit-drag-host')).not.toBeEmpty({ timeout: 10_000 })
+    await page.mouse.move(to.x, to.y, { steps: 8 })
     await page.mouse.up()
     expect(await center(page)).toBe(before) // the map did not move
-    await expect(card(page)).toContainText('What this change costs', { timeout: 15_000 })
+    // the new pad's scenario loads before the strip shows (3D software GL on CI: slow main thread)
+    await expect(card(page)).toContainText('What this change costs', { timeout: 45_000 })
   })
 
   await expect(mapEl(page)).toHaveAttribute('data-terrain', '3d') // 3D all along
