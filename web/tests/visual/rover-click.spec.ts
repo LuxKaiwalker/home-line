@@ -28,6 +28,22 @@ async function press(page: Page, at: { x: number; y: number }, dx: number, dy: n
   await page.mouse.up()
 }
 
+/**
+ * Screen point of parking option #2 (labels.json code P2): a drop there changes the plan at any map
+ * size. A fixed 60 px offset depended on the zoom: with the timeline in the plan-bottom drawer (L2b) the
+ * Plan map is taller, the fit zooms in, and 60 px from the pad landed on steep ground (snap back, no draft).
+ */
+async function p2(page: Page): Promise<{ x: number; y: number }> {
+  return page.evaluate(() => {
+    const el = document.querySelector<HTMLElement>('.hl-label[data-code="P2"]')
+    const map = el?.closest('.maplibregl-map')
+    const m = /translate\(([-\d.]+)px,\s*([-\d.]+)px\)/.exec(el?.style.transform ?? '')
+    if (!el || !map || !m) throw new Error('no label P2')
+    const r = map.getBoundingClientRect()
+    return { x: r.left + Number(m[1]), y: r.top + Number(m[2]) }
+  })
+}
+
 for (const [name, dx, dy] of [
   ['still click', 0, 0],
   ['click with 3 px jitter', 3, 0],
@@ -46,7 +62,8 @@ test('rover pad marker: a press moving beyond the slop still drags (delta strip 
   const at = await rover(page)
   await page.mouse.move(at.x, at.y)
   await page.mouse.down()
-  await page.mouse.move(at.x - 60, at.y + 10, { steps: 12 })
+  const to = await p2(page)
+  await page.mouse.move(to.x, to.y, { steps: 12 })
   await expect(page.locator('.hl-edit-rover')).toHaveClass(/is-dragging/)
   await page.mouse.up()
   await expect(card(page)).toContainText('What this change costs', { timeout: 10_000 })

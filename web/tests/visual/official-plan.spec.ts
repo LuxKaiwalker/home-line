@@ -153,7 +153,7 @@ test('T2: the drag readout is truthful about the live planner (off vs ready), wi
 
   // live ready (what the live layer reports through the seam)
   await page.evaluate(() => window.dispatchEvent(new CustomEvent('hl:live-status', { detail: 'ready' })))
-  const at2 = await center(page)
+  const at2 = await settled(page) // the rover is back on the official pad once the map stops
   await hold(page, at2, await awayFrom(page))
   await expect(readout).toHaveAttribute('data-live', 'ready')
   await expect(readout.locator('.hl-edit-drag__snap')).toContainText(LIVE_SNAP)
@@ -166,7 +166,7 @@ test('T2: the drag readout is truthful about the live planner (off vs ready), wi
   // and unreachable again: back to the static text
   await page.keyboard.press('Escape')
   await page.evaluate(() => window.dispatchEvent(new CustomEvent('hl:live-status', { detail: 'offline' })))
-  const at3 = await center(page)
+  const at3 = await settled(page)
   await hold(page, at3, await awayFrom(page))
   await expect(readout.locator('.hl-edit-drag__snap')).toContainText(STATIC_SNAP)
   await page.mouse.up()
