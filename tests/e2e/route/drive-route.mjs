@@ -15,7 +15,9 @@
 // Options
 //   --web <url>         use an already running web app instead of starting one
 //   --web-dir <dir>     web/ of the checkout under test (default: this checkout's web/)
-//   --scenarios a,b,..  subset (default all: a b c d e f g)
+//   --scenarios a,b,..  subset (default all: a b c d e f g h h-infeasible i)
+//   --export-route S..  h's feasible route (mock S4,S1,S2; real S4,S1,S6,S7)
+//   --export-infeasible S..  h-infeasible's route (mock = --infeasible; real S4,S1,S2)
 //   --ordered S4,S1,S2  stops of scenario a (picked in this order)
 //   --infeasible S4,S1,S2,S7,S8   stops of scenario b (the mock's time model fails it on leg S7 -> S8)
 //   --official-hash <h> official plan hash for g (mock: the mock's own; real: required for g,
@@ -24,9 +26,15 @@
 //   --stage-ms <ms>     mock stage length (default 4000: five stages = 20 s)
 //   --wp6               run scenario d (free points); skipped until WP6 lands (TODO selectors below)
 //   --out <dir>         screenshots + route-e2e-result.json (default $OUT or /tmp/hl-way/wp8a/run)
+//   --mission-schema <p> schema for h and i (default: this harness checkout's contracts/bundle/mission.schema.json)
+// WP8c (D110, simulator export): h = ordered route -> Compute -> "Send to simulator" -> the downloaded
+// mission.json validated (check_mission.py, the repo's Python + jsonschema) and compared with the route
+// and the run record; i = the official plan's mission.json (origin precomputed), live and static-first.
+// The web server runs with VITE_SIM_EXPORT=1 (serve-web.mjs); mock mode also stands in for
+// web/public/sim/official/mission.json until the checkout under test has it (serve-web --sim-official).
 // env: PW (playwright/index.mjs), CHROMIUM (browser binary)
-import { execSync, spawn } from 'node:child_process'
-import { mkdirSync, writeFileSync } from 'node:fs'
+import { execFileSync, execSync, spawn } from 'node:child_process'
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -42,12 +50,18 @@ if (MOCK && !(API_PORT >= 8150 && API_PORT <= 8199)) throw new Error('--api-port
 const WEB_DIR = resolve(opt('--web-dir', resolve(HERE, '../../../web')))
 const REPO = resolve(WEB_DIR, '..')
 const OUT = opt('--out', process.env.OUT ?? '/tmp/hl-way/wp8a/run')
-const ONLY = (opt('--scenarios', 'a,b,c,d,e,f,g')).split(',')
+const ONLY = (opt('--scenarios', 'a,b,c,d,e,f,g,h,h-infeasible,i')).split(',')
 const ORDERED = opt('--ordered', 'S4,S1,S2').split(',')
 const INFEASIBLE = opt('--infeasible', 'S4,S1,S2,S7,S8').split(',')
+// WP8c: h's feasible route and h-infeasible's route. Real data (orchestrator 12:4x): S4,S1,S2 is infeasible
+// (leg 3 S2 -> pad, O2, 23.84 min short) and S4,S1,S6,S7 is feasible. Mock: S4,S1,S2 / b's order.
+const EXPORT_ROUTE = opt('--export-route', MOCK ? 'S4,S1,S2' : 'S4,S1,S6,S7').split(',')
+const EXPORT_INFEASIBLE = opt('--export-infeasible', MOCK ? INFEASIBLE.join(',') : 'S4,S1,S2').split(',')
 const JOB_WAIT_S = Number(opt('--job-wait-s', MOCK ? 120 : 900))
 const STAGE_MS = Number(opt('--stage-ms', 4000))
 const WP6 = flag('--wp6')
+const HARNESS_REPO = resolve(HERE, '../../..')
+const MISSION_SCHEMA = resolve(opt('--mission-schema', join(HARNESS_REPO, 'contracts/bundle/mission.schema.json')))
 mkdirSync(OUT, { recursive: true })
 
 // Interface text the checks read (web/src/edit/route/text.ts ROUTE_TEXT / LIMIT_TEXT, R5 #110).
@@ -93,13 +107,18 @@ const S = {
   wp6Delete: (n) => `.hl-route__stop[data-point="W${n}"] [data-route-action="delete-point"]`, // TODO(WP6)
   wp6Validity: (n) => `.hl-route__stop[data-point="W${n}"] [data-validity]`, // as stations (panel.tsx)
   wp6Ghost: '[data-route-ghost]', // TODO(WP6): ghost route summary labelled "estimate"
+  // WP8c: "Send to simulator" (design S1: data-sim-export on the control, data-origin computed_live |
+  // precomputed). Fallback until S1 lands: the A5s slot links (live plan page / console route card).
+  simExport: '[data-sim-export]',
+  simExportOld: '.live-sim-file, .hl-simslot__file',
 }
+const SIM_NOT_AVAILABLE = 'Simulator file not available for this plan' // S1's text on a 404
 
 const T0 = performance.now()
 const now = () => +((performance.now() - T0) / 1000).toFixed(2)
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 const log = (...a) => console.log(`[${now()}s]`, ...a)
-const R = { mode: MOCK ? 'mock' : 'real', startedUtc: new Date().toISOString(), webDir: WEB_DIR, ordered: ORDERED, infeasible: INFEASIBLE, scenarios: {} }
+const R = { mode: MOCK ? 'mock' : 'real', startedUtc: new Date().toISOString(), webDir: WEB_DIR, ordered: ORDERED, infeasible: INFEASIBLE, exportRoute: EXPORT_ROUTE, exportInfeasible: EXPORT_INFEASIBLE, scenarios: {} }
 const children = []
 let mock = null
 
@@ -114,7 +133,7 @@ async function startServers() {
   }
   let web = opt('--web', null)
   if (!web) {
-    const args = [join(HERE, 'serve-web.mjs'), '--port', String(WEB_PORT), '--web-dir', WEB_DIR, ...(MOCK ? ['--api', apiOrigin] : ['--proxy', apiOrigin])]
+    const args = [join(HERE, 'serve-web.mjs'), '--port', String(WEB_PORT), '--web-dir', WEB_DIR, ...(MOCK ? ['--api', apiOrigin, '--sim-official', `${apiOrigin}/__mock/sim/official/mission.json`] : ['--proxy', apiOrigin])]
     const ch = spawn(process.execPath, args, { stdio: ['ignore', 'pipe', 'pipe'] })
     children.push(ch)
     web = await new Promise((ok, fail) => {
@@ -151,8 +170,11 @@ async function newPage(tag, { block = false } = {}) {
   page.on('request', (q) => {
     if (q.method() === 'POST' && /\/api\/v1\/jobs$/.test(q.url())) { try { posts.push({ t: now(), body: JSON.parse(q.postData() ?? 'null') }) } catch {} }
   })
+  const missionReqs = []
+  page.on('requestfailed', (q) => { if (/mission\.json(\?|$)/.test(q.url())) missionReqs.push({ t: now(), url: q.url(), failed: q.failure()?.errorText ?? 'failed' }) })
   page.on('response', async (r) => {
     const u = r.url()
+    if (/mission\.json(\?|$)/.test(u)) missionReqs.push({ t: now(), url: u, status: r.status() })
     if (!u.includes('/api/v1/')) return
     const path = u.replace(/^.*\/api\/v1/, '')
     netlog.push({ t: now(), page: tag, status: r.status(), method: r.request().method(), url: path })
@@ -162,7 +184,7 @@ async function newPage(tag, { block = false } = {}) {
       else if (/\/results\/[0-9a-f]+\/route_[^/]+\.geojson$/.test(path) && r.status() === 200) routeFiles.push({ t: now(), path, legs: ((await r.json()).features ?? []).map((f) => [f.properties?.from, f.properties?.to]) })
     } catch {}
   })
-  return { ctx, page, jobs, polls, routeFiles, posts, close: () => ctx.close() }
+  return { ctx, page, jobs, polls, routeFiles, posts, missionReqs, close: () => ctx.close() }
 }
 const shot = (page, name) => page.screenshot({ path: `${OUT}/${name}.png` }).catch((e) => log('screenshot failed', name, e.message))
 const txt = (page, sel) => page.evaluate((s) => { const e = document.querySelector(s); return e ? e.innerText.replace(/\s+/g, ' ').trim() : null }, sel)
@@ -238,6 +260,83 @@ const routeOf = (post) => post?.body?.inputs?.route ?? null
 const stopIds = (route) => (route?.stops ?? []).map((s) => s.station ?? `(${s.lon},${s.lat})`)
 const legChain = (ids) => ['pad', ...ids, 'pad'].slice(1).map((to, i) => [['pad', ...ids][i], to])
 const apiJson = async (path) => { const r = await fetch(CTX.api + path); return { status: r.status, body: await r.json().catch(() => null) } }
+
+// ---------- WP8c: simulator export helpers ----------
+/** The "Send to simulator" control: S1's hook first, else the A5s slot link; null after `ms`. */
+async function findExport(page, ms) {
+  const r = await until(async () => {
+    for (const [sel, hook] of [[S.simExport, true], [S.simExportOld, false]]) {
+      const c = await page.evaluate((sel) => {
+        const e = [...document.querySelectorAll(sel)].find((x) => x.offsetWidth || x.offsetHeight)
+        return e ? { tag: e.tagName.toLowerCase(), text: e.innerText.replace(/\s+/g, ' ').trim().slice(0, 120), origin: e.getAttribute('data-origin'), simExport: e.getAttribute('data-sim-export'), href: e.getAttribute('href'), download: e.getAttribute('download'), disabled: !!e.disabled, cls: e.className } : null
+      }, sel)
+      if (c) return { sel, hook, ...c }
+    }
+    return null
+  }, ms, 200)
+  return r.v
+}
+/** Click the control, catch the download (Playwright download event), save it as <OUT>/<tag>-mission.json. */
+async function exportMission(p, tag, ctl) {
+  const t = performance.now()
+  const dl = p.page.waitForEvent('download', { timeout: 15000 }).catch(() => null)
+  const urlBefore = p.page.url()
+  await p.page.locator(ctl.sel).first().click()
+  const d = await dl
+  const ms = Math.round(performance.now() - t)
+  const out = { ms, download: !!d, name: null, url: null, file: null, doc: null, bytes: 0, urlBefore, urlAfter: null, notAvailable: null, fallback: null }
+  if (d) {
+    out.name = d.suggestedFilename()
+    out.url = d.url()
+    out.file = `${OUT}/${tag}-mission.json`
+    await d.saveAs(out.file)
+    const text = readFileSync(out.file, 'utf8')
+    out.bytes = text.length
+    try { out.doc = JSON.parse(text) } catch { out.doc = null }
+  } else {
+    // no download: say what happened instead (navigation to the file, the 404 text, nothing)
+    await sleep(500)
+    out.urlAfter = p.page.url()
+    out.notAvailable = await p.page.evaluate((t) => document.body?.innerText.includes(t) ?? false, SIM_NOT_AVAILABLE).catch(() => null)
+    const href = ctl.href ? new URL(ctl.href, urlBefore).href : null
+    if (href) {
+      // for the record only (not the download criterion): what the link points to
+      const r = await fetch(href).catch(() => null)
+      const text = r ? await r.text() : null
+      out.fallback = { href, status: r?.status ?? null }
+      if (r?.ok) {
+        out.file = `${OUT}/${tag}-mission.fetched.json`
+        writeFileSync(out.file, text)
+        out.bytes = text.length
+        try { out.doc = JSON.parse(text) } catch { out.doc = null }
+      }
+    }
+  }
+  return out
+}
+/** check_mission.py in the harness checkout (the repo's Python and jsonschema; no npm dependency). */
+function checkMission(file) {
+  try {
+    const o = execFileSync('uv', ['run', '--no-sync', 'python', join(HARNESS_REPO, 'tests/e2e/route/check_mission.py'), file, '--schema', MISSION_SCHEMA], { cwd: HARNESS_REPO, encoding: 'utf8', timeout: 60000 })
+    return JSON.parse(o.trim().split('\n').at(-1))
+  } catch (e) {
+    return { fatal: String(e?.stderr ?? e).slice(0, 500) }
+  }
+}
+let STATIONS = null
+/** Station ids of the mission's waypoints, in file order: `station` when given, else the nearest station (access point or station, within 150 m). */
+function waypointStations(doc) {
+  STATIONS ??= JSON.parse(readFileSync(join(WEB_DIR, 'public/data/stations.json'), 'utf8'))
+  const d = (a, b) => Math.hypot((a[0] - b[0]) * Math.cos((a[1] * Math.PI) / 180), a[1] - b[1]) * (Math.PI / 180) * 3389500
+  return (doc?.waypoints ?? []).map((w) => {
+    if (typeof w.station === 'string' && w.station) return w.station
+    if (!Array.isArray(w.lonlat)) return '?'
+    let best = null
+    for (const st of STATIONS) for (const q of [[st.access_lon ?? st.lon, st.access_lat ?? st.lat], [st.lon, st.lat]]) { const m = d(w.lonlat, q); if (!best || m < best.m) best = { id: st.id, m } }
+    return best && best.m <= 150 ? best.id : `?(${w.lonlat.join(',')})`
+  })
+}
+const missionSummary = (doc) => (doc ? { mission_id: doc.mission_id, origin: doc.origin, origin_label: doc.origin_label, title: doc.title, waypoints: waypointStations(doc), legs: (doc.legs ?? []).map((l) => `${l.from}>${l.to}${l.routed ? '' : '(unrouted)'}`), feasible: doc.summary?.feasible ?? null, eva_min: doc.summary?.eva_min ?? null } : null)
 
 /** Run one scenario: catches its own failure, records timing, never stops the others. */
 async function scenario(key, what, fn) {
@@ -559,6 +658,130 @@ try {
     const criteria = { precomputedLabel: !!r.v?.label?.includes(PRE_LABEL), sameAsStatic: a.length === 3 && same(a, b), official23: a[0] === '23', noneWithheld: withheld === 0, routeModeAuto: (await attr(p.page, S.routeMode, 'data-route-mode')) === 'auto' || null, noUncaught: uncaught('g') === 0 }
     await p.close()
     return { pass: verdict(criteria), criteria, ms: r.ms, ...r.v, staticNums: a, planNums: b }
+  })
+
+  // ---------- h. export the computed route to the simulator (W2, D110) ----------
+  // h: a feasible route (mock S4,S1,S2; real S4,S1,S6,S7: on real data S4,S1,S2 is infeasible, leg 3
+  // S2 -> pad, O2). h-infeasible: an infeasible one (mock = b's order; real S4,S1,S2): the export still
+  // validates, summary.feasible is false and only the planned legs are routed.
+  async function exportScenario(key, stops, expectFeasible) {
+    const p = await newPage(key)
+    const open = await openPanel(p)
+    await pickStops(p, stops)
+    const run = await computeAndWait(p, key)
+    const hash = p.jobs.at(-1)?.body?.hash ?? null
+    // the control right after the result (route panel), else on the result page #/plan/{hash}
+    let where = 'route panel'
+    let ctl = await findExport(p.page, 5000)
+    if (!ctl && hash) {
+      where = 'plan page'
+      await p.page.evaluate((h) => { location.hash = h }, `#/plan/${hash}`)
+      await until(async () => (await attr(p.page, S.planLabel, 'data-origin')) || null, 20000)
+      ctl = await findExport(p.page, 10000)
+    }
+    if (!ctl) where = null
+    if (ctl) await p.page.locator(ctl.sel).first().scrollIntoViewIfNeeded().catch(() => {})
+    await shot(p.page, `${key}-export-control`)
+    const ex = ctl ? await exportMission(p, key, ctl) : null
+    await shot(p.page, `${key}-after-export`)
+    const chk = ex?.file ? checkMission(ex.file) : null
+    const doc = ex?.doc ?? null
+    const rec = hash ? await apiJson(`/results/${hash}/provenance`) : null
+    const f = rec?.body?.feasibility ?? null
+    const srv = hash ? await fetch(`${CTX.api}/results/${hash}/mission.json`).then(async (r) => ({ status: r.status, doc: r.ok ? await r.json().catch(() => null) : null })).catch(() => null) : null
+    const ms = missionSummary(doc)
+    // legs: the first `planned` legs of pad -> stops -> pad routed, in order, and no other leg routed
+    const chain = ['pad', ...stops.map((_, i) => `wp${i + 1}`), 'pad']
+    const planned = f ? (f.feasible ? stops.length + 1 : f.legs_planned ?? f.leg) : null
+    const legs = doc?.legs ?? []
+    const routedLegs = legs.filter((l) => l.routed)
+    const legsOk = planned !== null && routedLegs.length === planned && legs.slice(0, planned).every((l, i) => l.routed && l.from === chain[i] && l.to === chain[i + 1])
+    const criteria = {
+      panelReady: open.ready,
+      resultShown: run.seen.result !== null,
+      runRecordAsExpected: typeof f?.feasible === 'boolean' && f.feasible === expectFeasible, // else pick another order (--export-route / --export-infeasible)
+      exportControlShown: !!ctl,
+      controlHasHook: !!ctl?.hook, // S1: data-sim-export
+      controlOriginLive: ctl?.hook ? ctl.origin === 'computed_live' : null,
+      downloaded: !!ex?.download, // a real Playwright download event
+      fileNamedMissionJson: ex?.download ? ex.name === 'mission.json' : false,
+      schemaValid: chk?.valid === true,
+      originComputedLive: doc?.origin === 'computed_live',
+      waypointsInRouteOrder: same(ms?.waypoints, stops), // every stop the user planned, in order
+      feasibleMatchesRunRecord: typeof f?.feasible === 'boolean' && doc?.summary?.feasible === f.feasible,
+      plannedLegsOnly: legsOk, // feasible: all legs routed; infeasible: only the planned prefix
+      missionIdRule: chk?.mission_id_ok === true,
+      sameAsResultFile: srv?.doc && doc ? same(srv.doc, doc) : false, // the download is the result tree's file, unchanged
+      noUncaught: uncaught(key) === 0,
+    }
+    await p.close()
+    return {
+      pass: verdict(criteria), criteria, stops, hash, where, control: ctl, export: ex && { ...ex, doc: undefined }, check: chk, mission: ms,
+      runRecordFeasibility: f, plannedLegs: planned, routedLegs: routedLegs.map((l) => `${l.from}>${l.to}`), resultFileStatus: srv?.status ?? null, missionRequests: p.missionReqs,
+      timings: { resultS: run.seen.result, exportMs: ex?.ms ?? null },
+    }
+  }
+  await scenario('h', `route ${EXPORT_ROUTE.join(', ')} -> Compute -> Send to simulator: mission.json valid, in order, computed_live, feasible`, () => exportScenario('h', EXPORT_ROUTE, true))
+  await scenario('h-infeasible', `infeasible route ${EXPORT_INFEASIBLE.join(', ')} -> export: valid, summary.feasible false, only the planned legs`, () => exportScenario('h-infeasible', EXPORT_INFEASIBLE, false))
+
+  // ---------- i. the official plan's mission.json (precomputed), live and static-first ----------
+  await scenario('i', 'official plan -> Send to simulator: mission.json valid, origin precomputed; static-first reported', async () => {
+    if (!R.official) return { skipped: 'no --official-hash given (real mode)', pass: null }
+    // live: the official permalink (API reachable)
+    const p = await newPage('i')
+    await p.page.goto(`${CTX.web}/#/plan/${R.official}`)
+    await until(async () => ((await attr(p.page, S.planLabel, 'data-origin')) === 'precomputed') || null, 20000)
+    let where = 'official plan page'
+    let ctl = await findExport(p.page, 10000)
+    if (!ctl) {
+      where = 'console'
+      await p.page.goto(`${CTX.web}/#/`)
+      await until(async () => { const h = await txt(p.page, S.headline); return h && /(^|\D)23\s*%/.test(h) ? h : null }, 30000)
+      ctl = await findExport(p.page, 8000)
+    }
+    if (!ctl) where = null
+    if (ctl) await p.page.locator(ctl.sel).first().scrollIntoViewIfNeeded().catch(() => {})
+    await shot(p.page, 'i-export-control')
+    const ex = ctl ? await exportMission(p, 'i', ctl) : null
+    const chk = ex?.file ? checkMission(ex.file) : null
+    const doc = ex?.doc ?? null
+    const live = { where, control: ctl, export: ex && { ...ex, doc: undefined }, check: chk, mission: missionSummary(doc), missionRequests: p.missionReqs }
+    const criteria = {
+      exportControlShown: !!ctl,
+      controlHasHook: !!ctl?.hook,
+      controlOriginPrecomputed: ctl?.hook ? ctl.origin === 'precomputed' : null,
+      downloaded: !!ex?.download,
+      fileNamedMissionJson: ex?.download ? ex.name === 'mission.json' : false,
+      schemaValid: chk?.valid === true, // needs WP9c's schema (origin enum gains "precomputed")
+      originPrecomputed: doc?.origin === 'precomputed',
+      missionIdRule: chk?.mission_id_ok === true,
+      noUncaught: uncaught('i') === 0,
+    }
+    await p.close()
+    // static first (API refused by the browser): reported, not judged (team lead: do not demand it)
+    const q = await newPage('i-static', { block: true })
+    await q.page.goto(`${CTX.web}/#/`)
+    await until(async () => { const h = await txt(q.page, S.headline); return h && /(^|\D)23\s*%/.test(h) ? h : null }, 30000)
+    await sleep(1500)
+    let sWhere = 'console'
+    let sCtl = await findExport(q.page, 8000)
+    if (!sCtl) {
+      sWhere = 'official plan page'
+      await q.page.goto(`${CTX.web}/#/plan/${R.official}`)
+      await sleep(3000)
+      sCtl = await findExport(q.page, 5000)
+    }
+    if (!sCtl) sWhere = null
+    await shot(q.page, 'i-static-first')
+    const sEx = sCtl ? await exportMission(q, 'i-static', sCtl) : null
+    const sChk = sEx?.file ? checkMission(sEx.file) : null
+    const staticFirst = {
+      where: sWhere, control: sCtl, export: sEx && { ...sEx, doc: undefined }, check: sChk, mission: missionSummary(sEx?.doc), missionRequests: q.missionReqs,
+      observed: { controlShown: !!sCtl, downloaded: !!sEx?.download, schemaValid: sChk?.valid ?? null, originPrecomputed: sEx?.doc ? sEx.doc.origin === 'precomputed' : null, fromStaticFile: q.missionReqs.some((r) => /\/sim\/official\/mission\.json/.test(r.url) && r.status === 200) },
+      noUncaught: uncaught('i-static') === 0,
+    }
+    await q.close()
+    return { pass: verdict(criteria), criteria, ...live, staticFirst }
   })
 } catch (e) {
   R.fatal = String(e?.stack ?? e)

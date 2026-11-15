@@ -9,6 +9,7 @@
 //   GET  /api/v1/results/{hash}/{path}       the result tree, stage by stage (see TREE below)
 //   POST /api/v1/plans/import                {hash, inputs, computed}
 //   GET  /__mock/info                        {officialHash, jobs}: harness bookkeeping, not an API path
+//   GET  /__mock/sim/official/mission.json   the official mission (precomputed), for serve-web.mjs (WP8c)
 // Every other API path answers 404 {error: "not_in_mock"}. CORS: the request Origin is echoed (the
 // web runs on a Vite port 4200-4299, the mock on 8150-8199, so the browser keeps web security on).
 //
@@ -22,6 +23,14 @@
 //   partner  scenarios/*/partner.geojson
 // The official plan (hash of contracts/backend/examples/plan_inputs.official.json) is served as
 // "precomputed" with the whole static tree, for the official-permalink check.
+//
+// SIMULATOR EXPORT (WP8c, D110; interfaces "Simulator export"): a live tree's manifest.json gets one
+// entry of kind "sim_plan" (key sim.mission, file mission.json) and, once the job is done, mission.json
+// = a contracts/bundle mission (origin computed_live, label config labels.live) built from the
+// example's fixed blocks and the mock's legs, waypoints in the submitted order, summary.feasible =
+// the run record's feasibility. The official tree serves mission.json with origin "precomputed"
+// (route S7, S6, S1, S4 from the static route file; manifest untouched, as WP9c) and the same document
+// at /__mock/sim/official/mission.json. `missionDoc` explains the placeholder numbers.
 //
 // FEASIBILITY (the infeasible variant): a placeholder time model, not the engine. Walk = straight
 // distance x DETOUR at SPEED_M_MIN, dwell = stations.json dwell_min (30) per stop; budget =
@@ -73,7 +82,8 @@ export function loadWorld(repo) {
   const ex = join(repo, 'contracts/backend/examples')
   const stations = readJson(join(data, 'stations.json'))
   const pad = readJson(join(data, 'pad.json')).pad
-  return { repo, data, ex, stations, pad, index: readJson(join(data, 'scenarios/index.json')), official: readJson(join(ex, 'plan_inputs.official.json')) }
+  const missionExample = readJson(join(repo, 'contracts/bundle/examples/mission.mission_planer.json'))
+  return { repo, data, ex, stations, pad, missionExample, index: readJson(join(data, 'scenarios/index.json')), official: readJson(join(ex, 'plan_inputs.official.json')) }
 }
 
 /** Stops with names (station id or W1, W2, ...) and positions; null position = unknown station. */
@@ -151,6 +161,141 @@ function routeGeojson(plan) {
   }
 }
 
+// ---- WP8c (D110): mission.json, the simulator plan (contracts/bundle/mission.schema.json) ----
+// A placeholder mission built like contracts/bundle/examples/mission.mission_planer.json (its fixed
+// blocks, constants and conditions are copied) from the mock's legs: one waypoint per stop IN THE
+// GIVEN ORDER (lonlat = the station's access point; `station` is an extra key, objects are open), one
+// 'out' leg per planned leg and the 'home' leg, two path rows per leg (start, end). Legs past an
+// infeasible one are routed = false with null numbers, and the timeline is then null (schema rule).
+// mission_id follows the README rule ('m-' + 12 hex of sha256(JSON.stringify(doc, id and time = ''))).
+// The numbers are placeholders, not results.
+const PROJ_R = 3396190
+const r2 = (x) => (x === null || x === undefined ? null : +x.toFixed(2))
+
+/** README id rule over the compact JSON (key order as built). */
+export function missionId(doc) {
+  const text = JSON.stringify({ ...doc, mission_id: '', created_utc: '' })
+  return `m-${createHash('sha256').update(text, 'utf8').digest('hex').slice(0, 12)}`
+}
+
+/**
+ * stops: [{name, station?, label?, at:{lon,lat}, dwell}] in visit order; legs: [{from, to, a, b, t0, t1, len}]
+ * as planned (legs[i] = chain leg i; shorter when infeasible); feasible: the run record's verdict.
+ */
+export function missionDoc(world, { pad, stops, legs, feasible, origin, originLabel, files, createdUtc }) {
+  const ex = world.missionExample
+  const rad = Math.PI / 180
+  const kx = PROJ_R * rad * Math.cos(pad.lat * rad)
+  const xy = (p) => [r2((p.lon - pad.lon) * kx), r2((p.lat - pad.lat) * PROJ_R * rad)]
+  const rate = ex.constants.effort_rate_l_min
+  const stRate = ex.constants.station_rate_l_min
+  const home = (p) => (distM(p, pad) * DETOUR) / SPEED_M_MIN
+  const chain = [{ name: 'pad', at: pad }, ...stops, { name: 'pad', at: pad }]
+  const wpName = (i) => (i === 0 || i === chain.length - 1 ? 'pad' : `wp${i}`)
+  const rows = []
+  const outLegs = []
+  let o2 = 0
+  for (let i = 0; i + 1 < chain.length; i++) {
+    const l = legs[i]
+    const kind = i + 1 === chain.length - 1 ? 'home' : 'out'
+    const base = { leg: i + 1, kind, from: wpName(i), to: wpName(i + 1) }
+    if (!l) {
+      outLegs.push({ ...base, routed: false, length_m: null, time_min: null, o2_l: null, t_start_min: null, t_end_min: null, first_row: null, n_rows: 0 })
+      continue
+    }
+    const o2Leg = (l.t1 - l.t0) * rate
+    const [ax, ay] = xy(l.a), [bx, by] = xy(l.b)
+    outLegs.push({ ...base, routed: true, length_m: r2(l.len), time_min: r2(l.t1 - l.t0), o2_l: r2(o2Leg), t_start_min: r2(l.t0), t_end_min: r2(l.t1), first_row: rows.length, n_rows: 2 })
+    const ha = home(l.a), hb = home(l.b)
+    rows.push([i + 1, 0, ax, ay, null, r2(l.t0), r2(o2), r2(ha), r2(ha * rate)])
+    o2 += o2Leg
+    rows.push([i + 1, r2(l.len), bx, by, null, r2(l.t1), r2(o2), r2(hb), r2(hb * rate)])
+    if (kind === 'out') o2 += (chain[i + 1].dwell ?? 0) * stRate
+  }
+  const waypoints = stops.map((s, i) => {
+    const l = legs[i]
+    const [x, y] = xy(s.at)
+    const t = home(s.at)
+    return {
+      index: i + 1, id: i + 1, lonlat: [s.at.lon, s.at.lat], x_m: x, y_m: y, z_m: null, note: s.label ?? s.name, tags: s.station ? ['station'] : [], station: s.station ?? null,
+      stop_min: s.dwell ?? 0, arrive_t_min: l ? r2(l.t1) : null, leave_t_min: l ? r2(l.t1 + (s.dwell ?? 0)) : null, o2_used_at_leave_l: null, t_home_min: r2(t), o2_home_l: r2(t * rate),
+    }
+  })
+  const done = !!feasible && legs.length === chain.length - 1
+  const evaMin = done ? legs.at(-1).t1 : null
+  const limit = ex.constants.eva_limit_min
+  const walk = legs.reduce((a, l) => a + (l.t1 - l.t0), 0)
+  let timeline = null
+  if (done) {
+    const trows = [[0, 'depart', null, 0, 0, 0, 0, r2(limit), 'EVA duration']]
+    for (const w of waypoints) {
+      trows.push([w.arrive_t_min, 'arrive', w.index, 0, w.t_home_min, w.o2_home_l, 0, r2(limit - w.arrive_t_min - w.t_home_min), 'EVA duration'])
+      trows.push([w.leave_t_min, 'leave', w.index, 0, w.t_home_min, w.o2_home_l, 0, r2(limit - w.leave_t_min - w.t_home_min), 'EVA duration'])
+    }
+    trows.push([r2(evaMin), 'return', null, r2(o2), 0, 0, 0, r2(limit - evaMin), 'EVA duration'])
+    const low = trows.reduce((m, r) => (r[7] < m[7] ? r : m))
+    timeline = { ...ex.timeline, terms: ['EVA duration'], rows: trows, lowest: { margin_min: low[7], binding: 'EVA duration', t_min: low[0] } }
+  }
+  const doc = {
+    schema_version: ex.schema_version,
+    kind: ex.kind,
+    mission_id: '',
+    title: `Mission · ${stops.length} waypoints · ${ex.scenario.id}`,
+    created_utc: createdUtc,
+    origin,
+    origin_label: originLabel,
+    planner: { app_commit: null, config_hash: null, routing_grid_res_m: 3, elevation_res_m: 1, files },
+    frame: {
+      ...ex.frame,
+      projection: { proj: `+proj=eqc +lat_ts=${pad.lat} +lat_0=0 +lon_0=${pad.lon} +x_0=0 +y_0=0 +R=${PROJ_R} +units=m +no_defs`, pad_xy_m: [0, r2(pad.lat * rad * PROJ_R)] },
+      pad: { kind: 'official', id: pad.id ?? 'rank1', lon: pad.lon, lat: pad.lat, elev_m: pad.elev_m ?? null, source: 'mock (tests/e2e/route/mock-api.mjs)' },
+    },
+    scenario: ex.scenario,
+    world: ex.world,
+    constants: ex.constants,
+    conditions: ex.conditions,
+    waypoints,
+    legs: outLegs,
+    path: { ...ex.path, rows },
+    timeline,
+    summary: {
+      feasible: !!feasible, walk_min: r2(walk), stop_min: stops.reduce((a, s) => a + (s.dwell ?? 0), 0), t_home_min: done ? r2(legs.at(-1).t1 - legs.at(-1).t0) : null, eva_min: r2(evaMin),
+      time_margin_min: done ? r2(limit - evaMin) : null, o2_used_l: done ? r2(o2) : null, o2_home_l: null, o2_need_l: null,
+      o2_margin_l: done ? r2(ex.constants.o2_capacity_l - ex.constants.reserve_l - o2) : null, o2_margin_min: null,
+    },
+    label: ex.label,
+    dummy: false,
+  }
+  doc.mission_id = missionId(doc)
+  return doc
+}
+
+/** A live route job's mission (origin computed_live), from the mock's plan of the submitted stops. */
+export function liveMission(world, r, createdUtc) {
+  const stops = namedStops(world, r.inputs.route?.stops ?? []).map((s, i) => {
+    const raw = r.inputs.route.stops[i]
+    const st = 'station' in raw ? world.stations.find((x) => x.id === raw.station) : null
+    return { ...s, station: st ? st.id : null, label: raw.label ?? st?.name ?? s.name }
+  })
+  const f = r.plan.feasibility
+  return missionDoc(world, {
+    pad: { ...world.pad, ...r.inputs.pad }, stops, legs: r.plan.legs, feasible: f.feasible, origin: 'computed_live', originLabel: world.labels.live,
+    files: { route: `route_${world.index.default}.geojson`, run_record: 'provenance' }, createdUtc,
+  })
+}
+
+/** The official plan's mission (origin precomputed): the static route_nom_104.geojson legs (S7, S6, S1, S4). */
+export function officialMission(world) {
+  const route = readJson(join(world.data, `route_${world.index.default}.geojson`))
+  const pt = (c) => ({ lon: c[0], lat: c[1] })
+  const legs = route.features.map((f) => ({ from: f.properties.from, to: f.properties.to, a: pt(f.geometry.coordinates[0]), b: pt(f.geometry.coordinates.at(-1)), t0: f.properties.t_start_min, t1: f.properties.t_end_min, len: f.properties.length_m }))
+  const stops = legs.slice(0, -1).map((l) => {
+    const st = world.stations.find((s) => s.id === l.to)
+    return { name: l.to, station: l.to, label: st?.name ?? l.to, at: l.b, dwell: st?.dwell_min ?? 30 }
+  })
+  return missionDoc(world, { pad: { ...world.pad }, stops, legs, feasible: true, origin: 'precomputed', originLabel: world.labels.precomputed, files: { route: `route_${world.index.default}.geojson` }, createdUtc: '2026-11-15T00:00:00Z' })
+}
+
 function defaultsDoc(world) {
   const yaml = world.yaml
   const backend = yaml.parse(readFileSync(join(world.repo, 'config/backend.yaml'), 'utf8'))
@@ -186,6 +331,7 @@ export async function startMock({ port = 8170, host = '127.0.0.1', repo = resolv
   const world = loadWorld(repo)
   world.yaml = await import(pathToFileURL(join(repo, 'web/node_modules/yaml/dist/index.js')).href).catch(() => import('yaml'))
   const defaults = defaultsDoc(world)
+  world.labels = world.yaml.parse(readFileSync(join(repo, 'config/backend.yaml'), 'utf8')).labels
   const limits = { max_stops: 8, max_free_points: 4, min_stop_spacing_m: 50, ...(defaults.limits ?? {}) }
   const runRecordExample = readJson(join(world.ex, 'run_record.route_infeasible.json'))
   const versionExample = runRecordExample.engine
@@ -195,6 +341,11 @@ export async function startMock({ port = 8170, host = '127.0.0.1', repo = resolv
   const jobs = new Map()
   results.set(officialHash, { id: null, hash: officialHash, inputs: { ...world.official, contract_version: '1.2.0' }, t0: Date.now() - 10 * stageMs * STAGES.length, plan: null, official: true })
 
+  // WP8c (D110): the simulator plan file and its manifest entry (kind sim_plan, interfaces "Simulator export")
+  const MISSION_FILE = 'mission.json'
+  const SIM_ENTRY = { 'sim.mission': { value: null, units: null, file: MISSION_FILE, script: 'server/engine/mission.py (mock: tests/e2e/route/mock-api.mjs)', commit: '0'.repeat(40), utc: '2026-11-15T00:00:00Z', kind: 'sim_plan' } }
+  let officialDoc = null
+  const official = () => (officialDoc ??= officialMission(world))
   const stagesDone = (r) => (r.official ? STAGES : STAGES.filter((_, i) => Date.now() - r.t0 >= (i + 1) * stageMs))
   function jobOf(r) {
     const done = stagesDone(r)
@@ -237,10 +388,14 @@ export async function startMock({ port = 8170, host = '127.0.0.1', repo = resolv
     const has = (s) => done.includes(s)
     const file = join(world.data, p)
     const staticDoc = () => (existsSync(file) ? readJson(file) : null)
-    if (r.official) return p.endsWith('.json') || p.endsWith('.geojson') ? staticDoc() : null
+    // WP8c: the official tree is the static one (manifest untouched, WP9c) plus mission.json (precomputed)
+    if (r.official) return p === MISSION_FILE ? official() : p.endsWith('.json') || p.endsWith('.geojson') ? staticDoc() : null
     const def = world.index.default
     if (p === 'route_nom_104.geojson' || p === `route_${def}.geojson`) return has('nominal') ? routeGeojson(r.plan) : null
-    if (p === 'manifest.json') return has('nominal') ? staticDoc() : null
+    // WP8c: a live tree's manifest lists mission.json with kind sim_plan (WP9b exporter "mission");
+    // the file itself is written once the job is done
+    if (p === 'manifest.json') return has('nominal') ? { ...staticDoc(), ...SIM_ENTRY } : null
+    if (p === MISSION_FILE) return done.length === STAGES.length && r.plan ? (r.mission ??= liveMission(world, r, iso(r.t0 + STAGES.length * stageMs))) : null
     if (p === 'scenarios/index.json') {
       if (has('bands')) return staticDoc()
       if (!has('nominal')) return null
@@ -275,6 +430,9 @@ export async function startMock({ port = 8170, host = '127.0.0.1', repo = resolv
     }
     log(`${req.method} ${url.pathname}`)
     if (url.pathname === '/__mock/info') return send(200, { officialHash, stageMs, stages: STAGES, jobs: [...jobs.values()].map((r) => ({ id: r.id, hash: r.hash, route: r.inputs.route ?? null, feasibility: r.plan?.feasibility ?? null, job: jobOf(r) })) })
+    // WP8c: the official plan's static file web/public/sim/official/mission.json (WP9c), for serve-web.mjs
+    // to serve at sim/official/mission.json while the checkout under test does not have it yet
+    if (url.pathname === '/__mock/sim/official/mission.json') return send(200, official())
     if (!url.pathname.startsWith('/api/v1/')) return send(404, { error: 'not_found' })
     const path = url.pathname.slice('/api/v1'.length)
     if (req.method === 'GET' && path === '/health') return send(200, { ok: true, engine_warm: true, queue_length: 0, heavy_jobs: 'on' })
