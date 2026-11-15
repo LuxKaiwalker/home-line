@@ -11,6 +11,7 @@ import { LiveNum } from './num'
 import { canonicalJson, exportPlanInputs } from './planio'
 import { planUrl, recordRoute, type ImportState, type PlanLoad, type PlanTree } from './plan'
 import { stopTexts } from './plans/route'
+import { planId } from './plans/store'
 import { MyPlans, SavePlan, type MyPlansProps } from './plans/view'
 import { RangeFlags } from './rangeflags'
 import { SimSlot } from './simslot'
@@ -321,7 +322,7 @@ export function PlanPage({ load, permalink, simEnabled, importState, onImportFil
       <PlanRouteMode record={record} />
       <PlanRouteSection tree={tree} hash={hash} />
       <PlanActions record={record} hash={hash} permalink={permalink} />
-      {plans && <SavePlan hash={hash} snap={plans.snap} onSave={plans.onSave} />}
+      {plans && <SavePlan hash={hash} id={planId(hash, record.inputs)} snap={plans.snap} onSave={plans.onSave} />}
       <SimSlot enabled={simEnabled} manifest={tree.manifest} base={base} />
       <ImportPanel state={importState} onFile={onImportFile} />
       {plans && <MyPlans {...plans} />}

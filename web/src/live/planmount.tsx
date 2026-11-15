@@ -118,8 +118,8 @@ export function mountPlanRoute(app: HTMLElement, opts: PlanRouteOptions): Cleanu
     snap: store.list(),
     error: plansError,
     onSave: (hash) => current && current.hash === hash && act(store.save(current)),
-    onRename: (hash, title) => act(store.rename(hash, title)),
-    onRemove: (hash) => act(store.remove(hash)),
+    onRename: (id, title) => act(store.rename(id, title)),
+    onRemove: (id) => act(store.remove(id)),
   })
 
   const getLoad = (hash: string) => {

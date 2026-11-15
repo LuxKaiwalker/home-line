@@ -1,9 +1,6 @@
-// The route a plan carries (D97): plan_inputs v1.2.0 `route`, as in R0's contract (PR #105, branch
-// ws11-route-r0: plan_inputs.schema.json properties.route, run_record route_mode). R0 is not merged
-// into design yet and the schema here (v1.0.x) refuses `route` as an unknown field, so planio.ts and
-// plan.ts check `route` here and the rest of the document against the schema; after R0 merges the
-// schema checks it too and this stays as the readable message. R5 defines its own types in
-// web/src/live/route/types.ts (not on origin/design when this was written): keep one definition then.
+// The route a plan carries (D97): plan_inputs v1.2.0 `route` (contracts/backend/plan_inputs.schema.json
+// properties.route; types RouteMode and RouteStop in ../types.ts). plan_inputs.schema.json checks it;
+// checkRoute here turns its errors into readable ones that name the stop (planio.ts import).
 //
 //   route: { mode: "auto" | "ordered", stops: [ {station: "S4"} | {lon, lat, label?} ] }
 //   missing route = auto (old files stay valid); auto: stops absent or empty; ordered: >= 1 stop
@@ -12,20 +9,12 @@
 // Structure and names only, like the schema: stop counts, spacing and validity on the terrain are
 // the server's (config/backend.yaml route.* limits, R0/R3).
 import { TITLE_MAX_CHARS } from '../config'
+import type { RouteMode, RouteStop } from '../types'
 
-export const ROUTE_MODES = ['auto', 'ordered'] as const
-export type RouteMode = (typeof ROUTE_MODES)[number]
+export type { RouteMode, RouteStop }
+export const ROUTE_MODES: readonly RouteMode[] = ['auto', 'ordered']
 
-export interface StationStop {
-  station: string
-}
-export interface PointStop {
-  lon: number
-  lat: number
-  label?: string
-}
-export type RouteStop = StationStop | PointStop
-
+/** plan_inputs.route (v1.2.0). */
 export interface RouteSpec {
   mode: RouteMode
   stops?: RouteStop[]

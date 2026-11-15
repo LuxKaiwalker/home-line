@@ -7,6 +7,7 @@
 // quota). In each case the list still works for this page from an in-memory copy and `note` says why
 // saved plans will not outlast the page. Nothing here is sent anywhere.
 import { HASH_HEX_CHARS, TITLE_MAX_CHARS } from '../config'
+import { canonicalJson } from '../planio'
 import type { PlanInputs } from '../types'
 import { checkRoute, routeOf, type RouteSpec } from './route'
 
@@ -14,7 +15,10 @@ import { checkRoute, routeOf, type RouteSpec } from './route'
 export const PLANS_KEY = 'homeline.myplans.v1'
 
 export interface SavedPlan {
-  /** Result hash: the plan opens as #/plan/{hash}. One entry per hash. */
+  /** planId(hash, inputs): one entry per result hash and route with its labels. */
+  id: string
+  /** Result hash: the plan opens as #/plan/{hash}. Labels are not hashed (D57), so plans that differ
+   *  only in stop labels share a hash; they are kept as separate entries, each with its labels. */
   hash: string
   title: string
   /** When it was saved (ISO 8601 UTC). */
@@ -52,11 +56,22 @@ export function browserStorage(): StorageLike | null {
 }
 
 const HASH_RE = new RegExp(`^[0-9a-f]{${HASH_HEX_CHARS}}$`)
+
+/** FNV-1a, 32 bit, as 8 hex characters (an entry id, not a security hash). */
+function fnv(s: string): string {
+  let h = 0x811c9dc5
+  for (let i = 0; i < s.length; i++) h = Math.imul(h ^ s.charCodeAt(i), 0x01000193) >>> 0
+  return h.toString(16).padStart(8, '0')
+}
+
+/** Entry id of a plan: its result hash plus a digest of its route with the labels (which the hash drops). */
+export const planId = (hash: string, inputs: PlanInputs): string => `${hash}-${fnv(canonicalJson(routeOf(inputs)))}`
 const isObj = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object' && !Array.isArray(v)
 
 function validEntry(e: unknown): e is SavedPlan {
   return (
     isObj(e) &&
+    typeof e.id === 'string' &&
     typeof e.hash === 'string' &&
     HASH_RE.test(e.hash) &&
     typeof e.title === 'string' &&
@@ -81,11 +96,11 @@ const newestFirst = (a: SavedPlan, b: SavedPlan) => (a.saved_utc < b.saved_utc ?
 
 export interface PlansStore {
   list(): PlansSnapshot
-  get(hash: string): SavedPlan | null
-  /** Save (or re-save) the plan of `hash`. Title: `title`, else inputs.title, else "Plan {hash}". */
+  get(id: string): SavedPlan | null
+  /** Save (or re-save: same hash and route with labels) a plan. Title: `title`, else inputs.title, else "Plan {hash}". */
   save(p: { hash: string; inputs: PlanInputs; title?: string }): PlansResult
-  rename(hash: string, title: string): PlansResult
-  remove(hash: string): PlansResult
+  rename(id: string, title: string): PlansResult
+  remove(id: string): PlansResult
 }
 
 export function createPlansStore(storage: () => StorageLike | null = browserStorage, now: () => Date = () => new Date()): PlansStore {
@@ -150,7 +165,7 @@ export function createPlansStore(storage: () => StorageLike | null = browserStor
 
   return {
     list: snapshot,
-    get: (hash) => read().find((p) => p.hash === hash) ?? null,
+    get: (id) => read().find((p) => p.id === id) ?? null,
     save({ hash, inputs, title }) {
       if (!HASH_RE.test(hash)) return { ok: false, error: `"${hash}" is not a result hash.` }
       const routeErrs = inputs.route === undefined ? [] : checkRoute(inputs.route)
@@ -159,20 +174,21 @@ export function createPlansStore(storage: () => StorageLike | null = browserStor
       const t = (title ?? fromInputs).trim() || `Plan ${hash}`
       const bad = checkTitle(t)
       if (bad) return { ok: false, error: bad }
-      const entry: SavedPlan = { hash, title: t, saved_utc: now().toISOString(), route: routeOf(inputs), inputs }
-      return write([entry, ...read().filter((p) => p.hash !== hash)])
+      const id = planId(hash, inputs)
+      const entry: SavedPlan = { id, hash, title: t, saved_utc: now().toISOString(), route: routeOf(inputs), inputs }
+      return write([entry, ...read().filter((p) => p.id !== id)])
     },
-    rename(hash, title) {
+    rename(id, title) {
       const bad = checkTitle(title)
       if (bad) return { ok: false, error: bad }
       const plans = read()
-      if (!plans.some((p) => p.hash === hash)) return { ok: false, error: `No saved plan ${hash}.` }
-      return write(plans.map((p) => (p.hash === hash ? { ...p, title: title.trim() } : p)))
+      if (!plans.some((p) => p.id === id)) return { ok: false, error: `No saved plan ${id}.` }
+      return write(plans.map((p) => (p.id === id ? { ...p, title: title.trim() } : p)))
     },
-    remove(hash) {
+    remove(id) {
       const plans = read()
-      if (!plans.some((p) => p.hash === hash)) return { ok: false, error: `No saved plan ${hash}.` }
-      return write(plans.filter((p) => p.hash !== hash))
+      if (!plans.some((p) => p.id === id)) return { ok: false, error: `No saved plan ${id}.` }
+      return write(plans.filter((p) => p.id !== id))
     },
   }
 }

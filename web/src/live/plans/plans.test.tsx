@@ -1,9 +1,9 @@
-// R7 (D97 §3.7) known answers: "My plans" saves, lists, renames and deletes with storage present;
+// R7 (D97 §3.7, contracts v1.2.0) known answers: "My plans" saves, lists, renames and deletes with storage present;
 // works with empty storage, with no storage, with storage that throws (private mode) and with a full
 // storage, and then says so on screen; export -> import keeps the route (ordered stations and free
 // points with labels); a bad route is refused with readable errors; a permalink whose run record
 // carries a route shows its route mode.
-import { existsSync, readFileSync } from 'node:fs'
+import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { Fragment, type VNode } from 'preact'
 import { describe, expect, it } from 'vitest'
@@ -19,7 +19,7 @@ import { mockLiveLoader } from '../result'
 import { textOf, toHtml } from '../testing/html'
 import type { PlanInputs, RunRecord } from '../types'
 import { checkRoute, routeOf, routeText, type RouteSpec } from './route'
-import { createPlansStore, NOTE_FULL, NOTE_UNAVAILABLE, NOTE_UNREADABLE, PLANS_KEY, savedPlanInputs, type PlansStore, type StorageLike } from './store'
+import { createPlansStore, planId, NOTE_FULL, NOTE_UNAVAILABLE, NOTE_UNREADABLE, PLANS_KEY, savedPlanInputs, type PlansStore, type StorageLike } from './store'
 import { MyPlans, PLANS_CAPTION, SavePlan, type MyPlansProps } from './view'
 
 const H1 = '0123456789abcdef'
@@ -57,6 +57,10 @@ const throwing: StorageLike = {
 
 let tick = 0
 const clock = () => new Date(Date.UTC(2026, 10, 15, 10, 0, tick++))
+
+/** The saved entry of a result hash (tests save one entry per hash unless they say otherwise). */
+const byHash = (store: PlansStore, h: string) => store.list().plans.find((p) => p.hash === h) ?? null
+const idOf = (store: PlansStore, h: string) => byHash(store, h)?.id ?? `missing-${h}`
 
 /** MyPlans props over a store, the way planmount.tsx builds them. */
 function propsOf(store: PlansStore, current?: { hash: string; inputs: PlanInputs }): MyPlansProps & { lastError: () => string | null } {
@@ -100,16 +104,16 @@ describe('"My plans" store, storage present', () => {
       [H1, 'Rim first'],
     ])
     expect(store.save({ hash: H3, inputs: { ...(PLAN_INPUTS_OFFICIAL as PlanInputs), title: undefined } })).toEqual({ ok: true })
-    expect(store.get(H3)?.title).toBe(`Plan ${H3}`)
-    expect(store.remove(H3)).toEqual({ ok: true })
+    expect(byHash(store, H3)?.title).toBe(`Plan ${H3}`)
+    expect(store.remove(idOf(store, H3))).toEqual({ ok: true })
     expect(snap.plans[1].route).toEqual(ROUTE)
     expect(snap.plans[0].route).toEqual({ mode: 'auto' })
     expect(snap.plans[1].saved_utc).toMatch(/^2026-11-15T10:00:\d\dZ|^2026-11-15T10:00:\d\d\.\d{3}Z$/)
     expect(JSON.parse(m.get(PLANS_KEY)!).plans).toHaveLength(2)
 
-    expect(store.rename(H1, '  Rim, then S1  ')).toEqual({ ok: true })
-    expect(store.get(H1)?.title).toBe('Rim, then S1')
-    expect(store.remove(H2)).toEqual({ ok: true })
+    expect(store.rename(idOf(store, H1), '  Rim, then S1  ')).toEqual({ ok: true })
+    expect(byHash(store, H1)?.title).toBe('Rim, then S1')
+    expect(store.remove(idOf(store, H2))).toEqual({ ok: true })
 
     const again = createPlansStore(() => s).list()
     expect(again.plans.map((p) => [p.hash, p.title])).toEqual([[H1, 'Rim, then S1']])
@@ -124,17 +128,33 @@ describe('"My plans" store, storage present', () => {
     expect(store.list().plans.map((p) => p.title)).toEqual(['B'])
   })
 
+  it('labels are not hashed (D57): two plans with one hash but different labels are two entries, each keeping its labels', () => {
+    const store = createPlansStore(fresh(), clock)
+    const relabelled: RouteSpec = { mode: 'ordered', stops: [{ station: 'S4' }, { lon: 77.512345, lat: 18.401234, label: 'Dark sand edge' }, { station: 'S1' }, { lon: 77.5, lat: 18.39 }] }
+    store.save({ hash: H1, inputs: withRoute(ROUTE, 'First labels') })
+    store.save({ hash: H1, inputs: withRoute(relabelled, 'Second labels') })
+    const plans = store.list().plans
+    expect(plans.map((p) => p.title)).toEqual(['Second labels', 'First labels'])
+    expect(new Set(plans.map((p) => p.id)).size).toBe(2)
+    expect(plans.map((p) => p.hash)).toEqual([H1, H1])
+    const back = plans.map((p) => checkPlanInputsText(exportPlanInputs(savedPlanInputs(p)).text))
+    expect(back.map((b) => b.ok && b.inputs.route)).toEqual([relabelled, ROUTE])
+    // the same plan saved again is one entry
+    store.save({ hash: H1, inputs: withRoute(ROUTE, 'First labels') })
+    expect(store.list().plans).toHaveLength(2)
+  })
+
   it('refuses an empty or over-long title, a bad hash, a bad route, and unknown plans', () => {
     const store = createPlansStore(fresh(), clock)
     expect(store.save({ hash: 'nope', inputs: withRoute() }).ok).toBe(false)
     const bad = store.save({ hash: H1, inputs: withRoute({ mode: 'ordered', stops: [] }) })
     expect(bad.ok === false && bad.error).toMatch(/at least one stop/)
     store.save({ hash: H1, inputs: withRoute() })
-    expect(store.rename(H1, '   ')).toEqual({ ok: false, error: 'A plan needs a title.' })
-    expect(store.rename(H1, 'x'.repeat(TITLE_MAX_CHARS + 1)).ok).toBe(false)
-    expect(store.rename(H1, 'x'.repeat(TITLE_MAX_CHARS)).ok).toBe(true)
-    expect(store.rename(H3, 'x').ok).toBe(false)
-    expect(store.remove(H3).ok).toBe(false)
+    expect(store.rename(idOf(store, H1), '   ')).toEqual({ ok: false, error: 'A plan needs a title.' })
+    expect(store.rename(idOf(store, H1), 'x'.repeat(TITLE_MAX_CHARS + 1)).ok).toBe(false)
+    expect(store.rename(idOf(store, H1), 'x'.repeat(TITLE_MAX_CHARS)).ok).toBe(true)
+    expect(store.rename(idOf(store, H3), 'x').ok).toBe(false)
+    expect(store.remove(idOf(store, H3)).ok).toBe(false)
   })
 })
 
@@ -159,9 +179,9 @@ describe('"My plans" without usable storage', () => {
     const html = toHtml(<MyPlans {...props} />)
     expect(textOf(<MyPlans {...props} />)).toContain(NOTE_UNAVAILABLE)
     expect(html).toContain('role="status"')
-    props.onRename(H1, 'Renamed')
-    expect(store.get(H1)?.title).toBe('Renamed')
-    props.onRemove(H1)
+    props.onRename(idOf(store, H1), 'Renamed')
+    expect(byHash(store, H1)?.title).toBe('Renamed')
+    props.onRemove(idOf(store, H1))
     expect(store.list().plans).toEqual([])
   })
 
@@ -193,7 +213,7 @@ describe('"My plans" without usable storage', () => {
 
   it('garbage under the key: an empty list with a note; good entries survive bad ones', () => {
     expect(createPlansStore(() => memStorage({ [PLANS_KEY]: '{not json' }).s).list()).toEqual({ plans: [], persistent: true, note: NOTE_UNREADABLE })
-    const good = { hash: H1, title: 'Good', saved_utc: '2026-11-15T10:00:00.000Z', route: ROUTE, inputs: withRoute() }
+    const good = { id: planId(H1, withRoute()), hash: H1, title: 'Good', saved_utc: '2026-11-15T10:00:00.000Z', route: ROUTE, inputs: withRoute() }
     const mixed = JSON.stringify({ version: 1, plans: [good, { hash: H2, title: 3 }, { ...good, hash: H3, route: { mode: 'sideways' } }] })
     const snap = createPlansStore(() => memStorage({ [PLANS_KEY]: mixed }).s).list()
     expect(snap.plans.map((p) => p.hash)).toEqual([H1])
@@ -221,7 +241,7 @@ describe('"My plans" view', () => {
     const form = byClass(tree, 'live-plan-rename')[0]
     const input = { value: 'Renamed in the list' }
     ;(form.onSubmit as (e: unknown) => void)({ preventDefault: () => {}, currentTarget: { elements: { namedItem: (n: string) => (n === 'title' ? input : null) } } })
-    expect(store.get(H1)?.title).toBe('Renamed in the list')
+    expect(byHash(store, H1)?.title).toBe('Renamed in the list')
 
     ;(byClass(<MyPlans {...props} />, 'live-plan-delete')[0].onClick as () => void)()
     expect(store.list().plans).toEqual([])
@@ -231,18 +251,18 @@ describe('"My plans" view', () => {
     const store = createPlansStore(fresh(), clock)
     store.save({ hash: H1, inputs: withRoute() })
     const props = propsOf(store)
-    props.onRename(H1, '')
+    props.onRename(idOf(store, H1), '')
     expect(textOf(<MyPlans {...props} />)).toContain('A plan needs a title.')
   })
 
   it('"Save to My plans" saves the plan on screen and then says it is saved', () => {
     const store = createPlansStore(fresh(), clock)
     const props = propsOf(store, { hash: H1, inputs: withRoute(ROUTE, 'From the permalink') })
-    const btn = <SavePlan hash={H1} snap={props.snap} onSave={props.onSave} />
+    const btn = <SavePlan hash={H1} id={planId(H1, withRoute(ROUTE, 'From the permalink'))} snap={props.snap} onSave={props.onSave} />
     expect(textOf(btn)).toBe('Save to My plans')
     ;(elements(btn).find((p) => typeof p.onClick === 'function')!.onClick as () => void)()
-    expect(store.get(H1)).toMatchObject({ title: 'From the permalink', route: ROUTE })
-    expect(textOf(<SavePlan hash={H1} snap={props.snap} onSave={props.onSave} />)).toMatch(/Save again to My plans Saved in this browser/)
+    expect(byHash(store, H1)).toMatchObject({ title: 'From the permalink', route: ROUTE })
+    expect(textOf(<SavePlan hash={H1} id={planId(H1, withRoute(ROUTE, 'From the permalink'))} snap={props.snap} onSave={props.onSave} />)).toMatch(/Save again to My plans Saved in this browser/)
   })
 
   it('#/plan shows the import and "My plans"; without plans props it is unchanged', () => {
@@ -282,7 +302,7 @@ describe('JSON export and import carry the route (draft plan_inputs v1.2.0)', ()
     return r.ok ? '' : r.errors.join('\n')
   }
   it('refuses a bad route with readable errors naming the stop', () => {
-    expect(refused('ordered')).toMatch(/route \(draft v1\.2\.0\): \$\.route: must be an object/)
+    expect(refused('ordered')).toMatch(/route: \$\.route: must be an object/)
     expect(refused({ mode: 'shuffled', stops: [] })).toMatch(/\$\.route\.mode: must be "auto" or "ordered", not "shuffled"/)
     expect(refused({ mode: 'ordered' })).toMatch(/an ordered route needs at least one stop/)
     expect(refused({ mode: 'auto', stops: [{ station: 'S4' }] })).toMatch(/an auto route has no stops/)
@@ -353,32 +373,26 @@ describe('#/plan/{hash} permalink of a plan with a route', () => {
     const page = <PlanPage load={ok} permalink="p" simEnabled={false} importState={{ kind: 'idle' }} onImportFile={() => {}} plans={props} />
     const save = elements(page).find((p) => typeof p.onClick === 'function' && p.class === 'live-btn')!
     ;(save.onClick as () => void)()
-    expect(store.get(ok.hash)?.route).toEqual(ROUTE)
-    expect(savedPlanInputs(store.get(ok.hash)!).route).toEqual(ROUTE)
+    expect(byHash(store, ok.hash)?.route).toEqual(ROUTE)
+    expect(savedPlanInputs(byHash(store, ok.hash)!).route).toEqual(ROUTE)
     expect(textOf(<PlanPage load={ok} permalink="p" simEnabled={false} importState={{ kind: 'idle' }} onImportFile={() => {}} plans={props} />)).toContain('Saved in this browser')
   })
 })
 
-// R0's v1.2.0 examples (PR #105, contracts/backend/examples/*route*.json): checked once they are on
-// this branch, so the draft shape here cannot drift from the merged contract unnoticed.
-describe('R0 contract examples (v1.2.0), when present', () => {
-  const EX = resolve(__dirname, '../../../../contracts/backend/examples')
-  const ex = (n: string) => resolve(EX, n)
-  const json = (n: string) => JSON.parse(readFileSync(ex(n), 'utf8'))
-  const present = (ns: string[]) => ns.filter((n) => existsSync(ex(n)))
-  /** The examples on this branch, or one skipped placeholder (an empty each is an error). */
-  const cases = (ns: string[]) => (present(ns).length ? present(ns) : ['(R0 examples not on this branch)'])
-  const PI = ['plan_inputs.route_free.json', 'plan_inputs.route_ordered.json']
-  const RR = ['run_record.route_free.json', 'run_record.route_infeasible.json']
-  it.skipIf(present(PI).length === 0).each(cases(PI))('%s imports, keeps its route through export', (n) => {
+// R0's v1.2.0 examples (contracts/backend/examples/*route*.json): the route here matches the contract.
+describe('R0 contract examples (v1.2.0)', () => {
+  const json = (n: string) => JSON.parse(readFileSync(resolve(__dirname, '../../../../contracts/backend/examples', n), 'utf8'))
+  it.each(['plan_inputs.route_free.json', 'plan_inputs.route_ordered.json'])('%s imports and keeps its route (labels included) through export', (n) => {
     const doc = json(n)
     const back = checkPlanInputsText(exportPlanInputs(doc).text)
     expect(back.ok ? [] : back.errors).toEqual([])
     expect(back.ok && back.inputs.route).toEqual(doc.route)
   })
-  it.skipIf(present(RR).length === 0).each(cases(RR))('%s passes the run record check and shows its route mode', (n) => {
-    const rec = json(n) as RunRecord & { route_mode?: string }
+  it.each(['run_record.route_free.json', 'run_record.route_infeasible.json'])('%s passes the run record check and shows its route mode', (n) => {
+    const rec = json(n) as RunRecord
     expect(checkRunRecord(rec)).toEqual([])
     expect(recordRoute(rec).mode).toBe(rec.route_mode ?? 'auto')
+    const html = textOf(<ProvenancePage load={{ state: 'ok', hash: rec.hash, base: 'b', record: rec, tree: { scenario: null, timeline: null, errors: [] } as never }} />)
+    expect(html).toContain(`Route mode ${rec.route_mode}`)
   })
 })

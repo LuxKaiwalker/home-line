@@ -145,7 +145,7 @@ describe('privacy note text', () => {
   })
 
   it('"My plans": the note says saved plans stay in this browser; the store touches storage only inside try', () => {
-    expect(text).toMatch(/saved plans \("my plans"\) stay in this browser only/i)
+    expect(text).toMatch(/saved plans stay in this browser only/i)
     expect(text).toMatch(/nothing else uses browser storage/i)
     const src = read('web/src/live/plans/store.ts')
     // the storage object is obtained in one place, inside try, and every getItem/setItem call sits in a try block

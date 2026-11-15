@@ -12,9 +12,11 @@ export interface MyPlansProps {
   snap: PlansSnapshot
   /** Last action's error (a bad title …); null when none. */
   error: string | null
+  /** Save the plan on screen (its result hash). */
   onSave: (hash: string) => void
-  onRename: (hash: string, title: string) => void
-  onRemove: (hash: string) => void
+  /** Rename / delete a saved entry by its id (SavedPlan.id). */
+  onRename: (id: string, title: string) => void
+  onRemove: (id: string) => void
 }
 
 export const PLANS_TITLE = 'My plans'
@@ -44,7 +46,7 @@ export function MyPlans({ snap, error, onRename, onRemove }: MyPlansProps) {
           {snap.plans.map((p) => {
             const ex = exportPlanInputs(savedPlanInputs(p))
             return (
-              <li class="live-myplan" data-hash={p.hash} key={p.hash}>
+              <li class="live-myplan" data-hash={p.hash} key={p.id}>
                 <a class="live-plan-open" href={planUrl(p.hash)}>
                   {p.title}
                 </a>
@@ -56,7 +58,7 @@ export function MyPlans({ snap, error, onRename, onRemove }: MyPlansProps) {
                   onSubmit={(e) => {
                     e.preventDefault()
                     const input = (e.currentTarget as HTMLFormElement).elements.namedItem('title') as HTMLInputElement | null
-                    if (input) onRename(p.hash, input.value)
+                    if (input) onRename(p.id, input.value)
                   }}
                 >
                   <label>
@@ -68,7 +70,7 @@ export function MyPlans({ snap, error, onRename, onRemove }: MyPlansProps) {
                   <a class="live-btn live-plan-export" href={ex.href} download={ex.fileName}>
                     Export {ex.fileName}
                   </a>{' '}
-                  <button type="button" class="live-btn live-plan-delete" onClick={() => onRemove(p.hash)}>
+                  <button type="button" class="live-btn live-plan-delete" onClick={() => onRemove(p.id)}>
                     Delete
                   </button>
                 </form>
@@ -82,9 +84,9 @@ export function MyPlans({ snap, error, onRename, onRemove }: MyPlansProps) {
   )
 }
 
-/** "Save to My plans" for the plan on screen; says when it is saved already. */
-export function SavePlan({ hash, snap, onSave }: { hash: string } & Pick<MyPlansProps, 'snap' | 'onSave'>) {
-  const saved = snap.plans.some((p) => p.hash === hash)
+/** "Save to My plans" for the plan on screen (`id` = planId of its hash and inputs); says when it is saved already. */
+export function SavePlan({ hash, id, snap, onSave }: { hash: string; id: string } & Pick<MyPlansProps, 'snap' | 'onSave'>) {
+  const saved = snap.plans.some((p) => p.id === id)
   return (
     <p class="live-plan-save">
       <button type="button" class="live-btn" onClick={() => onSave(hash)}>
