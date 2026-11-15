@@ -4,6 +4,7 @@
 // Encoding (contracts/README.md "Field PNGs", "Cell states"): counts = R*256 + G, A = 0 no value;
 // value = counts * scale. Bounds are the outer pixel edges [w, s, e, n]; rows run north to south.
 import { STATE, VARIANTS, type CellState, type Variant } from './constants'
+import { marginAt, marginClass, type Binding, type FieldClass, type MarginInputs } from './margin'
 
 export type Bounds = [number, number, number, number]
 
@@ -164,6 +165,19 @@ export interface FieldSample {
   noRouteHome: Record<Variant, boolean>
   /** T_home as the shader draws it (manual bilinear; null if any neighbour has no value). */
   drawn: Record<Variant, number | null>
+  /** O2 home as the margin shader draws it (manual bilinear), L; null = no value. */
+  o2Drawn: number | null
+  // ---- margin mode (M3, contracts/field_shader.md §5), at the current clock minute ----
+  /** The variant used for t, margin and cls (the plan's variant). */
+  variant: Variant
+  /** T(x), min: drawn T_home of `variant` (u_k collapse not applied yet: task 4). */
+  t: number | null
+  /** m(x), min, for the current mission state; null when an input is missing or margin mode has no inputs. */
+  margin: number | null
+  /** The term that sets the margin; null when margin is null. */
+  binding: Binding | null
+  /** Class drawn in margin mode: safe / caution / limit, none, or unknown (hatch). */
+  cls: FieldClass
 }
 
 /** The decoded inputs of one scenario family (one suit mass): three t_home, o2_home nominal, cell state. */
@@ -175,6 +189,10 @@ export class FieldData {
   readonly state: StateGrid | null
   /** Files read, for the provenance popover. */
   readonly sources: string[]
+
+  /** Margin-mode inputs at the current clock (set by the field driver); null = not known. */
+  private marginInputs: MarginInputs | null = null
+  private marginVariant: Variant = 'nom'
 
   constructor(suitKg: number, t: Record<Variant, DecodedGrid>, o2: DecodedGrid | null, state: StateGrid | null, sources: string[]) {
     this.suitKg = suitKg
@@ -193,6 +211,12 @@ export class FieldData {
     return this.t.nom.bounds
   }
 
+  /** Margin inputs at the current clock (the same scalars the shader gets) and the plan variant. */
+  setMargin(inputs: MarginInputs | null, variant: Variant): void {
+    this.marginInputs = inputs
+    this.marginVariant = variant
+  }
+
   /** CPU lookup from the same decoded arrays the GPU layer uses. */
   at(lon: number, lat: number): FieldSample {
     const inside = pixelOf(this.t.nom, lon, lat) !== null
@@ -201,6 +225,13 @@ export class FieldData {
     const tHome = { opt: nearest(this.t.opt, lon, lat), nom: nearest(this.t.nom, lon, lat), con: nearest(this.t.con, lon, lat) }
     const drawn = { opt: bilinear(this.t.opt, lon, lat), nom: bilinear(this.t.nom, lon, lat), con: bilinear(this.t.con, lon, lat) }
     const noRoute = (v: Variant): boolean => inside && !unknown && tHome[v] === null
+    const variant = this.marginVariant
+    const o2Drawn = this.o2 ? bilinear(this.o2, lon, lat) : null
+    const tv = drawn[variant]
+    const m = this.marginInputs && tv !== null && o2Drawn !== null ? marginAt(this.marginInputs, tv, o2Drawn) : null
+    // class drawn in margin mode, the shader's order: outside the grid nothing is drawn; unknown
+    // terrain is hatched (never a colour); no T_home / O2_home value -> none (contract §3.1)
+    const cls: FieldClass = !inside ? 'none' : unknown ? 'unknown' : m === null ? 'none' : marginClass(m.margin)
     return {
       lon,
       lat,
@@ -211,6 +242,12 @@ export class FieldData {
       o2Home: this.o2 ? nearest(this.o2, lon, lat) : null,
       noRouteHome: { opt: noRoute('opt'), nom: noRoute('nom'), con: noRoute('con') },
       drawn,
+      o2Drawn,
+      variant,
+      t: tv,
+      margin: m ? m.margin : null,
+      binding: m ? m.binding : null,
+      cls,
     }
   }
 }

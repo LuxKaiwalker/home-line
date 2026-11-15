@@ -16,7 +16,7 @@ import { hatchDataUrl } from './hatch'
 import { edgeLabelPoints } from './labels'
 import { binEdges, stepColorExpression } from './legend'
 import { MarsScaleControl } from './scale'
-import { activeField, FIELD_TRUST, fieldRequested, loadFieldData, loadFieldLayer, setActiveField, VARIANT_OF, webgl2Available, type FieldData } from './field'
+import { activeField, BINDING_LABEL, driveMargin, FIELD_TRUST, fieldModeQuery, fieldRequested, loadFieldData, loadFieldLayer, setActiveField, VARIANT_OF, webgl2Available, zeroEdgeLabels, type FieldData, type MarginState } from './field'
 
 /** The GPU field layer handle (field/layer.ts, loaded lazily). */
 type FieldLayerHandle = ReturnType<Awaited<ReturnType<typeof loadFieldLayer>>['addFieldLayer']>
@@ -88,6 +88,12 @@ export class ConsoleMap {
   private fieldLayer: FieldLayerHandle | null = null
   private fieldData: FieldData | null = null
   private fieldOn = false
+  // WS16 task 3: margin mode (mission-state driven; ?field=margin|bands|play until the shell exists)
+  private margin: MarginState = { inputs: null, marginMode: false }
+  private marginLabels: Marker[] = []
+  private marginLabelAt = 0
+  private marginLabelTimer = 0
+  private stopMargin: (() => void) | null = null
   private stationsScenario: string | null = null
 
   constructor(container: HTMLElement, onStation: (id: string) => void) {
@@ -240,12 +246,14 @@ export class ConsoleMap {
       if (seq !== this.fieldSeq || this.fieldFailed) return
       const variant = VARIANT_OF[this.variant] ?? 'nom'
       if (!this.fieldLayer) {
-        const h = mod.addFieldLayer(this.map, fd, { budget: this.budget, variant, showBands: this.visible.bands, showHatch: this.visible.unknown }, 'iso-lines', (e) => this.fieldError(e))
+        const h = mod.addFieldLayer(this.map, fd, { budget: this.budget, variant, showBands: this.visible.bands, showHatch: this.visible.unknown, margin: null }, 'iso-lines', (e) => this.fieldError(e))
         if (this.fieldFailed) return h.remove()
         this.fieldLayer = h
       } else this.fieldLayer.setData(fd)
       this.fieldLayer.update({ variant, budget: this.budget })
       this.showField(fd)
+      this.stopMargin ??= driveMargin(() => this.fieldData?.suitKg ?? null, (s) => this.setMargin(s), fieldModeQuery(location.search, location.hash))
+      this.setMargin(this.margin)
     } catch (e) {
       this.fieldError(e)
     }
@@ -267,6 +275,36 @@ export class ConsoleMap {
     if (fd) c.setAttribute(FIELD_TRUST.sourceAttr, fd.sources.join(' '))
     else c.removeAttribute(FIELD_TRUST.sourceAttr)
     this.applyVisibility()
+  }
+
+  /** Margin mode (U2): inputs at the clock minute -> shader uniforms, fieldAt, edge labels. */
+  private setMargin(s: MarginState): void {
+    this.margin = s
+    const variant = VARIANT_OF[this.variant] ?? 'nom'
+    const inputs = this.fieldOn ? s.inputs : null
+    this.fieldData?.setMargin(s.inputs, variant)
+    this.fieldLayer?.update({ margin: inputs })
+    this.map.getContainer().setAttribute('data-field-mode', inputs ? 'margin' : 'bands')
+    // binding labels: at most 4 Hz while the clock runs (CPU scan of the drawn margin)
+    const wait = Math.max(0, this.marginLabelAt + 250 - performance.now())
+    clearTimeout(this.marginLabelTimer)
+    this.marginLabelTimer = window.setTimeout(() => this.renderMarginLabels(), wait)
+  }
+
+  private renderMarginLabels(): void {
+    this.marginLabelAt = performance.now()
+    this.marginLabels.forEach((m) => m.remove())
+    this.marginLabels = []
+    const inputs = this.fieldOn ? this.margin.inputs : null
+    const fd = this.fieldData
+    if (!inputs || !fd || !this.visible.bands) return
+    for (const l of zeroEdgeLabels(fd, inputs, VARIANT_OF[this.variant] ?? 'nom')) {
+      const el = document.createElement('div')
+      el.className = 'edge-label field-binding-label'
+      el.textContent = `0 min · ${BINDING_LABEL[l.binding]}`
+      el.title = `Zero margin: ${BINDING_LABEL[l.binding]} is the limit that binds here (margin per pixel, DESIGN U2; daylight at pad level)`
+      this.marginLabels.push(new Marker({ element: el }).setLngLat([l.lon, l.lat]).addTo(this.map))
+    }
   }
 
   /** True while the GPU field draws the bands (the polygons are hidden). */
@@ -463,6 +501,8 @@ export class ConsoleMap {
   }
 
   destroy(): void {
+    this.stopMargin?.()
+    clearTimeout(this.marginLabelTimer)
     this.fieldSeq++
     if (this.fieldData && activeField() === this.fieldData) setActiveField(null)
     this.map.remove()
