@@ -1,7 +1,18 @@
 /* Mission Planer (/mission): map left, panel right (PDF "Mission Planer" layout, app colours). */
+/* Panel background and text in the shell's palette, like the rail and top bar (user 2026-11-15); the
+   cards and the boxes on the map stay brown with brown borders (user: "keep the rectangles brown/orange"). */
+.mission {
+  --bg: var(--color-bg);
+  --panel: var(--color-sidebar);
+  --ink: var(--color-text);
+  --muted: var(--color-text-muted);
+  /* --panel-2 (cards) and --line (their borders) keep the brown of style.css */
+  --mp-float: rgba(33, 26, 23, 0.94);
+}
+.mission-panel { border-left-color: var(--color-card-border); }
 .mission-panel { width: 380px; }
 .mp-body h2 { margin-bottom: 0.25rem; }
-.mp-card { background: var(--panel-2, #2b221e); border: 1px solid var(--line); border-radius: 12px; padding: 0.6rem 0.8rem; margin: 0.75rem 0; }
+.mp-card { background: var(--panel-2); border: 1px solid var(--line); border-radius: 12px; padding: 0.6rem 0.8rem; margin: 0.75rem 0; }
 .mp-card h3 { margin-top: 0.1rem; }
 .mp-storm { display: block; margin-top: 0.45rem; font-size: 0.85rem; color: var(--muted); cursor: pointer; }
 .mp-storm:has(input:disabled) { opacity: 0.6; cursor: default; }
@@ -38,15 +49,15 @@
 }
 /* Maps switcher (bottom left, above the scale bar) */
 .mp-maps { position: absolute; left: 10px; bottom: 38px; z-index: 3; display: flex; flex-direction: column; align-items: flex-start; gap: 6px; max-width: 280px; font: 12px system-ui, sans-serif; }
-.mp-maps-btn { display: flex; align-items: center; gap: 8px; background: rgba(33, 26, 23, 0.94); color: var(--ink); border: 1px solid var(--line); border-radius: 10px; padding: 5px 10px 5px 5px; cursor: pointer; text-align: left; line-height: 1.2; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4); }
+.mp-maps-btn { display: flex; align-items: center; gap: 8px; background: var(--mp-float); color: var(--ink); border: 1px solid var(--line); border-radius: 10px; padding: 5px 10px 5px 5px; cursor: pointer; text-align: left; line-height: 1.2; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4); }
 .mp-maps-btn:hover, .mp-maps-tile:hover:not(:disabled) { border-color: var(--accent); }
 .mp-maps-swatch { width: 34px; height: 34px; border-radius: 7px; border: 1px solid rgba(255, 255, 255, 0.35); flex: none; display: inline-block; }
-.mp-maps-menu { display: flex; gap: 6px; background: rgba(33, 26, 23, 0.94); border: 1px solid var(--line); border-radius: 10px; padding: 6px; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4); }
+.mp-maps-menu { display: flex; gap: 6px; background: var(--mp-float); border: 1px solid var(--line); border-radius: 10px; padding: 6px; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4); }
 .mp-maps-tile { display: flex; flex-direction: column; align-items: center; gap: 4px; background: transparent; color: var(--ink); border: 1px solid transparent; border-radius: 8px; padding: 4px 6px; cursor: pointer; font-size: 11px; }
 .mp-maps-tile .mp-maps-swatch { width: 44px; height: 44px; }
 .mp-maps-tile.on { border-color: var(--accent); }
 .mp-maps-tile:disabled { opacity: 0.4; cursor: default; }
-.mp-maps-legend { background: rgba(33, 26, 23, 0.94); border: 1px solid var(--line); border-radius: 8px; padding: 6px 8px; color: var(--ink); }
+.mp-maps-legend { background: var(--mp-float); border: 1px solid var(--line); border-radius: 8px; padding: 6px 8px; color: var(--ink); }
 .mp-maps-legend ul { list-style: none; margin: 4px 0; padding: 0; display: grid; grid-template-columns: 1fr 1fr; gap: 2px 8px; }
 .mp-maps-legend li { display: flex; align-items: center; gap: 5px; }
 .mp-swatch { width: 12px; height: 12px; border-radius: 2px; flex: none; display: inline-block; }
@@ -85,7 +96,7 @@
 .mp-start-grid input { background: var(--bg); color: var(--ink); border: 1px solid var(--line); border-radius: 6px; padding: 3px 5px; font: inherit; font-size: 0.85rem; min-width: 0; width: 100%; box-sizing: border-box; color-scheme: dark; }
 .mp-start-foot { display: flex; justify-content: space-between; align-items: center; gap: 0.5rem; margin-top: 0.4rem; font-size: 0.8rem; }
 /* Layers panel (LayersControl.tsx), top right of the map */
-.mp-layers { position: absolute; top: 10px; right: 10px; z-index: 3; width: 250px; background: rgba(33, 26, 23, 0.94); border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4); font: 12px system-ui, sans-serif; color: var(--ink); }
+.mp-layers { position: absolute; top: 10px; right: 10px; z-index: 3; width: 250px; background: var(--mp-float); border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4); font: 12px system-ui, sans-serif; color: var(--ink); }
 .mp-layers-head { width: 100%; background: transparent; border: 0; color: var(--ink); font-weight: 700; text-align: left; padding: 6px 10px; cursor: pointer; font-size: 12px; }
 .mp-layers-body { padding: 0 10px 8px; display: grid; gap: 4px; }
 .mp-layer { display: flex; align-items: center; gap: 6px; cursor: pointer; }
@@ -95,7 +106,7 @@
 .mp-layers-note { display: block; color: var(--muted); font-size: 11px; margin-left: 20px; }
 .mp-layers-note code { font-size: 10px; }
 /* Curiosity drive-end photo popup */
-.mp-pop-wide .maplibregl-popup-content { background: #211a17; color: var(--ink); max-height: 60vh; overflow: auto; }
+.mp-pop-wide .maplibregl-popup-content { background: var(--color-sidebar); color: var(--ink); max-height: 60vh; overflow: auto; }
 .mp-photos { font: 12px system-ui, sans-serif; display: grid; gap: 4px; }
 .mp-photos h4 { margin: 6px 0 2px; font-size: 12px; }
 .mp-photo-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(84px, 1fr)); gap: 4px; }
@@ -113,7 +124,7 @@
 
 /* 2D/3D terrain control (map/terrain), bottom right: the same dark card as Maps and Layers. */
 .mission-map .maplibregl-ctrl-bottom-right .maplibregl-ctrl { margin: 0 10px 10px 0; }
-.mission-map .maplibregl-ctrl-group.hl-terrain-ctrl { flex-direction: row; align-items: center; gap: 10px; padding: 5px; background: rgba(33, 26, 23, 0.94); border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4); color: var(--ink); font: 12px system-ui, sans-serif; }
+.mission-map .maplibregl-ctrl-group.hl-terrain-ctrl { flex-direction: row; align-items: center; gap: 10px; padding: 5px; background: var(--mp-float); border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4); color: var(--ink); font: 12px system-ui, sans-serif; }
 .mission-map .hl-terrain-seg { gap: 2px; padding: 2px; border-radius: 8px; background: rgba(0, 0, 0, 0.25); }
 .mission-map .maplibregl-ctrl-group .hl-terrain-seg button { height: 26px; min-width: 34px; padding: 0 10px; border: 0; border-radius: 6px; background: transparent; color: var(--muted); font: 600 12px system-ui, sans-serif; cursor: pointer; }
 .mission-map .maplibregl-ctrl-group .hl-terrain-seg button:hover:not(:disabled):not([aria-checked='true']) { color: var(--ink); background: rgba(255, 255, 255, 0.06); }
@@ -127,7 +138,7 @@
 .mp-layers:not(:has(.mp-layers-body)) { width: auto; }
 
 /* Zoom buttons (MapLibre NavigationControl, top left): the same dark card as Maps, Layers and 2D/3D. */
-.mission-map .maplibregl-ctrl-top-left .maplibregl-ctrl-group:not(.hl-terrain-ctrl) { background: rgba(33, 26, 23, 0.94); border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4); overflow: hidden; }
+.mission-map .maplibregl-ctrl-top-left .maplibregl-ctrl-group:not(.hl-terrain-ctrl) { background: var(--mp-float); border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4); overflow: hidden; }
 .mission-map .maplibregl-ctrl-top-left .maplibregl-ctrl-group:not(.hl-terrain-ctrl) button { width: 32px; height: 32px; background-color: transparent; }
 .mission-map .maplibregl-ctrl-top-left .maplibregl-ctrl-group:not(.hl-terrain-ctrl) button + button { border-top: 1px solid var(--line); }
 .mission-map .maplibregl-ctrl-top-left .maplibregl-ctrl-group:not(.hl-terrain-ctrl) button:not(:disabled):hover { background-color: rgba(255, 255, 255, 0.06); }
