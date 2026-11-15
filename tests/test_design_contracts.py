@@ -16,6 +16,10 @@ REPO = Path(__file__).resolve().parents[1]
 CONTRACTS = REPO / "contracts"
 DESIGN_SCHEMAS = ["labels.schema.json", "storyboard.schema.json", "terrain_tiles.schema.json",
                   "highlights.schema.json"]
+# exact pin per schema: v1 frozen at merge, an additive change is a minor bump (contracts/README.md)
+DESIGN_VERSIONS = {"labels.schema.json": "1.0.0", "storyboard.schema.json": "1.0.0",
+                   "terrain_tiles.schema.json": "1.1.0",  # P2c: optional vertical_offset_m
+                   "highlights.schema.json": "1.0.0"}
 
 
 def load(name: str) -> dict:
@@ -33,13 +37,17 @@ def errs(name: str, doc) -> list[str]:
 # ------------------------------------------------------------------------------------- headers
 
 
+def test_design_versions_cover_every_schema():
+    assert set(DESIGN_VERSIONS) == set(DESIGN_SCHEMAS)
+
+
 @pytest.mark.parametrize("name", DESIGN_SCHEMAS)
 def test_schema_valid_with_repo_header(name):
     schema = load(name)
     Draft202012Validator.check_schema(schema)
     assert schema["$schema"] == "https://json-schema.org/draft/2020-12/schema"
     assert schema["$id"] == f"homeline/contracts/{name}"
-    assert schema["x-contract-version"] == "1.0.0"  # design contracts v1
+    assert schema["x-contract-version"] == DESIGN_VERSIONS[name]
     assert "Design contracts v1" in schema["description"]
     for key in ("title", "description", "x-source"):
         assert schema.get(key)
