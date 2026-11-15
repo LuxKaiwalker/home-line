@@ -25,6 +25,7 @@ export const ROUTE_MODE: Readonly<Record<string, Mode>> = {
   station: 'science',
   stations: 'science',
   trade: 'plan',
+  crew: 'plan',
   conditions: 'fly',
   hud: 'fly',
   cuff: 'report',

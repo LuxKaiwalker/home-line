@@ -38,6 +38,7 @@ export const MODE_VIEWS: Readonly<Record<Mode, readonly ModeView[]>> = {
     // The old Plan map (#/) is off the rail (user, 2026-11-15); its route still works by URL.
     { route: { name: 'mission' }, label: 'nav.views.mission', icon: 'mountain' },
     { route: { name: 'trade' }, label: 'nav.views.trade', icon: 'file-text' },
+    { route: { name: 'crew' }, label: 'nav.views.crew', icon: 'crew' },
   ],
   // Science stations: its own top-bar tab next to PLAN, a page without a map (user, 2026-11-15)
   science: [{ route: { name: 'stations' }, label: 'nav.views.stations', icon: 'flask-conical' }],
@@ -61,7 +62,7 @@ export const isMapMode = (m: Mode): boolean => m === 'plan' || m === 'fly'
  * Views without the EVA-time dock: the Mission Planer has its own planned-EVA strip; the trade table is a
  * table, not a walk on the clock (user 2026-11-15).
  */
-const NO_DOCK_ROUTES: ReadonlySet<Route['name']> = new Set(['mission', 'trade'])
+const NO_DOCK_ROUTES: ReadonlySet<Route['name']> = new Set(['mission', 'trade', 'crew'])
 /** Whether the timeline dock shows: map modes, except the views in NO_DOCK_ROUTES. */
 export const hasDock = (m: Mode, r: Route): boolean => isMapMode(m) && !NO_DOCK_ROUTES.has(r.name)
 

@@ -31,7 +31,7 @@ describe('hash router (SPEC F17 routes; mount slot for WS7)', () => {
 
   it('the nav lists every page and slot', () => {
     // the old Plan map (#/) is off the nav (user, 2026-11-15)
-    expect(NAV_ITEMS.map((n) => n.route.name)).toEqual(['mission', 'stations', 'trade', 'cuff', 'scorecard', 'about'])
+    expect(NAV_ITEMS.map((n) => n.route.name)).toEqual(['mission', 'stations', 'trade', 'crew', 'cuff', 'scorecard', 'about'])
   })
 })
 

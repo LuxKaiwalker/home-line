@@ -59,7 +59,7 @@ describe('legacy frame = the layout from before the shell', () => {
     expect(header.getAttribute('class')).toBe('topbar')
     expect(text(one(byClass(header, 'brand')))).toBe('M.A.R.V.I.S')
     const links = byTag(one(byClass(header, 'topnav')), 'a')
-    expect(links.map((a) => a.getAttribute('href'))).toEqual(['#/mission', '#/stations', '#/trade', '#/cuff', '#/scorecard', '#/about'])
+    expect(links.map((a) => a.getAttribute('href'))).toEqual(['#/mission', '#/stations', '#/trade', '#/crew', '#/cuff', '#/scorecard', '#/about'])
     expect(links.map(text)).toEqual(NAV_ITEMS.map((n) => n.label))
     expect(byClass(root, 'dummy-banner')).toHaveLength(1)
     expect(one(byTag(root, 'main')).getAttribute('class')).toBe('outlet')
@@ -171,7 +171,7 @@ describe('shell frame and islands', () => {
     expect(root().getAttribute('data-rail')).toBe('collapsed')
     expect(root().style['--hl-rail-w']).toBe(`${TOKENS.layout.leftRailCollapsed}px`)
     // collapsed on desktop: icon-only links keep their names
-    expect(byClass(root(), 'hl-rail__view').map((a) => a.getAttribute('aria-label'))).toEqual([t('nav.views.mission'), t('nav.views.trade')])
+    expect(byClass(root(), 'hl-rail__view').map((a) => a.getAttribute('aria-label'))).toEqual([t('nav.views.mission'), t('nav.views.trade'), t('nav.views.crew')])
     fire(one(byClass(root(), 'hl-rail__toggle')), 'click')
     expect(ui.panels.leftRail.value).toBe(TOKENS.layout.leftRail)
     const dockBtn = byTag(one(byClass(root(), 'hl-dock__head')), 'button')[0]
@@ -187,7 +187,7 @@ describe('shell frame and islands', () => {
     expect(root().getAttribute('data-bp')).toBe('tablet')
     expect(ui.panels.leftRail.value).toBe(TOKENS.layout.leftRail) // desktop preference: open
     expect(root().getAttribute('data-rail')).toBe('collapsed')
-    expect(byClass(root(), 'hl-rail__view').map((a) => a.getAttribute('aria-label'))).toEqual([t('nav.views.mission'), t('nav.views.trade')])
+    expect(byClass(root(), 'hl-rail__view').map((a) => a.getAttribute('aria-label'))).toEqual([t('nav.views.mission'), t('nav.views.trade'), t('nav.views.crew')])
     expect(byClass(root(), 'hl-rail__title')).toHaveLength(0)
     expect(byClass(root(), 'probe')).toHaveLength(0)
     expect(one(byClass(root(), 'hl-rail__body')).hasAttribute('hidden')).toBe(false)

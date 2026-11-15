@@ -11,6 +11,7 @@ export const VIEWS: Record<Route['name'], Loader> = {
   stations: async () => (await import('./stations')).view,
   station: async () => (await import('./station')).view,
   trade: async () => (await import('./trade')).view,
+  crew: async () => (await import('./crew')).view,
   conditions: async () => (await import('./conditions')).view,
   scorecard: async () => (await import('./scorecard')).view,
   cuff: async () => (await import('./cuff')).view,

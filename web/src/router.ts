@@ -27,9 +27,11 @@ export type Route =
   | { name: 'hud' }
   /** Mission Planer (3D map). plan: a shared plan string (mission/share.ts); add: a station id to append as a waypoint */
   | { name: 'mission'; plan?: string; add?: string }
+  /** Crew configuration: crew, masses, physiology, O2 and EVA limits the planner uses (read-only) */
+  | { name: 'crew' }
   | { name: 'notfound'; path: string }
 
-const SIMPLE = ['stations', 'trade', 'conditions', 'cuff', 'about', 'hud'] as const
+const SIMPLE = ['stations', 'trade', 'crew', 'conditions', 'cuff', 'about', 'hud'] as const
 
 type ModeView = 'hud' | 'conditions' | 'cuff' | 'scorecard' | 'about'
 /** New canonical path of every view outside PLAN (DESIGN §4.2). */
@@ -181,6 +183,7 @@ export const NAV_ITEMS: { route: Route; label: string }[] = [
   { route: { name: 'mission' }, label: 'Mission Planer' },
   { route: { name: 'stations' }, label: 'Science stations' },
   { route: { name: 'trade' }, label: 'Trade' },
+  { route: { name: 'crew' }, label: 'Crew configuration' },
   { route: { name: 'cuff' }, label: 'Cuff card' },
   { route: { name: 'scorecard' }, label: 'Scorecard' },
   { route: { name: 'about' }, label: 'About' },

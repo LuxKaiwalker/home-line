@@ -1,0 +1,13 @@
+/* Crew configuration (/crew): three quiet cards of label / value rows */
+.cr-lead { margin: 0.1rem 0 1rem; font-size: 0.88rem; color: var(--muted); }
+.cr-grid { display: grid; gap: 1rem; grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr)); align-items: start; }
+.cr-card { background: var(--panel-2); border: 1px solid var(--line); border-radius: 12px; padding: 0.75rem 1rem 0.5rem; }
+.cr-card h3 { margin: 0 0 0.35rem; font-size: 0.74rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); }
+.cr-rows { margin: 0; }
+.cr-row { display: flex; justify-content: space-between; align-items: baseline; gap: 1rem; padding: 0.5rem 0; border-top: 1px solid var(--line); }
+.cr-row:first-child { border-top: 0; }
+.cr-row dt { font-size: 0.88rem; }
+.cr-row dd { margin: 0; font-size: 0.95rem; font-weight: 600; font-variant-numeric: tabular-nums; text-align: right; white-space: nowrap; }
+.cr-note { display: block; font-size: 0.74rem; color: var(--muted); margin-top: 1px; }
+.cr-assumed { color: var(--warn); font-weight: 700; margin-left: 2px; }
+.cr-foot { margin: 1rem 0 0; font-size: 0.78rem; color: var(--muted); max-width: 90ch; }
