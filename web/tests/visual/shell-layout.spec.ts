@@ -87,20 +87,23 @@ test.describe('shell layout (§4.3)', () => {
     await card.locator('.hl-card').first().waitFor({ timeout: 30_000 })
     await expect(card.getByRole('link', { name: 'Open station' })).toHaveAttribute('href', /#\/station\/S7$/)
     await expect(page.locator('.hl-shell')).toHaveAttribute('data-sidebar', 'closed')
-    const c = await box(page, '#hl-lay-station')
     const m1 = await box(page, 'main.outlet')
     expect(Math.round(m1.width)).toBe(vp.width - railW) // the map keeps its size
+    // the card body loads lazily and grows: the card settles inside the map, clear of the dock
+    await expect.poll(async () => overlaps(await box(page, '#hl-lay-station'), await box(page, '.hl-dock')), { timeout: 5_000 }).toBe(false)
+    const c = await box(page, '#hl-lay-station')
     expect(c.x).toBeGreaterThanOrEqual(m1.x - 1)
     expect(c.x + c.width).toBeLessThanOrEqual(m1.x + m1.width + 1)
-    expect(overlaps(c, await box(page, '.hl-dock'))).toBe(false)
     expect(overlaps(c, await box(page, '.hl-rail'))).toBe(false)
     await page.keyboard.press('Escape') // the topmost container closes first
     await expect(card).toHaveCount(0)
 
-    // any other selection still opens the sidebar: the official pad (a plain click on the rover, H2b)
-    await expect(page.locator('.hl-edit-rover')).toHaveAttribute('data-select-pad', 'rank1', { timeout: 60_000 })
-    const rv = await box(page, '.hl-edit-rover')
-    await page.mouse.click(rv.x + rv.width / 2, rv.y + rv.height / 2)
+    // any other selection still opens the sidebar: the official pad, through search as well
+    await page.keyboard.press('Control+k')
+    await search.fill('PAD')
+    const pad = page.getByRole('option').filter({ hasText: /^PAD(?![0-9])/ }).first()
+    await pad.waitFor({ timeout: 10_000 })
+    await pad.click()
     await page.locator('.hl-shell[data-sidebar="open"]').waitFor({ state: 'attached', timeout: 30_000 })
     await page.locator('.hl-sidebar .hl-card').first().waitFor({ timeout: 30_000 })
     const side = await box(page, '.hl-sidebar')
