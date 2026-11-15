@@ -31,13 +31,16 @@ import { href, type Route } from '../router'
 import { buildTrack, legProfile, missionMargin } from '../mission/margin'
 import { buildMission, downloadJson, finalizeMission } from '../mission/export'
 import { detect, inMarvisViewer, sendMission } from '../marvis/bridge'
+import { PlanDock, type PlanDockState } from '../mission/PlanDock'
+import { planTimeline, stopLabel } from '../mission/planTimeline'
 import { ensureManifest } from './common'
 import type { View } from './types'
 
 export const view: View = async (el, route) => {
   const initial = route.name === 'mission' ? { plan: route.plan, add: route.add } : {}
-  el.innerHTML = `<div class="console mission"><div class="console-map mission-map"></div><aside class="console-panel mission-panel"></aside></div>`
+  el.innerHTML = `<div class="console mission"><div class="mission-main"><div class="console-map mission-map"></div><div class="mission-dock"></div></div><aside class="console-panel mission-panel"></aside></div>`
   const mapEl = el.querySelector<HTMLElement>('.mission-map')!
+  const dockEl = el.querySelector<HTMLElement>('.mission-dock')!
   const panelEl = el.querySelector<HTMLElement>('.mission-panel')!
   await ensureManifest()
   const handlers = { onAdd: (_lon: number, _lat: number) => {}, onMove: (_i: number, _lon: number, _lat: number) => {} }
@@ -49,8 +52,9 @@ export const view: View = async (el, route) => {
     for (const ev of ['mousedown', 'mouseup', 'click', 'dblclick', 'pointerdown', 'pointerup', 'touchstart', 'touchend', 'wheel']) box.addEventListener(ev, (e) => e.stopPropagation())
     mapEl.append(box)
   }
-  render(<MissionPanel mmap={mmap} handlers={handlers} mapsEl={mapsEl} layersEl={layersEl} initial={initial} />, panelEl)
+  render(<MissionPanel mmap={mmap} handlers={handlers} mapsEl={mapsEl} layersEl={layersEl} dockEl={dockEl} initial={initial} />, panelEl)
   return () => {
+    render(null, dockEl)
     render(null, mapsEl)
     render(null, layersEl)
     render(null, panelEl)
@@ -66,7 +70,21 @@ const fmtM = (v: number) => (v >= 1000 ? `${(v / 1000).toFixed(2)} km` : `${Math
 
 type Initial = { plan?: string; add?: string }
 
-function MissionPanel({ mmap, handlers, mapsEl, layersEl, initial }: { mmap: MissionMap; handlers: Handlers; mapsEl: HTMLElement; layersEl: HTMLElement; initial: Initial }) {
+function MissionPanel({
+  mmap,
+  handlers,
+  mapsEl,
+  layersEl,
+  dockEl,
+  initial,
+}: {
+  mmap: MissionMap
+  handlers: Handlers
+  mapsEl: HTMLElement
+  layersEl: HTMLElement
+  dockEl: HTMLElement
+  initial: Initial
+}) {
   const [d, setD] = useState<MissionData | null>(null)
   const [error, setError] = useState<unknown>(null)
   const [step, setStep] = useState('scenarios and pad')
@@ -288,6 +306,13 @@ function MissionPanel({ mmap, handlers, mapsEl, layersEl, initial }: { mmap: Mis
     const track = buildTrack(legs.map((l) => legProfile(l!, homeAt)), wps.map((w) => w.stopMin))
     return missionMargin(track, { tDarkMin, rad: d.rad, storm })
   }, [d, legs, wps, storm, tDarkMin])
+
+  // EVA time strip under the map: the plan's margin over time, in the timeline dock's style (no playback).
+  const labels = useMemo(() => wps.map((w, i) => stopLabel(i, w.station)), [wps])
+  useEffect(() => {
+    const state: PlanDockState = !wps.length ? { kind: 'empty' } : margin ? { kind: 'ready', tl: planTimeline(margin, labels, tDarkMin) } : { kind: 'unrouted' }
+    render(<PlanDock state={state} amberMin={CONFIG.marginAmberMin} />, dockEl)
+  }, [margin, labels, tDarkMin, wps.length])
 
   /** mission.json of the plan on screen (contracts/bundle/mission.schema.json); null without waypoints */
   const missionDoc = async () => {

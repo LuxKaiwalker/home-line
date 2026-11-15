@@ -143,3 +143,25 @@
 .mp-send:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
 .mp-send-msg { margin: 0 0 0.5rem; padding: 4px 8px; border: 1px solid var(--line); border-radius: 6px; font-size: 0.85rem; overflow-wrap: anywhere; }
 .mp-send-err { border-color: var(--bad); }
+/* EVA time strip under the map (PlanDock): the timeline dock's look, for the plan being built */
+.mission-main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.mission-main > .mission-map { flex: 1; min-height: 0; }
+.mission-dock { flex: none; }
+.mp-dock { background: var(--color-sidebar); border-top: 1px solid var(--color-card-border); padding: var(--space-1) var(--space-3); display: flex; flex-direction: column; height: var(--layout-timeline); }
+.mp-dock.is-collapsed { height: auto; }
+.mp-dock__head { display: flex; align-items: center; gap: var(--space-2); flex: none; }
+.mp-dock__toggle { background: transparent; border: 1px solid var(--color-card-border); border-radius: 4px; color: var(--color-text-muted); width: 22px; height: 18px; line-height: 1; padding: 0; cursor: pointer; font-size: 11px; }
+.mp-dock__toggle:hover { color: var(--color-text); }
+.mp-dock__title { font-size: var(--font-size-label); text-transform: uppercase; letter-spacing: 0.08em; color: var(--color-text-muted); font-weight: 600; }
+.mp-dock__body { flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; }
+.mp-tl__track { cursor: crosshair; margin: 0 var(--space-4); }
+.mp-tl__side { flex-direction: row; gap: var(--space-3); }
+.mp-tl__read { display: flex; flex-direction: column; min-width: 7.5rem; font-variant-numeric: tabular-nums; }
+.mp-tl__read b { color: var(--color-text); font-size: var(--font-size-body); line-height: var(--line-height-body); }
+.mp-tl__k { font-size: var(--font-size-label); color: var(--color-text-muted); white-space: nowrap; }
+.mp-tl__v--safe { color: var(--color-safe) !important; }
+.mp-tl__v--caution { color: var(--color-caution) !important; }
+.mp-tl__v--limit { color: var(--color-limit) !important; }
+@media (max-width: 760px) {
+  .mp-tl__side { display: none; }
+}
