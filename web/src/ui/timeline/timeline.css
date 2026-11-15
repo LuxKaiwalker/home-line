@@ -66,3 +66,9 @@
 
 /* tablet dock (96 px): drop the side column */
 .hl-shell[data-bp=tablet] .hl-tl__side { display: none; }
+
+/* Keyboard focus on manifest number links inside the dock (U12 a11y-perf: ring ≥ line.focusRingPx). */
+.hl-tl a:focus-visible {
+  outline: var(--line-focus-ring) solid var(--color-select);
+  outline-offset: var(--line-focus-ring);
+}
