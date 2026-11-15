@@ -132,8 +132,11 @@ describe('shell frame and islands', () => {
     expect(byClass(root(), 'hl-rail__view').map((a) => a.getAttribute('href'))).toEqual(['#/stations'])
   })
 
-  it('the Mission Planer (PLAN) has no EVA-time dock; the Plan view keeps it', () => {
+  it('the Mission Planer and the Trade table (PLAN) have no EVA-time dock; the Plan view keeps it', () => {
     act(() => void applyRoute({ name: 'mission' }, '#/mission'))
+    expect(ui.mode.value).toBe('plan')
+    expect(root().getAttribute('data-dock')).toBe('none')
+    act(() => void applyRoute({ name: 'trade' }, '#/trade'))
     expect(ui.mode.value).toBe('plan')
     expect(root().getAttribute('data-dock')).toBe('none')
     act(() => void applyRoute({ name: 'console' }, '#/'))
