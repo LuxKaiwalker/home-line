@@ -22,6 +22,17 @@
     "shortcuts": "Keyboard shortcuts",
     "legacyView": "Old view",
     "skipToMap": "Skip to the map",
+    "mainContent": "Main content",
+    "sidebar": {
+      "label": "Details panel",
+      "open": "Show the details panel",
+      "close": "Hide the details panel"
+    },
+    "dock": {
+      "label": "Mission timeline",
+      "collapse": "Hide the mission timeline",
+      "expand": "Show the mission timeline"
+    },
     "rail": {
       "summary": "Plan summary",
       "crewBudgets": "Crew and budgets",
@@ -114,7 +125,8 @@
       "invalidSpot": "Not a valid rover pad spot: {reason}",
       "invalidSteep": "too steep for the rover",
       "invalidUnknown": "no assessed terrain here",
-      "invalidOutside": "the flat walkback disc leaves the terrain grid"
+      "invalidOutside": "the flat walkback disc leaves the terrain grid",
+      "reachableStations": "Reachable stations"
     },
     "station": {
       "title": "Science target",
@@ -132,7 +144,8 @@
       "notReachable": "Not reachable on foot",
       "accessCell": "Access cell",
       "walkIn": "Straight walk-in from the access cell (not modelled)",
-      "next": "Next station"
+      "next": "Next station",
+      "dwellPlanned": "Planned dwell"
     },
     "scoredSite": {
       "title": "Scored site",
@@ -195,7 +208,12 @@
       "physiology": "Physiology: oxygen, daylight, dose or EVA duration runs out",
       "slope": "Slope: the ground beyond is too steep to walk",
       "data": "Data: no metre-scale terrain beyond this edge",
-      "whatWouldMoveIt": "What would move it"
+      "whatWouldMoveIt": "What would move it",
+      "moveIt": {
+        "physiology": "More of the binding budget: O₂, a later end of daylight, a larger dose allowance or a longer EVA",
+        "slope": "Nothing in the plan: the ground itself is too steep; look for the nearest way around",
+        "data": "Metre-scale terrain beyond the edge; until it exists the area stays unknown"
+      }
     },
     "landmark": {
       "title": "Landmark",
@@ -275,7 +293,8 @@
     },
     "dummy": {
       "label": "Dummy data",
-      "explanation": "Dummy data: synthetic world, not Mars results. Never capture."
+      "explanation": "Dummy data: synthetic world, not Mars results. Never capture.",
+      "banner": "Dummy data · synthetic world, not Mars results · never capture"
     }
   },
 
@@ -354,7 +373,14 @@
     "storm": "Replay the {storm_date} storm during this EVA; its tripwire fires at {time}",
     "stormUnavailable": "Storm replay unavailable: no tripwire, dose limit or route time home known",
     "drift": "Dead reckoning: the circle grows with distance since the last fix; fixes at the rover pad and surveyed stations",
-    "layerCap": "At most {max} thematic overlays at once · turned off {layer}"
+    "layerCap": "At most {max} thematic overlays at once · turned off {layer}",
+    "threadNoMargin": "Home in {t_home} min",
+    "elevationNone": "Not in the field data: no elevation layer on this map yet",
+    "compassNorth": "North",
+    "compassSun": "Sun",
+    "compassSunAt": "Sun at azimuth {azimuth}° · elevation {elevation}°",
+    "compassSunNone": "Sun direction unknown at this minute",
+    "fieldLookup": "Field lookup: {file} (nearest pixel)"
   },
 
   "layers": {
@@ -374,7 +400,8 @@
     "siting": { "name": "Siting heatmap", "what": "Where a rover pad scores best for science within reach" },
     "partner": { "name": "Partner line", "what": "How far one crewmember could haul the other back on the cart" },
     "parking": { "name": "Rover parking options", "what": "Alternative rover pads and their homelines" },
-    "edgeCauses": { "name": "Homeline edge causes", "what": "What sets each part of the edge: physiology, slope or data" }
+    "edgeCauses": { "name": "Homeline edge causes", "what": "What sets each part of the edge: physiology, slope or data" },
+    "flatCircle": { "name": "Flat circle", "what": "NASA's walkback on flat ground at walking pace, in every direction (dashed)" }
   },
 
   "timeline": {
@@ -387,7 +414,9 @@
     "marginCurve": "Margin over time",
     "elevationProfile": "Elevation profile",
     "expand": "Show elevation profile",
-    "collapse": "Hide elevation profile"
+    "collapse": "Hide elevation profile",
+    "title": "Mission timeline",
+    "notReady": "The mission timeline is not available yet"
   },
 
   "gauges": {
@@ -455,7 +484,15 @@
     "snapStatic": "Live planning is offline: the rover snaps between the precomputed parking options",
     "previewNote": "Instant preview: an estimate until the full plan is computed",
     "undoEmpty": "Nothing to undo",
-    "redoEmpty": "Nothing to redo"
+    "redoEmpty": "Nothing to redo",
+    "previewEstimates": "Feasible EVAs and reachable stations are estimates until the full plan is computed",
+    "reasons": {
+      "customPad": "A rover pad spot of your own needs live planning",
+      "dwell": "A changed dwell needs live planning",
+      "parkingSuit": "Parking options are precomputed for the default suit only",
+      "padSuit": "Rover pads other than the official one are computed for the default suit only",
+      "budget": "No precomputed homeline for a {budget_min}-minute walkback budget at this rover pad"
+    }
   },
 
   "stepper": {
@@ -506,6 +543,11 @@
       "warming": "Live planning is warming up · showing precomputed plans",
       "checking": "Checking live planning…",
       "unavailableHere": "Needs live planning, which is offline. The precomputed plan is shown."
+    },
+    "stale": {
+      "label": "Stale",
+      "explanation": "Computed for earlier inputs; it updates when the new result arrives",
+      "note": "Computed for earlier inputs at {time}"
     }
   },
 
@@ -526,7 +568,31 @@
   "collapse": {
     "flat": "Flat walk: {walkback_min} minutes at walking pace, in every direction",
     "real": "Real homeline: the same walk over the real terrain",
-    "headline": "Reachable within the walkback budget"
+    "headline": "Reachable within the walkback budget",
+    "toggleToFlat": "Flat vs real: show the flat circle",
+    "toggleToReal": "Flat vs real: collapse to the real homeline",
+    "flatWorld": "Flat world: the {budget_min}-min walk circle on flat ground",
+    "reachableInData": "reachable on foot within {budget_min} min (part of the circle inside the terrain data)",
+    "reachableAssessed": "reachable on foot within {budget_min} min of the assessed flat circle",
+    "ariaInData": "{value} reachable on foot, of the part of the {budget_min}-min flat circle inside the terrain data",
+    "ariaAssessed": "{value} reachable on foot, of the assessed flat {budget_min}-min circle"
+  },
+
+  "terrain": {
+    "notPublished": "3D terrain is not published in this data tree",
+    "trustNote": "Measured elevation: {sources}; heights ×{factor} in the tiles for the Earth-sized map, so one times is true shape",
+    "retryHint": "Choose 3D again to retry",
+    "lightNote": "Relief lit from the sun at the plan time; follows the clock in whole simulated minutes"
+  },
+
+  "mapLabels": {
+    "status": {
+      "official": "official",
+      "informal": "informal"
+    },
+    "expanded": "{name} · {status}",
+    "expandedFull": "{name} · {distance} from the rover pad · home in {t_home} min",
+    "offscreen": "{name} · bearing {bearing}° from the rover pad"
   },
 
   "simulator": {
@@ -596,5 +662,10 @@
     "privacy": "Privacy",
     "addOns": "Optional add-ons",
     "independence": "Independent team project for the Space Apps Challenge; not affiliated with any space agency."
+  },
+
+  "a11y": {
+    "mapSummary": "Map: the homeline covers {reachable} of the {budget_min}-minute flat circle around the rover pad",
+    "mapSummaryStations": "{reachable_count} of {station_count} science targets are reachable on foot"
   }
 }

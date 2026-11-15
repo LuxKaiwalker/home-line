@@ -104,6 +104,16 @@ describe('copy.json: shape', () => {
       'intro.gale', 'intro.walkback', 'intro.notFlat',
       'simulator.label', 'simulator.sendSlot',
       'report.sections.verdict',
+      // D6b: keys design agents had to inline (notes A2, A4, A5, M4, M5, M6, M8, H1, Q1; D79, D81)
+      'nav.mainContent', 'nav.sidebar.label', 'nav.dock.label', 'timeline.title', 'tags.dummy.banner',
+      'states.stale.label', 'states.stale.note', 'states.offline.warming',
+      'tooltips.threadNoMargin', 'tooltips.compassSunNone', 'tooltips.elevationNone', 'tooltips.fieldLookup',
+      'terrain.notPublished', 'terrain.trustNote', 'states.error.slow3d', 'states.error.webgl',
+      'collapse.toggleToFlat', 'collapse.toggleToReal', 'collapse.reachableInData', 'collapse.reachableAssessed',
+      'mapLabels.status.official', 'mapLabels.expanded',
+      'cards.homelineEdge.moveIt.physiology', 'cards.homelineEdge.moveIt.slope', 'cards.homelineEdge.moveIt.data',
+      'edit.reasons.customPad', 'edit.reasons.dwell', 'edit.previewEstimates', 'tags.estimate.label',
+      'a11y.mapSummary',
     ]
     const have = new Set(ALL.map((l) => l.path))
     for (const p of need) expect(have.has(p), p).toBe(true)
