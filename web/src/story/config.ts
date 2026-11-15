@@ -60,10 +60,10 @@ export const PANEL_MS: readonly [number, number] = TOKENS.motion.panelMs as unkn
 
 /**
  * M10c: the longest the live intro / kiosk waits before t = 0 (layers drawn once out of sight, tiles of
- * the first frame loaded), split into the warm-up and the first frame's tiles. assumed (M10c): please
- * add intro.warmup_max_ms to config/design.yaml (D). The storyboard's own timing is unchanged.
+ * the first frame loaded), split into the warm-up and the first frame's tiles. config/design.yaml
+ * intro.warmup_max_ms and intro.warmup_extra_ms (assumed, M10d). The storyboard's own timing is unchanged.
  */
-export const WARMUP_MAX_MS = 2500
-export const FIRST_FRAME_MAX_MS = 1000
+export const WARMUP_MAX_MS = cfg<number>(designRaw, 'intro.warmup_max_ms')
+export const FIRST_FRAME_MAX_MS = cfg<number>(designRaw, 'intro.warmup_extra_ms')
 /** M10c: camera path sampling step (s) for the tile prefetch along the storyboard */
 export const PREFETCH_STEP_S = 0.25
