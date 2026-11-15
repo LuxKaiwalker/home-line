@@ -97,7 +97,7 @@ export interface OverlaySpec {
   defaultOn: boolean
   /** false = not offered (feature flag; e.g. Curiosity is behind a flag) */
   enabled?: () => boolean
-  /** replaces a built-in overlay (map/overlays/catalog.ts id, e.g. 'slope'): that one is hidden */
+  /** replaces a built-in overlay (map/overlays/catalog.ts id, e.g. 'slopeClass'): that one is hidden */
   replaces?: string
   install(ctx: MapExtensionContext): OverlayHandle
 }
