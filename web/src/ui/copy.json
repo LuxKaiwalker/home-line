@@ -1202,6 +1202,10 @@
       },
       "handle": { "title": "{name}: drag to move, Delete to remove", "remove": "Remove {name}" },
       "card": { "add": "Add to route", "addTip": "Add this station to your route (estimate)", "inRoute": "In your route" }
+    },
+    "fly": {
+      "mine": "Your route",
+      "mineTip": "Fly your route (Estimate): the camera follows your route; the HUD numbers and the crew marker stay the official plan's"
     }
   }
 }

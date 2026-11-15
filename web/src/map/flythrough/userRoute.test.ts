@@ -4,6 +4,7 @@ import { Plan } from '../../hud/plan'
 import { createPlanningStore } from '../../state/planning'
 import type { LegResult, RouteResults } from '../../state/routeResults'
 import { userFlight } from './userRoute'
+import { t } from '../../ui/copy'
 
 const metric = { mPerDegLon: 59000, mPerDegLat: 59000 }
 const leg = (index: number, from: string, to: string, minutes: number | null, path: [number, number][]): LegResult => ({ index, fromStopId: from, toStopId: to, minutes, o2L: null, distanceM: null, feasible: true, path, mode: 'fast', refined: false })
@@ -61,5 +62,17 @@ describe('userFlight', () => {
     expect(userFlight({ ...r, legs: r.legs.map((l, i) => (i === 1 ? { ...l, minutes: null } : l)) }, route)).toBe(null)
     expect(userFlight(r, route, 'rank3')).toBe(null)
     expect(userFlight({ ...r, status: 'partial' }, route)).not.toBe(null)
+  })
+})
+
+// PORT I5: during a "Your route" flight the HUD and the crew marker still follow the official timeline;
+// the toggle's tip must say so, so nothing is mislabelled
+describe('"Your route" toggle copy', () => {
+  it('says the camera follows your route while the HUD numbers stay the official plan\'s (Estimate)', () => {
+    const tip = t('route.fly.mineTip')
+    expect(tip).toContain('Estimate')
+    expect(tip).toMatch(/camera follows your route/)
+    expect(tip).toMatch(/HUD numbers .*stay the official plan/)
+    expect(t('route.fly.mine')).toBe('Your route')
   })
 })

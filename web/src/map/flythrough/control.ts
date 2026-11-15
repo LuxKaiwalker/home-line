@@ -10,8 +10,6 @@ import type { FlyLayers } from './fly'
 import { planning } from '../../state/planning'
 import { getRouteResults, subscribeRouteResults } from '../../state/routeResults'
 import { flyMine, userFlight } from './userRoute'
-import copyI2 from './copy.I2.json'
-import { copyFrom } from '../../ui/copy'
 import './flythrough.css'
 
 export class FlythroughControl implements IControl {
@@ -41,12 +39,11 @@ export class FlythroughControl implements IControl {
     speed.className = 'hl-fly-btn hl-fly-speed'
     speed.hidden = true
     // PORT I2: "Your route" toggle (shown only while a user route is computed): fly it, not the official one
-    const tf = copyFrom(copyI2)
     const mine = document.createElement('button')
     mine.type = 'button'
     mine.className = 'hl-fly-btn hl-fly-mine'
-    mine.textContent = tf('mine')
-    mine.title = tf('mineTip')
+    mine.textContent = t('route.fly.mine')
+    mine.title = t('route.fly.mineTip')
     mine.hidden = true
     mine.addEventListener('click', () => {
       flyMine.value = !flyMine.peek()
