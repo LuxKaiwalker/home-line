@@ -24,10 +24,14 @@ import { MapFurniture, MARKER_LAYERS, ROUTE_LAYERS } from './furniture'
 import { LabelLayer, loadLabels, setLabelPlacementPaused, setSelectedLabel } from './labels/layer'
 import type { MapLabel } from './labels/model'
 import { TerrainController } from './terrain'
+import { framePitched } from './terrain/frame'
+import { PLAN_VIEW } from '../state/view'
+import { TOKENS } from '../ui/tokens'
 import type { RoverHandle } from '../edit/roverMap'
 import { FlythroughControl } from './flythrough/control'
 import { installStorm } from './storm'
 import { storyParams, storyRequest } from '../story/query'
+import { whenIntroStarted } from '../story/loading'
 import { CameraController, type ControllerMap } from './camera'
 import { installOverlays } from './overlays'
 import { MapSelection, SELECT_ROUTE_HIT, type SelectMap, type SelectSources } from './select'
@@ -80,6 +84,9 @@ export function blankStyle(): StyleSpecification {
 
 const EMPTY: AnyFC = { type: 'FeatureCollection', features: [] }
 
+/** px around the framed box (fitTo) */
+const FIT_PADDING_PX = 50
+
 export class ConsoleMap {
   readonly map: MlMap
   private ready: Promise<void>
@@ -129,6 +136,8 @@ export class ConsoleMap {
   private lastPadOptions: Parameters<ConsoleMap['setPadOptions']> | null = null
   // WS16 task 8 (M8): U1 terrain; the 3D code loads only when ui.view turns '3d'
   private terrain: TerrainController | null = null
+  /** L13: the last box fitTo framed (the opening 3D view and the end-of-intro hook frame it again) */
+  private lastFit: [number, number, number, number] | null = null
   // WS18 task 2: drag the rover (U15), shell frame only; lazy chunk
   private rover: RoverHandle | null = null
   // WS16 task 10 (M10): U6 flythrough button and story mode (intro, ?demo=1, ?capture=; lazy)
@@ -181,7 +190,8 @@ export class ConsoleMap {
     // X3 (fallback drill finding 1): the view may be gone before 'load'; never touch a removed map
     this.ready.then(() => !this.destroyed && this.initLayers())
     if (container.closest('.hl-shell'))
-      void this.ready.then(() => import('../edit/roverMap')).then((m) => {
+      // L12 (c): the edit code loads once the intro has started (or at once when none plays)
+      void this.ready.then(() => whenIntroStarted()).then(() => import('../edit/roverMap')).then((m) => {
         if (this.destroyed) return
         this.rover = m.installRoverDrag(this.map)
         if (this.padMarker) this.rover.attach(this.padMarker)
@@ -242,7 +252,10 @@ export class ConsoleMap {
       paint: { 'circle-radius': 4, 'circle-color': THEME.mapBackground, 'circle-stroke-color': THEME.station, 'circle-stroke-width': 2 },
     })
     this.furniture = new MapFurniture(m)
-    this.terrain = new TerrainController(m, 'iso-fill') // relief shading above the basemap, under everything else
+    // relief shading above the basemap, under everything else. L13: in the shell (Plan mode) the map
+    // opens in state/view.ts planView() — 3D by default — at plan_view's pose with the route in view
+    const planView = !!m.getContainer().closest('.hl-shell')
+    this.terrain = new TerrainController(m, 'iso-fill', planView ? { planView, frame: (animate) => this.frameRoute(animate) } : {})
     this.furniture.setRouteVisible(this.visible.route)
     this.applyFilters()
     this.applyVisibility()
@@ -620,7 +633,30 @@ export class ConsoleMap {
     const f = CONFIG.aoiFocus
     const b = new LngLatBounds([f.west, f.south], [f.east, f.north])
     for (const p of points) b.extend([p.lon, p.lat])
-    this.map.fitBounds(b, { padding: 50, duration: 0 })
+    this.lastFit = [b.getWest(), b.getSouth(), b.getEast(), b.getNorth()]
+    // L13: in 3D the box is framed at Plan mode's pose (tilted, the near half needs room)
+    if (this.terrain?.is3d) this.frameRoute(false)
+    else this.map.fitBounds(b, { padding: FIT_PADDING_PX, duration: 0 })
+  }
+
+  /** L13: Plan mode's 3D open pose (plan_view pitch/bearing) with the last fitted box in view. */
+  private frameRoute(animate: boolean): void {
+    if (this.destroyed) return
+    const pose = { pitch: PLAN_VIEW.pitch, bearing: PLAN_VIEW.bearing }
+    const ms = TOKENS.motion.cameraMs[0]
+    if (this.lastFit && framePitched(this.map as never, this.lastFit, pose, FIT_PADDING_PX, animate, ms)) return
+    if (animate) this.map.easeTo({ ...pose, duration: ms })
+    else this.map.jumpTo(pose)
+  }
+
+  /**
+   * L13 end-of-intro hook (owned by the intro, L12: call it when the intro ends or is skipped, after
+   * StoryStage.restore()): Plan mode's default view (state/view.ts planView(): ?view=, else the
+   * viewer's choice, else 3D) and, in 3D, the open pose with the route in view. `animate` eases the
+   * camera (never under reduced motion).
+   */
+  applyDefaultView({ animate = false }: { animate?: boolean } = {}): void {
+    this.terrain?.openPlanView({ animate })
   }
 
   setBudget(minutes: number): void {

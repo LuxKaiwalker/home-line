@@ -11,7 +11,7 @@ import { expect, test, type Page } from 'playwright/test'
 
 /** Load `#/` with the intro playing and its chrome hidden. */
 async function introPlaying(page: Page): Promise<void> {
-  await page.goto('/#/')
+  await page.goto('/?view=2d#/')
   await page.locator('html[data-story-chrome="hide"]').waitFor({ state: 'attached', timeout: 30_000 })
 }
 
