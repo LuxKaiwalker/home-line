@@ -210,6 +210,7 @@ $$
 
 1. Storyboards as JSON (`web/public/story/*.json`, schema in §6.3): timed steps of camera keyframes, layer changes, clock positions, field mode and collapse value, captions.
 2. Flythrough camera: smoothed route (centripetal Catmull-Rom over 20 m samples), camera 250 m behind and 120 m above the look-at point at 1× (scaled with exaggeration), look-ahead 150 m; the library computes the camera from a camera point and a look-at point.
+   *Note (T1, 2026-11-15):* `config/design.yaml` `camera.flythrough.above_m` is now 175 m (pitch 55°, was 120 m ≈ 64°), because MapLibre 6.18 selects zero tiles above about 60° pitch at this zoom; the 3D tilt cap is `terrain_3d.max_pitch_deg: 60`.
 3. Descent: low-zoom relief from the far-field elevation (CTX 20 m, MOLA–HRSC 200 m) exported as z6–10 tiles over Gale (§6.1).
 4. Intro shown once per browser (stored setting, wrapped so it never fails), never under reduced motion.
 
