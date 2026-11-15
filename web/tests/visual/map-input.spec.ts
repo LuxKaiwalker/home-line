@@ -102,22 +102,34 @@ test('a left drag on the rover moves the rover (drag readout appears)', async ({
 
 test('a left click on the S7 pill opens its card', async ({ page }) => {
   await open(page)
-  const s7 = page.locator('.hl-label[data-code="S7"]').first()
+  const s7 = page.getByRole('button', { name: /^S7: / })
   await expect(s7).toBeVisible({ timeout: 10_000 })
-  await expect(card(page)).not.toContainText('S7')
+  await expect(card(page)).not.toContainText('Science target')
   await s7.click()
-  await expect(card(page)).toContainText('S7', { timeout: 5_000 })
+  await expect(card(page)).toContainText('Science target', { timeout: 5_000 }) // copy cards.station.title
+  await expect(card(page)).toContainText('S7')
 })
 
 test('Ctrl + right drag in 3D changes the bearing', async ({ page }) => {
   const box = await open(page)
-  await page.locator('.maplibregl-canvas').focus()
-  await page.keyboard.press('t') // 2D / 3D (shell shortcut; M8 lifts maxPitch and allows rotation)
-  await expect(cam(page)).toHaveAttribute('data-terrain', '3d', { timeout: 20_000 })
-  const b0 = Number(await cam(page).getAttribute('data-camera-bearing'))
   const at = await emptySpot(page, box)
-  await page.keyboard.down('Control')
-  await drag(page, at, 80, 0, 'right')
-  await page.keyboard.up('Control')
-  await expect.poll(async () => Number(await cam(page).getAttribute('data-camera-bearing')), { timeout: 5_000 }).not.toBe(b0)
+  // headless WebGL is software-rendered: M8's FPS guard may drop back to 2D after ~3 s, so the drag
+  // follows the switch at once, and a fallback gets a fresh try (M8: pressing 3D again retries)
+  let bearing = 0
+  for (let attempt = 0; attempt < 4 && bearing === 0; attempt++) {
+    await page.locator('.maplibregl-canvas').focus()
+    await page.keyboard.press('t') // 2D / 3D (shell shortcut; M8 lifts maxPitch and allows rotation)
+    await expect(cam(page)).toHaveAttribute('data-terrain', /3d|flat/, { timeout: 20_000 })
+    if ((await cam(page).getAttribute('data-terrain')) !== '3d') continue
+    await page.keyboard.down('Control')
+    await page.mouse.move(at.x, at.y)
+    await page.mouse.down({ button: 'right' })
+    await page.mouse.move(at.x + 80, at.y, { steps: 4 })
+    await page.mouse.up({ button: 'right' })
+    await page.keyboard.up('Control')
+    await page.waitForTimeout(300)
+    bearing = Number(await cam(page).getAttribute('data-camera-bearing'))
+    if (bearing === 0 && (await cam(page).getAttribute('data-terrain')) === '3d') break
+  }
+  expect(bearing).not.toBe(0)
 })
