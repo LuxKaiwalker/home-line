@@ -38,7 +38,7 @@
 .hl-route__stop.is-dragging { opacity: var(--overlay-opacity-max); }
 .hl-route__stop[draggable='true'] { cursor: grab; }
 .hl-route__stop:focus-visible { outline: var(--line-focus-ring) solid var(--color-select); }
-.hl-route__handle { color: var(--color-text-faint); user-select: none; }
+.hl-route__handle { color: var(--color-text-muted); user-select: none; }
 .hl-route__order { font-family: var(--font-mono); color: var(--color-text-muted); font-variant-numeric: tabular-nums; }
 .hl-route__id { font-family: var(--font-mono); font-weight: var(--font-weight-label); }
 .hl-route__validity { grid-column: 4; color: var(--color-text-muted); font-size: var(--font-size-label); line-height: var(--line-height-label); }
@@ -65,7 +65,7 @@
   border-radius: var(--radius-input);
   background: var(--color-card);
 }
-.hl-route__stage { color: var(--color-text-faint); }
+.hl-route__stage { color: var(--color-text-muted); }
 .hl-route__stage.is-shown { color: var(--color-text); }
 .hl-route__progress { margin: 0; color: var(--color-text-muted); font-variant-numeric: tabular-nums; }
 .hl-route__label { margin: 0; color: var(--color-live); }
