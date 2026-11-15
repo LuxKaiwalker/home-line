@@ -13,6 +13,7 @@
 // WP12 (L6 W-4): ticking a station while the engine chooses switches to "My order" (controller); every
 // control that stays disabled names its reason (title + aria-describedby on a visible or hidden note).
 // WP12 (L6 W-1): the one compute action; the inputs line says which pad and crew go with it.
+import type { ComponentChildren } from 'preact'
 import { useEffect, useRef } from 'preact/hooks'
 import { signal, useSignalValue, type ReadSignal } from '../../state/signal'
 import { t } from '../../ui/copy'
@@ -89,6 +90,8 @@ export interface RoutePanelViewProps {
   blocked?: string | null
   /** WP12 (W-7): row layout kept since the last explicit reorder (controller.layout); null = route order */
   layout?: readonly string[] | null
+  /** S1 slot in the result box (done and infeasible results; nothing while running or without a result) */
+  resultSlot?: ResultSlot | null
   /** WP12: the root element (the panel focuses the progress through it) */
   rootRef?: { current: HTMLDivElement | null }
 }
@@ -141,7 +144,10 @@ function StageList({ c }: { c: Extract<ComputeState, { kind: 'running' | 'done' 
   )
 }
 
-function ResultView({ c }: { c: Extract<ComputeState, { kind: 'done' }> }) {
+/** Extra content of the result box (S1 "Send to simulator", mounted by the live side); done results only. */
+export type ResultSlot = (c: Extract<ComputeState, { kind: 'done' }>) => ComponentChildren
+
+function ResultView({ c, slot }: { c: Extract<ComputeState, { kind: 'done' }>; slot?: ResultSlot | null }) {
   const r = c.result
   const f = r.feasibility
   return (
@@ -182,6 +188,7 @@ function ResultView({ c }: { c: Extract<ComputeState, { kind: 'done' }> }) {
           <p class="hl-route__note">{T.infeasibleNote}</p>
         </div>
       ) : null}
+      {slot ? <div class="hl-route__result-slot">{slot(c)}</div> : null}
     </div>
   )
 }
@@ -221,7 +228,7 @@ export function RoutePanelView(p: RoutePanelViewProps) {
   return (
     <div class="hl-route" ref={p.rootRef} data-mode={route.mode} data-state={c.kind} data-feasible={c.kind === 'done' && c.result.feasibility ? String(c.result.feasibility.feasible) : undefined}>
       {/* the answer first: visible without scrolling the rail (R5-C); details below */}
-      {c.kind === 'done' ? <ResultView c={c} /> : null}
+      {c.kind === 'done' ? <ResultView c={c} slot={p.resultSlot} /> : null}
       {c.kind === 'failed' ? (
         <div class="hl-route__failed" role="alert" data-status={c.failure.status} data-code={c.failure.code}>
           <p class="hl-route__infeasible-title">
@@ -402,7 +409,7 @@ export function RoutePanelView(p: RoutePanelViewProps) {
 const NO_REASON = signal<string | null>(null)
 
 /** The panel bound to the controller (re-renders on every signal it shows). */
-export function RoutePanel({ ctl, live, reason, undo }: { ctl: RouteController; live: ReadSignal<boolean>; reason?: ReadSignal<string | null>; undo?: SharedUndo | null }) {
+export function RoutePanel({ ctl, live, reason, undo, resultSlot }: { ctl: RouteController; live: ReadSignal<boolean>; reason?: ReadSignal<string | null>; undo?: SharedUndo | null; resultSlot?: ResultSlot | null }) {
   const why = useSignalValue(reason ?? NO_REASON)
   const rootRef = useRef<HTMLDivElement | null>(null)
   const props: RoutePanelViewProps = {
@@ -420,6 +427,7 @@ export function RoutePanel({ ctl, live, reason, undo }: { ctl: RouteController; 
     blocked: useSignalValue(ctl.blocked ?? NO_REASON),
     rootRef,
     layout: useSignalValue(ctl.layout),
+    resultSlot,
   }
   useSignalValue(ctl.legs)
   useSignalValue(ctl.store.step) // the inputs line (pad, crew)

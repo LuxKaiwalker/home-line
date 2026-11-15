@@ -16,7 +16,7 @@
 import { h } from 'preact'
 import { createRouteController, type RouteController } from '../../edit/route/controller'
 import type { StationGeo, StopProbe } from '../../edit/route/model'
-import { RoutePanel } from '../../edit/route/panel'
+import { RoutePanel, type ResultSlot } from '../../edit/route/panel'
 import { createRouteStore, registerRouteDraftTarget } from '../../edit/route/store'
 import { createSharedUndo, type SharedUndo, type UndoWindow } from '../../edit/route/undo'
 import type { LonLat, PlanInputs } from '../types'
@@ -62,6 +62,8 @@ export interface MountRouteOptions {
   crew?: { jobInputs(): PlanInputs | null; blocked(): string | null; subscribe(fn: () => void): () => void } | null
   /** WP12: the handle the Live pad card uses (one compute action), once the panel exists */
   onReady?: (h: RouteHandle) => void
+  /** S1: content of the route result box (Send to simulator); default: the S1 control when enabled */
+  resultSlot?: ResultSlot | null
   /** WP12: the window for the one undo (default: window; null: none) */
   win?: UndoWindow | null
 }
@@ -261,7 +263,7 @@ export function mountRoutePanel(o: MountRouteOptions): () => void {
     const note = () =>
       (o.register ?? registerRailSection)({ id: ROUTE_SECTION_ID, modes: ['plan'], title: 'nav.rail.stationsRoute', icon: 'station', render: () => h(RouteOfflineNote, { note: noteText, key: 'offline' }) })
     const section = () => {
-      const off = (o.register ?? registerRailSection)({ id: ROUTE_SECTION_ID, modes: ['plan'], title: 'nav.rail.stationsRoute', icon: 'station', render: () => h(RoutePanel, { ctl: c, live, reason, undo, key: ROUTE_TEXT.title }) })
+      const off = (o.register ?? registerRailSection)({ id: ROUTE_SECTION_ID, modes: ['plan'], title: 'nav.rail.stationsRoute', icon: 'station', render: () => h(RoutePanel, { ctl: c, live, reason, undo, resultSlot: o.resultSlot ?? null, key: ROUTE_TEXT.title }) })
       // WP6: free waypoints (markers, click to add) and the ghost route (estimate) on the console map,
       // shown and hidden with the panel (offline: gone with the other live controls)
       const offMap = installWaypointMap(c, o.cmap)
