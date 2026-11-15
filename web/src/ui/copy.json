@@ -379,7 +379,9 @@
     "compassSun": "Sun",
     "compassSunAt": "Sun at azimuth {azimuth}° · elevation {elevation}°",
     "compassSunNone": "Sun direction unknown at this minute",
-    "fieldLookup": "Field lookup: {file} (nearest pixel)"
+    "fieldLookup": "Field lookup: {file} (nearest pixel)",
+    "hoverEstimate": "Estimate: home in {t_home} min · hold Alt for the way home",
+    "hoverNoValue": "No time home known here"
   },
 
   "layers": {
