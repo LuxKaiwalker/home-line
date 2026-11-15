@@ -98,3 +98,6 @@
   stroke: currentColor;
 }
 .hl-storm-curve__label { white-space: nowrap; }
+
+/* L2c (D111): the icon shows only in the Plan map-edge tools (views/planLayers.css) */
+.hl-storm-btn .hl-ctrl-icon { display: none; }

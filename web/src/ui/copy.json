@@ -404,7 +404,14 @@
     "partner": { "name": "Partner line", "what": "How far one crewmember could haul the other back on the cart" },
     "parking": { "name": "Rover parking options", "what": "Alternative rover pads and their homelines" },
     "edgeCauses": { "name": "Homeline edge causes", "what": "What sets each part of the edge: physiology, slope or data" },
-    "flatCircle": { "name": "Flat circle", "what": "NASA's walkback on flat ground at walking pace, in every direction (dashed)" }
+    "flatCircle": { "name": "Flat circle", "what": "NASA's walkback on flat ground at walking pace, in every direction (dashed)" },
+    "manager": {
+      "label": "Layers",
+      "legend": "Legend",
+      "tools": "Map tools",
+      "view": "Map view",
+      "exaggerationIn3d": "Vertical exaggeration applies in 3D (key T)"
+    }
   },
 
   "timeline": {
