@@ -5,6 +5,7 @@ import { effect, mission, missionClock } from '../../state'
 import { activity, controlState, end as endPlayer, start as startPlayer } from '../../state/activity'
 import { installActivityClock } from '../../state/activityClock'
 import { t } from '../../ui/copy'
+import type { FlyLayers } from './fly'
 import './flythrough.css'
 
 export class FlythroughControl implements IControl {
@@ -12,6 +13,11 @@ export class FlythroughControl implements IControl {
   private stops: (() => void)[] = []
   private flight: { stop(): void } | null = null
   private flying = false
+  private readonly layers: FlyLayers | undefined
+
+  constructor(layers?: FlyLayers) {
+    this.layers = layers
+  }
 
   onAdd(map: MlMap): HTMLElement {
     const box = document.createElement('div')
@@ -49,10 +55,14 @@ export class FlythroughControl implements IControl {
       setFlying(true)
       void import('./fly').then(async (m) => {
         if (!this.flying) return
-        const flight = await m.startFlythrough(map, () => {
-          this.flight = null
-          setFlying(false)
-        })
+        const flight = await m.startFlythrough(
+          map,
+          () => {
+            this.flight = null
+            setFlying(false)
+          },
+          this.layers,
+        )
         // stopped (store or button) while the path loaded: land at once; its stop pauses the mission
         // clock, so a replay started meanwhile plays on (the clock observer registers it again)
         if (flight && !this.flying) {

@@ -706,6 +706,17 @@
     "stormSetting": "Storm is a setting: Play replays the EVA with the storm on"
   },
 
+  "layout": {
+    "summary": {
+      "loading": "Loading the route for {label}…",
+      "noRoute": "No route for {label}",
+      "total": "total",
+      "stations": "{n} stations"
+    },
+    "storageTitle": "Stored in this browser",
+    "privacy": "No accounts, logins or cookies. Saved plans, and which panels and view you left open, stay in this browser; nothing else uses browser storage."
+  },
+
   "a11y": {
     "mapSummary": "Map: the homeline covers {reachable} of the {budget_min}-minute flat circle around the rover pad",
     "mapSummaryStations": "{reachable_count} of {station_count} science targets are reachable on foot"
