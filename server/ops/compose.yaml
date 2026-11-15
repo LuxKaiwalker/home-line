@@ -18,7 +18,11 @@ services:
       HL_SERVER_DATA: /srv/hl-data
       # kill switch (config/backend.yaml deploy.kill_switch_env): non-empty = heavy jobs off
       HL_HEAVY_JOBS_OFF: ${HL_HEAVY_JOBS_OFF:-}
-      # X-Forwarded-For is believed only when it comes from the Caddy container
+      # team token for /api/v1/admin/* (header X-HL-Team; O3). From the host environment only, never
+      # written to a file; unset/empty = admin disabled (every admin request 403 admin_disabled)
+      HL_TEAM_TOKEN: ${HL_TEAM_TOKEN:-}
+      # uvicorn --forwarded-allow-ips: X-Forwarded-For is believed only from the Caddy container
+      # (its fixed address below), so the client address (rate-limit key) is Caddy's TCP peer
       FORWARDED_ALLOW_IPS: 172.31.212.10
     volumes:
       - type: bind
@@ -51,6 +55,8 @@ services:
       api:
         condition: service_healthy
     environment:
+      # request body cap: up.sh exports config/backend.yaml limits.proxy_max_body_bytes (bytes);
+      # 2MB is only the fallback for runs without up.sh
       HL_PROXY_MAX_BODY: ${HL_PROXY_MAX_BODY:-2MB}
     volumes:
       - type: bind
