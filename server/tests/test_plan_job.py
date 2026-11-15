@@ -5,8 +5,9 @@ Known answers, on the synthetic world (pipeline/engine/synthetic.py via parity_h
   official set (D81);
 - the job runs through its stages in order (nominal, bands, partner, route, summary);
 - the stage files appear in the public tree before the job is done: after "nominal" the default
-  scenario's isochrones, edges, partner line and route are readable, while manifest.json and
-  scenarios/index.json are written once, in the summary stage;
+  scenario's isochrones, edges, partner line and route are readable, with a partial
+  manifest.json and scenarios/index.json at every stage (H5-1; their contents:
+  test_plan_stages.py);
 - a file of the nominal stage that the full call reproduces is published once (same inode);
 - the result tree validates against the web contracts; the run record validates against
   run_record.schema.json (origin computed_live, label labels.live, canonical inputs, stages with
@@ -138,12 +139,11 @@ def test_stages_in_order_and_files_before_done(inprocess):
               "route_nom_104.geojson", "timeline_nom_104.json"):
         assert f in nominal, f
     assert not any(f.startswith(("scenarios/con_", "scenarios/opt_")) for f in nominal)
-    for held in ("manifest.json", "scenarios/index.json", "stations.json"):
-        assert held not in nominal, held
+    assert "stations.json" not in nominal
     bands = conn.events[1][1]
     assert {"scenarios/con_104/isochrones.geojson", "scenarios/opt_104/edges.geojson"} <= bands
-    for name, files, _ in conn.events[:-1]:
-        assert "manifest.json" not in files and "scenarios/index.json" not in files, name
+    for name, files, _ in conn.events:  # H5-1: a partial index and manifest at every stage
+        assert "manifest.json" in files and "scenarios/index.json" in files, name
     final = conn.events[-1][1]
     assert {"manifest.json", "scenarios/index.json", "stations.json",
             "trade_table.json"} <= final
