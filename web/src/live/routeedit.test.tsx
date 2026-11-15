@@ -215,7 +215,7 @@ describe('padTool and VITE_ROUTE_EDIT (D116)', () => {
     const link = all(root, (n) => hasClass(n, 'hl-route__mission'))
     expect(link).toHaveLength(1)
     const a = byTag(link[0], 'a')[0]
-    expect(a.getAttribute('href')).toBe('#/mission')
+    expect(a.getAttribute('href')).toBe('#/') // PORT I3: the Plan view (its Route panel), no Mission Planer tab
     expect(a.textContent).toContain('Plan a route → Plan your EVA (estimate)')
     expect(all(root, (n) => hasClass(n, 'hl-route__stop'))).toEqual([])
     expect(all(root, (n) => hasClass(n, 'hl-route__stops'))).toEqual([])
