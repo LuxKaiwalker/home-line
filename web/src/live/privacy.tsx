@@ -4,8 +4,10 @@
 //
 // Every sentence matches the code (privacy.test.ts pins each one to its source); change both together:
 // - no accounts or logins: no user routes, D69 (the admin token is a team header, server/api/auth/admin.py);
-// - no cookies; browser storage only for "My plans": server/ sets no cookie, web/src uses no cookie
-//   API and no storage API outside live/plans/ (D97: saved plans, local storage, never sent);
+// - no cookies; browser storage only for "My plans" and the remembered layout: server/ sets no cookie,
+//   web/src uses no cookie API and no storage API outside live/plans/ (D97: saved plans, local storage,
+//   never sent) and ui/layout/store.ts (D111, design W-8: which panels and which 2D/3D view were left
+//   open, local storage, never sent);
 // - plan inputs and results by hash, run record: $HL_SERVER_DATA/results/{hash} (config/backend.yaml
 //   cache.dir, server/engine/results.py cache_dir), run_record.schema.json (inputs, engine, timings);
 //   least recently used trees removed when the cache is full (server/api/plans/pinning.py evict);
@@ -22,7 +24,7 @@
 export const PRIVACY_TITLE = 'Privacy'
 
 export const PRIVACY_TEXT: readonly string[] = [
-  'There are no accounts or logins and no cookies. Saved plans stay in this browser only; nothing else uses browser storage.',
+  'No accounts, logins or cookies. Saved plans, and which panels and view you left open, stay in this browser; nothing else uses browser storage.',
   'The live server keeps the plan inputs it computes (with their title) and the results, filed by a hash of the inputs, each with a run record: engine version, stages and timings.',
   'The least recently used results are removed when its cache is full.',
   'To limit how many computations one address can start, it keeps salted hashes of addresses, in memory only, cleared on restart.',
