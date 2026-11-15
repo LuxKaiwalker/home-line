@@ -82,6 +82,14 @@ export function ContextLine({ strip, padId, pads, shown, sections, onPlanRoute }
           <span class="hl-ctx__plantext">{t('route.strip.planRoute')}</span>
         </button>
       )}
+      {/* PORT I5: with a route on the map (a share link, or after closing the panel) the Route panel must
+          stay reachable; "Plan a route" is for the official plan only */}
+      {onPlanRoute && shown.kind === 'mine' && (
+        <button type="button" class="hl-ctx__edit" onClick={onPlanRoute} aria-label={t('route.strip.editRoute')} title={t('route.strip.editRoute')}>
+          <Icon name="panel-right" />
+          <span class="hl-ctx__plantext">{t('route.strip.editRoute')}</span>
+        </button>
+      )}
     </div>
   )
 }

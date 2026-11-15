@@ -22,14 +22,14 @@
 .hl-ctx__bad { color: var(--color-limit); font-weight: var(--font-weight-heading); }
 .hl-ctx__chips { display: inline-flex; align-items: center; gap: var(--space-2); flex: none; }
 .hl-ctx__choice { display: inline-flex; }
-.hl-ctx__chip, .hl-ctx__plan {
+.hl-ctx__chip, .hl-ctx__plan, .hl-ctx__edit {
   display: inline-flex; align-items: center; gap: var(--space-1);
   font: inherit; color: var(--color-text); background: var(--color-card); cursor: pointer;
   border: 1px solid var(--color-card-border); border-radius: var(--radius-input); padding: var(--space-1) var(--space-2);
 }
-.hl-ctx__plan { flex: none; }
-.hl-ctx__chip:hover, .hl-ctx__plan:hover { border-color: var(--color-text-muted); }
-.hl-ctx__chip:focus-visible, .hl-ctx__plan:focus-visible { outline: var(--line-focus-ring) solid var(--color-select); outline-offset: -2px; }
+.hl-ctx__plan, .hl-ctx__edit { flex: none; }
+.hl-ctx__chip:hover, .hl-ctx__plan:hover, .hl-ctx__edit:hover { border-color: var(--color-text-muted); }
+.hl-ctx__chip:focus-visible, .hl-ctx__plan:focus-visible, .hl-ctx__edit:focus-visible { outline: var(--line-focus-ring) solid var(--color-select); outline-offset: -2px; }
 .hl-ctx__chip[aria-expanded=true] { border-color: var(--color-select); }
 /* the chip is the opener: the popover's own icon button is not shown; the panel hangs under the top
    bar at the chip's left edge (fixed, so the bar's overflow never clips it) */

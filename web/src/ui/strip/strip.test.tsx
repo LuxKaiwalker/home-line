@@ -114,6 +114,20 @@ describe('ContextLine', () => {
     expect(text()).toContain(t('route.strip.unreachableHome'))
   })
 
+  it('your route: an "Edit route" button reopens the Route panel (share link, or after closing it)', () => {
+    let n = 0
+    const shown = shownFor(4, { ...MOCK_ROUTE_RESULTS, firstInfeasibleLeg: null, marginMin: 41.4 }, 'rank2')
+    draw(<ContextLine strip={strip} padId="rank2" pads={MOCK_PADS} shown={{ ...shown, kind: 'mine', computing: false, marginMin: 41, fast: false } as never} sections={null} onPlanRoute={() => n++} />)
+    expect(byClass(root, 'hl-ctx__plan')).toHaveLength(0)
+    const b = byClass(root, 'hl-ctx__edit')
+    expect(b).toHaveLength(1)
+    expect(attr(b[0], 'aria-label')).toBe(t('route.strip.editRoute'))
+    act(() => void b[0].dispatch('click'))
+    expect(n).toBe(1)
+    draw(<ContextLine strip={strip} padId="rank2" pads={MOCK_PADS} shown={{ ...shown, kind: 'mine', computing: false, marginMin: 41, fast: false } as never} sections={null} onPlanRoute={null} />)
+    expect(byClass(root, 'hl-ctx__edit')).toHaveLength(0)
+  })
+
   it('Plan a route calls the handler (named button)', () => {
     let n = 0
     draw(<ContextLine strip={strip} padId={null} pads={[]} shown={{ kind: 'official' }} sections={null} onPlanRoute={() => n++} />)

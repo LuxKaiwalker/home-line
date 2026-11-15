@@ -937,6 +937,7 @@
       "fast": "Fast route",
       "fastTitle": "Fast route · may not be the fastest",
       "planRoute": "Plan a route",
+      "editRoute": "Edit route",
       "scenario": "Scenario",
       "budget": "Walkback budget",
       "budgetValue": "{budget} min",
