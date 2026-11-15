@@ -25,6 +25,8 @@ export const ROUTE_TEXT = {
   hash: 'Plan hash',
   hashPending: 'known once live planning answers',
   needsLive: 'Computing a route needs live planning.',
+  checkingLive: 'Checking whether live planning is reachable…',
+  heavyJobsOff: 'Live planning is not taking new plans now.',
   legs: 'Legs',
   stagesTitle: 'Staged result',
   stageFirst: 'Nominal band and route',

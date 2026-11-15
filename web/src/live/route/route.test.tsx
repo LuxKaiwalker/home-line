@@ -8,7 +8,7 @@ import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
 import { dirname, join, relative, resolve, sep } from 'node:path'
 import { render, type ComponentChildren } from 'preact'
 import { act } from 'preact/test-utils'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { buildCatalog } from '../../edit/options'
 import type { StationGeo, StopProbe } from '../../edit/route/model'
 import { ROUTE_TEXT } from '../../edit/route/text'
@@ -17,7 +17,7 @@ import { all, byClass, hasClass, installDom, type FakeNode } from '../../ui/test
 import type { RailSection } from '../../ui/shell/store'
 import { TOKENS } from '../../ui/tokens'
 import { createApiClient } from '../client'
-import { LIVE_LABEL } from '../config'
+import { LIVE_LABEL, OFFLINE_LABEL } from '../config'
 import type { LiveState } from '../health'
 import { HEALTH_WARM } from '../mock/fixtures'
 import { createMockFetch } from '../mock/fetch'
@@ -232,6 +232,48 @@ describe('Edit-route panel (Plan rail, live builds)', () => {
     expect(q('hl-route__infeasible')).toHaveLength(0)
     await until(() => (map.data.get(FAILING_LEG_ID) as GeoJSON.FeatureCollection).features.length === 0, 'the highlight cleared')
     expect(restored.n).toBe(1) // the console's static plan is put back
+  })
+
+  it('API unreachable (published build, server down): the panel renders whole, Compute is disabled with the offline label, no errors', async () => {
+    const errs: unknown[] = []
+    const spy = [vi.spyOn(console, 'error').mockImplementation((...a) => void errs.push(a)), vi.spyOn(console, 'warn').mockImplementation((...a) => void errs.push(a))]
+    const down = (async () => {
+      throw new TypeError('Failed to fetch')
+    }) as unknown as typeof fetch
+    const client = createApiClient({ base: 'http://api.test', fetch: down })
+    let section: RailSection | null = null
+    cleanup = mountRoutePanel({
+      client,
+      onLiveState: (fn) => {
+        fn({ kind: 'offline' } as LiveState)
+        return () => {}
+      },
+      cmap: fakeConsoleMap().cm,
+      catalog,
+      stations,
+      probe,
+      register: (s) => {
+        section = s
+        return () => (section = null)
+      },
+    })
+    await until(() => section !== null, 'the rail section')
+    act(() => render((section as unknown as RailSection).render() as ComponentChildren, root as unknown as Element))
+    await act(async () => {
+      await flush()
+    })
+    mode('ordered')
+    check('S4')
+    expect(order()).toEqual(['S4']) // editing works offline (undo steps), only computing needs the server
+    expect(q('hl-route__compute')[0].hasAttribute('disabled')).toBe(true)
+    const why = text(q('hl-route__reason')[0])
+    expect(why).toContain(ROUTE_TEXT.needsLive)
+    expect(why).toContain(OFFLINE_LABEL)
+    expect(text(q('hl-route__hash')[0])).toContain(ROUTE_TEXT.hashPending)
+    click(q('hl-route__compute')[0])
+    expect(q('hl-route__stages')).toHaveLength(0) // nothing half-done
+    expect(errs).toEqual([])
+    spy.forEach((s) => s.mockRestore())
   })
 
   it('offline: Compute plan is disabled and says why', async () => {

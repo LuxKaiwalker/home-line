@@ -8,7 +8,7 @@
 //   infeasible the first failing leg, its limit and the time short; that leg is marked in the legs list
 //              and on the map; nothing is reordered
 // Every edit is one undo step (route store); Ctrl+Z / Ctrl+Shift+Z inside the panel, or the buttons.
-import { useSignalValue, type ReadSignal } from '../../state/signal'
+import { signal, useSignalValue, type ReadSignal } from '../../state/signal'
 import { Button, IconButton } from '../../ui/components/Button'
 import { cx, Icon } from '../../ui/components/Icon'
 import type { ComputeState, RouteController } from './controller'
@@ -54,6 +54,8 @@ export interface RoutePanelViewProps {
   dragging: number | null
   /** live planning can take a job now */
   live: boolean
+  /** why it cannot (offline, warming, heavy jobs off); null = the generic reason */
+  reason?: string | null
 }
 
 
@@ -251,7 +253,12 @@ export function RoutePanelView(p: RoutePanelViewProps) {
           {running ? T.computing : T.compute}
         </Button>
       </div>
-      {!p.live ? <p class="hl-route__note">{T.needsLive}</p> : null}
+      {!p.live ? (
+        <p class="hl-route__note hl-route__reason" role="status">
+          {T.needsLive}
+          {p.reason ? ` ${p.reason}` : ''}
+        </p>
+      ) : null}
       <p class="hl-route__hash">
         {T.hash}: <code>{p.hash ?? T.hashPending}</code>
       </p>
@@ -271,8 +278,11 @@ export function RoutePanelView(p: RoutePanelViewProps) {
   )
 }
 
+const NO_REASON = signal<string | null>(null)
+
 /** The panel bound to the controller (re-renders on every signal it shows). */
-export function RoutePanel({ ctl, live }: { ctl: RouteController; live: ReadSignal<boolean> }) {
+export function RoutePanel({ ctl, live, reason }: { ctl: RouteController; live: ReadSignal<boolean>; reason?: ReadSignal<string | null> }) {
+  const why = useSignalValue(reason ?? NO_REASON)
   const props: RoutePanelViewProps = {
     ctl,
     route: useSignalValue(ctl.store.route),
@@ -283,6 +293,7 @@ export function RoutePanel({ ctl, live }: { ctl: RouteController; live: ReadSign
     canRedo: useSignalValue(ctl.store.canRedo),
     dragging: useSignalValue(ctl.dragging),
     live: useSignalValue(live),
+    reason: why,
   }
   useSignalValue(ctl.legs)
   return <RoutePanelView {...props} />

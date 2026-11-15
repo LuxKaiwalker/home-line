@@ -83,6 +83,7 @@ export function mountRoutePanel(o: MountRouteOptions): () => void {
   let alive = true
   const offs: (() => void)[] = []
   const live = signal(false)
+  const reason = signal<string | null>(ROUTE_TEXT.checkingLive)
   let ctl: RouteController | null = null
 
   void (async () => {
@@ -100,6 +101,17 @@ export function mountRoutePanel(o: MountRouteOptions): () => void {
       const p = store.step.peek().inputs.pad
       return { lon: p.lon, lat: p.lat }
     }
+    let asking = false
+    function askIdentity(): void {
+      if (asking) return
+      asking = true
+      o.client
+        .engineVersion()
+        .then((v) => alive && store.setIdentity(identityOf(v)))
+        .catch(() => alive && store.setIdentity(null))
+        .finally(() => (asking = false))
+    }
+    askIdentity()
     const c = (ctl = createRouteController({
       store,
       jobs: createRouteJobs({ client: o.client, loaderFor: o.loaderFor, job: o.job }),
@@ -124,14 +136,13 @@ export function mountRoutePanel(o: MountRouteOptions): () => void {
       o.onLiveState((s) => {
         const b = bannerFor(s)
         live.value = b.controls && b.heavyJobs
+        reason.value = b.controls ? (b.heavyJobs ? null : ROUTE_TEXT.heavyJobsOff) : (b.text ?? ROUTE_TEXT.checkingLive)
         if (!b.controls) c.reset()
+        // the engine identity (plan hash) is asked again once the server is back
+        else if (!store.identity.peek()) askIdentity()
       }),
     )
-    o.client
-      .engineVersion()
-      .then((v) => alive && store.setIdentity(identityOf(v)))
-      .catch(() => alive && store.setIdentity(null))
-    offs.push((o.register ?? registerRailSection)({ id: ROUTE_SECTION_ID, modes: ['plan'], title: 'nav.rail.stationsRoute', icon: 'station', render: () => h(RoutePanel, { ctl: c, live, key: ROUTE_TEXT.title }) }))
+    offs.push((o.register ?? registerRailSection)({ id: ROUTE_SECTION_ID, modes: ['plan'], title: 'nav.rail.stationsRoute', icon: 'station', render: () => h(RoutePanel, { ctl: c, live, reason, key: ROUTE_TEXT.title }) }))
   })().catch((e) => console.warn('edit route unavailable:', e))
 
   return () => {
