@@ -63,6 +63,8 @@ function About() {
         <>
           <h2>{t('layout.storageTitle')}</h2>
           <p class="about-privacy">{t('layout.privacy')}</p>
+          {/* J1 (D132): the one third-party fetch of the static site: mission/curiosity.ts, off by default */}
+          <p class="about-privacy">{t('layout.curiosity')}</p>
         </>
       )}
       <h2>Licences</h2>

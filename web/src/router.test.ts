@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { canonicalHref, href, landingFor, LANDING_HASH, isLegacy, legacyParam, NAV_ITEMS, parseRoute, redirectFor, type Route } from './router'
+import { canonicalHref, href, landingFor, LANDING_HASH, landingWhen, isLegacy, legacyParam, NAV_ITEMS, parseRoute, redirectFor, type Route } from './router'
 
 describe('hash router (SPEC F17 routes; mount slot for WS7)', () => {
   it.each([
@@ -29,7 +29,7 @@ describe('hash router (SPEC F17 routes; mount slot for WS7)', () => {
   })
 
   it('the nav lists every page and slot', () => {
-    expect(NAV_ITEMS.map((n) => n.route.name)).toEqual(['console', 'mission', 'trade', 'cuff', 'scorecard', 'about'])
+    expect(NAV_ITEMS.map((n) => n.route.name)).toEqual(['console', 'mission', 'trade', 'conditions', 'cuff', 'hud', 'scorecard', 'about'])
   })
 })
 
@@ -144,6 +144,24 @@ describe('landing page (user, 2026-11-15)', () => {
     expect(landingFor('#/')).toBeNull()
     expect(parseRoute('#/')).toEqual({ name: 'console' })
     expect(parseRoute(LANDING_HASH)).toEqual({ name: 'mission' })
+  })
+
+  it('D132: the bare address plays the intro first (first visit), then lands; #/ and story links never land', () => {
+    expect(landingWhen('', '', true)).toBe('after-intro')
+    expect(landingWhen('?intro=1', '#', true)).toBe('after-intro')
+    expect(landingWhen('', '', false)).toBe('now') // intro seen, ?intro=0, reduced motion
+    expect(landingWhen('?intro=0', '', false)).toBe('now')
+    expect(landingWhen('', '#/', true)).toBeNull() // #/ stays Plan (and plays the intro there)
+    expect(landingWhen('', '#/mission', false)).toBeNull()
+    expect(landingWhen('?capture=intro', '', true)).toBeNull()
+    expect(landingWhen('?demo=1', '', false)).toBeNull()
+    expect(landingWhen('', '#/?demo=1', false)).toBeNull()
+  })
+
+  it('the Mission Planer routes: #/mission and its plan links (?plan=, ?add=)', () => {
+    for (const r of [{ name: 'mission' }, { name: 'mission', plan: 'WzEsW11d' }, { name: 'mission', add: 'S4' }] as const) expect(parseRoute(canonicalHref(r))).toEqual(r)
+    expect(canonicalHref({ name: 'mission' })).toBe('#/mission')
+    expect(redirectFor('#/mission')).toBeNull() // no mode redirect: #/mission is its own PLAN route
   })
 })
 

@@ -4,10 +4,18 @@
 // and the minutes to darkness that feed the margin's daylight term and the mission export.
 // The default is WS4's simulated EVA (config clock.eva_start_lmst_h on the sol of eva_sol_ref_utc,
 // D31): the same instant as clock.json.
+// J1 (D132, waypoint orchestrator): I3's behaviour (#177, edit/route/browser/start.ts): the default is
+// clock.json's instant and its data as is (t_dark from clock.json); a moved start is labelled
+// CUSTOM_START_LABEL ("custom start · outside the validated scenario"); nothing persists (component state).
+// The constants are the same as browser/start.ts's (parity.test.ts pins them); edit/route stays out of
+// the static build (live-only, map.test.tsx / route.test.tsx), so they are not imported from there.
+import { CUSTOM_START_LABEL } from './export'
 import { CLOCK, formatHms, LEAP_VALID_UNTIL_MS, lmstH, utcAtLmst, utcAtSolLmst, type EvaClock } from './marstime'
 
-/** Default start: 09:00 LMST (D31) on the local sol of eva_sol_ref_utc, exactly as WS4 computes it. */
+/** Default start: 09:00 LMST (D31) on the local sol of eva_sol_ref_utc, exactly as WS4 computes it (clock.json). */
 export const DEFAULT_START_MS = utcAtLmst(Date.parse(CLOCK.evaSolRefUtc), CLOCK.evaStartLmstH, CLOCK.galeLonEastDeg)
+/** A start within a second of the default is the default (clock.json rounds start_utc to the second). */
+export const isDefaultStart = (ms: number | null): boolean => ms === null || Math.abs(ms - DEFAULT_START_MS) < 1000
 /** Earliest pickable start: Curiosity's landing (mission sol 0). */
 export const MIN_START_MS = Date.parse(CLOCK.mslLandingUtc)
 /** Latest: the end of the leap-second table the Mars24 port trusts. */
@@ -26,7 +34,7 @@ export function daylightFor(c: EvaClock): number {
 }
 
 export function StartTime({ startMs, clock, onChange, sunSiteLabel }: { startMs: number; clock: EvaClock; onChange: (ms: number) => void; sunSiteLabel: string }) {
-  const isDefault = Math.abs(startMs - DEFAULT_START_MS) < 1000
+  const isDefault = isDefaultStart(startMs)
   const setSolLmst = (sol: number, lmstHours: number) => {
     if (!Number.isInteger(sol) || sol < 0 || !Number.isFinite(lmstHours)) return
     onChange(clamp(utcAtSolLmst(sol, lmstHours, CLOCK.galeLonEastDeg)))
@@ -95,7 +103,8 @@ export function StartTime({ startMs, clock, onChange, sunSiteLabel }: { startMs:
       </div>
       {sunDown && <p class="mp-notice">The sun is below the horizon at this start: the daylight margin is negative from the first minute.</p>}
       <div class="mp-start-foot">
-        <span class="muted">{isDefault ? `Default: ${formatHms(CLOCK.evaStartLmstH)} LMST (D31).` : `Changed from the default ${formatHms(CLOCK.evaStartLmstH)} LMST, sol of ${CLOCK.evaSolRefUtc.slice(0, 10)}.`}</span>
+        <span class="muted">{isDefault ? `Default: ${formatHms(CLOCK.evaStartLmstH)} LMST on the sol of ${CLOCK.evaSolRefUtc.slice(0, 10)} (clock.json, D31).` : `Changed from the default ${formatHms(CLOCK.evaStartLmstH)} LMST, sol of ${CLOCK.evaSolRefUtc.slice(0, 10)}.`}</span>
+        {!isDefault && <b class="mp-custom-start">{CUSTOM_START_LABEL}</b>}
         {!isDefault && (
           <button type="button" class="mp-clear" onClick={() => onChange(DEFAULT_START_MS)}>
             Reset

@@ -12,6 +12,10 @@ import type { Leg } from './router'
 
 export const MISSION_SCHEMA_VERSION = '1.1.0'
 export const ORIGIN_LABEL = 'Mission Planer: browser estimate on the 5 m grid, not part of the validated scorecard'
+/** I3 (#177, edit/route/browser/start.ts CUSTOM_START_LABEL, same text; parity.test.ts pins it): a moved EVA start. */
+export const CUSTOM_START_LABEL = 'custom start · outside the validated scenario'
+/** J1 (D132): the tab's origin_label: ORIGIN_LABEL, plus the custom-start label when the start was moved (as I3). */
+export const originLabel = (customStart: boolean): string => (customStart ? `${ORIGIN_LABEL} · ${CUSTOM_START_LABEL}` : ORIGIN_LABEL)
 
 export interface HomeValues {
   tHomeMin: number | null
@@ -68,7 +72,7 @@ function doseBlock(inp: MissionExportInput, m: MarginProfile | null): Record<str
 }
 
 /** The mission document without mission_id / created_utc (see finalizeMission). */
-export function buildMission(inp: MissionExportInput): Record<string, unknown> {
+export function buildMission(inp: MissionExportInput, o: { customStart?: boolean } = {}): Record<string, unknown> {
   const eqc = parseEqc(inp.proj)
   const [px, py] = lonLatToXY(eqc, inp.pad.lon, inp.pad.lat)
   const local = (lon: number, lat: number) => {
@@ -203,7 +207,7 @@ export function buildMission(inp: MissionExportInput): Record<string, unknown> {
     title: inp.title ?? `Mission · ${n} waypoint${n === 1 ? '' : 's'} · ${inp.scenario.id}`,
     created_utc: '',
     origin: 'mission_planer',
-    origin_label: ORIGIN_LABEL,
+    origin_label: originLabel(o.customStart ?? false),
     planner: {
       app_commit: inp.planner.appCommit ?? null,
       config_hash: inp.planner.configHash ?? null,

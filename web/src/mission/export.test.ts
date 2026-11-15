@@ -1,12 +1,14 @@
 // Known answers for the mission.json export (contracts/bundle/mission.schema.json): a 10 m leg due
 // east of the pad on a 5 m grid, a 5-min stop, and the way home back along the same cells.
-import { readFileSync } from 'node:fs'
+import { spawnSync } from 'node:child_process'
+import { existsSync, readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { CONFIG } from '../config'
 import { lonLatToXY, parseEqc, xyToLonLat } from '../fp3d/geo'
 import { BUDGET_CONSTANTS, missionBudget } from './budget'
-import { buildMission, finalizeMission, type MissionExportInput } from './export'
+import { REPO } from '../hud/testutil'
+import { buildMission, CUSTOM_START_LABEL, finalizeMission, ORIGIN_LABEL, originLabel, type MissionExportInput } from './export'
 import { buildTrack, doseTimingFromRad, legProfile, missionMargin } from './margin'
 import type { Rad } from '../data/types'
 import type { LonLat, Waypoint } from './plan'
@@ -138,5 +140,51 @@ describe('finalizeMission', () => {
     expect(a.mission_id).toMatch(/^m-[0-9a-f]{12}$/)
     expect(a.mission_id).toBe(b.mission_id)
     expect(a.created_utc).toBe('2026-11-15T10:00:00Z')
+  })
+})
+
+// J1 (D132, waypoint orchestrator): the tab's mission.json: schema 1.1.0, origin mission_planer, its own
+// provenance label (I3's custom-start label added for a moved start); validates against
+// contracts/bundle/mission.schema.json (the repo .venv's jsonschema, as browser/compute.test.ts; HL_PYTHON
+// overrides the interpreter). Same numbers as the Edit-route estimate: parity.test.ts.
+describe('the tab\'s mission.json: schema, origin, provenance label', () => {
+  const SCHEMA = resolve(REPO, 'contracts/bundle/mission.schema.json')
+  const PY = process.env.HL_PYTHON ?? resolve(REPO, '.venv/bin/python')
+  const validate = (doc: unknown) => {
+    const code = [
+      'import json, sys',
+      'from jsonschema import Draft202012Validator',
+      `schema = json.load(open(${JSON.stringify(SCHEMA)}))`,
+      'doc = json.load(sys.stdin)',
+      'errs = sorted(Draft202012Validator(schema).iter_errors(doc), key=lambda e: list(e.path))',
+      "print('\\n'.join(f'{list(e.path)}: {e.message}' for e in errs[:20]) or 'OK')",
+      'sys.exit(1 if errs else 0)',
+    ].join('\n')
+    const r = spawnSync(PY, ['-I', '-c', code], { input: JSON.stringify(doc), encoding: 'utf8' })
+    return `${r.stdout}${r.stderr}`.trim()
+  }
+
+  it('schema 1.1.0, origin mission_planer, the honesty label; a moved EVA start adds I3\'s custom-start label; validates', async () => {
+    const doc = (await finalizeMission(buildMission(input([LEG])), new Date('2026-11-15T16:00:00Z'))) as Doc
+    expect(doc.schema_version).toBe('1.1.0')
+    expect(doc.origin).toBe('mission_planer')
+    expect(doc.origin_label).toBe('Mission Planer: browser estimate on the 5 m grid, not part of the validated scorecard')
+    expect(doc.label).toBe(CONFIG.simulatedLabel)
+    const custom = (await finalizeMission(buildMission(input([LEG]), { customStart: true }))) as Doc
+    expect(custom.origin_label).toBe(`${ORIGIN_LABEL} · ${CUSTOM_START_LABEL}`)
+    expect(originLabel(true)).toBe('Mission Planer: browser estimate on the 5 m grid, not part of the validated scorecard · custom start · outside the validated scenario')
+    const schema = JSON.parse(readFileSync(SCHEMA, 'utf8')) as { required: string[] }
+    for (const k of schema.required) expect(doc, k).toHaveProperty(k)
+    if (existsSync(PY)) {
+      expect(validate(doc)).toBe('OK')
+      expect(validate(custom)).toBe('OK')
+      expect(validate(await finalizeMission(buildMission(input([null]))))).toBe('OK')
+    }
+  })
+
+  it('waypoint notes, tags and stop times stay in the tab\'s mission.json: no plan_inputs, no route hash', () => {
+    const doc = buildMission(input([LEG])) as Doc
+    expect(doc.waypoints[0]).toMatchObject({ note: 'core sample', tags: ['Drill'], stop_min: 5 })
+    expect(JSON.stringify(doc)).not.toMatch(/plan_inputs|route=/)
   })
 })

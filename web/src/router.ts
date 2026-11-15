@@ -95,6 +95,15 @@ export function parseRoute(hash: string): Route {
 export const LANDING_HASH = '#/mission'
 /** Where a bare address (no hash, or just "#") lands; null for any other hash. */
 export const landingFor = (hash: string): string | null => (hash === '' || hash === '#' ? LANDING_HASH : null)
+/**
+ * D132: when a load lands on LANDING_HASH. 'now': replace the bare address at once; 'after-intro': the
+ * L12 intro plays on the Plan map first (first visit, no ?intro=0) and the page lands once it is over;
+ * null: no landing (a route in the hash, or a ?capture= / ?demo= story link with its own start).
+ */
+export function landingWhen(search: string, hash: string, introPlays: boolean): 'now' | 'after-intro' | null {
+  if (/[?&](capture|demo)=/.test(search + hash) || !landingFor(hash)) return null
+  return introPlays ? 'after-intro' : 'now'
+}
 
 /** Unlinked dev page (WS16 M1 field-shader spike): never in NAV_ITEMS; main.ts lazy-loads it. */
 export const isSpikeHash = (hash: string): boolean => /^#?\/spike\/?(\?|$)/.test(hash)
@@ -171,12 +180,14 @@ export function isLegacy(param: string | null, route: Route): boolean {
   return v.split(',').some((n) => n.trim() === route.name.toLowerCase())
 }
 
-/** Top navigation (legacy layout), in display order. FLY views (hud, conditions) are left out: FLY is hidden (state/ui HIDDEN_MODES). */
+/** Top navigation, in display order. The hud slot is listed but owned by WS7. */
 export const NAV_ITEMS: { route: Route; label: string }[] = [
   { route: { name: 'console' }, label: 'Plan' },
   { route: { name: 'mission' }, label: 'Mission Planer' },
   { route: { name: 'trade' }, label: 'Trade' },
+  { route: { name: 'conditions' }, label: 'Conditions' },
   { route: { name: 'cuff' }, label: 'Cuff card' },
+  { route: { name: 'hud' }, label: 'HUD' },
   { route: { name: 'scorecard' }, label: 'Scorecard' },
   { route: { name: 'about' }, label: 'About' },
 ]

@@ -6,7 +6,7 @@
 //   window.addEventListener('hl:shortcut', (e) => { if (e.detail.action === 'search') { …; e.preventDefault() } })
 import type { Route } from '../../router'
 import type { ClockDriver } from '../../state/clock'
-import { HIDDEN_MODES, ui, type Mode } from '../../state/ui'
+import { ui, type Mode } from '../../state/ui'
 import type { CopyKey } from '../copy'
 import { modeHash, shell } from './store'
 
@@ -33,9 +33,7 @@ export interface KeyLike {
   target?: unknown
 }
 
-const ALL_MODE_KEYS: Record<string, Mode> = { p: 'plan', y: 'fly', r: 'report', e: 'evidence' }
-/** Mode keys of the shown modes only (a hidden mode, HIDDEN_MODES, has no key). */
-const MODE_KEYS: Record<string, Mode> = Object.fromEntries(Object.entries(ALL_MODE_KEYS).filter(([, m]) => !HIDDEN_MODES.has(m)))
+const MODE_KEYS: Record<string, Mode> = { p: 'plan', y: 'fly', r: 'report', e: 'evidence' }
 
 /** Typing in a field (or a slider, select, editable text) never triggers a shortcut. */
 export function isTypingTarget(t: unknown): boolean {
@@ -92,7 +90,7 @@ export const HELP_ROWS: readonly HelpRow[] = [
   { keys: ['Esc'], label: 'shortcuts.escape', ready: true },
   { keys: ['Ctrl+Z', 'Ctrl+Shift+Z'], label: 'shortcuts.undoRedo', ready: false }, // U15
   { keys: ['[', ']'], label: 'shortcuts.history', ready: true }, // A5 (ui/cards/sidebar.tsx)
-  { keys: Object.entries(ALL_MODE_KEYS).filter(([, m]) => !HIDDEN_MODES.has(m)).map(([k]) => k.toUpperCase()), label: 'shortcuts.modes', ready: true },
+  { keys: ['P', 'Y', 'R', 'E'], label: 'shortcuts.modes', ready: true },
   { keys: ['T'], label: 'shortcuts.toggle3d', ready: true },
   { keys: ['?'], label: 'shortcuts.help', ready: true },
   // I1 mouse model (map/input): left button interacts, right button moves the map

@@ -20,7 +20,7 @@ import { MissionMap } from '../mission/missionMap'
 import { MapsControl } from '../mission/MapsControl'
 import { LayersControl } from '../mission/LayersControl'
 import { evaClock } from '../mission/marstime'
-import { daylightFor, DEFAULT_START_MS, StartTime } from '../mission/StartTime'
+import { daylightFor, DEFAULT_START_MS, isDefaultStart, StartTime } from '../mission/StartTime'
 import { boundaryOptions, defaultBoundary, legPairs, moveWaypoint, removeWaypoint, replaceWaypoint, routeLegs, toggleTag, WAYPOINT_TAGS, type LonLat, type Waypoint } from '../mission/plan'
 import { LegRouter, type Leg } from '../mission/router'
 import { decodePlan, encodePlan } from '../mission/share'
@@ -29,7 +29,7 @@ import { data } from '../data/loader'
 import type { Station } from '../data/types'
 import { href, type Route } from '../router'
 import { buildTrack, legProfile, missionMargin } from '../mission/margin'
-import { buildMission, downloadJson, finalizeMission } from '../mission/export'
+import { buildMission, downloadJson, finalizeMission, originLabel } from '../mission/export'
 import { ensureManifest } from './common'
 import type { View } from './types'
 
@@ -120,7 +120,10 @@ function MissionPanel({ mmap, handlers, mapsEl, layersEl, initial }: { mmap: Mis
 
   // Mars clock at the chosen start; the sun is computed at the pad (D21, as clock.json).
   const clock = useMemo(() => (d ? evaClock(startMs, { lat: d.pad.lat, lon: d.pad.lon }) : null), [d, startMs])
-  const tDarkMin = clock ? daylightFor(clock) : (d?.tDarkMin ?? null)
+  // I3 behaviour (#177, edit/route/browser/start.ts withEvaStart): the default start is clock.json's
+  // data as is (D31); only a moved start ("custom start", labelled) recomputes t_dark (2 decimals).
+  const customStart = !isDefaultStart(startMs)
+  const tDarkMin = customStart && clock ? Math.round(daylightFor(clock) * 100) / 100 : (d?.tDarkMin ?? null)
 
   const router = useMemo(() => (d ? new LegRouter(d.grid, d.model) : null), [d])
   const padCell = useMemo(() => {
@@ -290,9 +293,10 @@ function MissionPanel({ mmap, handlers, mapsEl, layersEl, initial }: { mmap: Mis
       scenario: { id: d.scenario.id, variant: d.scenario.variant, suit_kg: d.scenario.suit_kg },
       planner: { gridResM: d.grid.resM, elevationResM: d.elevationResM, files: d.files },
       constants: { ...BUDGET_CONSTANTS, marginAmberMin: CONFIG.marginAmberMin },
-      conditions: clock
-        ? { evaStartLmst: clock.lmst, tDarkMin: tDarkMin === null ? null : Math.round(tDarkMin * 100) / 100, storm, evaStartUtc: clock.startUtc, mslSol: clock.mslSol, rad: d.rad }
-        : { evaStartLmst: d.evaStartLmst, tDarkMin: d.tDarkMin, storm, evaStartUtc: d.evaStartUtc, mslSol: d.mslSol, rad: d.rad },
+      conditions:
+        customStart && clock
+          ? { evaStartLmst: clock.lmst, tDarkMin, storm, evaStartUtc: clock.startUtc, mslSol: clock.mslSol, rad: d.rad }
+          : { evaStartLmst: d.evaStartLmst, tDarkMin: d.tDarkMin, storm, evaStartUtc: d.evaStartUtc, mslSol: d.mslSol, rad: d.rad },
       wps,
       legs,
       homePath: home.path?.coords ?? null,
@@ -304,7 +308,7 @@ function MissionPanel({ mmap, handlers, mapsEl, layersEl, initial }: { mmap: Mis
       homeAt: (lon, lat) => ({ tHomeMin: d.tHome.valueAt(lon, lat), o2HomeL: d.o2Home ? d.o2Home.valueAt(lon, lat) : null }),
       label: CONFIG.simulatedLabel,
       dummy: DATA_MODE === 'dummy',
-    })
+    }, { customStart })
     const fin = await finalizeMission(doc)
     downloadJson(fin, `mission_${fin.mission_id}.json`)
   }
@@ -393,6 +397,8 @@ function MissionPanel({ mmap, handlers, mapsEl, layersEl, initial }: { mmap: Mis
         <button type="button" disabled={!wps.length} onClick={() => void exportMission()} title="mission.json for the EVA simulator (contracts/bundle/mission.schema.json)">
           Download mission.json
         </button>
+        {/* J1 (D132): the export labels its provenance (mission.json origin_label) */}
+        <p class="caption mp-origin">{originLabel(customStart)}</p>
         {margin && (
           <span class="muted">
             {' '}lowest margin {margin.lowest.marginMin.toFixed(1)} min ({margin.lowest.binding})

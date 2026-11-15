@@ -755,7 +755,8 @@
       "stations": "{n} stations"
     },
     "storageTitle": "Stored in this browser",
-    "privacy": "No accounts, logins or cookies. Saved plans, and which panels and view you left open, stay in this browser; nothing else uses browser storage."
+    "privacy": "No accounts, logins or cookies. Saved plans, and which panels and view you left open, stay in this browser; nothing else uses browser storage.",
+    "curiosity": "The Mission Planer's Curiosity layer is off by default; turning it on loads the rover's drives and pictures from mars.nasa.gov, so it contacts NASA's site."
   },
 
   "a11y": {
