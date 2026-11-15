@@ -3,18 +3,20 @@
 // land in it, no server call, nothing from src/live (works with the API down). The user's order is
 // passed as is (waypoint rule 2: never reordered). "Send to simulator" builds mission.json from the
 // shown estimate and downloads it at once (Blob, ui/cards/simslot.tsx saveMissionText).
+// I3: the EVA start (start / setStart) moves t_dark and the exported start instant; null = clock.json.
 import { effect, signal, type ReadSignal } from '../../../state/signal'
 import { saveMissionText } from '../../../ui/cards/simslot'
+import type { EvaClock } from '../../../mission/marstime'
 import type { PlanRoute, RouteStop } from '../model'
 import type { RouteStore } from '../store'
-import { browserCore, padFields } from './adapter'
+import { browserCore, isDefaultStart, padFields } from './adapter'
 import { ESTIMATE_LABEL, type EstimateCore, type EstimateResult } from './types'
 
 export type EstimateState =
   | { kind: 'off'; why: 'auto' | 'empty' }
   | { kind: 'loading' }
   | { kind: 'unavailable'; reason: string }
-  | { kind: 'ready'; result: EstimateResult; ms: number; stops: readonly RouteStop[]; key: string }
+  | { kind: 'ready'; result: EstimateResult; ms: number; stops: readonly RouteStop[]; key: string; startMs: number | null }
 
 export interface RouteEstimateOptions {
   store: Pick<RouteStore, 'route' | 'step' | 'catalog'>
@@ -59,6 +61,8 @@ export function createRouteEstimate(o: RouteEstimateOptions) {
   const state = signal<EstimateState>({ kind: 'off', why: 'empty' })
   /** computes run so far (tests: once per frame) */
   const runs = signal(0)
+  /** I3: the EVA start (UTC ms) the estimate and the export use; null = clock.json's instant (D31). Per visit. */
+  const start = signal<number | null>(null)
   const loaded = new Map<string, Promise<unknown>>()
   const data = new Map<string, unknown>()
   const failed = new Map<string, string>()
@@ -102,20 +106,30 @@ export function createRouteEstimate(o: RouteEstimateOptions) {
     }
     const stops = route.stops.slice()
     const pad = o.pad()
+    const startMs = start.peek()
     const t0 = now()
     try {
-      const result = core.compute(data.get(fields), pad, stops)
+      const result = core.compute(atStart(data.get(fields), startMs), pad, stops)
       runs.value = runs.peek() + 1
-      state.value = { kind: 'ready', result, ms: now() - t0, stops, key: JSON.stringify([pad, stops]) }
+      state.value = { kind: 'ready', result, ms: now() - t0, stops, key: JSON.stringify([pad, stops, startMs]), startMs }
     } catch (e) {
       state.value = { kind: 'unavailable', reason: ESTIMATE_TEXT.unavailableCore.replace('{why}', e instanceof Error ? e.message : String(e)) }
     }
   }
 
-  // every edit (route, pad, plan): one compute on the next frame
+  /** I3: the data at a start (the core's withEvaStart); a core without it ignores the start */
+  const atStart = (d: unknown, startMs: number | null): unknown => (core.atStart ? core.atStart(d, startMs) : d)
+  /** the loaded data of the plan's pad, or undefined */
+  const currentData = (): unknown => {
+    const fields = padFields(padIdOf(o.store), o.store.catalog.officialPadId)
+    return fields ? data.get(fields) : undefined
+  }
+
+  // every edit (route, pad, plan, EVA start): one compute on the next frame
   const off = effect(() => {
     void o.store.route.value
     void o.store.step.value
+    void start.value
     schedule()
   })
 
@@ -124,7 +138,7 @@ export function createRouteEstimate(o: RouteEstimateOptions) {
     const s = state.peek()
     if (s.kind !== 'ready' || !s.stops.length) return null
     const fields = padFields(padIdOf(o.store), o.store.catalog.officialPadId)
-    const doc = await core.mission(s.result, { data: fields ? data.get(fields) : null, pad: o.pad(), padId: padIdOf(o.store), stops: s.stops })
+    const doc = await core.mission(s.result, { data: fields && data.has(fields) ? atStart(data.get(fields), s.startMs) : null, pad: o.pad(), padId: padIdOf(o.store), stops: s.stops })
     const text = JSON.stringify(doc, null, 1)
     const id = typeof doc.mission_id === 'string' ? doc.mission_id.replace(/^m-/, '').slice(0, 8) : ''
     const name = `homeline-mission-${/^[0-9a-f]{8}$/.test(id) ? id : hash8(s.key)}.json`
@@ -136,6 +150,22 @@ export function createRouteEstimate(o: RouteEstimateOptions) {
     state: state as ReadSignal<EstimateState>,
     runs: runs as ReadSignal<number>,
     label: ESTIMATE_LABEL,
+    /** I3: the EVA start (null = clock.json's instant) */
+    start: start as ReadSignal<number | null>,
+    /** I3: move the EVA start; a start within a second of the default (or null) is the default */
+    setStart(ms: number | null): void {
+      start.value = ms === null || isDefaultStart(ms) ? null : ms
+    },
+    /** I3: the Mars clock at the current start, or null until the pad's data is loaded (or no picker in the core) */
+    clockAt(startMs: number | null): EvaClock | null {
+      const d = currentData()
+      return d !== undefined && core.clockAt ? core.clockAt(d, startMs) : null
+    },
+    /** I3: the sun site of the loaded data, or null */
+    sunSite(): { lat: number; lon: number } | null {
+      const d = currentData()
+      return d !== undefined && core.sunSite ? core.sunSite(d) : null
+    },
     /** recompute on the next frame (pad tool, plan changes outside the store) */
     schedule,
     exportMission,

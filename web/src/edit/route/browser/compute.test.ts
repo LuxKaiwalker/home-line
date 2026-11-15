@@ -21,6 +21,7 @@ import { gradeModel, scenarioParams } from '../map/physio'
 import { buildBrowserMission, buildBrowserMissionDraft, computeBrowserRoute } from './compute'
 import { makeBrowserRouteData, type BrowserRouteData } from './data'
 import { ORIGIN_LABEL } from './export'
+import { clockAt, DEFAULT_START_MS, withEvaStart } from './start'
 
 const PUB = resolve(REPO, 'web/public/data')
 const SCHEMA = resolve(REPO, 'contracts/bundle/mission.schema.json')
@@ -169,6 +170,37 @@ describe.skipIf(!existsSync(PUB))('computeBrowserRoute on the official pad (real
     // the draft is the same document without id / time
     const draft = buildBrowserMissionDraft(r, { data: d })
     expect({ ...draft, mission_id: doc.mission_id, created_utc: doc.created_utc }).toEqual(doc)
+  })
+
+  // I3: the EVA start picker's instant feeds t_dark and the export (browser/start.ts)
+  it('EVA start: default = clock.json (the data as is); a moved start moves t_dark, the daylight term and mission.json', async () => {
+    expect(withEvaStart(d, null)).toBe(d)
+    expect(withEvaStart(d, DEFAULT_START_MS)).toBe(d)
+    // the Mars24 port at the default instant reproduces clock.json's t_dark at the fields' pad
+    expect(clockAt(d, null).tDarkMin!).toBeCloseTo(d.tDarkMin!, 1)
+    const stops = st('S7', 'S6', 'S1', 'S4')
+    const base = computeBrowserRoute(d, d.fieldsPad, stops)
+    // 5 h later (Earth time): darkness 300 min sooner; the same walk now binds on daylight and fails
+    const later = withEvaStart(d, DEFAULT_START_MS + 5 * 3600_000)
+    expect(later).not.toBe(d)
+    expect(later.legCache).toBe(d.legCache) // shared: the walk does not depend on the clock
+    expect(later.tDarkMin!).toBeCloseTo(d.tDarkMin! - 300, 0)
+    expect(later.customStart).toBe(true)
+    expect(later.evaStartUtc).toBe('2026-11-14T15:51:18Z')
+    expect(later.evaStartLmst).toMatch(/^13:5\d:\d\d$/)
+    const r = computeBrowserRoute(later, later.fieldsPad, stops)
+    expect(r.totals.evaMin).toBeCloseTo(base.totals.evaMin!, 6)
+    expect(r.feasibility).toMatchObject({ feasible: false, limit: 'daylight' })
+    const doc = (await buildBrowserMission(r, { data: later, now: new Date('2026-11-15T15:30:00Z') })) as Record<string, any> // eslint-disable-line @typescript-eslint/no-explicit-any
+    expect(doc.origin_label).toBe(`${ORIGIN_LABEL} · custom start · outside the validated scenario`)
+    expect(doc.conditions).toMatchObject({ eva_start_utc: '2026-11-14T15:51:18Z', t_dark_min: later.tDarkMin, msl_sol: 5074, eva_start_lmst: later.evaStartLmst })
+    if (existsSync(PY)) expect(validateWithPython(doc).out.trim()).toBe('OK')
+    // the default export is unchanged: clock.json's values and the plain estimate label
+    const def = (await buildBrowserMission(base, { data: d })) as Record<string, any> // eslint-disable-line @typescript-eslint/no-explicit-any
+    expect(def.origin_label).toBe(ORIGIN_LABEL)
+    expect(def.conditions).toMatchObject({ eva_start_utc: '2026-11-14T10:51:18Z', t_dark_min: 578.67, eva_start_lmst: '09:00:00', msl_sol: 5074 })
+    // the sun already down at the start: t_dark 0 (daylight negative from the first minute), never null
+    expect(withEvaStart(d, DEFAULT_START_MS + 12 * 3600_000).tDarkMin).toBe(0)
   })
 
   it('performance: 4 stations + 4 free points, one full recompute with a warm leg cache', () => {
