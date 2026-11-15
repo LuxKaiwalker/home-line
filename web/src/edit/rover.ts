@@ -9,7 +9,7 @@
 //   cycle(±1)      keyboard alternative: the next / previous precomputed pad
 import { signal, type ReadSignal } from '../state/signal'
 import type { PadRow } from './canonical'
-import { cyclePad, snapTarget, spotValues, type DragFields, type SpotValues } from './drag'
+import { cyclePad, snapTarget, spotValues, type DragFields, type SpotFail, type SpotValues } from './drag'
 import { isCustomPad, offeredOptions, type EditOption, type LonLat } from './options'
 import type { Draft, PlanEditStore } from './store'
 
@@ -21,6 +21,19 @@ export interface RoverDragState {
   values: SpotValues | null
   /** where the rover snaps on release; null = no valid precomputed pad (stays) */
   target: PadRow | null
+  /**
+   * The nearest precomputed pad when the browser's spot check refuses it (it is skipped as a snap
+   * target): the readout says why (L7b, T2). null = the nearest pad is the target.
+   */
+  refused?: RefusedPad | null
+}
+
+/** A precomputed pad the spot check refuses: the failed checks and the block's max slope (field lookup). */
+export interface RefusedPad {
+  pad: PadRow
+  failed: SpotFail[]
+  /** max slope over the pad's 20 × 20 m block (deg; slope field), null = not known */
+  maxSlopeDeg: number | null
 }
 
 export interface RoverDrag {
@@ -41,22 +54,35 @@ export interface RoverDrag {
   options(): EditOption[]
   /** validity of a precomputed pad's own spot (cached; pads that cannot be checked count as valid) */
   padValid(p: PadRow): boolean
+  /** the checks a precomputed pad's own spot fails ([] = valid or not checkable) */
+  padFailed(p: PadRow): SpotFail[]
+}
+
+/** The nearest precomputed pad to `at` when the spot check refuses it (else null). */
+export function refusedNearest(pads: readonly PadRow[], at: LonLat, target: PadRow | null, check: (p: PadRow) => SpotValues): RefusedPad | null {
+  const nearest = snapTarget(pads, at, () => true)
+  if (!nearest || nearest === target) return null
+  const v = check(nearest)
+  if (v.validity !== 'invalid') return null
+  return { pad: nearest, failed: v.failed, maxSlopeDeg: v.maxSlopeDeg }
 }
 
 export function createRoverDrag(store: PlanEditStore, fields: DragFields): RoverDrag {
   const c = store.catalog
   const pads = c.pads
   const state = signal<RoverDragState | null>(null)
-  const validCache = new Map<string, boolean>()
-  const padValid = (p: PadRow): boolean => {
-    let v = validCache.get(p.id)
+  const checkCache = new Map<string, SpotValues>()
+  const padCheck = (p: PadRow): SpotValues => {
+    let v = checkCache.get(p.id)
     if (v === undefined) {
-      v = spotValues(fields, p).validity !== 'invalid'
+      v = spotValues(fields, p)
       // a missing field is not cached: it may load later
-      if (fields.grid) validCache.set(p.id, v)
+      if (fields.grid) checkCache.set(p.id, v)
     }
     return v
   }
+  const padValid = (p: PadRow): boolean => padCheck(p).validity !== 'invalid'
+  const padFailed = (p: PadRow): SpotFail[] => (padCheck(p).validity === 'invalid' ? padCheck(p).failed : [])
   const planPad = (): string | LonLat => (store.draft.peek()?.step.plan ?? store.committed.peek().plan).pad
   const padOf = (id: string) => pads.find((p) => p.id === id) ?? null
   const committedAt = (): LonLat => {
@@ -84,7 +110,8 @@ export function createRoverDrag(store: PlanEditStore, fields: DragFields): Rover
       const target = snapTarget(pads, at, padValid)
       // static mode: the draft only ever holds a precomputed pad (never the dragged spot itself)
       if (target && planPad() !== target.id) store.snapPadDrag(target.id)
-      const s: RoverDragState = { phase: 'dragging', at, values, target }
+      const refused = refusedNearest(pads, at, target, padCheck)
+      const s: RoverDragState = { phase: 'dragging', at, values, target, refused }
       state.value = s
       return s
     },
@@ -128,6 +155,7 @@ export function createRoverDrag(store: PlanEditStore, fields: DragFields): Rover
     },
     options: () => offeredOptions(c, store.live.peek()),
     padValid,
+    padFailed,
   }
   return rd
 }
