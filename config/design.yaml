@@ -18,7 +18,13 @@ terrain_tiles:
   height_step_cap_m:                 # coarsest Terrarium height step the budget fit may use, m of TRUE elevation (precision_m / factor)
     terrain: 0.1                      # = P2 brief tolerance: decoded pad pixel = 1 m DEM x factor +- 0.1 m x factor (U1)
     low: 1.0                          # added by P2b 2026-11-15 (assumed: true): z6-10 intro relief, below the vertical accuracy of CTX 20 m / MOLA-HRSC 200 m at 81-1300 m pixels
-exaggeration: {min: 1.0, max: 3.0, default: 1.0}
+exaggeration: {min: 1.0, max: 3.0, default: 1.0, step: 0.1}   # step added by D6b 2026-11-15 (assumed: true): slider step; the factor label shows one decimal (M8)
+terrain_3d:                          # added by D6b 2026-11-15 (DESIGN U1 items 4 and 6; keys asked for in notes/M8.md)
+  fallback_window_s: 3               # DESIGN U1 item 6 "below 30 fps for 3 s": the rate must stay under performance.fps_3d_min this long before the flat fallback
+  fps_window_s: 0.5                  # assumed: true (M8): the frame rate is the frame count over this trailing window
+  idle_gap_s: 1.0                    # assumed: true (M8): a frame gap longer than this is an idle map (MapLibre renders on demand), never a slow frame
+  light_update_sim_min: 1            # DESIGN U1 item 4: relief light follows the clock at most once per simulated minute
+  assumed: [fps_window_s, idle_gap_s]
 field_layer:
   sampling: nearest_then_manual_bilinear   # encoded values must not be filtered
   update_hz_playing: 30
@@ -29,6 +35,22 @@ field_layer:
   flat_radius_m: {30: 1764, 60: 3528}
   hatch_px: 6
 collapse: {duration_s: 3, easing: ease-in-out}
+markers:                             # added by D6b 2026-11-15 (DESIGN U4; values M5 chose, RR judges; notes/M5.md "Left")
+  ring_width_px: [1, 6]              # assumed: true: station ring thickness over science value 0-1
+  ring_radius_px: 7                  # assumed: true: station ring radius
+  scored_site_halo_px: 1             # assumed: true: stroke of the extra halo on scored sites
+  scored_site_halo_offset_px: 5      # assumed: true: halo radius = ring_radius_px + this
+  pulse_every_s: 3                   # DESIGN U4 "pulses once every 3 s" (= tokens motion.pulseEveryMs)
+  pulse_active_divisor: 3            # assumed: true: the pulse ring grows and fades in the first 1/N of each period (M5: first third)
+  pulse_grow_px: 12                  # assumed: true: how far the pulse ring grows
+  pulse_stroke_px: 2                 # assumed: true: pulse ring stroke
+  assumed: [ring_width_px, ring_radius_px, scored_site_halo_px, scored_site_halo_offset_px, pulse_active_divisor, pulse_grow_px, pulse_stroke_px]
+route:                               # added by D6b 2026-11-15 (DESIGN U4; notes/M5.md)
+  draw_on_s: 1.5                     # DESIGN U4 "draws itself along its length (1.5 s)" (= tokens motion.routeDrawMs)
+  coming_opacity: 0.5                # DESIGN U4 "coming legs at 50% opacity"
+  width_px: 2.5                      # assumed: true (M5): route line width
+  turnback_tick_m: 30                # assumed: true (M5): turn-back tick length across the arriving direction, ground metres
+  assumed: [width_px, turnback_tick_m]
 thread:
   update_hz: 30
   dash_steps: 14                     # frames per dash cycle

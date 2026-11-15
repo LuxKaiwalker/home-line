@@ -17,6 +17,7 @@
 //   mountPlanRoute(app, opts)         #/plan, #/plan/{hash}[/provenance|/play] (F28, F35); started by mountLive
 //   loadPlan, importPlanFile          permalink load and plan_inputs.json import (plan.ts)
 //   exportPlanInputs, canonicalJson   JSON export (planio.ts)
+//   mountPrivacy(root)                privacy note on /about, live builds only (privacy.tsx, H3)
 //
 // Pad tool mount (owned by WS5/C, not added here), in views/console.tsx after `cmap` exists, behind the
 // same VITE_LIVE guard:
@@ -48,6 +49,7 @@ export { importPlanFile, loadPlan, parsePlanRoute, planUrl, type ImportState, ty
 export { canonicalJson, checkPlanInputsText, exportPlanInputs } from './planio'
 export { mountPlanRoute, playPlan, type PlanRouteOptions } from './planmount'
 export { simPlanFiles, SimSlot } from './simslot'
+export { mountPrivacy, PRIVACY_TEXT, PRIVACY_TITLE } from './privacy'
 export type * from './types'
 
 // Dev mock: the flag is compared inline so Vite folds it and, when off, drops the mock chunk.
