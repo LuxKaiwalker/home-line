@@ -1,5 +1,5 @@
 // Helmet-style HUD panel (F18): a DOM overlay in two levels (D14: minimal by default, expanded one
-// click away). Reused by WS8's 3D view: createHudPanel(el, cfg).update(readout, pos, extras).
+// click away): createHudPanel(el, cfg).update(readout, pos, extras).
 import type { HudConfig } from './config'
 import type { PanelRow, RowSource } from './provenance'
 import type { Readout } from './readout'
