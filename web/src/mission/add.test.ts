@@ -5,6 +5,7 @@ import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { parseRoute } from '../router'
+import { t } from '../ui/copy'
 import { addRefusal, addToRouteHref, MAX_STOPS, rememberPad, rememberPlan, startPad, startPlan } from './add'
 
 describe('Add to route', () => {
@@ -18,9 +19,10 @@ describe('Add to route', () => {
     expect(MAX_STOPS).toBe(Number(/^\s*max_stops:\s*(\d+)/m.exec(yaml)![1]))
     expect(addRefusal([], 'S1')).toBeNull()
     expect(addRefusal([{ station: 'S1' }, {}], 'S4')).toBeNull()
-    expect(addRefusal([{ station: 'S1' }], 'S1')).toBe('S1 is already in the plan.')
+    expect(addRefusal([{ station: 'S1' }], 'S1')).toBe('inPlan')
     const full = Array.from({ length: MAX_STOPS }, () => ({}))
-    expect(addRefusal(full, 'S4')).toMatch(/already has \d+ stops/)
+    expect(addRefusal(full, 'S4')).toBe('full')
+    expect(t('mission.notices.routeFull', { id: 'S4', n: MAX_STOPS })).toBe(`The route already has ${MAX_STOPS} stops, the most one route can have: S4 not added.`)
     expect(addRefusal(full.slice(1), 'S4')).toBeNull()
   })
 

@@ -11,6 +11,10 @@
 // the static build (live-only, map.test.tsx / route.test.tsx), so they are not imported from there.
 import { CUSTOM_START_LABEL } from './export'
 import { CLOCK, formatHms, LEAP_VALID_UNTIL_MS, lmstH, utcAtLmst, utcAtSolLmst, type EvaClock } from './marstime'
+import { t } from '../ui/copy'
+
+/** Where the sun position comes from (Mars24 algorithm steps), for the tooltip. */
+const SUN_REF = 'Mars24 D-5/D-6'
 
 /** Default start: 09:00 LMST (D31) on the local sol of eva_sol_ref_utc, exactly as WS4 computes it (clock.json). */
 export const DEFAULT_START_MS = utcAtLmst(Date.parse(CLOCK.evaSolRefUtc), CLOCK.evaStartLmstH, CLOCK.galeLonEastDeg)
@@ -45,7 +49,7 @@ export function StartTime({ startMs, clock, onChange, sunSiteLabel }: { startMs:
     <div class="mp-start">
       <div class="mp-start-grid">
         <label>
-          <span>Earth (UTC)</span>
+          <span>{t('mission.start.earth')}</span>
           <input
             type="datetime-local"
             value={toInput(startMs)}
@@ -58,11 +62,11 @@ export function StartTime({ startMs, clock, onChange, sunSiteLabel }: { startMs:
           />
         </label>
         <label>
-          <span>Mars sol</span>
+          <span>{t('mission.start.sol')}</span>
           <input type="number" min={0} step={1} value={clock.mslSol} onChange={(e) => setSolLmst(parseInt((e.target as HTMLInputElement).value, 10), clock.lmstH)} />
         </label>
         <label>
-          <span>LMST</span>
+          <span>{t('mission.start.lmst')}</span>
           <input
             type="time"
             value={hm(clock.lmstH)}
@@ -75,39 +79,41 @@ export function StartTime({ startMs, clock, onChange, sunSiteLabel }: { startMs:
       </div>
       <div class="mp-est">
         <div class="mp-row">
-          <span>Local time at Gale</span>
-          <b>
-            Sol {clock.mslSol}, {clock.lmst} LMST
-          </b>
+          <span>{t('mission.start.localTime')}</span>
+          <b>{t('mission.start.localTimeValue', { sol: clock.mslSol, lmst: clock.lmst })}</b>
         </div>
-        <div class="mp-row" title="Areocentric solar longitude (season) and Mars year">
-          <span>Season</span>
-          <b>
-            Ls {clock.lsDeg.toFixed(1)}°, MY {clock.marsYear}
-          </b>
+        <div class="mp-row" title={t('mission.start.seasonTitle')}>
+          <span>{t('mission.start.season')}</span>
+          <b>{t('mission.start.seasonValue', { ls: clock.lsDeg.toFixed(1), year: clock.marsYear })}</b>
         </div>
-        <div class="mp-row" title={`Sun's centre at ${sunSiteLabel}, no refraction (Mars24 D-5/D-6)`}>
-          <span>Sun at start</span>
+        <div class="mp-row" title={t('mission.start.sunTitle', { site: sunSiteLabel, ref: SUN_REF })}>
+          <span>{t('mission.start.sun')}</span>
           <b class={sunDown ? 'mp-bad' : ''}>
-            {clock.sun.elevationDeg.toFixed(1)}° up, az {clock.sun.azimuthDeg.toFixed(0)}°
+            {t('mission.start.sunValue', { elevation: clock.sun.elevationDeg.toFixed(1), azimuth: clock.sun.azimuthDeg.toFixed(0) })}
           </b>
         </div>
-        <div class="mp-row" title={`Flat horizon at ${CLOCK.sunHorizonDeg}° (config clock.sun_horizon_elevation_deg)`}>
-          <span>Sunset</span>
-          <b>{clock.sunset !== null ? `${utcHm(clock.sunset)} UTC${sunsetLmst !== null ? ` · ${hm(sunsetLmst)} LMST` : ''}` : '–'}</b>
+        <div class="mp-row" title={t('mission.start.sunsetTitle', { deg: CLOCK.sunHorizonDeg })}>
+          <span>{t('mission.start.sunset')}</span>
+          <b>
+            {clock.sunset !== null
+              ? sunsetLmst !== null
+                ? t('mission.start.sunsetLmst', { utc: utcHm(clock.sunset), lmst: hm(sunsetLmst) })
+                : t('mission.start.sunsetUtc', { utc: utcHm(clock.sunset) })
+              : '–'}
+          </b>
         </div>
-        <div class="mp-row" title="Minutes from EVA start until the sun sets on a flat horizon: the margin's daylight term">
-          <span>Daylight left</span>
-          <b class={sunDown ? 'mp-bad' : ''}>{sunDown ? 'sun is down' : `${clock.tDarkMin!.toFixed(1)} min`}</b>
+        <div class="mp-row" title={t('mission.start.daylightTitle')}>
+          <span>{t('mission.start.daylight')}</span>
+          <b class={sunDown ? 'mp-bad' : ''}>{sunDown ? t('mission.start.sunDown') : `${clock.tDarkMin!.toFixed(1)} min`}</b>
         </div>
       </div>
-      {sunDown && <p class="mp-notice">The sun is below the horizon at this start: the daylight margin is negative from the first minute.</p>}
+      {sunDown && <p class="mp-notice">{t('mission.start.sunDownNotice')}</p>}
       <div class="mp-start-foot">
-        <span class="muted">{isDefault ? `Default: ${formatHms(CLOCK.evaStartLmstH)} LMST on the sol of ${CLOCK.evaSolRefUtc.slice(0, 10)} (clock.json, D31).` : `Changed from the default ${formatHms(CLOCK.evaStartLmstH)} LMST, sol of ${CLOCK.evaSolRefUtc.slice(0, 10)}.`}</span>
+        <span class="muted">{t(isDefault ? 'mission.start.isDefault' : 'mission.start.changed', { lmst: formatHms(CLOCK.evaStartLmstH), date: CLOCK.evaSolRefUtc.slice(0, 10) })}</span>
         {!isDefault && <b class="mp-custom-start">{CUSTOM_START_LABEL}</b>}
         {!isDefault && (
           <button type="button" class="mp-clear" onClick={() => onChange(DEFAULT_START_MS)}>
-            Reset
+            {t('mission.start.reset')}
           </button>
         )}
       </div>

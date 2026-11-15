@@ -5,11 +5,13 @@
 // provenance as I2b's edit/route/browser/data.ts (fieldKeys, pickerPadOf); copied, not imported: the
 // static tab must not import edit/route/** (static-isolation tests).
 import type { PadMarkerInfo } from '../map/pad'
+import { t } from '../ui/copy'
 
 export const PADS_INDEX = 'scenarios/pads/index.json'
 /** The picker pads with browser fields (I2): rank2..rank4 of the pads index. */
 export const FIELD_PADS = ['rank2', 'rank3', 'rank4'] as const
-export const OFFICIAL_PAD_LABEL = 'Official pad'
+/** copy.json mission.pads.official (the app's picker: I2b PAD_PICK_TEXT.official) */
+export const OFFICIAL_PAD_LABEL = t('mission.pads.official')
 
 /** The tab's pad: null = the official pad, else a FIELD_PADS id. */
 export type MissionPad = string | null

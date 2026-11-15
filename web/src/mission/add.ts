@@ -39,9 +39,9 @@ export function startPad(initial: { plan?: string; add?: string }): string | nul
   return !initial.plan && initial.add && lastPlan ? lastPad : null
 }
 
-/** Why a station cannot be appended (null = it can): already in the route, or the route is full. */
-export function addRefusal(list: readonly { station?: string }[], id: string): string | null {
-  if (list.some((w) => w.station === id)) return `${id} is already in the plan.`
-  if (list.length >= MAX_STOPS) return `The route already has ${MAX_STOPS} stops (the most one route can have): ${id} not added.`
+/** Why a station cannot be appended (null = it can): already in the route, or the route is full (copy: mission.notices). */
+export function addRefusal(list: readonly { station?: string }[], id: string): 'inPlan' | 'full' | null {
+  if (list.some((w) => w.station === id)) return 'inPlan'
+  if (list.length >= MAX_STOPS) return 'full'
   return null
 }

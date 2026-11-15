@@ -16,7 +16,7 @@ import { BASEMAP_CREDIT, basemapSources } from '../map/basemap'
 import { dataUrl, DATA_MODE } from '../env'
 import { BUDGET_CONSTANTS, missionBudget, stopMinutes, type MissionBudget } from '../mission/budget'
 import { missionData, type MissionData } from '../mission/data'
-import { addRefusal, rememberPad, rememberPlan, startPad, startPlan } from '../mission/add'
+import { addRefusal, MAX_STOPS, rememberPad, rememberPlan, startPad, startPlan } from '../mission/add'
 import { PadPick } from '../mission/PadPick'
 import type { MissionPad } from '../mission/pads'
 import { MissionMap } from '../mission/missionMap'
@@ -33,6 +33,8 @@ import type { Station } from '../data/types'
 import { href, type Route } from '../router'
 import { buildTrack, legProfile, missionMargin } from '../mission/margin'
 import { buildMission, downloadJson, finalizeMission, originLabel } from '../mission/export'
+import { tx } from '../mission/richCopy'
+import { t } from '../ui/copy'
 import { ensureManifest } from './common'
 import type { View } from './types'
 
@@ -68,10 +70,15 @@ const fmtM = (v: number) => (v >= 1000 ? `${(v / 1000).toFixed(2)} km` : `${Math
 
 type Initial = { plan?: string; add?: string }
 
+/** Date of the RAD storm the storm switch replays (D39). */
+const STORM_DATE = '20 May 2024'
+/** Grid of the engine's own routes, for the sources caption. */
+const ENGINE_ROUTE_RES_M = 3
+
 function MissionPanel({ mmap, handlers, mapsEl, layersEl, initial }: { mmap: MissionMap; handlers: Handlers; mapsEl: HTMLElement; layersEl: HTMLElement; initial: Initial }) {
   const [d, setD] = useState<MissionData | null>(null)
   const [error, setError] = useState<unknown>(null)
-  const [step, setStep] = useState('scenarios and pad')
+  const [step, setStep] = useState(t('mission.loading.firstStep'))
   const [wps, setWps] = useState<Waypoint[]>([])
   const [notice, setNotice] = useState<string | null>(null)
   const [boundary, setBoundary] = useState('none')
@@ -138,7 +145,7 @@ function MissionPanel({ mmap, handlers, mapsEl, layersEl, initial }: { mmap: Mis
       return typeof c === 'number' ? [{ ...w, cell: c }] : []
     })
     const lost = wps.length - kept.length
-    setNotice(lost ? `${lost} waypoint${lost === 1 ? '' : 's'} with no walk home to this pad ${lost === 1 ? 'was' : 'were'} left out.` : null)
+    setNotice(lost ? t(lost === 1 ? 'mission.notices.padLostOne' : 'mission.notices.padLostMany', { n: lost }) : null)
     setWps(kept)
   }, [d])
 
@@ -170,11 +177,11 @@ function MissionPanel({ mmap, handlers, mapsEl, layersEl, initial }: { mmap: Mis
     if (!d) return null
     const c = cellAt(lon, lat)
     if (c === 'outside') {
-      setNotice('That spot is outside the terrain data: no waypoint added.')
+      setNotice(t('mission.notices.outside'))
       return null
     }
     if (c === 'blocked') {
-      setNotice(`No walk home from that spot in ${d.scenario.id} (blocked, too steep, unknown terrain or not reached): no waypoint there.`)
+      setNotice(t('mission.notices.blocked', { scenario: d.scenario.id }))
       return null
     }
     setNotice(null)
@@ -197,13 +204,15 @@ function MissionPanel({ mmap, handlers, mapsEl, layersEl, initial }: { mmap: Mis
   /** Append a science station (its access cell, its dwell time) unless it is in the plan already. */
   const withStation = (list: Waypoint[], id: string): { list: Waypoint[]; msg: string } => {
     const s = stations?.find((x) => x.id === id)
-    if (!s) return { list, msg: `No science station "${id}" in stations.json: nothing added.` }
-    const no = addRefusal(list, id) // J1d: no duplicate, at most route.max_stops
-    if (no) return { list, msg: no }
+    if (!s) return { list, msg: t('mission.notices.noStation', { id }) }
+    // J1d: no duplicate, at most route.max_stops (mission/add.ts)
+    const no = addRefusal(list, id)
+    if (no === 'inPlan') return { list, msg: t('mission.notices.stationInPlan', { id }) }
+    if (no === 'full') return { list, msg: t('mission.notices.routeFull', { id, n: MAX_STOPS }) }
     const w = stationWaypoint(s, d!.scenario.id)
     const c = w ? cellAt(w.lon, w.lat) : 'blocked'
-    if (!w || typeof c !== 'number') return { list, msg: `${id} has no walkable access cell in ${d!.scenario.id}: not added.` }
-    return { list: [...list, { ...w, id: nextId.current++, cell: c }], msg: `Added ${id} as waypoint #${list.length + 1}, with a ${w.stopMin}-min stop.` }
+    if (!w || typeof c !== 'number') return { list, msg: t('mission.notices.stationNoAccess', { id, scenario: d!.scenario.id }) }
+    return { list: [...list, { ...w, id: nextId.current++, cell: c }], msg: t('mission.notices.stationAdded', { id, n: list.length + 1, stop_min: w.stopMin }) }
   }
   const addStation = (id: string) => {
     const r = withStation(wps, id)
@@ -218,14 +227,14 @@ function MissionPanel({ mmap, handlers, mapsEl, layersEl, initial }: { mmap: Mis
     restored.current = true
     const src = startPlan(initial) ?? '' // J1d: an "Add to route" link adds to this page load's last plan
     const plan = decodePlan(src)
-    if (plan === null && initial.plan) setNotice('The plan in this link is damaged or from another version: starting empty.')
+    if (plan === null && initial.plan) setNotice(t('mission.notices.planDamaged'))
     let out: Waypoint[] = []
     for (const w of plan ?? []) {
       const c = cellAt(w.lon, w.lat)
       if (typeof c === 'number') out.push({ ...w, id: nextId.current++, cell: c })
     }
     const lost = (plan ?? []).length - out.length
-    if (lost) setNotice(`${lost} waypoint${lost === 1 ? '' : 's'} of the saved plan ${lost === 1 ? 'has' : 'have'} no walk home in ${d.scenario.id} and ${lost === 1 ? 'was' : 'were'} left out.`)
+    if (lost) setNotice(t(lost === 1 ? 'mission.notices.lostOne' : 'mission.notices.lostMany', { n: lost, scenario: d.scenario.id }))
     if (initial.add) {
       const r = withStation(out, initial.add)
       out = r.list
@@ -251,7 +260,7 @@ function MissionPanel({ mmap, handlers, mapsEl, layersEl, initial }: { mmap: Mis
   const copyLink = () => {
     navigator.clipboard?.writeText(location.href).then(
       () => setCopied(true),
-      () => setNotice('Could not copy: copy the address from the browser bar instead.'),
+      () => setNotice(t('mission.notices.copyFailed')),
     )
   }
 
@@ -368,8 +377,8 @@ function MissionPanel({ mmap, handlers, mapsEl, layersEl, initial }: { mmap: Mis
     )
   }, [d, stations, inPlan])
 
-  if (error) return <div class="panel-body"><DataProblem error={error} what="Mission Planer data" /></div>
-  if (!d) return <div class="panel-body"><p class="muted">Loading {step}…</p></div>
+  if (error) return <div class="panel-body"><DataProblem error={error} what={t('mission.loading.what')} /></div>
+  if (!d) return <div class="panel-body"><p class="muted">{t('mission.loading.step', { step })}</p></div>
 
   return (
     <div class="panel-body mp-body">
@@ -379,15 +388,15 @@ function MissionPanel({ mmap, handlers, mapsEl, layersEl, initial }: { mmap: Mis
       <PadPick choices={d.padChoices} pad={pad} loaded={d.fieldsPad} onPick={setPad} />
 
       <section class="mp-card">
-        <h3>Estimated times and consumption</h3>
+        <h3>{t('mission.estimates.title')}</h3>
         <Estimates b={budget} n={wps.length} />
       </section>
 
       {clock && (
         <section class="mp-card">
           <details>
-            <summary>EVA start</summary>
-            <StartTime startMs={startMs} clock={clock} onChange={setStartMs} sunSiteLabel={`the pad (${d.pad.lat.toFixed(5)}°, ${d.pad.lon.toFixed(5)}°E)`} />
+            <summary>{t('mission.start.title')}</summary>
+            <StartTime startMs={startMs} clock={clock} onChange={setStartMs} sunSiteLabel={t('mission.start.sunSite', { lat: d.pad.lat.toFixed(5), lon: d.pad.lon.toFixed(5) })} />
           </details>
         </section>
       )}
@@ -395,21 +404,21 @@ function MissionPanel({ mmap, handlers, mapsEl, layersEl, initial }: { mmap: Mis
       <section class="mp-card">
         <details ref={wpDetails}>
           <summary>
-            Waypoints <span class="muted">({wps.length})</span>
+            {t('mission.waypoints.title')} <span class="muted">{t('mission.waypoints.count', { n: wps.length })}</span>
           </summary>
           <WaypointList wps={wps} legs={legs} setWps={setWps} />
           {wps.length > 0 && (
             <div class="mp-share">
               <button type="button" class="mp-clear" onClick={copyLink}>
-                {copied ? 'Link copied ✓' : 'Copy link to this plan'}
+                {copied ? t('mission.waypoints.linkCopied') : t('mission.waypoints.copyLink')}
               </button>
             </div>
           )}
         </details>
         <details>
-          <summary>Reachable-area boundary</summary>
+          <summary>{t('mission.boundary.title')}</summary>
           <label class="mp-select">
-            <span class="sr-only">Boundary shown on the map</span>
+            <span class="sr-only">{t('mission.boundary.selectLabel')}</span>
             <select value={boundary} onChange={(e) => setBoundary((e.target as HTMLSelectElement).value)}>
               {options.map((o) => (
                 <option key={o.id} value={o.id}>
@@ -419,43 +428,60 @@ function MissionPanel({ mmap, handlers, mapsEl, layersEl, initial }: { mmap: Mis
             </select>
           </label>
           <p class="caption">
-            From <code>{boundaryFile(boundary, d)}</code> ({d.scenario.id}): the area from which the crew can walk back to the pad within that time.
+            {tx('mission.boundary.caption', { file: <code>{boundaryFile(boundary, d)}</code>, scenario: d.scenario.id })}
           </p>
         </details>
       </section>
 
       <section class="mp-card mp-export">
-        <button type="button" disabled={!wps.length} onClick={() => void exportMission()} title="mission.json for the EVA simulator (contracts/bundle/mission.schema.json)">
-          Download mission.json
+        <button type="button" disabled={!wps.length} onClick={() => void exportMission()} title={t('mission.export.buttonTitle')}>
+          {t('mission.export.button')}
         </button>
         {/* J1 (D132): the export labels its provenance (mission.json origin_label) */}
         <p class="caption mp-origin">{originLabel(customStart)}</p>
         {margin && (
           <span class="muted">
-            {' '}lowest margin {margin.lowest.marginMin.toFixed(1)} min ({margin.lowest.binding})
+            {' '}
+            {t('mission.export.lowestMargin', { margin: margin.lowest.marginMin.toFixed(1), binding: margin.lowest.binding })}
           </span>
         )}
-        <label class="mp-storm" title={d.rad ? 'D39: the storm series is shifted so its tripwire fires at the route\'s largest T_home; the dose term joins the margin' : 'rad.json (WS4) is not loaded: no storm series to replay'}>
+        <label class="mp-storm" title={d.rad ? t('mission.export.stormTitle') : t('mission.export.stormNoRad')}>
           <input type="checkbox" checked={storm && !!d.rad} disabled={!d.rad} onChange={(e) => setStorm((e.target as HTMLInputElement).checked)} />{' '}
-          Replay the 20 May 2024 storm during this EVA
+          {t('mission.export.storm', { date: STORM_DATE })}
         </label>
       </section>
 
       <p class="caption mp-howto">
-        Click the map to add a waypoint. Each leg is the fastest walk on the {d.grid.resM} m grid for <code>{d.scenario.id}</code>; the dashed line is the way home from the last waypoint.
+        {tx('mission.help.howto', { res_m: d.grid.resM, scenario: <code>{d.scenario.id}</code> })}
       </p>
 
       <p class="caption mp-sources">
-        <b>Estimates.</b> Leg times and leg O₂ are computed in your browser with the engine's walking model (<code>config/crew.yaml</code>, <code>config/variants.yaml</code>) on
-        the {d.grid.resM} m grid with {d.elevationResM} m terrain heights (<code>{d.files.elevation}</code>), so they can differ from WS2's 3 m routes. Time home and O₂ home come
-        from WS2's fields (<code>{d.files.tHome}</code>
-        {d.files.o2Home ? (
-          <>
-            , <code>{d.files.o2Home}</code>
-          </>
-        ) : null}
-        ). O₂ capacity: primary supply per <code>{CITED.o2PrimaryL.source}</code> (computed from its formula); reserve: {CITED.o2ReserveMinAtEffortCap.value} min at the effort cap; EVA limit: {CITED.evaH.value} h. Planned time at a waypoint is station work at the station task rate (<code>crew.yaml</code> <code>o2_margin.station_task_rate_btu_h</code>, {BUDGET_CONSTANTS.stationRateLMin.toFixed(3)} L/min); tags and notes are labels only.
-        {credit ? ` Basemap: ${credit}.` : ''}
+        <b>{t('mission.help.sourcesLead')}</b>{' '}
+        {tx('mission.help.sources', {
+          crew: <code>config/crew.yaml</code>,
+          variants: <code>config/variants.yaml</code>,
+          res_m: d.grid.resM,
+          elevation_res_m: d.elevationResM,
+          elevation_file: <code>{d.files.elevation}</code>,
+          route_res_m: ENGINE_ROUTE_RES_M,
+          fields: (
+            <>
+              <code>{d.files.tHome}</code>
+              {d.files.o2Home ? (
+                <>
+                  , <code>{d.files.o2Home}</code>
+                </>
+              ) : null}
+            </>
+          ),
+          o2_source: <code>{CITED.o2PrimaryL.source}</code>,
+          reserve_min: CITED.o2ReserveMinAtEffortCap.value,
+          eva_h: CITED.evaH.value,
+          crew_file: <code>crew.yaml</code>,
+          rate_key: <code>o2_margin.station_task_rate_btu_h</code>,
+          rate: BUDGET_CONSTANTS.stationRateLMin.toFixed(3),
+        })}
+        {credit ? ` ${t('mission.help.basemap', { credit })}` : ''}
       </p>
     </div>
   )
@@ -480,25 +506,25 @@ function Row({ k, v, cls, title }: { k: string; v: string; cls?: string; title?:
 const sign = (v: number | null) => (v === null ? '' : v < 0 ? 'mp-bad' : 'mp-ok')
 
 function Estimates({ b, n }: { b: MissionBudget; n: number }) {
-  if (!b.legsKnown) return <p class="mp-notice">A leg could not be routed (see the waypoint list): times and O₂ are unknown until it is moved or removed.</p>
+  if (!b.legsKnown) return <p class="mp-notice">{t('mission.estimates.notRouted')}</p>
   return (
     <div class="mp-est">
-      <Row k={n ? `Time home from #${n}` : 'Time home'} v={fmtMin(b.tHomeMin)} title="WS2 T_home at the last waypoint (fastest walk back to the pad)" />
-      <Row k="Walk out (all legs)" v={fmtMin(b.walkMin)} />
-      <Row k="Time at waypoints" v={fmtMin(b.stopMin)} title="Sum of the planned stop times" />
-      <Row k="EVA total" v={b.evaMin === null ? '–' : `${b.evaMin.toFixed(1)} of ${b.evaLimitMin} min`} />
-      <Row k="Time margin" v={fmtMin(b.timeMarginMin)} cls={sign(b.timeMarginMin)} title="EVA limit − walk out − time home" />
+      <Row k={n ? t('mission.estimates.timeHomeFrom', { n }) : t('mission.estimates.timeHome')} v={fmtMin(b.tHomeMin)} title={t('mission.estimates.timeHomeTitle')} />
+      <Row k={t('mission.estimates.walkOut')} v={fmtMin(b.walkMin)} />
+      <Row k={t('mission.estimates.atWaypoints')} v={fmtMin(b.stopMin)} title={t('mission.estimates.atWaypointsTitle')} />
+      <Row k={t('mission.estimates.evaTotal')} v={b.evaMin === null ? '–' : t('mission.estimates.evaTotalValue', { used: b.evaMin.toFixed(1), limit: b.evaLimitMin })} />
+      <Row k={t('mission.estimates.timeMargin')} v={fmtMin(b.timeMarginMin)} cls={sign(b.timeMarginMin)} title={t('mission.estimates.timeMarginTitle')} />
       <div class="mp-sep" />
-      <Row k="O₂ left at the last waypoint" v={fmtL(b.o2LeftL)} title={`${b.o2CapacityL.toFixed(1)} L primary supply − ${fmtL(b.o2UsedL)} used (legs + ${b.o2StopsL.toFixed(1)} L at stops)`} />
-      {b.stopMin > 0 && <Row k="O₂ for stops" v={fmtL(b.o2StopsL)} title={`${b.stopMin.toFixed(0)} min × ${BUDGET_CONSTANTS.stationRateLMin.toFixed(3)} L/min station task rate`} />}
-      <Row k="O₂ needed (home + reserve)" v={b.o2NeedL === null ? '–' : `${b.o2NeedL.toFixed(1)} L`} title={`O₂ home ${fmtL(b.o2HomeL)} + reserve ${b.reserveL.toFixed(1)} L`} />
-      <Row k="O₂ margin" v={b.o2MarginL === null ? '–' : `${b.o2MarginL.toFixed(1)} L · ${b.o2MarginMin!.toFixed(0)} min at max effort`} cls={sign(b.o2MarginL)} />
+      <Row k={t('mission.estimates.o2Left')} v={fmtL(b.o2LeftL)} title={t('mission.estimates.o2LeftTitle', { capacity: b.o2CapacityL.toFixed(1), used: fmtL(b.o2UsedL), stops: b.o2StopsL.toFixed(1) })} />
+      {b.stopMin > 0 && <Row k={t('mission.estimates.o2Stops')} v={fmtL(b.o2StopsL)} title={t('mission.estimates.o2StopsTitle', { minutes: b.stopMin.toFixed(0), rate: BUDGET_CONSTANTS.stationRateLMin.toFixed(3) })} />}
+      <Row k={t('mission.estimates.o2Need')} v={b.o2NeedL === null ? '–' : `${b.o2NeedL.toFixed(1)} L`} title={t('mission.estimates.o2NeedTitle', { home: fmtL(b.o2HomeL), reserve: b.reserveL.toFixed(1) })} />
+      <Row k={t('mission.estimates.o2Margin')} v={b.o2MarginL === null ? '–' : t('mission.estimates.o2MarginValue', { litres: b.o2MarginL.toFixed(1), minutes: b.o2MarginMin!.toFixed(0) })} cls={sign(b.o2MarginL)} />
     </div>
   )
 }
 
 function WaypointList({ wps, legs, setWps }: { wps: Waypoint[]; legs: (Leg | null)[]; setWps: (f: (w: Waypoint[]) => Waypoint[]) => void }) {
-  if (!wps.length) return <p class="muted mp-empty">No waypoints yet: click the map.</p>
+  if (!wps.length) return <p class="muted mp-empty">{t('mission.waypoints.empty')}</p>
   return (
     <>
       <ol class="mp-list">
@@ -509,32 +535,32 @@ function WaypointList({ wps, legs, setWps }: { wps: Waypoint[]; legs: (Leg | nul
               <div class="mp-li-head">
                 <span class="mp-num">{i + 1}</span>
                 <span class="mp-leg">
-                  {i === 0 ? 'Pad' : `#${i}`} → #{i + 1}
+                  {i === 0 ? t('mission.waypoints.legFromPad', { to: i + 1 }) : t('mission.waypoints.legFrom', { from: i, to: i + 1 })}
                   {w.station && (
-                    <a class="mp-st-link" href={href({ name: 'station', id: w.station })} title="Open the station card">
-                      {w.station} details →
+                    <a class="mp-st-link" href={href({ name: 'station', id: w.station })} title={t('mission.waypoints.stationLinkTitle')}>
+                      {t('mission.waypoints.stationLink', { id: w.station })}
                     </a>
                   )}
                 </span>
                 <span class="mp-actions">
-                  <button type="button" title="Move up" aria-label={`Move waypoint ${i + 1} up`} disabled={i === 0} onClick={() => setWps((x) => moveWaypoint(x, i, -1))}>
-                    ↑
+                  <button type="button" title={t('mission.waypoints.moveUp')} aria-label={t('mission.waypoints.moveUpLabel', { n: i + 1 })} disabled={i === 0} onClick={() => setWps((x) => moveWaypoint(x, i, -1))}>
+                    {t('mission.waypoints.moveUpIcon')}
                   </button>
-                  <button type="button" title="Move down" aria-label={`Move waypoint ${i + 1} down`} disabled={i === wps.length - 1} onClick={() => setWps((x) => moveWaypoint(x, i, 1))}>
-                    ↓
+                  <button type="button" title={t('mission.waypoints.moveDown')} aria-label={t('mission.waypoints.moveDownLabel', { n: i + 1 })} disabled={i === wps.length - 1} onClick={() => setWps((x) => moveWaypoint(x, i, 1))}>
+                    {t('mission.waypoints.moveDownIcon')}
                   </button>
-                  <button type="button" title="Delete" aria-label={`Delete waypoint ${i + 1}`} onClick={() => setWps((x) => removeWaypoint(x, i))}>
-                    ✕
+                  <button type="button" title={t('mission.waypoints.remove')} aria-label={t('mission.waypoints.removeLabel', { n: i + 1 })} onClick={() => setWps((x) => removeWaypoint(x, i))}>
+                    {t('mission.waypoints.removeIcon')}
                   </button>
                 </span>
               </div>
               <div class="mp-li-body">
                 {l ? (
                   <>
-                    {(l.timeS / 60).toFixed(1)} min · {fmtM(l.distM)} · {l.o2L.toFixed(1)} L O₂
+                    {t('mission.waypoints.legStats', { minutes: (l.timeS / 60).toFixed(1), distance: fmtM(l.distM), o2: l.o2L.toFixed(1) })}
                   </>
                 ) : (
-                  <span class="mp-bad">no walkable route from the previous point</span>
+                  <span class="mp-bad">{t('mission.waypoints.noRoute')}</span>
                 )}
               </div>
               <WaypointEditor w={w} n={i + 1} onChange={(nw) => setWps((x) => x.map((y) => (y.id === w.id ? nw : y)))} />
@@ -543,7 +569,7 @@ function WaypointList({ wps, legs, setWps }: { wps: Waypoint[]; legs: (Leg | nul
         })}
       </ol>
       <button type="button" class="mp-clear" onClick={() => setWps(() => [])}>
-        Clear all
+        {t('mission.waypoints.clearAll')}
       </button>
     </>
   )
@@ -552,7 +578,7 @@ function WaypointList({ wps, legs, setWps }: { wps: Waypoint[]; legs: (Leg | nul
 /** Marker tooltip text: stop time, tags, note. */
 function waypointInfo(w: Waypoint): string {
   const parts: string[] = []
-  if (w.stopMin > 0) parts.push(`stop ${w.stopMin} min`)
+  if (w.stopMin > 0) parts.push(t('mission.waypoints.markerStop', { minutes: w.stopMin }))
   if (w.tags.length) parts.push(w.tags.join(', '))
   if (w.note.trim()) parts.push(w.note.trim())
   return parts.join(' · ')
@@ -563,33 +589,33 @@ function WaypointEditor({ w, n, onChange }: { w: Waypoint; n: number; onChange: 
   const o2 = w.stopMin * BUDGET_CONSTANTS.stationRateLMin
   return (
     <details class="mp-wpe">
-      <summary>{summary || <span class="muted">Add stop time, tags, note</span>}</summary>
+      <summary>{summary || <span class="muted">{t('mission.editor.addDetails')}</span>}</summary>
       <label class="mp-wpe-stop">
-        <span>Planned stop</span>
+        <span>{t('mission.editor.plannedStop')}</span>
         <input
           type="number"
           min={0}
           step={5}
           inputMode="numeric"
           placeholder="0"
-          aria-label={`Planned stop time at waypoint ${n} in minutes`}
+          aria-label={t('mission.editor.plannedStopLabel', { n })}
           value={w.stopMin || ''}
           onInput={(e) => onChange({ ...w, stopMin: stopMinutes(parseFloat((e.target as HTMLInputElement).value)) })}
         />
-        <span>min</span>
-        {w.stopMin > 0 && <span class="muted">≈ {o2.toFixed(1)} L O₂</span>}
+        <span>{t('mission.editor.unit')}</span>
+        {w.stopMin > 0 && <span class="muted">{t('mission.editor.stopO2', { o2: o2.toFixed(1) })}</span>}
       </label>
-      <div class="mp-tags" role="group" aria-label={`Tags for waypoint ${n}`}>
-        {WAYPOINT_TAGS.map((t) => (
-          <button type="button" key={t} class={w.tags.includes(t) ? 'on' : ''} aria-pressed={w.tags.includes(t)} onClick={() => onChange({ ...w, tags: toggleTag(w.tags, t) })}>
-            {t}
+      <div class="mp-tags" role="group" aria-label={t('mission.editor.tagsLabel', { n })}>
+        {WAYPOINT_TAGS.map((tag) => (
+          <button type="button" key={tag} class={w.tags.includes(tag) ? 'on' : ''} aria-pressed={w.tags.includes(tag)} onClick={() => onChange({ ...w, tags: toggleTag(w.tags, tag) })}>
+            {tag}
           </button>
         ))}
       </div>
       <textarea
         rows={2}
-        placeholder="Note: resource, task, what to carry out here…"
-        aria-label={`Note for waypoint ${n}`}
+        placeholder={t('mission.editor.notePlaceholder')}
+        aria-label={t('mission.editor.noteLabel', { n })}
         value={w.note}
         onInput={(e) => onChange({ ...w, note: (e.target as HTMLTextAreaElement).value })}
       />
