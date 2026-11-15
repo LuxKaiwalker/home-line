@@ -5,10 +5,11 @@
 // select(ref, 'search') and the sidebar shows the same card as a map or list click (A5).
 // No number is displayed from here: rows show code, name and kind only.
 import type { Loader } from '../../data/loader'
-import type { ShortcutAction } from '../shell/keys'
+import { keysForAction, type ShortcutAction } from '../shell/keys'
+import { commands, type Command } from '../commands/registry'
+import { shellCommands } from '../commands/shell'
 import { refFromLabel } from '../../state/selectionAdapter'
 import { refKey, type SelectionRef } from '../../state/selection'
-import { MODES } from '../../state/ui'
 import type { ChipKind, IconName } from '../components'
 import type { CopyKey } from '../copy'
 
@@ -66,6 +67,8 @@ export interface SearchItem {
   priority: number
   ref?: SelectionRef
   command?: ShortcutAction
+  /** Registry command id (ui/commands): Enter runs it through runCommand, when enabled. */
+  commandId?: string
   /** Shortcut keys shown beside a command (DESIGN §4.4). */
   keys?: string[]
   /** Non-selection target (layer on, clock seek, scenario, route): runs only when the row is chosen. */
@@ -123,17 +126,15 @@ export function buildObjectIndex(labels: readonly LabelLike[], stations: readonl
   return out
 }
 
-/** Short command list (U17 commands; first on the DESIGN §8 cut order). Each runs the §4.4 shortcut. */
-export function commandItems(): SearchItem[] {
-  const modeKey: Record<string, string> = { plan: 'P', fly: 'Y', report: 'R', evidence: 'E' }
-  const modeIcon: Record<string, IconName> = { plan: 'map', fly: 'compass', report: 'file-text', evidence: 'shield-check' }
-  return [
-    ...MODES.map(
-      (m): SearchItem => ({ id: `cmd:mode:${m}`, group: 'commands', code: '', name: m, label: `modes.${m}.label`, icon: modeIcon[m], priority: 20, command: { action: 'mode', mode: m }, keys: [modeKey[m]] }),
-    ),
-    { id: 'cmd:toggle3d', group: 'commands', code: '', name: '2D 3D', label: 'shortcuts.toggle3d', icon: 'rotate-3d', priority: 20, command: { action: 'toggle3d' }, keys: ['T'] },
-    { id: 'cmd:playPause', group: 'commands', code: '', name: 'play pause', label: 'shortcuts.playPause', icon: 'play', priority: 20, command: { action: 'playPause' }, keys: ['Space'] },
-  ]
+/** Palette row id: the legacy `cmd:<action>[:<param>]` for shortcut commands (stable across S2), else `cmd:<id>`. */
+const commandRowId = (c: Command): string => `cmd:${c.shortcut ? Object.values(c.shortcut).join(':') : c.id}`
+
+/** Palette rows for the commands (ui/commands, search block S2): copy-deck label, keywords as the searchable
+ *  name, and the shortcut keys from HELP_ROWS beside each one. Disabled state is read when shown. Without a
+ *  list: the registered commands, or the shell's own list before the registry chunk has installed them. */
+export function commandItems(list?: readonly Command[]): SearchItem[] {
+  const cmds = list ?? (commands.peek().length ? commands.peek() : shellCommands())
+  return cmds.map((c) => ({ id: commandRowId(c), group: 'commands', code: '', name: (c.keywords ?? []).join(' '), label: c.label, icon: c.icon, priority: 20, command: c.shortcut, commandId: c.id, keys: [...(c.keys ?? (c.shortcut ? keysForAction(c.shortcut) : []))] }))
 }
 
 /** Load the object index from the static data tree (loader-cached: no extra request if the cards loaded them). */
@@ -186,6 +187,8 @@ const COLLATOR = new Intl.Collator('en', { numeric: true })
  *  word in an object's name still finds the object first (e.g. "clay" → the S8 site, then the layer). */
 const EXPANDED: ReadonlySet<SearchGroup> = new Set<SearchGroup>(['areas', 'legs', 'events', 'scenarios', 'report', 'glossary'])
 const EXPANDED_WEIGHT = 0.65
+/** Commands also rank a little below objects that match as well (FIND first; S2). */
+const COMMAND_WEIGHT = 0.9
 
 /** Score one query token against one text (0 = no match). Exact > prefix > word start > substring > in-order letters. */
 export function scoreText(token: string, text: string, exact: number): number {
@@ -226,7 +229,7 @@ function scoreItem(tokens: string[], it: SearchItem, labelText: string): number 
     if (s === 0) return 0 // every token must match
     total += s
   }
-  return (total / tokens.length) * (EXPANDED.has(it.group) ? EXPANDED_WEIGHT : 1)
+  return (total / tokens.length) * (EXPANDED.has(it.group) ? EXPANDED_WEIGHT : it.commandId ? COMMAND_WEIGHT : 1)
 }
 
 export interface SearchResult {
