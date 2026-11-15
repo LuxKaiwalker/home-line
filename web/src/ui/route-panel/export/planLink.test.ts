@@ -124,7 +124,11 @@ describe('applyPlanLink', () => {
     expect(applyPlanLink(`#/mission?plan=${v1}&add=S6`, store, o)).toBe('loaded')
     const stops = store.doc.peek().route.stops
     expect(stops.map((s) => (s.kind === 'station' ? s.station : 'pt'))).toEqual(['pt', 'S6'])
+    // the link's plan has no undo step; the added station is one (Ctrl+Z takes it out)
+    expect(store.undo()).toBe(true)
+    expect(store.doc.peek().route.stops).toHaveLength(1)
     expect(store.canUndo.peek()).toBe(false)
+    store.redo()
     expect(o.hashes.at(-1)).toBe(planningHref(store.doc.peek()))
     expect(o.hashes.at(-1)).not.toMatch(/add=/)
   })
@@ -156,6 +160,15 @@ describe('applyPlanLink', () => {
     expect(o.hashes.at(-1)).toBe(planningHref(before))
     expect(applyPlanLink('#/mission?plan=garbage!!', store, o)).toBe('invalid')
     expect(store.doc.peek()).toBe(before)
+  })
+
+  it('?add= goes through io.addStation when given (R3: route limits + notice)', () => {
+    const store = createPlanningStore()
+    const added: string[] = []
+    const o = { ...io(), addStation: (id: string) => void added.push(id) }
+    expect(applyPlanLink('#/?add=S8', store, o)).toBe('added')
+    expect(added).toEqual(['S8'])
+    expect(store.doc.peek().route.stops).toHaveLength(0)
   })
 
   it('the default IO publishes the notice signal', () => {

@@ -3,13 +3,14 @@
 // redirectFor. Format and parsing are state/planningUrl.ts (one place); this file decides what to do:
 //   #/mission?plan=<v1>[&add=S]  legacy Mission link   -> replace the hash with #/?route=<v2>[&add=S], then load
 //   #/mission?add=S              legacy "Add to route" -> #/?add=S, then add S to the current plan
-//   #/?route=<v2>[&add=S]        share link            -> planning.replace(doc [+ S]): no undo step, history cleared
+//   #/?route=<v2>[&add=S]        share link            -> planning.replace(doc): no undo step, history cleared;
+//                                                         then S appended as one undo step (io.addStation)
 //   #/?add=S                     add S to the plan on screen (one undo step, like the station card's link)
 //   unreadable route / plan      -> notice, nothing loaded, the plan on screen stays; never throws
 // After a legacy or add link the hash is replaced by the plan's canonical href (add= dropped, so a
 // reload adds nothing); a plain #/?route= link stays as it is (other hash params survive).
 import { signal, type ReadSignal } from '../../../state/signal'
-import { addStopTo, encodeRouteParam, legacyRedirect, parsePlanningHash, planning, planningHref, type PlanningDoc, type PlanningStore } from '../../../state/planning'
+import { encodeRouteParam, legacyRedirect, parsePlanningHash, planning, planningHref, type PlanningDoc, type PlanningStore } from '../../../state/planning'
 import { copyFrom } from '../../copy'
 import own from './copy.export.json'
 
@@ -45,6 +46,11 @@ export interface PlanLinkIO {
   replaceHash(hash: string): void
   /** tell the user (the notice below by default) */
   notify(n: PlanLinkNotice): void
+  /**
+   * Append a station to the plan as one undo step (default: store.addStop). I1 may pass R3's
+   * edit/route/map/addToRoute helper here so ?add= gets the route limits and R3's notice.
+   */
+  addStation?(station: string, store: PlanningStore): void
 }
 
 export interface PlanLinkNotice {
@@ -91,17 +97,12 @@ export function applyPlanLink(hash: string, store: PlanningStore = planning, io:
     return 'invalid'
   }
   if (res.kind !== 'load') return 'none'
-  const cur = store.doc.peek()
-  let outcome: PlanLinkOutcome
-  if (res.doc) {
-    const next = res.add ? { ...res.doc, route: addStopTo(res.doc.route, { kind: 'station', station: res.add }) } : res.doc
-    // the address already shows the plan on screen (our own URL sync, Back/Forward to it): keep the history
-    if (!sameRoute(cur, next)) store.replace(next)
-    outcome = 'loaded'
-  } else {
-    store.addStop({ kind: 'station', station: res.add! })
-    outcome = 'added'
-  }
+  // the plan of the link: no undo step, history cleared; unless the address already shows the plan on
+  // screen (our own URL sync, Back/Forward to it): then the history stays
+  if (res.doc && !sameRoute(store.doc.peek(), res.doc)) store.replace(res.doc)
+  // ?add=: one undo step on top (Ctrl+Z takes the added station out again)
+  if (res.add) (io.addStation ?? ((station, s) => void s.addStop({ kind: 'station', station })))(res.add, store)
+  const outcome: PlanLinkOutcome = res.doc ? 'loaded' : 'added'
   const canonical = planningHref(store.doc.peek())
   if (redirected || res.add) io.replaceHash(canonical)
   return outcome
