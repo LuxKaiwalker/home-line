@@ -159,12 +159,13 @@ test.describe('drag a point', () => {
 })
 
 test.describe('infeasible leg', () => {
-  // All six stations with long stops: the route runs over the EVA budget, so a leg is infeasible.
-  // TODO(Q1, wave 2): confirm the first infeasible leg index on the integrated build (core numbers).
-  const longStops = ['S1', 'S6', 'S7', 'S2', 'S8', 'S4'].map((id) => ({ ...station(id), stopMin: 120 }))
+  // Known infeasible order (edit/route/browser/compute.test.ts I1c, real data): S2,S8,S7,S6,S1,S4 from pad
+  // rank2 breaks the O2 bound; the browser core names leg index 4 (S6 -> S1, ~21 min short; engine: leg 3).
+  // TODO(Q1, wave 2): pin "Leg 5 (S6 → S1)" once the worker's fast mode is confirmed to give the same leg.
+  const order = ['S2', 'S8', 'S7', 'S6', 'S1', 'S4'].map((id) => station(id))
 
   test.fixme('an infeasible leg is red on the map, flagged in the list and called out in the panel', async ({ page }) => {
-    await openPlan(page, routeHash(OFFICIAL_PAD_ID, longStops))
+    await openPlan(page, routeHash('rank2', order))
     await openRoutePanel(page)
     await routeReady(page, 60_000)
     const callout = page.locator(S.infeasibleCallout)
