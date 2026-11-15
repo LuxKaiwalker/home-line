@@ -15,6 +15,9 @@
 // the order never depends on which listener was registered first; a key that is used here is
 // preventDefault()-ed and keys.ts then leaves it alone (it checks defaultPrevented). Typing in a field
 // keeps Ctrl+Z for the field. While a route job runs, route entries are locked (the panel says so).
+// PORT I2: the Plan view's planning store (state/planning.ts) is the route side of this timeline in the
+// static build: state/planningActivity.ts installPlanningActivity() loads this module with import()
+// (§7b lazy entry) and passes a tagged planningUndoSource as `ctl`.
 import { computed, signal, type ReadSignal } from '../../state/signal'
 import { isTypingTarget, shortcutFor, type ShortcutAction } from '../../ui/shell/keys'
 import type { RouteController } from './controller'
