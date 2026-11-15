@@ -35,6 +35,7 @@ export const ICON_NAMES = [
   'panel-right',
   'pause',
   'play',
+  'plus',
   'printer',
   'qr-code',
   'radiation',

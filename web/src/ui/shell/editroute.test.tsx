@@ -82,7 +82,7 @@ describe('VITE_ROUTE_EDIT (D116): the Edit-route button and drawer are absent wh
   it('the gate is live/config.ts ROUTE_EDIT_ENABLED (WP14), passed in by views/console.tsx', () => {
     // (this file may not import src/live/: isolation.test.ts; WP14's routeedit.test.tsx covers the parsing)
     const consoleSrc = readFileSync(resolve(__dirname, '../../views/console.tsx'), 'utf8')
-    expect(consoleSrc).toContain('{ enabled: m.ROUTE_EDIT_ENABLED, simMode: m.SIM_EXPORT_MODE }')
+    expect(consoleSrc).toContain('{ enabled: m.PLAN_ROUTE_EDIT, simMode: m.SIM_EXPORT_MODE }')
     // ?legacy=1 (no shell frame): no D111 containers; L2-shell's live slot when present
     expect(consoleSrc).toContain("el.closest('.hl-shell') ? (mapEl.querySelector<HTMLElement>('[data-plan-slot=live]') ?? mapEl) : null")
   })

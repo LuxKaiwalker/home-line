@@ -9,6 +9,8 @@
 //                          Escape did in the sidebar. With the station card open, the strip sits on top
 //                          of it instead (one card at a time), as it sat above the selection card before.
 // Numbers, trust chips and card content are unchanged: only the container moved.
+// J1d (team lead 2026-11-15 16:57): the station card also has "Add to route" -> #/mission?add=<id> (the
+// Mission Planer appends the station to its route, mission/add.ts).
 import { render, type ComponentChildren } from 'preact'
 import { useEffect, useState } from 'preact/hooks'
 import { data } from '../data/loader'
@@ -19,6 +21,7 @@ import { hostRoverCard, roverStrip } from '../state/roverCard'
 import { clearSelection, selection } from '../state/selection'
 import { batch, effect, useSignalValue } from '../state/signal'
 import { CardSkeleton } from '../ui/components'
+import { Icon } from '../ui/components/Icon'
 import { t } from '../ui/copy'
 import { closeContainer, layout, MarkerCard, openContainer, registerContainer } from '../ui/layout'
 import { hostIn } from '../ui/shell/store'
@@ -45,8 +48,18 @@ function StationCardBody({ id }: { id: string }) {
         <a class="hl-btn hl-btn--secondary" href={href({ name: 'station', id })} title={t('cards.station.openTip')}>
           {t('cards.station.open')}
         </a>
+        <StationAddToRoute id={id} />
       </p>
     </>
+  )
+}
+
+/** J1d: "Add to route" on a station card: the Mission Planer with ?add=<id> (it appends the station). */
+export function StationAddToRoute({ id }: { id: string }) {
+  return (
+    <a class="hl-btn hl-btn--secondary plan-card__add" href={href({ name: 'mission', add: id })} title={t('cards.station.addToRouteTip')} data-add-to-route={id}>
+      <Icon name="plus" /> {t('cards.station.addToRoute')}
+    </a>
   )
 }
 

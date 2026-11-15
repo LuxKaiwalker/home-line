@@ -1,4 +1,4 @@
-// HOMELINE web app entry point (WS5 owns web/ except src/hud and src/nav, the HUD's navigation helpers).
+// MARVIS web app entry point (WS5 owns web/ except src/hud and src/nav, the HUD's navigation helpers).
 // WS15 task 4 (A4): the app shell (DESIGN U0, §4) hosts every existing view unchanged in main.outlet.
 // ?legacy=1 (or ?legacy=<route name>, in the page query or the hash query) renders the old layout;
 // #/styleguide and #/spike (internal pages) also keep the old frame.
@@ -9,13 +9,13 @@ import './ui/components/components.css'
 import './ui/shell/shell.css'
 import { DATA_MODE, IS_DEV, dataUrl } from './env'
 import { clearUnbacked, onUnbackedChange, unbackedNumbers } from './prov/store'
-import { isSpikeHash, isStyleguideHash, parseRoute, redirectFor, type Route } from './router'
+import { isSpikeHash, isStyleguideHash, LANDING_HASH, landingFor, landingWhen, parseRoute, redirectFor, type Route } from './router'
 import { applyRoute } from './ui/shell/store'
 import { buildLegacyFrame, buildShellFrame, frameKindFor, type Frame, type FrameKind } from './ui/shell/frame'
 import type { ShellHandle } from './ui/shell/Shell'
 import { mountShell } from './ui/shell/Shell'
 import { VIEWS } from './views'
-import { bootLoading, loadingActive, loadingDone, setLoadProgress, STAGE, whenIntroStarted } from './story/loading'
+import { bootLoading, loadingActive, loadingDone, setLoadProgress, STAGE, whenIntroOver, whenIntroStarted } from './story/loading'
 import { storyParams, storyRequest } from './story/query'
 import { ui } from './state/ui'
 
@@ -110,6 +110,13 @@ async function render(): Promise<void> {
   const seq = ++renderSeq
   const userNav = !first
   first = false
+  // A bare address opens the landing page (router LANDING_HASH); story/capture links keep their own start.
+  // D132: when this load plays the L12 intro (first visit, no ?intro=0), the intro plays on the Plan map
+  // first and the page lands on the Mission Planer once it is over (ended or skipped), unless the viewer
+  // has gone elsewhere meanwhile. #/ stays the Plan page.
+  const landing = landingWhen(location.search, location.hash, intro && !userNav)
+  if (landing === 'after-intro') void whenIntroOver().then(() => landingFor(location.hash) && location.replace(LANDING_HASH))
+  else if (landing === 'now') history.replaceState(history.state, '', LANDING_HASH)
   const spike = isSpikeHash(location.hash)
   const styleguide = !spike && isStyleguideHash(location.hash)
   const internal = spike || styleguide

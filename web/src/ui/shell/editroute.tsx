@@ -14,6 +14,11 @@
 //   live/padmount.tsx      puts the crew panel into the drawer (setEditRouteCrew) while a host is mounted
 //   views/console.tsx      mounts the host inside the console map (mountEditRoute), live builds only
 //
+// J1d (team lead 2026-11-15 16:57): the route editor itself (instant estimate, stop list, map waypoints) shows
+// here only with VITE_ROUTE_EDITOR_IN_DRAWER=1 (live/config.ts ROUTE_EDITOR_IN_DRAWER, default off); otherwise
+// the route section shows "Plan a route → Mission Planer" (#/mission). Pad tool, crew, My plans, Send to
+// simulator and the server's Compute plan stay in the drawer.
+//
 // Loaded only through the VITE_LIVE dynamic import in views/console.tsx (and the live chunks), so
 // the static build does not contain it. It imports nothing from src/live/ (isolation.test.ts): the
 // D116 gate (live/config.ts ROUTE_EDIT_ENABLED) and the "My plans" store and list come in through

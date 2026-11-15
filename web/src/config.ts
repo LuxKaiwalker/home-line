@@ -59,6 +59,10 @@ export interface IsochroneMinutes {
 
 export const CONFIG = {
   marsRadiusM: num(siteRaw, 'crs.mars_radius_m'),
+  /** the analysis projection (eqc), = the simulator bundle's pad-local frame (contracts/bundle/README.md) */
+  analysisProj: cfg<string>(siteRaw, 'crs.analysis_proj'),
+  /** SPEC F18 band colouring: green > this, amber 0..this, red < 0 */
+  marginAmberMin: num(hudRaw, 'margin_amber_min'),
   aoiFocus: cfg<{ west: number; east: number; south: number; north: number }>(siteRaw, 'aoi_focus'),
   padDefault: cfg<{ lon: number; lat: number; rule: string; verify_at_h0?: boolean }>(siteRaw, 'pad_default'),
   planningRadiusM: num(siteRaw, 'planning_radius_m'),

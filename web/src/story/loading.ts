@@ -45,6 +45,8 @@ const skipListeners = new Set<() => void>()
 let teardown: (() => void) | null = null
 let started: (() => void) | null = null
 let startedP: Promise<void> = new Promise((r) => (started = r))
+let over: (() => void) | null = null
+let overP: Promise<void> = new Promise((r) => (over = r))
 
 const root = (): HTMLElement | null => (typeof document === 'undefined' || typeof document.getElementById !== 'function' ? null : document.getElementById(ROOT_ID))
 /** <html>'s dataset (undefined outside a browser, e.g. the stage tests' minimal document) */
@@ -77,6 +79,19 @@ export function onIntroSkip(f: () => void): () => void {
 export function whenIntroStarted(): Promise<void> {
   if (!loadingActive() || htmlData()?.hlIntro === 'playing') return Promise.resolve()
   return startedP
+}
+
+/**
+ * D132: resolves once the intro is over: played to its end, skipped, or failed (story/attach.ts calls
+ * introOver()). A bare address waits for it before it lands on the Mission Planer (main.ts).
+ */
+export function whenIntroOver(): Promise<void> {
+  return overP
+}
+
+/** The intro is over (ended, skipped or failed): resolves whenIntroOver(). */
+export function introOver(): void {
+  over?.()
 }
 
 /** Progress of the real loads the intro needs, 0..1; only ever moves forward. */
@@ -215,4 +230,5 @@ export function _resetLoadingForTests(): void {
   skipListeners.clear()
   teardown = null
   startedP = new Promise((r) => (started = r))
+  overP = new Promise((r) => (over = r))
 }

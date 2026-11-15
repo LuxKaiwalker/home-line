@@ -28,8 +28,8 @@ export const LIVE_SENTENCE =
 function About() {
   if (import.meta.env.VITE_LIVE === '1') void import('../live').then((m) => m.mountPrivacy(document))
   return (
-    <Page title="About HOMELINE">
-      <p class="lead">Mars isn't flat: HOMELINE draws where a suited crew can really go and still get home, and checks it against Curiosity's own photos.</p>
+    <Page title="About MARVIS">
+      <p class="lead">Mars isn't flat: MARVIS draws where a suited crew can really go and still get home, and checks it against Curiosity's own photos.</p>
       <p>
         A static site: every number was computed offline during NASA Space Apps 2026 from public data and is listed with its file, script
         and commit on the <a href="#/scorecard">scorecard</a>. {import.meta.env.VITE_LIVE === '1' ? LIVE_SENTENCE : STATIC_SENTENCE}
@@ -63,6 +63,8 @@ function About() {
         <>
           <h2>{t('layout.storageTitle')}</h2>
           <p class="about-privacy">{t('layout.privacy')}</p>
+          {/* J1 (D132): the one third-party fetch of the static site: mission/curiosity.ts, off by default */}
+          <p class="about-privacy">{t('layout.curiosity')}</p>
         </>
       )}
       <h2>Licences</h2>
