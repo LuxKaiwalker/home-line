@@ -13,7 +13,7 @@ import { GHOST_LAYER_ID } from '../edit/route/map/layer'
 import { failureText } from '../edit/route/text'
 import { all, byTag, hasClass, installDom, type FakeNode } from '../ui/testing/dom'
 import { ApiError, createApiClient, type FetchLike } from './client'
-import { isEditorInDrawerFlag, isRouteEditFlag } from './config'
+import { isEditorInDrawerFlag, isEditRouteDrawerFlag, isRouteEditFlag } from './config'
 import type { LiveState } from './health'
 import type { MapPort } from './mapPort'
 import { HEALTH_WARM } from './mock/fixtures'
@@ -86,6 +86,60 @@ describe('VITE_ROUTE_EDITOR_IN_DRAWER parsing (J1d)', () => {
   })
 })
 
+describe('VITE_EDIT_ROUTE_DRAWER parsing (J1f)', () => {
+  it('off unless 1 or true', () => {
+    for (const v of [undefined, '', '0', 'false', 'yes', false]) expect(isEditRouteDrawerFlag(v)).toBe(false)
+    for (const v of ['1', 'true', true]) expect(isEditRouteDrawerFlag(v)).toBe(true)
+  })
+})
+
+// J1f (team lead 2026-11-15 17:31): the fallback hides Plan's Edit-route drawer and its edge button by default
+describe("VITE_EDIT_ROUTE_DRAWER (J1f): Plan's Edit-route drawer and edge button", () => {
+  afterEach(() => {
+    vi.unstubAllEnvs()
+    vi.resetModules()
+  })
+  async function hostWith(drawer: string | undefined) {
+    if (drawer !== undefined) vi.stubEnv('VITE_EDIT_ROUTE_DRAWER', drawer)
+    const { document: doc } = installDom()
+    const live = await import('./index')
+    const er = await import('../ui/shell/editroute')
+    const { act: step } = await import('preact/test-utils')
+    const mapEl = doc.createElement('div')
+    doc.body.appendChild(mapEl)
+    const plans = { store: { list: () => null, rename: () => ({ ok: true as const }), remove: () => ({ ok: true as const }) }, View: () => null }
+    let off = () => {}
+    let offRoute = () => {}
+    // views/console.tsx passes exactly this gate
+    step(() => void (off = er.mountEditRoute(mapEl as unknown as Element, plans, { enabled: live.PLAN_ROUTE_EDIT })))
+    step(() => void (offRoute = er.registerEditRoute({ render: () => null })))
+    const body = doc.body as unknown as FakeNode
+    const found = {
+      open: all(body, (n) => hasClass(n, 'hl-editroute__open')).length,
+      drawer: all(body, (n) => n.getAttribute('id') === 'hl-lay-edit-route').length,
+      hosted: er.editRouteHosted(),
+    }
+    step(() => {
+      offRoute()
+      off()
+    })
+    return { live, found }
+  }
+
+  it('unset (the default, also the Pages build): no .hl-editroute__open, no drawer, no host', async () => {
+    const { live, found } = await hostWith(undefined)
+    expect(live.EDIT_ROUTE_DRAWER).toBe(false)
+    expect(live.PLAN_ROUTE_EDIT).toBe(false)
+    expect(found).toEqual({ open: 0, drawer: 0, hosted: false })
+  })
+
+  it('"1": the edge button and the drawer are back', async () => {
+    const { live, found } = await hostWith('1')
+    expect(live.PLAN_ROUTE_EDIT).toBe(true)
+    expect(found).toEqual({ open: 1, drawer: 1, hosted: true })
+  })
+})
+
 describe('padTool and VITE_ROUTE_EDIT (D116)', () => {
   let root: FakeNode
   let panel: FakeNode
@@ -114,8 +168,9 @@ describe('padTool and VITE_ROUTE_EDIT (D116)', () => {
   })
 
   // index.ts, the shell store and preact from one fresh module graph (the flag is read at import)
-  async function mountWith(flag: string | undefined, editorInDrawer?: string) {
+  async function mountWith(flag: string | undefined, editorInDrawer?: string, drawer: string | null = '1') {
     if (flag !== undefined) vi.stubEnv('VITE_ROUTE_EDIT', flag)
+    if (drawer !== null) vi.stubEnv('VITE_EDIT_ROUTE_DRAWER', drawer) // null: unset
     if (editorInDrawer !== undefined) vi.stubEnv('VITE_ROUTE_EDITOR_IN_DRAWER', editorInDrawer)
     const live = await import('./index')
     const { railSections } = await import('../ui/shell/store')
@@ -154,7 +209,7 @@ describe('padTool and VITE_ROUTE_EDIT (D116)', () => {
     expect(link).toHaveLength(1)
     const a = byTag(link[0], 'a')[0]
     expect(a.getAttribute('href')).toBe('#/mission')
-    expect(a.textContent).toContain('Plan a route → Mission Planer')
+    expect(a.textContent).toContain('Plan a route → Plan your EVA (estimate)')
     expect(all(root, (n) => hasClass(n, 'hl-route__stop'))).toEqual([])
     expect(all(root, (n) => hasClass(n, 'hl-route__stops'))).toEqual([])
     expect(all(root, (n) => hasClass(n, 'hl-route__estimate'))).toEqual([])
@@ -180,6 +235,20 @@ describe('padTool and VITE_ROUTE_EDIT (D116)', () => {
     await t.tick(50, () => t.cmap.layers.has(GHOST_LAYER_ID))
     expect(t.cmap.layers.has(GHOST_LAYER_ID)).toBe(true)
     expect(t.cmap.listeners).toEqual(expect.arrayContaining(['click', 'pointerdown']))
+    t.unmount()
+  })
+
+  // J1f: without Plan's Edit-route drawer (the default) the route panel is not mounted at all: the pad
+  // card keeps its own "Compute full plan" and nothing is registered into the absent host
+  it('VITE_EDIT_ROUTE_DRAWER unset (J1f default): mountRoutePanel is never called, nothing registered, no map waypoints', async () => {
+    const t = await mountWith(undefined, undefined, null)
+    expect(t.live.ROUTE_EDIT_ENABLED).toBe(true)
+    expect(t.live.PLAN_ROUTE_EDIT).toBe(false)
+    await t.tick(50)
+    expect(spy).not.toHaveBeenCalled()
+    expect(t.editRouteSection.peek()).toBeUndefined()
+    expect([...t.cmap.sources.keys(), ...t.cmap.layers.keys()]).toEqual([])
+    expect(t.cmap.listeners).toEqual([])
     t.unmount()
   })
 

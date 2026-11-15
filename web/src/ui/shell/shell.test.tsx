@@ -204,7 +204,7 @@ describe('shell frame and islands', () => {
     expect(root().getAttribute('data-bp')).toBe('tablet')
     expect(ui.panels.leftRail.value).toBe(TOKENS.layout.leftRail) // desktop preference: open
     expect(root().getAttribute('data-rail')).toBe('collapsed')
-    expect(byClass(root(), 'hl-rail__view').map((a) => a.getAttribute('aria-label'))).toEqual([t('nav.views.mission'), t('modes.plan.label')])
+    expect(byClass(root(), 'hl-rail__view').map((a) => a.getAttribute('aria-label'))).toEqual([t('nav.views.mission'), t('nav.views.console')])
     expect(byClass(root(), 'hl-rail__title')).toHaveLength(0)
     expect(byClass(root(), 'probe')).toHaveLength(0)
     expect(one(byClass(root(), 'hl-rail__body')).hasAttribute('hidden')).toBe(false)

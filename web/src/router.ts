@@ -182,8 +182,8 @@ export function isLegacy(param: string | null, route: Route): boolean {
 
 /** Top navigation, in display order. The hud slot is listed but owned by WS7. */
 export const NAV_ITEMS: { route: Route; label: string }[] = [
-  { route: { name: 'console' }, label: 'Plan' },
-  { route: { name: 'mission' }, label: 'Mission Planer' },
+  { route: { name: 'console' }, label: 'Official plan' },
+  { route: { name: 'mission' }, label: 'Plan your EVA (estimate)' },
   { route: { name: 'trade' }, label: 'Trade' },
   { route: { name: 'conditions' }, label: 'Conditions' },
   { route: { name: 'cuff' }, label: 'Cuff card' },

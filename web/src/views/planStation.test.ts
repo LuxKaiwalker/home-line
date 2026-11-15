@@ -89,7 +89,7 @@ describe('station card: Add to route', () => {
     const { StationAddToRoute } = await import('./planStation')
     const v = StationAddToRoute({ id: 'S4' }) as unknown as { props: { href: string; title: string; children: unknown[] } }
     expect(v.props.href).toBe('#/mission?add=S4')
-    expect(v.props.title).toBe('Add this station to the route in the Mission Planer')
+    expect(v.props.title).toBe('Add this station to the route in Plan your EVA (estimate)')
     expect(JSON.stringify(v.props.children)).toContain('Add to route')
     expect((v.props.children[0] as { props: { name: string } }).props.name).toBe('plus')
   })

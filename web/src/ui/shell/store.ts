@@ -36,7 +36,7 @@ export const MODE_VIEWS: Readonly<Record<Mode, readonly ModeView[]>> = {
   plan: [
     // Mission Planer first: the landing page and where the PLAN tab leads by default (user, 2026-11-15)
     { route: { name: 'mission' }, label: 'nav.views.mission', icon: 'mountain' },
-    { route: { name: 'console' }, label: 'modes.plan.label', icon: 'map' },
+    { route: { name: 'console' }, label: 'nav.views.console', icon: 'map' },
   ],
   fly: [
     { route: { name: 'hud' }, label: 'nav.views.hud', icon: 'gauge' },

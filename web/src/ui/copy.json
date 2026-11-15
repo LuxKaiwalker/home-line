@@ -42,7 +42,8 @@
       "expand": "Expand panel"
     },
     "views": {
-      "mission": "Mission Planer",
+      "console": "Official plan",
+      "mission": "Plan your EVA (estimate)",
       "trade": "Trade table",
       "conditions": "Conditions",
       "cuff": "Cuff card",
@@ -132,7 +133,7 @@
       "open": "Open station",
       "openTip": "The full station page: Navcam photo, panorama, timeline and tasks",
       "addToRoute": "Add to route",
-      "addToRouteTip": "Add this station to the route in the Mission Planer",
+      "addToRouteTip": "Add this station to the route in Plan your EVA (estimate)",
       "objective": "Objective",
       "tasks": "Tasks",
       "dwell": "Dwell",
@@ -522,8 +523,8 @@
     "undoEmpty": "Nothing to undo",
     "redoEmpty": "Nothing to redo",
     "previewEstimates": "Feasible EVAs and reachable stations are estimates until the full plan is computed",
-    "planInMission": "Plan a route → Mission Planer",
-    "planInMissionTip": "Route stops, stop times and the browser estimate are in the Mission Planer tab",
+    "planInMission": "Plan a route → Plan your EVA (estimate)",
+    "planInMissionTip": "Route stops, stop times and the browser estimate are in the Plan your EVA (estimate) tab",
     "reasons": {
       "customPad": "A rover pad spot of your own needs live planning",
       "dwell": "A changed dwell needs live planning",
