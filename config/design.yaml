@@ -24,7 +24,8 @@ terrain_3d:                          # added by D6b 2026-11-15 (DESIGN U1 items 
   fps_window_s: 0.5                  # assumed: true (M8): the frame rate is the frame count over this trailing window
   idle_gap_s: 1.0                    # assumed: true (M8): a frame gap longer than this is an idle map (MapLibre renders on demand), never a slow frame
   light_update_sim_min: 1            # DESIGN U1 item 4: relief light follows the clock at most once per simulated minute
-  assumed: [fps_window_s, idle_gap_s]
+  max_pitch_deg: 60                  # added by T1 2026-11-15 (assumed: true): manual 3D tilt cap (map maxPitch). MapLibre 6.18 selects zero tiles for every source above ~60 deg at zoom 16-17 with the terrain at about -7020 map m (-3740 m x 1.878): only the black background draws (notes/T1.md, flybug-*.png)
+  assumed: [fps_window_s, idle_gap_s, max_pitch_deg]
 field_layer:
   sampling: nearest_then_manual_bilinear   # encoded values must not be filtered
   update_hz_playing: 30
@@ -64,10 +65,10 @@ camera:
   presets:
     overhead: {pitch: 0, bearing: 0}
     isometric: {pitch: 45}
-    low: {pitch: 70}
+    low: {pitch: 60}                  # T1 2026-11-15: was 70; = terrain_3d.max_pitch_deg (MapLibre 6.18 draws no tiles above ~60 deg at the pad's -7 km map elevation)
     focus: {padding_px: 80}
-    follow: {behind_m: 250, above_m: 120, lookahead_m: 150}
-  flythrough: {sample_m: 20, spline: centripetal_catmull_rom, behind_m: 250, above_m: 120, lookahead_m: 150, turn_deg_per_min: 12}   # turn_deg_per_min added by M10b 2026-11-15 (assumed: true, M10): follow-camera bearing turns at most this many deg per EVA minute (out-and-back routes flip 180 deg at a station; 180 deg in 15 EVA min, mostly in the dwell)
+    follow: {behind_m: 250, above_m: 175, lookahead_m: 150}   # T1 2026-11-15: above_m was 120 (pitch 64.4 deg -> no tiles); 175 = pitch 55 deg, same as camera.flythrough
+  flythrough: {sample_m: 20, spline: centripetal_catmull_rom, behind_m: 250, above_m: 175, lookahead_m: 150, turn_deg_per_min: 12}   # above_m 120 -> 175 by T1 2026-11-15: atan(250/120) = 64.4 deg pitch made MapLibre 6.18 select zero tiles (terrain at about -7020 map m), atan(250/175) = 55 deg renders; turn_deg_per_min added by M10b 2026-11-15 (assumed: true, M10): follow-camera bearing turns at most this many deg per EVA minute (out-and-back routes flip 180 deg at a station; 180 deg in 15 EVA min, mostly in the dwell)
   history_max: 10
 overlays:
   max_thematic_on: 2

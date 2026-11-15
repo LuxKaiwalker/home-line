@@ -10,7 +10,7 @@ import { parse } from 'yaml'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { Plan } from '../../hud/plan'
 import { REPO } from '../../hud/testutil'
-import { ELEVATION_FACTOR } from '../../story/config'
+import { ELEVATION_FACTOR, FLYTHROUGH } from '../../story/config'
 import { Director, type DirectorOptions } from '../../story/director'
 import { parseStoryboard } from '../../story/storyboard'
 import { CONFIG } from '../../config'
@@ -19,6 +19,7 @@ import { t } from '../../ui/copy'
 import { commandItems } from '../../ui/search/search'
 import { HELP_ROWS, installShortcuts } from '../../ui/shell/keys'
 import { byTag, installDom, type FakeDocument, type FakeNode } from '../../ui/testing/dom'
+import { PRESETS } from '../camera/config'
 import { jumpToPose } from '../flythrough/camera'
 import type { CameraPose } from '../flythrough/path'
 import { flightPath, gridMetric } from '../flythrough/route'
@@ -182,6 +183,37 @@ describe.skipIf(!HAVE_TERRAIN)('T1: camera clearance over the published terrain 
       expect(b.cam).toBeCloseTo(a.cam, 6) // true metres: the same; on screen ×3 (map metres)
     }
   })
+})
+
+// ---- 2b. pitch cap (orchestrator add-on): MapLibre 6.18 draws no tiles above ~60° at the pad --------
+describe('T1: no camera pose exceeds the 3D pitch cap (terrain_3d.max_pitch_deg)', () => {
+  const cap = TERRAIN.maxPitch3d
+  it('the cap is design.yaml terrain_3d.max_pitch_deg = 60 (above it MapLibre selects zero tiles)', () => {
+    const d = parse(readFileSync(resolve(REPO, 'config/design.yaml'), 'utf8')) as { terrain_3d: { max_pitch_deg: number; assumed: string[] } }
+    expect(cap).toBe(d.terrain_3d.max_pitch_deg)
+    expect(cap).toBeLessThanOrEqual(60)
+    expect(d.terrain_3d.assumed).toContain('max_pitch_deg')
+  })
+  it('camera presets 1-3 (U16) stay at or under the cap', () => {
+    for (const p of [PRESETS.overhead.pitch, PRESETS.isometric.pitch, PRESETS.low.pitch, TERRAIN.pitch3d]) expect(p).toBeLessThanOrEqual(cap)
+  })
+  it('the flythrough follow camera is 175 m above (55°), never over the cap', () => {
+    expect(FLYTHROUGH.aboveM).toBe(175)
+    const o = realOptions()
+    let worst = 0
+    for (let tm = 0; tm <= o.tEnd + 30; tm += 0.25) worst = Math.max(worst, o.fp.poseAt(tm).pitch)
+    expect(worst).toBeCloseTo((Math.atan2(FLYTHROUGH.behindM, FLYTHROUGH.aboveM) * 180) / Math.PI, 6)
+    expect(worst).toBeLessThanOrEqual(55.1)
+  })
+  for (const id of ['flythrough', 'video_beat1', 'intro', 'kiosk', 'storm']) {
+    it(`${id}.json: every frame's camera pitch <= the cap`, () => {
+      const sb = parseStoryboard(JSON.parse(readFileSync(resolve(REPO, `web/public/story/${id}.json`), 'utf8')), id)
+      const d = new Director(sb, realOptions())
+      let worst = 0
+      for (let s = 0; s <= d.duration; s += 0.25) worst = Math.max(worst, d.stateAt(s).camera?.pitch ?? 0)
+      expect(worst).toBeLessThanOrEqual(cap)
+    })
+  }
 })
 
 // ---- 3. T toggles 2D/3D like the button ---------------------------------------------------------------

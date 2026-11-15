@@ -19,8 +19,11 @@ export const TERRAIN = {
   },
   /** camera.presets.isometric.pitch: the tilt 3D opens with */
   pitch3d: cfg<number>(designRaw, 'camera.presets.isometric.pitch'),
-  /** camera.presets.low.pitch: the steepest preset = maxPitch while 3D is on */
-  maxPitch3d: cfg<number>(designRaw, 'camera.presets.low.pitch'),
+  /**
+   * terrain_3d.max_pitch_deg: maxPitch while 3D is on (manual tilt cap). Above ~60° MapLibre 6.18 selects
+   * no tiles at the pad's −7 km map elevation and draws only the background (T1).
+   */
+  maxPitch3d: cfg<number>(designRaw, 'terrain_3d.max_pitch_deg'),
   /** performance.fps_3d_min */
   fps3dMin: cfg<number>(designRaw, 'performance.fps_3d_min'),
 } as const

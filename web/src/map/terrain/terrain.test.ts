@@ -253,11 +253,13 @@ describe('config/design.yaml and copy.json cross-check (when present on this bra
       exaggeration: { min: number; max: number; default: number; step: number }
       camera: { presets: { isometric: { pitch: number }; low: { pitch: number } } }
       performance: { fps_3d_min: number }
+      terrain_3d: { max_pitch_deg: number }
     }
     expect(TERRAIN.elevationFactor).toBe(d.scale.elevation_factor)
     expect({ ...TERRAIN.exaggeration, step: TERRAIN_PENDING.exaggerationStep }).toEqual(d.exaggeration)
     expect(TERRAIN.pitch3d).toBe(d.camera.presets.isometric.pitch)
-    expect(TERRAIN.maxPitch3d).toBe(d.camera.presets.low.pitch)
+    expect(TERRAIN.maxPitch3d).toBe(d.terrain_3d.max_pitch_deg)
+    expect(d.camera.presets.low.pitch).toBeLessThanOrEqual(TERRAIN.maxPitch3d)
     expect(TERRAIN.fps3dMin).toBe(d.performance.fps_3d_min)
   })
   it('the terrain text comes from the copy deck (ui/copy), no copied strings (T1)', () => {
