@@ -9,6 +9,7 @@ import { buildUserReplay, loadUserReplay, replayAt, replayOfficialPlan, userRepl
 import { Button } from '../components'
 import { copyFrom } from '../copy'
 import own from './copy.F5.json'
+import { ReplayElevation, ReplayHeight, ReplayViewTabs, useHeightRes, useReplayElevation, useReplayView } from './userReplayElev'
 
 export const tr = copyFrom(own)
 
@@ -52,6 +53,10 @@ export function UserReplayReadout({ store = planning }: { store?: PlanningStore 
   const u = useSignalValue(userReplay)
   const tNow = useSignalValue(missionClock.s.t)
   const stops = usePlanning((s) => s.route.stops, store)
+  // PORT F15: main's Margin / Elevation switch and the height along the route (userReplayElev.tsx)
+  const elev = useReplayElevation(u)
+  const [view, setView] = useReplayView()
+  const resM = useHeightRes()
   if (!u) return null
   const st = replayAt(u, tNow)
   const labels = stopLabels(stops)
@@ -64,6 +69,8 @@ export function UserReplayReadout({ store = planning }: { store?: PlanningStore 
     <div class="plan-replay__readout" data-replay-readout>
       <ReplaySourceBar />
       <p>{where}</p>
+      <ReplayViewTabs view={view} setView={setView} />
+      {view === 'elevation' && <ReplayElevation u={u} e={elev} tNow={tNow} stops={stops} resM={resM} />}
       <ul class="plan-replay__nums">
         <li data-estimate>
           <span class="plan-replay__tag">{tr('estimate')}</span> {tr('length', { v: u.totalMin.toFixed(1) })}
@@ -74,6 +81,7 @@ export function UserReplayReadout({ store = planning }: { store?: PlanningStore 
         <li data-estimate>
           <span class="plan-replay__tag">{tr('estimate')}</span> {u.marginMin === null ? tr('marginUnknown') : tr('margin', { v: u.marginMin.toFixed(1) })}
         </li>
+        <ReplayHeight e={elev} tNow={tNow} />
       </ul>
       <p class="muted">{tr('officialHidden')}</p>
     </div>

@@ -74,7 +74,7 @@ describe('Load into replay (PORT F5)', () => {
     expect(userReplay.peek()?.totalMin).toBeCloseTo(79.5)
     expect(text(root)).toContain('Replaying: your route (estimate)')
     const nums = all(root, (n) => n.hasAttribute('data-estimate'))
-    expect(nums.length).toBe(3)
+    expect(nums.length).toBe(4) // PORT F15: + height
     for (const n of nums) expect(text(n)).toMatch(/^Estimate /)
     expect(text(root)).toContain('Margin 12.5 min')
     expect(text(root)).toContain('Official plan values are hidden')
