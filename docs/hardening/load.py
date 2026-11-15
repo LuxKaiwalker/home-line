@@ -384,7 +384,9 @@ async def setup(base: str) -> dict:
                 files += [f for f in s["files"].values() if f not in files]
         # valid pads: the nearest valid block of random points, re-validated, distinct
         rng, valid, seen = random.Random(71), [], set()
-        while len(valid) < 24:
+        for _ in range(4000):  # nearest valid blocks repeat: stop when enough or tried out
+            if len(valid) >= 24:
+                break
             p = random_point(rng, centre)
             v = (await c.post("/pads/validate", json=p)).json()
             q = v if v.get("valid") else v.get("nearest_valid")
@@ -398,8 +400,15 @@ async def setup(base: str) -> dict:
             if (await c.post("/pads/validate", json=q)).json().get("valid"):
                 seen.add(key)
                 valid.append(q)
+        # job pads: only pads with no result tree yet (a re-run must not hit run-1 results)
+        fresh = []
+        for q in valid:
+            body = {"contract_version": cv, "pad": q}
+            h = (await c.post("/plans/import", json=body)).json().get("hash")
+            if h and (await c.get(f"/results/{h}/run_record.json")).status_code == 404:
+                fresh.append(q)
     return {"cv": cv, "centre": centre, "official": official, "official_inputs": d["inputs"],
-            "files": files, "valid": valid, "job_pads": valid[:12]}
+            "files": files, "valid": valid, "job_pads": fresh[:12]}
 
 
 async def main() -> int:
