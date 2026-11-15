@@ -24,7 +24,7 @@
 //   if (import.meta.env.VITE_LIVE === '1') void import('../live').then((m) => m.padTool(panelEl, m.consoleMapPort(cmap)))
 import './live.css'
 import { h } from 'preact'
-import { SendToSimulator } from '../ui/cards/simslot-export'
+import { useEffect, useState } from 'preact/hooks'
 import type { StageResult } from './stage'
 import { createApiClient, type ApiClient, type FetchLike } from './client'
 import { dataUrl } from '../env'
@@ -237,7 +237,8 @@ export function padTool(panel: Element, port: MapPort, client: ApiClient = liveC
 
 /** S1's self-contained control for a live route result (hooks data-sim-export, data-origin, data-state). */
 function routeSimSlot(client: ApiClient, hash: string, manifest: StageResult['manifest'] | null) {
-  return h(SendToSimulator, {
+  return h(LazySendToSimulator, {
+    key: hash,
     base: client.resultBase({ hash, result_url: null }),
     manifest,
     origin: 'computed_live',
@@ -245,6 +246,19 @@ function routeSimSlot(client: ApiClient, hash: string, manifest: StageResult['ma
     // the dev mock answers the API's URLs (as planRoute's simFetch)
     ...(USE_MOCK ? { fetchFor: (url: string) => (url.startsWith(API_BASE) ? lazyMockFetch : fetch) } : {}),
   })
+}
+
+type SimProps = import('../ui/cards/simslot-export').SendToSimulatorProps
+let simModule: Promise<typeof import('../ui/cards/simslot-export')> | null = null
+/** SendToSimulator loaded with import() on the first route result (only reached when VITE_SIM_EXPORT is set). */
+function LazySendToSimulator(props: SimProps) {
+  const [C, setC] = useState<((p: SimProps) => unknown) | null>(null)
+  useEffect(() => {
+    let on = true
+    void (simModule ??= import('../ui/cards/simslot-export')).then((m) => on && setC(() => m.SendToSimulator as unknown as (p: SimProps) => unknown))
+    return () => void (on = false)
+  }, [])
+  return C ? h(C as never, props) : null
 }
 
 /** The pad tool's spot while it is a checked, valid pad (else null: the plan in use). */
