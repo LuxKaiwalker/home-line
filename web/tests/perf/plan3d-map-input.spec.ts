@@ -19,7 +19,8 @@ import { expect, test, type Page } from 'playwright/test'
 // (issue #131); the interactions themselves are checked with their usual timeouts
 test.describe.configure({ timeout: 180_000 })
 
-const card = (page: Page) => page.locator('.hl-sidebar__body')
+/** L2e (D111): cards on the map (selection, station, rover), not the sidebar */
+const card = (page: Page) => page.locator('.hl-lay-card')
 const cam = (page: Page) => page.locator('[data-camera-center]').first()
 const mapEl = (page: Page) => page.locator('.maplibregl-map').first()
 const center = async (page: Page) => (await cam(page).getAttribute('data-camera-center'))!

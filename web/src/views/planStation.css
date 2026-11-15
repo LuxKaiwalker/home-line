@@ -1,9 +1,14 @@
-/* Plan map cards (L2d, D111). Tokens only. The station card keeps the sidebar's width (the selection
-   cards are laid out for it, card-fit), capped by the map; long cards scroll inside the card. */
-.plan-card.hl-lay-card { max-height: calc(100% - var(--space-4)); }
-.plan-card .hl-lay-card__body { min-height: 0; overflow: auto; }
-.plan-card--station.hl-lay-card { width: min(var(--layout-sidebar), calc(100% - var(--space-4))); }
+/* Plan map cards (L2d, D111). Tokens only. The selection cards (station, selection) are sized in
+   ui/cards/selectionCard.css (L2e: the sidebar width, capped by the map and by the room beside the
+   object); the rover card scrolls inside when long. */
+.plan-card--rover.hl-lay-card { max-height: calc(100% - var(--space-4)); }
+.plan-card--rover .hl-lay-card__body { min-height: 0; overflow: auto; }
 .plan-card__open { margin: var(--space-2) 0 0; }
 /* J1d: "Open station" and "Add to route" side by side */
 .plan-card__open { display: flex; flex-wrap: wrap; gap: var(--space-2); }
 .plan-card__add { display: inline-flex; align-items: center; gap: var(--space-1); }
+/* L2e: the cards stay clear of the map-edge tool column (L2c .plan-tools: 32 px icons, right edge, drawn
+   above the cards), so the card's × is never under it, as long as the map is wide enough for the full card
+   width beside the column (a narrow map, e.g. a portrait tablet, keeps the full width for the readouts);
+   the slot keeps the map's left / top origin */
+.plan-layout > .plan-layout__card { right: clamp(0px, calc(100% - var(--layout-sidebar) - var(--space-4) - var(--space-7)), var(--space-7)); }

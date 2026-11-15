@@ -23,7 +23,8 @@ const STATIC_SNAP = 'Live planning is offline: the rover snaps between the preco
 const LIVE_SNAP = 'Release to snap to a parking option · for a custom spot, click the map (live planner)'
 
 const roverEl = (page: Page) => page.locator('.hl-edit-rover')
-const card = (page: Page) => page.locator('.hl-sidebar__body')
+/** L2e (D111): the selection's pop-up card on the map, not the sidebar */
+const card = (page: Page) => page.locator('.sel-card')
 /** L2d (D111): the delta strip shows in the rover card on the map (#hl-lay-rover), not the sidebar */
 const strip = (page: Page) => page.locator('#hl-lay-rover')
 const noStrip = (page: Page, timeout = 5_000) => expect(page.locator('.hl-edit-delta')).toHaveCount(0, { timeout })
@@ -119,7 +120,7 @@ test('T9: "Official plan" is disabled with its reason on the official plan, and 
   await expect(btn).toBeDisabled()
   // the rover sits on the official pad again (the camera may have moved with the selection)
   await expect.poll(async () => dist(await settled(page), await pointOf(page, 'PAD')), { timeout: 10_000 }).toBeLessThan(3)
-  await expect(card(page)).not.toContainText('Parking option')
+  await expect(card(page).filter({ hasText: 'Parking option' })).toHaveCount(0)
   await noStrip(page)
 })
 
@@ -167,7 +168,7 @@ test('T2: the drag readout is truthful about the live planner (off vs ready), wi
   await expect(readout).not.toContainText('computing')
   await page.mouse.up()
   await expect(strip(page)).toContainText('What this change costs', { timeout: 10_000 })
-  await expect(card(page)).not.toContainText(STATIC_SNAP)
+  await expect(card(page).filter({ hasText: STATIC_SNAP })).toHaveCount(0)
 
   // and unreachable again: back to the static text
   await page.keyboard.press('Escape')

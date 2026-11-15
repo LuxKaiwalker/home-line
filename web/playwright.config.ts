@@ -15,7 +15,7 @@ const PORT = Number(process.env.HL_VISUAL_PORT ?? 4179)
 // waits for a map frame, so official-plan's three drags outlasted the 90 s test timeout (T2fix).
 // These specs run in their own projects, one worker, after the screenshot projects, so nothing else
 // competes for the CPU.
-const CLICK_SPECS = /(shell-layout|story-intro|map-input|rover-click|console-fixes|hover-replay|official-plan|activity-players|plan-strip)\.spec\.ts$/
+const CLICK_SPECS = /(shell-layout|story-intro|map-input|rover-click|console-fixes|hover-replay|official-plan|activity-players|plan-strip|selection-card)\.spec\.ts$/
 const VIEWPORTS: [string, { width: number; height: number }][] = [
   ['1440x900', { width: 1440, height: 900 }],
   ['1024x768', { width: 1024, height: 768 }],

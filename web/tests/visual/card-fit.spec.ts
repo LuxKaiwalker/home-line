@@ -1,13 +1,13 @@
 /**
  * Selection-card readouts fit their box (U14 card, DESIGN §3.2 readout type, §3.7 readout; A5b).
  * Not a screenshot test: it lives here so the visual config (../../playwright.config.ts) runs it on both
- * projects (1440×900: 360 px sidebar; 1024×768: 360 px overlay sidebar) against the built app, plus a
+ * projects (1440×900, 1024×768; L2e: the selection's pop-up card on the map, at most 360 px wide) against the built app, plus a
  * portrait tablet (768×1024: the half-height bottom sheet). Found by A7b: the S7 card showed "44.3" and
  * "41." because the map cursor readout's CSS (also class .hl-readout) turned card readouts into a
  * two-column grid.
  * For every card kind reachable from search with real data (official pad, the four parking options,
  * route stations, a station, a scored site, every landmark, a terrain cell by coordinates) and the
- * route summary (nothing selected), every readout must:
+ * route summary (L2e: the Plan summary opener), every readout must:
  *   - not overflow (scrollWidth ≤ clientWidth on the readout and its value; the card does not overflow);
  *   - keep every glyph of its label and value inside its own box (no clipping, no ellipsis);
  *   - never break inside a number (a value may wrap between number and unit, or after a range dash).
@@ -109,9 +109,12 @@ async function checkAllCards(page: Page): Promise<void> {
     total += readouts
     all.push(...problems.map((p) => ({ ...p, card: `${q}: ${p.card}` })))
   }
-  // nothing selected: the route summary card
+  // L2e: nothing selected = no card; the route summary opens from the Plan summary opener
   await page.keyboard.press('Escape')
-  await page.locator('.hl-selection .hl-card:not([data-state="selected"])').first().waitFor({ timeout: 10_000 })
+  await expect(page.locator('.sel-card')).toHaveCount(0)
+  await page.locator('[data-testid="plan-summary"]').click()
+  await page.locator('.hl-selection[data-selected="summary"] .hl-card').first().waitFor({ timeout: 15_000 })
+  await page.waitForLoadState('networkidle')
   const summary = await measure(page)
   total += summary.readouts
   all.push(...summary.problems.map((p) => ({ ...p, card: `summary: ${p.card}` })))
@@ -120,11 +123,12 @@ async function checkAllCards(page: Page): Promise<void> {
 }
 
 test.describe('selection card readouts fit (U14, A5b)', () => {
-  test('every readout on every card kind fits the sidebar width', async ({ page }) => {
+  test('every readout on every card kind fits the selection card', async ({ page }) => {
     await checkAllCards(page)
-    // the width under test: the 360 px sidebar (desktop column, tablet overlay)
-    const sidebar = await page.locator('.hl-sidebar__body').locator('..').boundingBox()
-    expect(Math.round(sidebar!.width)).toBe(360)
+    // the width under test (L2e): the pop-up card keeps the 360 px the cards are laid out for
+    await openCard(page, 'S7', /^S7(?![0-9])/)
+    const c = await page.locator('.sel-card').boundingBox()
+    expect(Math.round(c!.width)).toBe(360)
   })
 
   test.describe('portrait tablet bottom sheet', () => {
