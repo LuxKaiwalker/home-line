@@ -231,9 +231,9 @@ describe.skipIf(!HAVE)('search palette (real data)', () => {
     runItem(items.find((i) => i.id === 'cmd:toggle3d')!, { navigate: () => {} })
     expect(ui.view.value).toBe('3d')
     const nav = vi.fn()
-    runItem(items.find((i) => i.id === 'cmd:mode:evidence')!, { navigate: nav })
+    runItem(items.find((i) => i.id === 'cmd:mode:report')!, { navigate: nav })
     expect(nav).toHaveBeenCalledTimes(1)
-    expect(labelOf(items.find((i) => i.id === 'cmd:mode:evidence')!)).toBe(t('modes.evidence.label'))
+    expect(labelOf(items.find((i) => i.id === 'cmd:mode:report')!)).toBe(t('modes.report.label'))
   })
 
   it('top-bar button: click opens; the shell\'s search shortcut (Ctrl+K, /) toggles; Escape closes', async () => {
