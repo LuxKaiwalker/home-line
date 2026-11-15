@@ -173,6 +173,8 @@ export function createRouteController(o: RouteControllerOptions) {
     setMode: (m: RouteMode) => edit(setMode(store.route.peek(), m)),
     toggle: (id: string, on: boolean) => edit(toggleStation(store.route.peek(), id, on)),
     move: (from: number, to: number) => edit(moveStop(store.route.peek(), from, to)),
+    /** Any other route edit (WP6 free points: add, move, rename, delete): one undo step, result cleared. */
+    edit,
     /** Drag gesture: start (no store change), drop (one undo step), cancel. */
     dragStart(i: number): void {
       dragging.value = i
