@@ -48,22 +48,6 @@
 .hl-rp__notice--bad { border-left-color: var(--color-limit); }
 .hl-rp__bad { color: var(--color-limit); }
 
-/* PORT F6: the Route panel sits LEFT of the map-edge tool column (zoom, compass, layers, 2D/3D, camera,
-   rover, full screen, summary), which stays at the map's right edge (views/planLayers.tsx). The drawer box
-   still reaches the map edge: a transparent right border as wide as the column plus its margin and a gap
-   (--plan-tools-w, written by views/planChrome.tsx) keeps the column's strip clear, and the drawer's
-   measured width (Drawer -> layoutInsets.right) is panel + column, so the map centre and fitBounds clear
-   both. The strip lets clicks through to the map. */
-.hl-lay-drawer.hl-rp {
-  --hl-rp-edge: calc(var(--plan-tools-w, 0px) + var(--space-2) + var(--space-2));
-  width: calc(min(var(--layout-sidebar), 40%) + var(--hl-rp-edge));
-  max-width: calc(40% + var(--hl-rp-edge));
-  border-right: var(--hl-rp-edge) solid transparent;
-  background-clip: padding-box;
-  pointer-events: none;
-}
-.hl-lay-drawer.hl-rp > * { pointer-events: auto; }
-
 /* collapsed: the header only (the drawer's inline bottom is the bottom drawer's inset) */
 .hl-lay-drawer.hl-rp--collapsed { bottom: auto !important; }
 .hl-rp--collapsed .hl-lay-drawer__body { display: none; }

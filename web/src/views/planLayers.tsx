@@ -1,8 +1,7 @@
 // Plan mode: the layers popover, the legend corner chip and the map-edge tools (package L2c, D111; L0 rows
 // 5, 7, 16, Q3). Mount points only (L2-shell slot ctx.el.edge, views/planSlots.tsx): no layer logic, no
 // number logic, the "preliminary" tags and trust chips come with the components as they are.
-//   map-edge tools (right edge, top; follows the right drawer's edge, except the Route panel's, which sits
-//     left of the column (F6); z above the cards, so never covered)
+//   map-edge tools (right edge, top; follows the right drawer's edge, z above the cards, so never covered)
 //     zoom (L2f) · compass (MapFurniture) · Layers popover · 2D/3D (terrain control, L13 owns T and the
 //     view state) · Flythrough (icon) · Storm replay (icon) · Rover card + Full screen (L2f, planChrome.tsx)
 //     · Edit route under the column (L3's button, placed by planChrome.css)
@@ -17,8 +16,6 @@ import { useLayoutEffect, useRef } from 'preact/hooks'
 import { LayerPanel } from '../map/overlays/LayerPanel'
 import { t } from '../ui/copy'
 import { Popover, useLayoutInsets } from '../ui/layout'
-import { routePanelOpen } from '../ui/route-panel/panelState'
-import { useSignalValue } from '../state/signal'
 import { hostIn } from '../ui/shell/store'
 import { FullscreenButton, RoverButton } from './planChrome' // L2f: the last map-edge tools
 import { MapControls } from './planPortSlots'
@@ -105,19 +102,11 @@ function LayersBody({ sections, mapEl }: { sections: Sections; mapEl: HTMLElemen
 
 export function PlanEdge({ sections, mapEl }: { sections: Sections; mapEl: HTMLElement }) {
   const insets = useLayoutInsets()
-  // PORT F6: the Route panel sits LEFT of this column (routePanel.css), so the column stays at the map edge
-  // while it is open; any other right drawer still pushes the column to its left edge
-  const rpOpen = useSignalValue(routePanelOpen)
-  const toolsRight = rpOpen ? 0 : insets.right
-  useLayoutEffect(() => {
-    mapEl.style.setProperty?.('--plan-tools-right', `${toolsRight}px`)
-  }, [mapEl, toolsRight])
-  useLayoutEffect(() => () => mapEl.style.removeProperty?.('--plan-tools-right'), [mapEl])
   const label = t('layers.manager.label')
   const legend = t('layers.manager.legend')
   return (
     <>
-      <div class="plan-tools" role="group" aria-label={t('layers.manager.tools')} style={{ right: `${toolsRight}px` }}>
+      <div class="plan-tools" role="group" aria-label={t('layers.manager.tools')} style={{ right: `${insets.right}px` }}>
         <Borrow root={mapEl} sel={EDGE_CONTROLS.zoom} class="plan-tools__zoom" />
         <Borrow root={mapEl} sel={EDGE_CONTROLS.compass} class="plan-tools__compass" />
         <Popover id={LAYERS_ID} icon="layers" label={label} title={label} edge="right-top" class="plan-pop plan-pop--layers">
