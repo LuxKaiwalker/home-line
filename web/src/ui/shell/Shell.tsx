@@ -110,7 +110,8 @@ export function TopBar() {
         )}
       </nav>
       <div class="hl-topbar__plan" id="hl-topbar-plan">
-        {/* L2 (D111): the Plan headline strip renders here (views/console.tsx, a portal into this host) */}
+        {/* L2 (D111): the Plan headline strip renders here (views/planStrip.tsx, a portal into this host);
+            L7b's Official plan button sits next to it */}
         <div class="hl-strip" id="hl-headline-strip" />
         {mode === 'plan' && <OfficialPlanButton />}
       </div>
