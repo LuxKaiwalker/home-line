@@ -11,6 +11,9 @@ type PaletteC = ComponentType<PaletteProps>
 let loaded: PaletteC | null = null
 export const loadPalette = (): Promise<PaletteC> => import('./palette').then((m) => (loaded = m.Palette))
 
+/** Warm the palette chunk when the pointer or focus reaches the button (never on page load: perf test). */
+const prefetch = (): void => void (loaded || loadPalette().catch(() => {}))
+
 export interface SearchButtonProps {
   win?: Window
   /** Passed to the palette (tests). */
@@ -36,7 +39,7 @@ export function SearchButton({ win = typeof window === 'undefined' ? undefined :
   }, [open])
   return (
     <>
-      <IconButton icon="search" label={t('nav.search')} aria-haspopup="dialog" aria-expanded={open ? 'true' : 'false'} aria-keyshortcuts="Control+K Meta+K /" onClick={() => setOpen(true)} />
+      <IconButton icon="search" label={t('nav.search')} aria-haspopup="dialog" aria-expanded={open ? 'true' : 'false'} aria-keyshortcuts="Control+K Meta+K /" onPointerEnter={prefetch} onFocus={prefetch} onClick={() => setOpen(true)} />
       {open && P && <P {...palette} win={palette?.win ?? win} onClose={() => setOpen(false)} />}
     </>
   )
