@@ -83,11 +83,14 @@ export function readFeasibility(rec: unknown): { value: Feasibility | null; erro
   return { value: null, error: null }
 }
 
-/** The stop a 422 names: Error.stop (v1.2.0), else "stops[i]" in the detail text. */
+/**
+ * The stop a 422 names: Error.stop (v1.2.0, carried on ApiError.stop), else the index in the detail
+ * text, either the mock's "stops[i]" or the server's "stop i (Sx)". The index is 0-based either way.
+ */
 export function errorStop(body: { stop?: unknown; detail?: unknown } | null | undefined): number | null {
   if (!body) return null
   if (Number.isInteger(body.stop) && (body.stop as number) >= 0) return body.stop as number
   const d = typeof body.detail === 'string' ? body.detail : JSON.stringify(body.detail ?? '')
-  const m = /stops\[(\d+)\]/.exec(d)
-  return m ? Number(m[1]) : null
+  const m = /\bstops\[(\d+)\]|\bstop (\d+)\b/.exec(d)
+  return m ? Number(m[1] ?? m[2]) : null
 }
