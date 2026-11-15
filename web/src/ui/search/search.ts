@@ -117,7 +117,7 @@ export async function loadObjectIndex(L: Loader): Promise<SearchItem[]> {
 // ---- Coordinates: decimal degrees "lon, lat" or "lat, lon"; accepted only when unambiguous (one value
 // outside ±90 is the longitude). Planner metres (x, y) need the site projection: not built here.
 const NUM = /^[-+]?\d+(?:\.\d+)?$/
-export function parseCoordinates(q: string): SelectionRef | null {
+export function parseCoordinates(q: string): Extract<SelectionRef, { kind: 'cell' }> | null {
   const parts = q
     .trim()
     .replace(/[°]/g, '')
