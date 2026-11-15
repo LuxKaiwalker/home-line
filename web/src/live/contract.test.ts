@@ -22,8 +22,11 @@ import { MOCK_RESULT_STAGES, mockResultDocs } from './mock/result'
 import { planInputsFor } from './padtool'
 import { schemaFor } from '../data/contracts'
 import { MOCK_STAGES } from './mock/fixtures'
+import { crewJobScript, mockCrewInputs, mockDefaults, runRecordCrew } from './mock/fixtures'
+import { MOCK_CREW_HASH } from './mock/hashes'
+import { jobPlanInputs } from './padtool'
 import {
-  ENGINE_VERSION_KEYS, ERROR_KEYS, HEALTH_KEYS, IMPORT_RESULT_KEYS, JOB_KEYS, JOB_REQUEST_KEYS, JOB_STATUSES, JOB_TYPES,
+  DEFAULTS_KEYS, ENGINE_VERSION_KEYS, ERROR_KEYS, HEALTH_KEYS, IMPORT_RESULT_KEYS, JOB_KEYS, JOB_REQUEST_KEYS, JOB_STATUSES, JOB_TYPES,
   PAD_CHECK_KEYS, PAD_REASONS, PAD_SCREEN_KEYS, RUN_ORIGINS, RUN_RECORD_KEYS, RUN_STATUSES,
 } from './types'
 
@@ -104,7 +107,7 @@ describe('hand-written types match openapi.yaml', () => {
   const cases: [string, Record<string, 'required' | 'optional'>][] = [
     ['Health', HEALTH_KEYS], ['Job', JOB_KEYS], ['Error', ERROR_KEYS], ['JobRequest', JOB_REQUEST_KEYS],
     ['PadCheck', PAD_CHECK_KEYS], ['PadScreen', PAD_SCREEN_KEYS], ['EngineVersion', ENGINE_VERSION_KEYS],
-    ['ImportResult', IMPORT_RESULT_KEYS],
+    ['ImportResult', IMPORT_RESULT_KEYS], ['Defaults', DEFAULTS_KEYS],
   ]
   it.each(cases)('%s: same properties and required list', (name, keys) => {
     const s = schemaOf(`#/components/schemas/${name}`) as Doc
@@ -282,5 +285,42 @@ describe('permalink, provenance and import mocks (U3: F28, F35, D76) validate', 
       expect(kinds.includes('sim_plan')).toBe(sim)
     }
     expect(Object.keys(withSimPlan({} as never))).toEqual([`sim.${MOCK_RESULT_SCENARIO}.export`])
+  })
+})
+
+describe('crew panel mocks (U4: F26) validate against openapi.yaml v1.1.0', () => {
+  it('GET /defaults 200: the mock body, also over HTTP', async () => {
+    const s = responseSchema('GET', '/defaults', 200)
+    valid(mockDefaults(), s)
+    const client = createApiClient({ base: 'http://api.test', fetch: createMockFetch() })
+    valid(await client.defaults(), s)
+    expect(validatePlanInputs(mockDefaults().inputs)).toEqual([])
+  })
+  it('the check is not vacuous: a Defaults body without ranges fails', () => {
+    const { ranges: _r, ...rest } = mockDefaults()
+    void _r
+    expect(validate(rest, responseSchema('GET', '/defaults', 200))).not.toEqual([])
+  })
+  it('crew job script (POST /jobs 202, GET /jobs/{id} 200)', () => {
+    const s = crewJobScript()
+    valid(s[0], responseSchema('POST', '/jobs', 202))
+    for (const j of s.slice(1)) valid(j, responseSchema('GET', '/jobs/{id}', 200))
+  })
+  it('crew run record with its range flag (GET /results/{hash}/provenance 200), also client-side', () => {
+    const rec = runRecordCrew()
+    expect(rec.hash).toBe(MOCK_CREW_HASH)
+    expect(rec.range_flags!.length).toBeGreaterThan(0)
+    valid(rec, responseSchema('GET', '/results/{hash}/provenance', 200))
+    expect(validateRunRecord(rec)).toEqual([])
+  })
+  it('the crew job request body (only changed fields) is a JobRequest and a plan_inputs', async () => {
+    const f = createMockFetch({ crewJobs: true })
+    const client = createApiClient({ base: 'http://api.test', fetch: f })
+    const inputs = jobPlanInputs(MOCK_PAD_VALID, {}, { crew: { tools_kg: (mockCrewInputs().crew as { tools_kg: number }).tools_kg } })
+    const job = await client.submitJob({ type: 'plan', inputs })
+    valid(job, responseSchema('POST', '/jobs', 202))
+    valid(f.calls[0].body, schemaOf('#/components/schemas/JobRequest'))
+    expect(validatePlanInputs(inputs)).toEqual([])
+    valid(await client.provenance(job.hash), responseSchema('GET', '/results/{hash}/provenance', 200))
   })
 })

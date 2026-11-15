@@ -10,6 +10,7 @@ import { LIVE_LABEL, OFFLINE_LABEL, PRECOMPUTED_LABEL, TITLE_MAX_CHARS, UPLOAD_M
 import { LiveNum } from './num'
 import { canonicalJson, exportPlanInputs } from './planio'
 import { planUrl, type ImportState, type PlanLoad, type PlanTree } from './plan'
+import { RangeFlags } from './rangeflags'
 import { SimSlot } from './simslot'
 import type { RunOrigin, RunRecord } from './types'
 
@@ -283,6 +284,7 @@ export function PlanPage({ load, permalink, simEnabled, importState, onImportFil
           ))}
         </ul>
       )}
+      <RangeFlags flags={record.range_flags} />
       <PlanHeadline tree={tree} hash={hash} />
       <PlanRouteSection tree={tree} hash={hash} />
       <PlanActions record={record} hash={hash} permalink={permalink} />
@@ -361,19 +363,7 @@ export function ProvenancePage({ load }: { load: Extract<PlanLoad, { state: 'ok'
       ) : (
         <p class="muted">No stages recorded (a precomputed tree is not run by the server).</p>
       )}
-      {r.range_flags && r.range_flags.length > 0 && (
-        <>
-          <h3>Range flags</h3>
-          <ul class="live-range-flags">
-            {r.range_flags.map((f) => (
-              <li>
-                <code>{f.key}</code>
-                {f.value !== undefined ? ` = ${f.value}` : ''}: {f.note}
-              </li>
-            ))}
-          </ul>
-        </>
-      )}
+      <RangeFlags flags={r.range_flags} />
       {r.infeasible && (
         <p class="live-failed">
           Infeasible from leg {r.infeasible.leg} ({r.infeasible.from} → {r.infeasible.to}), binding: {r.infeasible.binding}

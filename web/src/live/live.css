@@ -86,3 +86,35 @@
 .live-offline {
   color: var(--warn);
 }
+
+/* Crew panel (F26). WS15 tokens (src/ui/tokens.css) when loaded, else the app's own variables. */
+.live-crew {
+  margin: var(--space-3, 12px) 0;
+  padding: var(--space-2, 8px) var(--space-3, 12px);
+  border: 1px solid var(--color-card-border, var(--line));
+  background: var(--color-card, var(--panel));
+}
+.live-crew h2 {
+  margin: 0 0 var(--space-1, 4px);
+  font-size: var(--font-size-body, 1rem);
+}
+.live-crew-fields th {
+  text-align: left;
+  padding-right: var(--space-3, 12px);
+  vertical-align: top;
+}
+.live-crew-fields input {
+  width: 6em;
+}
+.live-crew-fields input[aria-invalid='true'] {
+  border-color: var(--color-caution, var(--warn));
+}
+.live-extrapolation {
+  color: var(--color-caution, var(--warn));
+}
+.live-fixed {
+  color: var(--color-text-muted, var(--muted));
+}
+.live-range-flags-box {
+  margin-top: var(--space-2, 8px);
+}

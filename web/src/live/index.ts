@@ -10,7 +10,9 @@
 //   startJob(client, req, callbacks)  submit + poll with backoff, staged callbacks, cancel() (jobs.ts)
 //   liveLoader(resultBase)            the existing contract-checking loader on a live result (result.ts)
 //   LIVE_LABEL, OFFLINE_LABEL         labels from config/backend.yaml (config.ts)
-//   padTool(panel, port)              F24 pad tool: validate, instant preview, staged full plan (padmount.tsx)
+//   padTool(panel, port)              F24 pad tool: validate, instant preview, staged full plan, with the
+//                                     F26 crew panel next to it in the same slot (padmount.tsx)
+//   createCrew, CrewPanel             crew model (GET /defaults ranges, changed fields only) and its view
 //   consoleMapPort(cmap, restore?)    MapPort over the console map (mapPort.ts)
 //   mountPlanRoute(app, opts)         #/plan, #/plan/{hash}[/provenance|/play] (F28, F35); started by mountLive
 //   loadPlan, importPlanFile          permalink load and plan_inputs.json import (plan.ts)
@@ -38,6 +40,9 @@ export { liveLoader } from './result'
 export { consoleMapPort, type ConsoleMapLike, type MapPort } from './mapPort'
 export { createPadTool, type PadTool, type PadToolState } from './padtool'
 export { mountPadTool } from './padmount'
+export { createCrew, CREW_FIELDS, EXTRAPOLATION_TEXT, type CrewModel, type CrewState } from './crew'
+export { CrewPanel, crewBlockedText } from './crewview'
+export { RangeFlags } from './rangeflags'
 export { loadStage, type StageResult } from './stage'
 export { importPlanFile, loadPlan, parsePlanRoute, planUrl, type ImportState, type PlanLoad, type PlanRoute } from './plan'
 export { canonicalJson, checkPlanInputsText, exportPlanInputs } from './planio'
@@ -54,7 +59,7 @@ const staticTree = async (path: string): Promise<string | null> => {
   return res.ok ? res.text() : null
 }
 const lazyMockFetch: FetchLike = async (input, init) => {
-  const f = await (mockFetch ??= import('./mock/fetch').then((m) => m.createMockFetch({ trees: { [MOCK_OFFICIAL_HASH]: staticTree } })))
+  const f = await (mockFetch ??= import('./mock/fetch').then((m) => m.createMockFetch({ crewJobs: true, trees: { [MOCK_OFFICIAL_HASH]: staticTree } })))
   return f(input, init)
 }
 

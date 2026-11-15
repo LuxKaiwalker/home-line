@@ -133,3 +133,45 @@ jobs:
         run: npm run build
       - name: Bundle budget (DESIGN §5.4, config/design.yaml performance)
         run: npm run bundle:budget
+
+  # Package Q1 (U12, DESIGN §9 Contrast / Colour vision / Accessibility / Performance, §5.4 lazy loading).
+  #   static   token contrast matrix + allow-list, colour-vision ΔE, second cues (web/tests/a11y/*.test.ts)
+  #   browser  keyboard reach, focus ring, no trap, landmarks/names/labels/headings/contrast on 2D routes +
+  #            /styleguide, failing only on violations not in web/tests/a11y/baseline.json; lazy-loading and
+  #            font budget on the production build (web/tests/perf). Frame rate stays with the RR lane.
+  a11y-perf:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci
+      - name: Static checks (contrast, colour vision, second cue)
+        run: npm run test:a11y:static
+      - name: Build (real data, with the Vite manifest for the lazy-loading check)
+        run: npm run build -- --manifest
+      - name: Playwright version
+        id: pw
+        run: echo "version=$(node -p "require('./node_modules/playwright/package.json').version")" >> "$GITHUB_OUTPUT"
+      - name: Cache Playwright browsers
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ steps.pw.outputs.version }}-chromium
+      - name: Install Chromium (+ system deps)
+        run: npx playwright install --with-deps chromium
+      - name: Accessibility (keyboard, focus, automated checks) and lazy-loading / font budget
+        run: npm run test:a11y-perf
+      - name: Upload report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: a11y-perf-report
+          path: |
+            web/test-results/a11y/
+            web/playwright-report-a11y/
+          if-no-files-found: ignore
