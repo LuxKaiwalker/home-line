@@ -1,0 +1,17 @@
+{
+  "basemaps": {
+    "title": "Maps",
+    "label": "Base map",
+    "satellite": "Satellite",
+    "topo": "Topography",
+    "material": "Material",
+    "rendering": "Rendering the {type} map…",
+    "error": "The {type} map could not be drawn ({reason}). Satellite is still available.",
+    "encodeError": "could not encode the relief image",
+    "topoLegend": "Contours every {step} m (bold every {bold} m) · {low} to {high} m (MOLA areoid), {res_m} m terrain heights",
+    "topoNote": "Drawn in your browser from the same terrain heights the route estimates use. For orientation, not a survey.",
+    "materialTitle": "Mineral units",
+    "noUnit": "No rocks on this terrain.",
+    "materialNote": "Same layer as the Unity EVA map in MARVIS: the dominant class of the {count} field rocks nearby (Gaussian, {sigma_m} m). Not a mineral survey."
+  }
+}
