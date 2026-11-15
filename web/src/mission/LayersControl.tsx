@@ -2,7 +2,9 @@
 //   - Slope: WS1's cell slope (fields/shared/slope.png) in classes from config/site.yaml (slope.ts)
 //   - Curiosity: the rover's real traverse and drive ends inside the map area, live from NASA;
 //     a click on a drive end opens the Mastcam (colour) and Navcam pictures taken there (curiosity.ts)
-// Both load on first use only.
+//   - Reachable area: WS2's walk-home band (30/60 min x estimate) or the limit edge coloured by cause,
+//     on by default (30-min nominal band); moved here from the side panel (user 2026-11-15)
+// Slope and Curiosity load on first use only.
 import { render } from 'preact'
 import { useEffect, useRef, useState } from 'preact/hooks'
 import { data } from '../data/loader'
@@ -11,7 +13,8 @@ import { loadField } from '../hud/fields'
 import type { FieldsIndex as HudFieldsIndex } from '../hud/types'
 import { loadCuriosity, loadStopImages, RAW_IMAGE_PAGE, type Bounds, type DriveEnd, type RawImage } from './curiosity'
 import type { MissionMap, Overlay } from './missionMap'
-import type { LonLat } from './plan'
+import { boundaryChoices, pickBoundary, type BoundaryOption, type BoundarySel, type LonLat } from './plan'
+import { THEME } from '../theme'
 import { renderSlope, SLOPE_CLASSES, SLOPE_OPACITY } from './slope'
 
 async function rgbaToUrl(rgba: Uint8ClampedArray, w: number, h: number): Promise<string> {
@@ -26,7 +29,16 @@ async function rgbaToUrl(rgba: Uint8ClampedArray, w: number, h: number): Promise
 
 type Status = 'off' | 'loading' | 'on' | 'error'
 
-export function LayersControl({ mmap, bounds }: { mmap: MissionMap; bounds: Bounds }) {
+export interface BoundaryProps {
+  options: BoundaryOption[]
+  /** initial walk-home budget (config walkback_budgets_min[0]) */
+  budget: number
+  /** file and scenario the drawn boundary comes from (caption) */
+  fileOf: (o: BoundaryOption) => string
+  scenarioId: string
+}
+
+export function LayersControl({ mmap, bounds, boundary }: { mmap: MissionMap; bounds: Bounds; boundary?: BoundaryProps }) {
   const [open, setOpen] = useState(false) // closed by default; the head shows "Layers ▸"
   const [st, setSt] = useState<Record<Overlay, Status>>({ slope: 'off', curiosity: 'off' })
   const [err, setErr] = useState<Partial<Record<Overlay, string>>>({})
@@ -37,6 +49,12 @@ export function LayersControl({ mmap, bounds }: { mmap: MissionMap; bounds: Boun
   const stops = useRef<DriveEnd[]>([])
 
   const set = (o: Overlay, s: Status) => setSt((x) => ({ ...x, [o]: s }))
+
+  // Reachable area: kept here (not in Reachable) so it survives closing the panel; drawn on every change.
+  const [sel, setSel] = useState<BoundarySel>(() => initialSel(boundary))
+  useEffect(() => {
+    if (boundary) void mmap.showBoundary(pickBoundary(boundary.options, sel))
+  }, [sel, boundary])
 
   const load = async (o: Overlay) => {
     if (o === 'slope') {
@@ -107,6 +125,7 @@ export function LayersControl({ mmap, bounds }: { mmap: MissionMap; bounds: Boun
       </button>
       {open && (
         <div class="mp-layers-body">
+          {boundary && <Reachable b={boundary} sel={sel} setSel={setSel} />}
           {row('slope', 'Slope', 'Ground slope in classes from config/site.yaml (pad-flat, walkable, beyond tested, no-go)')}
           {err.slope && <span class="mp-bad mp-layers-note">{err.slope}</span>}
           {st.slope === 'on' && (
@@ -157,6 +176,66 @@ export function LayersControl({ mmap, bounds }: { mmap: MissionMap; bounds: Boun
         </div>
       )}
     </div>
+  )
+}
+
+/** Default: on, the configured budget (else the first offered), nominal band (else the first estimate). */
+function initialSel(b: BoundaryProps | undefined): BoundarySel {
+  const c = b ? boundaryChoices(b.options) : { budgets: [], kinds: [], variants: [] }
+  return {
+    on: c.kinds.length > 0,
+    budget: b && c.budgets.includes(b.budget) ? b.budget : (c.budgets[0] ?? 30),
+    kind: c.kinds[0] ?? 'band',
+    variant: c.variants.includes('nominal') ? 'nominal' : (c.variants[0] ?? 'nominal'),
+  }
+}
+
+const KIND_LABEL: Record<BoundarySel['kind'], string> = { band: 'Band', edges: 'Edge by cause' }
+const VARIANT_LABEL: Record<string, string> = { conservative: 'Cautious', nominal: 'Nominal', optimistic: 'Optimistic' }
+
+function Chips<T extends string | number>({ label, items, value, text, onPick }: { label: string; items: T[]; value: T; text: (v: T) => string; onPick: (v: T) => void }) {
+  if (items.length < 2) return null
+  return (
+    <div class="mp-chiprow" role="radiogroup" aria-label={label}>
+      <span class="mp-chiprow-k">{label}</span>
+      {items.map((v) => (
+        <button key={String(v)} type="button" role="radio" aria-checked={v === value} class="mp-chip" onClick={() => onPick(v)}>
+          {text(v)}
+        </button>
+      ))}
+    </div>
+  )
+}
+
+function Reachable({ b, sel, setSel }: { b: BoundaryProps; sel: BoundarySel; setSel: (f: (s: BoundarySel) => BoundarySel) => void }) {
+  const c = boundaryChoices(b.options)
+  if (!c.kinds.length) return null
+  const drawn = pickBoundary(b.options, sel)
+  return (
+    <>
+      <label class="mp-layer" title="The area from which the crew can still walk back to the pad within the chosen time (WS2)">
+        <input type="checkbox" checked={sel.on} onChange={(e) => setSel((s) => ({ ...s, on: (e.target as HTMLInputElement).checked }))} />
+        Reachable area
+      </label>
+      {sel.on && (
+        <div class="mp-chips">
+          <Chips label="Walk home" items={c.budgets} value={sel.budget} text={(v) => `${v} min`} onPick={(v) => setSel((s) => ({ ...s, budget: v }))} />
+          <Chips label="Show" items={c.kinds} value={sel.kind} text={(v) => KIND_LABEL[v]} onPick={(v) => setSel((s) => ({ ...s, kind: v }))} />
+          {sel.kind === 'band' && <Chips label="Estimate" items={c.variants} value={sel.variant} text={(v) => VARIANT_LABEL[v] ?? v} onPick={(v) => setSel((s) => ({ ...s, variant: v }))} />}
+          {sel.kind === 'edges' && (
+            <ul class="mp-layers-legend">
+              {Object.keys(THEME.cause).map((k) => (
+                <li key={k}>
+                  <span class="mp-swatch" style={{ background: THEME.cause[k] }} />
+                  {THEME.causeLabel[k] ?? k}
+                </li>
+              ))}
+            </ul>
+          )}
+          <span class="mp-layers-note">{drawn ? <><code>{b.fileOf(drawn)}</code> ({b.scenarioId})</> : 'Not in the data for this choice.'}</span>
+        </div>
+      )}
+    </>
   )
 }
 

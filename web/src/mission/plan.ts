@@ -104,6 +104,44 @@ export function boundaryOptions(bands: BandsFC | null, isochrones: IsochroneFC |
   return out
 }
 
+/** The boundary as the Layers panel picks it (user 2026-11-15): on/off, walk-home budget, band or cause edge, estimate. */
+export interface BoundarySel {
+  on: boolean
+  budget: number
+  kind: 'band' | 'edges'
+  /** band estimate (conservative / nominal / optimistic); edges have one estimate only */
+  variant: string
+}
+
+/** The chips the Layers panel offers: budgets with a band or an edge, kinds present, estimates of the bands (in order). */
+export function boundaryChoices(opts: BoundaryOption[]): { budgets: number[]; kinds: ('band' | 'edges')[]; variants: string[] } {
+  const budgets = new Set<number>()
+  const kinds = new Set<'band' | 'edges'>()
+  const variants = new Set<string>()
+  for (const o of opts) {
+    if (o.kind === 'band') {
+      budgets.add(o.budget)
+      kinds.add('band')
+      variants.add(o.variant)
+    } else if (o.kind === 'edges') {
+      budgets.add(o.budget)
+      kinds.add('edges')
+    }
+  }
+  return {
+    budgets: [...budgets].sort((a, b) => a - b),
+    kinds: (['band', 'edges'] as const).filter((k) => kinds.has(k)),
+    variants: [...variants].sort((a, b) => VARIANT_ORDER.indexOf(a) - VARIANT_ORDER.indexOf(b)),
+  }
+}
+
+/** The option to draw for a selection; undefined when off or when the files hold no such boundary. */
+export function pickBoundary(opts: BoundaryOption[], sel: BoundarySel): BoundaryOption | undefined {
+  if (!sel.on) return undefined
+  if (sel.kind === 'edges') return opts.find((o) => o.kind === 'edges' && o.budget === sel.budget)
+  return opts.find((o) => o.kind === 'band' && o.budget === sel.budget && o.variant === sel.variant)
+}
+
 /** Default: the Plan page's default band (30-min nominal) when present, else the first band, else none. */
 export function defaultBoundary(opts: BoundaryOption[], budget: number): string {
   return (opts.find((o) => o.kind === 'band' && o.budget === budget && o.variant === 'nominal') ?? opts.find((o) => o.kind === 'band') ?? opts[0]).id

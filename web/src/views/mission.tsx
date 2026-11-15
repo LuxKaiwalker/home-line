@@ -1,6 +1,6 @@
 // "/mission" Mission Planer: the main planning area where waypoints are made. Left: the 3D map
 // (HiRISE basemap, reachable-area boundary, pad, waypoints, legs, way home). Right: estimated times
-// and consumption, then the waypoint list and the boundary picker. Click the map to add a
+// and consumption, then the waypoint list; the reachable-area boundary is in the map's Layers panel. Click the map to add a
 // waypoint; each leg is routed in the browser (src/mission/router.ts), the way home from the last
 // waypoint is WS2's (pointer field, T_home, O2 home).
 // Each waypoint carries a note, quick tags and a planned stop time (station work: EVA time + O2).
@@ -21,7 +21,7 @@ import { MapsControl } from '../mission/MapsControl'
 import { LayersControl } from '../mission/LayersControl'
 import { evaClock } from '../mission/marstime'
 import { daylightFor, DEFAULT_START_MS, StartTime } from '../mission/StartTime'
-import { boundaryOptions, defaultBoundary, legPairs, moveWaypoint, removeWaypoint, replaceWaypoint, routeLegs, toggleTag, WAYPOINT_TAGS, type LonLat, type Waypoint } from '../mission/plan'
+import { boundaryOptions, legPairs, moveWaypoint, removeWaypoint, replaceWaypoint, routeLegs, toggleTag, WAYPOINT_TAGS, type LonLat, type Waypoint } from '../mission/plan'
 import { LegRouter, type Leg } from '../mission/router'
 import { decodePlan, encodePlan } from '../mission/share'
 import { stationWaypoint } from '../mission/stations'
@@ -90,7 +90,6 @@ function MissionPanel({
   const [step, setStep] = useState('scenarios and pad')
   const [wps, setWps] = useState<Waypoint[]>([])
   const [notice, setNotice] = useState<string | null>(null)
-  const [boundary, setBoundary] = useState('none')
   const [credit, setCredit] = useState<string | null>(null)
   const nextId = useRef(1)
   const cache = useRef(new Map<string, Leg | null>())
@@ -138,9 +137,15 @@ function MissionPanel({
         await mmap.setBoundaryData(md)
         // Maps switcher (bottom left of the map): satellite / topography / material.
         render(<MapsControl mmap={mmap} src={{ grid: md.tHome, elev: md.grid.elev, resM: md.grid.resM, hasBasemap: !!md.tilejson }} />, mapsEl)
-        // Overlays (top right): slope classes, Curiosity's route and photos.
-        render(<LayersControl mmap={mmap} bounds={[md.tHome.w, md.tHome.s, md.tHome.e, md.tHome.n]} />, layersEl)
-        setBoundary(defaultBoundary(boundaryOptions(md.bands, md.isochrones, md.edges), CONFIG.walkbackBudgetsMin[0]))
+        // Overlays + reachable area (top right): slope classes, Curiosity's route and photos, walk-home band / edge.
+        render(
+          <LayersControl
+            mmap={mmap}
+            bounds={[md.tHome.w, md.tHome.s, md.tHome.e, md.tHome.n]}
+            boundary={{ options: boundaryOptions(md.bands, md.isochrones, md.edges), budget: CONFIG.walkbackBudgetsMin[0], fileOf: (o) => boundaryFile(o.id, md), scenarioId: md.scenario.id }}
+          />,
+          layersEl,
+        )
       },
       (e) => alive && setError(e),
     )
@@ -159,7 +164,6 @@ function MissionPanel({
     const p = d.tHome.pixelOf(d.pad.lon, d.pad.lat)
     return p ? p.row * d.tHome.width + p.col : -1
   }, [d])
-  const options = useMemo(() => (d ? boundaryOptions(d.bands, d.isochrones, d.edges) : []), [d])
 
   /** Grid cell of a spot, or why it cannot be a waypoint. */
   const cellAt = (lon: number, lat: number): number | 'outside' | 'blocked' => {
@@ -387,7 +391,6 @@ function MissionPanel({
     )
   }, [d, wps, legs, home])
 
-  useEffect(() => void mmap.showBoundary(options.find((o) => o.id === boundary)), [boundary, options])
 
   // Science stations on the map (popup: add as waypoint, details). The ref keeps the click current.
   const addRef = useRef(addStation)
@@ -437,22 +440,6 @@ function MissionPanel({
               </button>
             </div>
           )}
-        </details>
-        <details>
-          <summary>Reachable-area boundary</summary>
-          <label class="mp-select">
-            <span class="sr-only">Boundary shown on the map</span>
-            <select value={boundary} onChange={(e) => setBoundary((e.target as HTMLSelectElement).value)}>
-              {options.map((o) => (
-                <option key={o.id} value={o.id}>
-                  {o.label}
-                </option>
-              ))}
-            </select>
-          </label>
-          <p class="caption">
-            From <code>{boundaryFile(boundary, d)}</code> ({d.scenario.id}): the area from which the crew can walk back to the pad within that time.
-          </p>
         </details>
       </section>
 

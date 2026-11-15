@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { BandsFC, EdgesFC, IsochroneFC } from '../data/types'
-import { boundaryOptions, defaultBoundary, legPairs, moveWaypoint, removeWaypoint, replaceWaypoint, routeLegs, toggleTag } from './plan'
+import { boundaryChoices, boundaryOptions, defaultBoundary, pickBoundary, legPairs, moveWaypoint, removeWaypoint, replaceWaypoint, routeLegs, toggleTag } from './plan'
 import type { Leg } from './router'
 
 describe('waypoint list edits', () => {
@@ -67,5 +67,26 @@ describe('waypoint tags', () => {
     expect(toggleTag([], 'Photo')).toEqual(['Photo'])
     expect(toggleTag(['Photo'], 'Sample')).toEqual(['Sample', 'Photo'])
     expect(toggleTag(['Sample', 'Photo'], 'Sample')).toEqual(['Photo'])
+  })
+})
+
+describe('boundary in the Layers panel (budget x band/edge x estimate)', () => {
+  const opts = boundaryOptions(
+    {
+      type: 'FeatureCollection',
+      features: [60, 30].flatMap((budget) => ['optimistic', 'nominal', 'conservative'].map((variant) => ({ type: 'Feature', geometry: null, properties: { budget, variant } }))),
+    } as unknown as BandsFC,
+    { type: 'FeatureCollection', features: [2, 4].map((minutes) => ({ type: 'Feature', geometry: null, properties: { minutes } })) } as unknown as IsochroneFC,
+    { type: 'FeatureCollection', features: [30, 60].map((budget) => ({ type: 'Feature', geometry: null, properties: { budget, cause: 'slope' } })) } as unknown as EdgesFC,
+  )
+  it('chips: budgets, kinds and estimates in order; isochrones are not offered', () => {
+    expect(boundaryChoices(opts)).toEqual({ budgets: [30, 60], kinds: ['band', 'edges'], variants: ['conservative', 'nominal', 'optimistic'] })
+  })
+  it('picks the matching option, nothing when off or missing', () => {
+    expect(pickBoundary(opts, { on: true, budget: 30, kind: 'band', variant: 'nominal' })?.id).toBe('band:30:nominal')
+    expect(pickBoundary(opts, { on: true, budget: 60, kind: 'band', variant: 'conservative' })?.id).toBe('band:60:conservative')
+    expect(pickBoundary(opts, { on: true, budget: 60, kind: 'edges', variant: 'optimistic' })?.id).toBe('edges:60')
+    expect(pickBoundary(opts, { on: false, budget: 30, kind: 'band', variant: 'nominal' })).toBeUndefined()
+    expect(pickBoundary(opts, { on: true, budget: 90, kind: 'band', variant: 'nominal' })).toBeUndefined()
   })
 })
