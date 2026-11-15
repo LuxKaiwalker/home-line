@@ -15,7 +15,8 @@ import { overlayOn, setOverlay } from '../map/overlays/state'
 import { install as installRoutes } from '../map/routes'
 import { loadPadIndex, padService, prefetchPads } from '../pads'
 import { encodeRouteParam, parsePlanningHash, planning, ROUTE_PARAM, type PlanningDoc, type PlanningStore } from '../state/planning'
-import { installRoutePanel } from '../ui/route-panel'
+import { installRoutePanel, registerRoutePanelSection } from '../ui/route-panel'
+import { RouteSettings } from '../ui/route-panel/settings/RouteSettings'
 import { install as installExport } from '../ui/route-panel/export'
 
 let installed = false
@@ -38,6 +39,7 @@ export function installPlanPort(): void {
   installSlope() // L1a: replaces the U7 slope-classes overlay (its row is hidden, it stays off)
   if (overlayOn.peek().slopeClass) setOverlay('slopeClass', false)
   installBasemaps() // L1c: satellite (default) / topography / material, map-edge switcher
+  registerRoutePanelSection('settings', RouteSettings) // U3: EVA start, storm (D143 default on), boundary
   installExport() // U4: Send to MARVIS / Download mission.json + share link (Route panel section)
   void data()
     .stations()
