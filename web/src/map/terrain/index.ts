@@ -23,7 +23,7 @@ import { noteFallback, openPose, planView, viewOverride, type View } from '../..
 import { TOKENS } from '../../ui/tokens'
 import { COPY_PENDING, t } from './config'
 import { TerrainControl, TerrainNotice, TERRAIN_TRUST } from './controls'
-import { installTileDebug } from './debug'
+import { farFieldOff, installTileDebug } from './debug'
 import { FpsWatch } from './fps'
 import { exaggeration, reliefAzimuth, reliefMinute, setView } from './state'
 import { parseTerrainTiles, type TerrainTiles } from './tiles'
@@ -206,7 +206,9 @@ export class TerrainController {
       if (ct && !ct.includes('json')) return null // dev server SPA fallback
       this.tiles = parseTerrainTiles(await res.json())
       // V1 (D141): the low-zoom Gale pyramid under the planning extent (3D far field); optional
-      const far = await fetch(dataUrl('terrain_low/tiles.json', DATA_MODE))
+      const far = farFieldOff()
+        ? null
+        : await fetch(dataUrl('terrain_low/tiles.json', DATA_MODE))
         .then(async (r) => (r.ok && (r.headers.get('content-type') ?? 'json').includes('json') ? parseTerrainTiles(await r.json()) : null))
         .catch(() => null)
       const mod = await import('./terrain')

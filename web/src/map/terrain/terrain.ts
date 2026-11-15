@@ -114,11 +114,13 @@ export function addTerrain(
   let on = false
   // V1: the manual tilt cap follows the camera height (zoom); a story sets its own camera
   const capPitch = (): void => {
+    if (!far) return
     const zoom = (map as Partial<MlMap>).getZoom?.()
     if (!on || zoom === undefined) return
     map.setMaxPitch(storyOn() ? TERRAIN.maxPitch3d : pitchCap(zoom, FAR_FIELD.pitchCap))
   }
   const sky = (next: boolean): void => {
+    if (!far) return
     // setSky(undefined) resets the style's sky to MapLibre's transparent default (the typing wants a spec)
     const m = map as unknown as { setSky?: (s: ReturnType<typeof skySpec> | undefined) => void }
     m.setSky?.(next ? skySpec() : undefined)
