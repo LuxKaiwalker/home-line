@@ -107,6 +107,8 @@ export interface EditButton {
   enabled: boolean
   /** tooltip when disabled */
   hint?: CopyKey
+  /** why it is disabled (D117); undefined while enabled */
+  reason?: CopyKey
   run: () => boolean
 }
 
@@ -114,11 +116,20 @@ export interface EditButton {
 export function editButtons(store: PlanEditStore): EditButton[] {
   const d = store.draft.value
   const keepable = !!d && d.phase === 'released' && d.availability.ok
+  const keepWhy: CopyKey | undefined = !d
+    ? 'hints.disabled.keepNothing'
+    : d.phase !== 'released'
+      ? 'hints.disabled.keepDragging'
+      : d.availability.ok
+        ? undefined
+        : (d.availability.reason ?? 'states.offline.unavailableHere')
+  const undoWhy: CopyKey | undefined = store.canUndo.value ? undefined : 'edit.undoEmpty'
+  const redoWhy: CopyKey | undefined = store.canRedo.value ? undefined : 'edit.redoEmpty'
   return [
-    { id: 'keep', label: 'buttons.keep', enabled: keepable, hint: 'edit.keepOrDiscard', run: store.commit },
-    { id: 'discard', label: 'buttons.discard', enabled: !!d, hint: 'edit.keepOrDiscard', run: store.cancel },
-    { id: 'undo', label: 'buttons.undo', enabled: store.canUndo.value, hint: store.canUndo.value ? undefined : 'edit.undoEmpty', run: store.undo },
-    { id: 'redo', label: 'buttons.redo', enabled: store.canRedo.value, hint: store.canRedo.value ? undefined : 'edit.redoEmpty', run: store.redo },
+    { id: 'keep', label: 'buttons.keep', enabled: keepable, hint: 'edit.keepOrDiscard', reason: keepWhy, run: store.commit },
+    { id: 'discard', label: 'buttons.discard', enabled: !!d, hint: 'edit.keepOrDiscard', reason: d ? undefined : 'hints.disabled.discardNothing', run: store.cancel },
+    { id: 'undo', label: 'buttons.undo', enabled: store.canUndo.value, hint: undoWhy, reason: undoWhy, run: store.undo },
+    { id: 'redo', label: 'buttons.redo', enabled: store.canRedo.value, hint: redoWhy, reason: redoWhy, run: store.redo },
   ]
 }
 

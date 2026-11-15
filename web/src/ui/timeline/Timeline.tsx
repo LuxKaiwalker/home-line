@@ -127,7 +127,7 @@ export function Timeline({ model, clock, ticker, amberMin }: TimelineProps) {
             label={t(replaying ? 'buttons.pause' : 'buttons.play')}
             pressed={replaying}
             disabled={shared && !replay.enabled}
-            title={shared && !replay.enabled ? replay.title : undefined}
+            title={shared && !replay.enabled ? replay.title : t('hints.timeline.play')}
             data-activity-reason={shared ? (replay.reason ?? undefined) : undefined}
             aria-keyshortcuts="Space"
             onClick={play}
@@ -162,6 +162,7 @@ export function Timeline({ model, clock, ticker, amberMin }: TimelineProps) {
         role="slider"
         tabIndex={0}
         aria-label={t('timeline.title')}
+        title={t('hints.timeline.scrub')}
         aria-valuemin={0}
         aria-valuemax={tMax}
         aria-valuenow={+tNow.toFixed(2)}
