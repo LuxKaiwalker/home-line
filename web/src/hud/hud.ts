@@ -6,8 +6,9 @@
 //   const hud = await mountHud(container, { dataUrl, config })   // config = parseHudConfig(...)
 //   hud.destroy()
 //
-// WS8 reuses the pieces: loadHudData() -> HudData, then each frame computeReadout(pos, data.ctx)
-// and createHudPanel(el, cfg).update(readout, pos, extras).
+// The pieces are exported separately (hud/index.ts): loadHudData() -> HudData, then each frame
+// computeReadout(pos, data.ctx) and createHudPanel(el, cfg).update(readout, pos, extras).
+// (WS8's first-person 3D view used to reuse them; it was removed in D99.)
 import './hud.css'
 import { PlaybackClock, type ClockDriver } from './clock'
 import { mission, missionClock } from '../state/mission'
