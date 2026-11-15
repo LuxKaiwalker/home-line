@@ -29,7 +29,7 @@ describe('legs', () => {
     const calls: string[] = []
     const route = (a: number, b: number): Leg => {
       calls.push(`${a}-${b}`)
-      return { cells: [a, b], timeS: 1, o2L: 1, distM: 1 }
+      return { cells: [a, b], timeS: 1, o2L: 1, distM: 1, tauS: [0, 1], o2CumL: [0, 1] }
     }
     const cache = new Map<string, Leg | null>()
     routeLegs(legPairs(0, [{ cell: 1 }, { cell: 2 }, { cell: 3 }]), route, cache)

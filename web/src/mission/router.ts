@@ -25,6 +25,10 @@ export interface Leg {
   o2L: number
   /** horizontal length, metres */
   distM: number
+  /** time from the leg start to each cell, seconds (same length as cells; last = timeS) */
+  tauS: number[]
+  /** O2 from the leg start to each cell, litres (same length as cells; last = o2L) */
+  o2CumL: number[]
 }
 
 // (drow, dcol), rows grow southwards (graph.OFFSETS).
@@ -142,7 +146,7 @@ export class LegRouter {
   route(from: number, to: number): Leg | null {
     const { width: W, passable } = this.g
     if (!passable[from] || !passable[to]) return null
-    if (from === to) return { cells: [from], timeS: 0, o2L: 0, distM: 0 }
+    if (from === to) return { cells: [from], timeS: 0, o2L: 0, distM: 0, tauS: [0], o2CumL: [0] }
     if (++this.gen === 0xffffffff) {
       this.stamp.fill(0)
       this.closed.fill(0)
@@ -192,6 +196,8 @@ export class LegRouter {
     let timeS = 0
     let o2L = 0
     let distM = 0
+    const tauS = [0]
+    const o2CumL = [0]
     for (let s = 1; s < cells.length; s++) {
       const a = cells[s - 1]
       const b = cells[s]
@@ -202,8 +208,10 @@ export class LegRouter {
       timeS += e.len * e.pace
       o2L += e.len * e.o2
       distM += e.len
+      tauS.push(timeS)
+      o2CumL.push(o2L)
     }
     if (cells[0] !== from) throw new Error('A* path does not start at the start cell')
-    return { cells, timeS, o2L, distM }
+    return { cells, timeS, o2L, distM, tauS, o2CumL }
   }
 }

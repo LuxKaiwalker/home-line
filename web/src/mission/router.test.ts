@@ -29,6 +29,21 @@ describe('A* leg router (16-neighbour, engine move rules)', () => {
     expect(leg.cells.every((i) => Math.floor(i / g.width) === 10)).toBe(true)
   })
 
+  it('cumulative time and O2 per cell: one entry per cell, rising, ending at the leg totals', () => {
+    const g = grid(50, 50)
+    const leg = new LegRouter(g, M).route(idx(g, 10, 10), idx(g, 30, 40))!
+    expect(leg.tauS).toHaveLength(leg.cells.length)
+    expect(leg.o2CumL).toHaveLength(leg.cells.length)
+    expect(leg.tauS[0]).toBe(0)
+    expect(leg.o2CumL[0]).toBe(0)
+    for (let s = 1; s < leg.cells.length; s++) {
+      expect(leg.tauS[s]).toBeGreaterThan(leg.tauS[s - 1])
+      expect(leg.o2CumL[s]).toBeGreaterThan(leg.o2CumL[s - 1])
+    }
+    expect(leg.tauS[leg.tauS.length - 1]).toBe(leg.timeS)
+    expect(leg.o2CumL[leg.o2CumL.length - 1]).toBe(leg.o2L)
+  })
+
   it('flat ground, (0,0) -> (20,10): ten knight moves, 10 * sqrt(5) * 5 m', () => {
     const g = grid(30, 30)
     const leg = new LegRouter(g, M).route(idx(g, 0, 0), idx(g, 20, 10))!
@@ -39,7 +54,7 @@ describe('A* leg router (16-neighbour, engine move rules)', () => {
   it('same start and end: an empty leg', () => {
     const g = grid(5, 5)
     const leg = new LegRouter(g, M).route(idx(g, 2, 2), idx(g, 2, 2))!
-    expect(leg).toEqual({ cells: [idx(g, 2, 2)], timeS: 0, o2L: 0, distM: 0 })
+    expect(leg).toEqual({ cells: [idx(g, 2, 2)], timeS: 0, o2L: 0, distM: 0, tauS: [0], o2CumL: [0] })
   })
 
   it('uphill and downhill differ: 5 deg ramp, 150 m east up, back down', () => {

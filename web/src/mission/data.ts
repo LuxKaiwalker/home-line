@@ -8,7 +8,7 @@
 //   - way home: WS2's pointer field (same path as the HUD's drag-anywhere).
 import { CONFIG } from '../config'
 import { data } from '../data/loader'
-import type { BandsFC, EdgesFC, IsochroneFC, ScenarioEntry, TileJson } from '../data/types'
+import type { BandsFC, EdgesFC, IsochroneFC, Rad, ScenarioEntry, TileJson } from '../data/types'
 import { dataUrl } from '../env'
 import { codecOf, decodeHeights, farOrigin, gunzipIfNeeded, parseIndex } from '../fp3d/format'
 import { lonLatToXY, parseEqc } from '../fp3d/geo'
@@ -16,7 +16,7 @@ import { HeightGrid } from '../fp3d/terrain'
 import { FieldGrid, loadField } from '../hud/fields'
 import type { FieldsIndex as HudFieldsIndex } from '../hud/types'
 import { loadPointer, type PointerField } from '../hud/wayhome'
-import { padMarker, type PadMarkerInfo } from '../map/pad'
+import { citesD21, padMarker, type PadMarkerInfo } from '../map/pad'
 import { gradeModel, scenarioParams, type GradeModel } from './physio'
 import type { RouteGrid } from './router'
 
@@ -36,6 +36,29 @@ export interface MissionData {
   /** file each layer came from, for the captions */
   files: { tHome: string; o2Home: string | null; pointer: string | null; elevation: string; bands: string; isochrones: string; edges: string }
   elevationResM: number
+  /** WS4 conditions for the margin (mission/margin.ts): the RAD storm series (D39) and the
+   *  minutes from EVA start to darkness; null when the file is missing */
+  rad: Rad | null
+  tDarkMin: number | null
+  /** pad.json pad id and areoid elevation (null without pad.json / when unknown): the mission export's frame */
+  padId: string | null
+  /** official = pad.json cites D21; config_default = no pad.json (site.yaml pad_default); custom = any other pad.json pad */
+  padKind: 'official' | 'custom' | 'config_default'
+  padElevM: number | null
+  /** clock.json eva.start_lmst (D31), or null */
+  evaStartLmst: string | null
+}
+
+/** clock.json eva.start_lmst (WS4), or null. */
+export function evaStartLmstOf(clock: unknown): string | null {
+  const v = (clock as { eva?: { start_lmst?: unknown } } | null)?.eva?.start_lmst
+  return typeof v === 'string' && /^[0-9]{2}:[0-9]{2}:[0-9]{2}$/.test(v) ? v : null
+}
+
+/** clock.json eva.t_dark_min (WS4), or null. */
+export function tDarkOf(clock: unknown): number | null {
+  const v = (clock as { eva?: { t_dark_min?: unknown } } | null)?.eva?.t_dark_min
+  return typeof v === 'number' && Number.isFinite(v) ? v : null
 }
 
 async function fetchBuf(path: string): Promise<ArrayBuffer> {
@@ -90,11 +113,13 @@ export async function loadMissionData(scenarioId?: string, onStep?: (what: strin
   const passable = new Uint8Array(tHome.width * tHome.height)
   passable.set(tHome.data.known)
 
-  step('reachable-area layers')
-  const [bands, isochrones, edges] = await Promise.all([
+  step('reachable-area layers and conditions')
+  const [bands, isochrones, edges, rad, clock] = await Promise.all([
     L.optional(() => L.bands(scenario)),
     L.optional(() => L.isochrones(scenario)),
     L.optional(() => L.edges(scenario)),
+    L.optional(() => L.rad()),
+    L.optional(() => L.clock()),
   ])
 
   return {
@@ -120,5 +145,11 @@ export async function loadMissionData(scenarioId?: string, onStep?: (what: strin
       edges: scenario.files.edges,
     },
     elevationResM: fp.far.res_m,
+    rad,
+    tDarkMin: tDarkOf(clock),
+    padId: padFile ? (padFile.pad.id ?? null) : null,
+    padKind: !padFile ? 'config_default' : citesD21(padFile.pad.source) ? 'official' : 'custom',
+    padElevM: padFile && typeof padFile.pad.elev_m === 'number' ? padFile.pad.elev_m : null,
+    evaStartLmst: evaStartLmstOf(clock),
   }
 }
