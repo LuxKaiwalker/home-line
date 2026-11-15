@@ -22,7 +22,7 @@ import { bindLayoutStorage, installLayoutKeys, resetLayout } from '../layout'
 import { legEnds, legsO2, marginTone } from './Estimates'
 import { closeRoutePanel, isRoutePanelOpen, openRoutePanel, routePanelCollapsed, routePanelOpen, setRoutePanelCollapsed } from './panelState'
 import { officialReach, padReach } from './Reach'
-import { MOCK_ROUTE_RESULTS, publishRouteResults, type RouteResults } from './results'
+import { MOCK_ROUTE_RESULTS, publishRouteResults, resetRouteResults } from './results'
 import { installRoutePanel, RoutePanel } from './RoutePanel'
 import { registerRoutePanelSection, resetRoutePanelSections, type RoutePanelSectionProps } from './sections'
 
@@ -67,8 +67,6 @@ function fakeWin() {
   }
 }
 
-const IDLE: RouteResults = { seq: 0, padId: 'official', status: 'idle', legs: [], totalMinutes: null, marginMin: null, firstInfeasibleLeg: null, fastRoute: false }
-
 beforeEach(() => {
   ;({ document: doc } = installDom())
   root = doc.createElement('div')
@@ -77,7 +75,7 @@ beforeEach(() => {
   resetLayout()
   resetRoutePanelSections()
   setRoutePanelCollapsed(false)
-  publishRouteResults(IDLE)
+  resetRouteResults()
   svc = createMockPadService()
   restorePads = setPadService(svc)
   store = createPlanningStore()
@@ -239,8 +237,9 @@ describe('Route panel: pad picker', () => {
 
 describe('Route panel: estimates from the route results (§9)', () => {
   const withStops = () => {
-    store.addStop({ kind: 'station', station: 'S1', id: 's1' })
-    store.addStop({ kind: 'point', lon: 137.4, lat: -4.78, id: 's2' })
+    // R1's mock: pad → w1 → s3 → pad, the last leg over the budget
+    store.addStop({ kind: 'point', lon: 137.396, lat: -4.772, id: 'w1' })
+    store.addStop({ kind: 'station', station: 'S3', id: 's3' })
   }
 
   it('labels every number "Estimate", says "Fast route", and calls out the first infeasible leg', () => {
@@ -253,7 +252,7 @@ describe('Route panel: estimates from the route results (§9)', () => {
     expect(text(est)).toContain('41.3 min')
     expect(text(est)).toContain('12.5 min')
     expect(text(one(attr('data-fast-route')))).toBe('Fast route · may not be the fastest')
-    expect(text(one(attr('data-infeasible-leg', '2')))).toBe('Leg 3 (W1 → pad) cannot be walked: not reachable on foot')
+    expect(text(one(attr('data-infeasible-leg', '2')))).toBe('Leg 3 (S3 → pad) cannot be walked: over the budget')
     expect(attr('data-empty')).toHaveLength(0)
   })
 
@@ -275,14 +274,14 @@ describe('Route panel: estimates from the route results (§9)', () => {
 
   it('pure helpers: O₂ only when every leg has it; margin tone; leg ends', () => {
     expect(legsO2(MOCK_ROUTE_RESULTS.legs)).toBeNull()
-    expect(legsO2(MOCK_ROUTE_RESULTS.legs.slice(0, 2))).toBeCloseTo(2.5)
+    expect(legsO2(MOCK_ROUTE_RESULTS.legs.slice(0, 2))).toBeCloseTo(23.1)
     expect(legsO2([])).toBeNull()
     expect(marginTone(null)).toBeNull()
     expect(marginTone(-1)).toBe('limit')
     expect(marginTone(1e6)).toBe('safe')
     withStops()
     const stops = store.state.peek().route.stops
-    expect(legEnds(MOCK_ROUTE_RESULTS.legs[0], stops)).toEqual({ from: 'pad', to: 'S1' })
+    expect(legEnds(MOCK_ROUTE_RESULTS.legs[0], stops)).toEqual({ from: 'pad', to: 'W1' })
   })
 })
 
