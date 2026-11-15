@@ -57,14 +57,16 @@ function Item({ label, short, r, units, kind, title }: { label: string; short: s
           {short}
         </span>
       </span>
-      {r ? (
-        <>
-          <Num v={r.v} units={units} file={r.file} k={r.k} />
-          <TrustChip kind={kind} prov={{ key: r.k, file: r.file, value: r.v }} align="start" />
-        </>
-      ) : (
-        <span class="hl-strip__none">–</span>
-      )}
+      <span class="hl-strip__value">
+        {r ? (
+          <>
+            <Num v={r.v} units={units} file={r.file} k={r.k} />
+            <TrustChip kind={kind} prov={{ key: r.k, file: r.file, value: r.v }} align="start" />
+          </>
+        ) : (
+          <span class="hl-strip__none">–</span>
+        )}
+      </span>
     </div>
   )
 }

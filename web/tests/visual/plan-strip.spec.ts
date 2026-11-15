@@ -17,10 +17,14 @@ test('the headline strip shows three numbers with trust chips', async ({ page })
   await expect(strip.locator('.num')).toHaveCount(3, { timeout: 30_000 })
   await expect(strip.locator('.hl-chip')).toHaveCount(3)
   await expect(strip.locator('.num-unbacked')).toHaveCount(0)
-  // the strip fits the top bar: it ends before the top bar's own buttons
-  const end = await page.locator('.hl-topbar__end').boundingBox()
-  const row = await page.locator('#hl-topbar-plan .hl-strip__row').boundingBox()
-  expect(row!.x + row!.width).toBeLessThanOrEqual(end!.x + 1)
+  // the strip fits the top bar: whole, before L7b's Official plan button and the top bar's own buttons
+  const row = (await page.locator('#hl-topbar-plan .hl-strip__row').boundingBox())!
+  const host = (await page.locator('#hl-headline-strip').boundingBox())!
+  expect(row.x + row.width).toBeLessThanOrEqual(host.x + host.width + 1) // not clipped
+  for (const sel of ['#hl-topbar-plan .hl-officialplan', '.hl-topbar__end']) {
+    const b = await page.locator(sel).first().boundingBox()
+    if (b) expect(row.x + row.width, sel).toBeLessThanOrEqual(b.x + 1)
+  }
 })
 
 test('the scenario and budget chips open their sections in a popover; Esc returns focus to the chip', async ({ page }) => {
