@@ -18,13 +18,16 @@ import { VIEWS } from './views'
 import { bootLoading, loadingActive, loadingDone, setLoadProgress, STAGE, whenIntroOver, whenIntroStarted } from './story/loading'
 import { storyParams, storyRequest } from './story/query'
 import { ui } from './state/ui'
+import { applyPlanLink, resolvePlanLink } from './ui/route-panel/export/planLink'
 
 const app = document.querySelector<HTMLDivElement>('#app')!
 
 // L12 (D111): the inline loading screen (index.html) stays only when the descent intro will play on
 // this load: the planning map in the shell frame, no capture / kiosk, no ?intro=0, no reduced motion.
 function introExpected(): boolean {
-  const hash = redirectFor(location.hash) ?? location.hash
+  // PORT I3: an old #/mission link opens the Plan map (applyPlanLink below), so it counts as the Plan map here
+  const link = resolvePlanLink(location.hash)
+  const hash = link.kind === 'redirect' ? link.to : redirectFor(location.hash) ?? location.hash
   if (isSpikeHash(hash) || isStyleguideHash(hash) || parseRoute(hash).name !== 'console') return false
   const legacy = frameKindFor(location.search, location.hash) === 'legacy'
   return storyRequest(storyParams(location.search, location.hash), { reduced: ui.reducedMotion.peek(), introSeen: ui.introSeen.peek(), legacy })?.kind === 'intro'
@@ -112,16 +115,22 @@ async function render(): Promise<void> {
   first = false
   // A bare address opens the landing page (router LANDING_HASH); story/capture links keep their own start.
   // D132: when this load plays the L12 intro (first visit, no ?intro=0), the intro plays on the Plan map
-  // first and the page lands on the Mission Planer once it is over (ended or skipped), unless the viewer
-  // has gone elsewhere meanwhile. #/ stays the Plan page.
+  // first and the page lands on LANDING_HASH once it is over (ended or skipped), unless the viewer
+  // has gone elsewhere meanwhile. #/ stays the Plan page. (PORT I3: the Mission Planer is gone; a
+  // landing on #/mission is sent on to #/ by applyPlanLink until router.ts LANDING_HASH is '#/'.)
   const landing = landingWhen(location.search, location.hash, intro && !userNav)
   if (landing === 'after-intro') void whenIntroOver().then(() => landingFor(location.hash) && location.replace(LANDING_HASH))
   else if (landing === 'now') history.replaceState(history.state, '', LANDING_HASH)
   const spike = isSpikeHash(location.hash)
   const styleguide = !spike && isStyleguideHash(location.hash)
   const internal = spike || styleguide
-  let route: Route = parseRoute(location.hash)
   const legacy = frameKindFor(location.search, location.hash) === 'legacy'
+  // PORT U4/I3: #/?route=… loads pad + route (planning.replace, no undo step); #/?add=S appends S (one step);
+  // old #/mission, #/mission?plan=… and #/mission?add=… links (the removed Mission Planer tab) are replaced
+  // (history.replaceState) by #/ or #/?route=…; an unreadable link -> notice (planLinkNotice), plan unchanged.
+  // Runs on load and on every hashchange (render()); never throws.
+  if (!legacy && !internal) applyPlanLink(location.hash)
+  let route: Route = parseRoute(location.hash)
   if (!legacy) {
     // DESIGN §4.2: old URLs move to their mode route (replace, so Back skips the old entry).
     const to = redirectFor(location.hash)

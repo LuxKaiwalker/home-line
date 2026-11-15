@@ -1,16 +1,18 @@
 // Plan-port perf probe (W0b, spec §4): one plan edit re-routes one leg in the browser route core
-// (mission/legsRoute.ts handler -> router.ts LegRouter, the code the legs worker runs). Budget:
-// <= 200 ms per edit. The grid has the real Mission Planer size (fields/index.json: 1480 x 1480 at
-// 5 m) with synthetic relief and walls, so the probe needs no data files; legs are typical stop-to-stop
-// lengths (0.5-3 km) incl. detours around walls. p50 / p95 / max are printed (Q1). This is the exact
-// router of today's Mission Planer, a baseline only: the 200 ms per-edit budget applies to the fast
-// mode the Plan view edits with (R2, asserted in route-search.perf.test.ts on the real grid). Q1 20:50:
-// the median assertion was dropped: at load avg ~80 (15 agents) the exact median was 256-426 ms, which
-// failed every package's check.sh perf step for a router the edit path no longer uses.
+// (edit/route/browser/worker.ts createRouteWorkerHandler, the handler the route worker runs; PORT I3: was
+// mission/legsRoute.ts, deleted with the Mission Planer). Budget: <= 200 ms per edit. The grid has the real
+// Mission Planer size (fields/index.json: 1480 x 1480 at 5 m) with synthetic relief and walls, so the probe
+// needs no data files; legs are typical stop-to-stop lengths (0.5-3 km) incl. detours around walls.
+// p50 / p95 / max are printed (Q1). Exact mode, uncapped (= map/router.ts LegRouter, worker parity tests):
+// a baseline only: the 200 ms per-edit budget applies to the fast mode the Plan view edits with (R2,
+// asserted in route-search.perf.test.ts on the real grid). Q1 20:50: the median assertion was dropped: at
+// load avg ~80 (15 agents) the exact median was 256-426 ms, which failed every package's check.sh perf
+// step for a router the edit path no longer uses.
 import { describe, expect, it } from 'vitest'
-import { handleLegsMessage, type LegsRequest, type LegsState } from '../../src/mission/legsRoute'
-import { scenarioParams } from '../../src/mission/physio'
-import type { RouteGrid } from '../../src/mission/router'
+import { createRouteWorkerHandler } from '../../src/edit/route/browser/worker'
+import type { RouteWorkerResponse } from '../../src/edit/route/browser/worker.types'
+import { scenarioParams } from '../../src/edit/route/map/physio'
+import type { RouteGrid } from '../../src/edit/route/map/router'
 import { fmtStats } from './realGrid'
 
 const W = 1480
@@ -36,8 +38,17 @@ const at = (r: number, c: number): number => r * W + c
 
 describe('route core perf (plan edit = one leg)', () => {
   it(`routes every leg (exact router baseline; budget ${BUDGET_MS} ms is asserted for fast mode)`, () => {
-    const state: LegsState = { router: null }
-    handleLegsMessage(state, { type: 'init', grid: grid(), params: scenarioParams('nom_104') } as LegsRequest)
+    // synchronous worker: deferred steps run at once, so one 'route' request returns with its final legs
+    const out: RouteWorkerResponse[] = []
+    const h = createRouteWorkerHandler((m) => void out.push(m), { defer: (fn) => fn() })
+    h.handle({ type: 'env', env: { padId: 'official', scenario: 'nom_104', grid: grid(), params: scenarioParams('nom_104'), padCell: at(700, 700) } })
+    let seq = 0
+    const routeLeg = (a: number, b: number) => {
+      out.length = 0
+      h.handle({ type: 'route', seq: ++seq, padId: 'official', cells: [a, b], mode: 'exact', weight: 1, legCapMs: 600_000, refine: false })
+      const fin = out.find((m): m is Extract<RouteWorkerResponse, { type: 'legs' }> => m.type === 'legs' && m.final)
+      return fin?.legs[0]
+    }
     const legs: [number, number][] = [
       [at(700, 700), at(760, 820)], // ~0.7 km
       [at(200, 200), at(420, 520)], // crosses a wall row
@@ -48,14 +59,14 @@ describe('route core perf (plan edit = one leg)', () => {
       [at(1200, 200), at(1400, 600)],
       [at(600, 600), at(600, 1100)], // ~2.5 km, crosses wall columns
     ]
-    handleLegsMessage(state, { type: 'route', a: legs[0][0], b: legs[0][1] }) // warm-up (JIT)
+    routeLeg(legs[0][1], legs[0][0]) // warm-up (JIT); the reverse leg, so the timed one is not a cache hit
     const ms: number[] = []
     let routed = 0
     for (const [a, b] of legs) {
       const t0 = performance.now()
-      const out = handleLegsMessage(state, { type: 'route', a, b })
+      const leg = routeLeg(a, b)
       ms.push(performance.now() - t0)
-      if (out?.leg) routed++
+      if (leg?.leg && leg.mode === 'exact' && !leg.capped) routed++
     }
     const sorted = [...ms].sort((x, y) => x - y)
     const median = sorted[Math.floor(sorted.length / 2)]

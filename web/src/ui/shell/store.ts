@@ -34,8 +34,8 @@ export interface ModeView {
 }
 export const MODE_VIEWS: Readonly<Record<Mode, readonly ModeView[]>> = {
   plan: [
-    // Mission Planer first: the landing page and where the PLAN tab leads by default (user, 2026-11-15)
-    { route: { name: 'mission' }, label: 'nav.views.mission', icon: 'mountain' },
+    // PORT I3: the Mission Planer tab is gone; route planning lives in Plan (Route panel). Old #/mission
+    // links are redirected by main.ts (ui/route-panel/export/planLink.ts applyPlanLink).
     { route: { name: 'console' }, label: 'nav.views.console', icon: 'map' },
   ],
   // Science stations: its own top-bar tab next to PLAN, a page without a map (user, 2026-11-15)
@@ -60,10 +60,8 @@ export const MODE_KEY: Readonly<Record<Mode, string>> = { plan: 'P', science: 'S
 
 /** Map modes get the timeline dock and the selection sidebar; REPORT and EVIDENCE are documents (D7 mockups 05, 06). */
 export const isMapMode = (m: Mode): boolean => m === 'plan' || m === 'fly'
-/** Map views without the EVA-time dock: the Mission Planer has its own times and margins panel. */
-const NO_DOCK_ROUTES: ReadonlySet<Route['name']> = new Set(['mission'])
-/** Whether the timeline dock shows: map modes, except the views in NO_DOCK_ROUTES. */
-export const hasDock = (m: Mode, r: Route): boolean => isMapMode(m) && !NO_DOCK_ROUTES.has(r.name)
+/** Whether the timeline dock shows: map modes (PORT I3: the Mission Planer, the one map view without it, is gone). */
+export const hasDock = (m: Mode, _r?: Route): boolean => isMapMode(m)
 
 export const shell = {
   route: signal<Route>({ name: 'console' }),

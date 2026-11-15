@@ -4,7 +4,7 @@
 // read: t_dark (the margin's daylight term and every leg's latest departure), eva_start_utc,
 // eva_start_lmst and msl_sol. null = clock.json's instant (D31): the data is returned AS IS, so the
 // default changes nothing. The sun is at the fields' pad (D21, as clock.json: config clock.site).
-import { CLOCK, evaClock, isoSecond, utcAtLmst, type EvaClock } from '../../../mission/marstime'
+import { CLOCK, evaClock, isoSecond, utcAtLmst, type EvaClock } from '../../../ui/route-panel/settings/marstime'
 import type { BrowserRouteData } from './data'
 
 /** Shown on the start card, the estimate and mission.json origin_label when the start was moved. */

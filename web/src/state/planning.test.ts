@@ -1,9 +1,26 @@
 import { describe, expect, it } from 'vitest'
 import { createPlanningStore, decodeLegacyPlan, decodeRouteParam, encodeRouteParam, legacyRedirect, OFFICIAL_PAD_ID, parsePlanningHash, planningHref, planningUndoSource, subscribePlanning, toPlanRoute, type PlanningDoc } from './planning'
-import { encodePlan } from '../mission/share'
 import { createSharedUndo } from '../edit/route/undo'
 import { copyFrom } from '../ui/copy'
 import type { PlanRoute as CorePlanRoute } from '../edit/route/model'
+
+// PORT I3: mission/ is deleted; its v1 plan-link encoder (mission/share.ts encodePlan) restated verbatim for
+// the legacy-link fixture (WAYPOINT_TAGS = PLAN_TAGS, stopMinutes = finite and > 0, else 0).
+const LEGACY_TAGS = ['Sample', 'Drill', 'Photo', 'Survey', 'Install', 'Inspect', 'Repair', 'Rest']
+function encodePlan(wps: { lon: number; lat: number; stopMin: number; tags: string[]; note: string; station?: string }[]): string {
+  if (!wps.length) return ''
+  const round6 = (v: number) => Math.round(v * 1e6) / 1e6
+  const stopMinutes = (v: number) => (Number.isFinite(v) && v > 0 ? v : 0)
+  const rows = wps.map((w) => {
+    const mask = LEGACY_TAGS.reduce((m, t, i) => (w.tags.includes(t) ? m | (1 << i) : m), 0)
+    const row: (number | string)[] = [round6(w.lon), round6(w.lat), stopMinutes(w.stopMin), mask, w.note]
+    if (w.station) row.push(w.station)
+    return row
+  })
+  let bin = ''
+  for (const b of new TextEncoder().encode(JSON.stringify([1, rows]))) bin += String.fromCharCode(b)
+  return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
+}
 
 const strip = (d: PlanningDoc) => ({ ...d, route: { ...d.route, stops: d.route.stops.map(({ id: _id, ...s }) => s) } })
 

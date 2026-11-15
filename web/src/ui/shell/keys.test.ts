@@ -89,13 +89,13 @@ describe('runShortcut', () => {
   })
 
   it('P/S/Y/R/E go to the mode, back to the last place visited in it', () => {
-    applyRoute({ name: 'mission' }, '#/mission') // (dev: trade is a REPORT document, D111)
+    applyRoute({ name: 'console' }, '#/?route=WzIsInJhbmsyIl0') // a shared Plan route (PORT I3: the Mission tab is gone)
     applyRoute({ name: 'station', id: 'S4' }, '#/station/S4')
     expect(ui.mode.value).toBe('science') // station detail pages live under Science stations
     applyRoute({ name: 'about' }, '#/evidence/about')
     expect(ui.mode.value).toBe('evidence')
     expect(run({ action: 'mode', mode: 'plan' })).toBe(true)
-    expect(nav).toHaveBeenLastCalledWith('#/mission')
+    expect(nav).toHaveBeenLastCalledWith('#/?route=WzIsInJhbmsyIl0')
     run({ action: 'mode', mode: 'science' })
     expect(nav).toHaveBeenLastCalledWith('#/station/S4')
     run({ action: 'mode', mode: 'evidence' })

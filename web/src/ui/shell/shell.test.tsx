@@ -157,11 +157,10 @@ describe('shell frame and islands', () => {
     expect(byClass(root(), 'hl-rail__view').map((a) => a.getAttribute('href'))).toEqual(['#/stations'])
   })
 
-  it('the Mission Planer (PLAN) has no EVA-time dock; the Plan view keeps it', () => {
-    act(() => void applyRoute({ name: 'mission' }, '#/mission'))
-    expect(ui.mode.value).toBe('plan')
-    expect(root().getAttribute('data-dock')).toBe('none')
+  it('PLAN lists the Plan view only (PORT I3: no Mission Planer tab) and keeps the EVA-time dock', () => {
     act(() => void applyRoute({ name: 'console' }, '#/'))
+    expect(ui.mode.value).toBe('plan')
+    expect(byClass(root(), 'hl-rail__view').map((a) => a.getAttribute('href'))).toEqual(['#/'])
     expect(root().getAttribute('data-dock')).not.toBe('none')
   })
 
@@ -213,7 +212,7 @@ describe('shell frame and islands', () => {
     expect(root().getAttribute('data-bp')).toBe('tablet')
     expect(ui.panels.leftRail.value).toBe(TOKENS.layout.leftRail) // desktop preference: open
     expect(root().getAttribute('data-rail')).toBe('collapsed')
-    expect(byClass(root(), 'hl-rail__view').map((a) => a.getAttribute('aria-label'))).toEqual([t('nav.views.mission'), t('nav.views.console')])
+    expect(byClass(root(), 'hl-rail__view').map((a) => a.getAttribute('aria-label'))).toEqual([t('nav.views.console')])
     expect(byClass(root(), 'hl-rail__title')).toHaveLength(0)
     expect(byClass(root(), 'probe')).toHaveLength(0)
     expect(one(byClass(root(), 'hl-rail__body')).hasAttribute('hidden')).toBe(false)

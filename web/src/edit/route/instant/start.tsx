@@ -8,7 +8,7 @@
 // visit only (not in browser storage), so a reload is the validated scenario again; drawer classes.
 import { useSignalValue } from '../../../state/signal'
 import { cx } from '../../../ui/components/Icon'
-import { CLOCK, formatHms, LEAP_VALID_UNTIL_MS, lmstH, utcAtSolLmst, type EvaClock } from '../../../mission/marstime'
+import { CLOCK, formatHms, LEAP_VALID_UNTIL_MS, lmstH, utcAtSolLmst, type EvaClock } from '../../../ui/route-panel/settings/marstime'
 import { fill } from '../text'
 import { CUSTOM_START_LABEL, DEFAULT_START_MS } from './adapter'
 import type { RouteEstimate } from './estimate'
