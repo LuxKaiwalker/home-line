@@ -472,7 +472,12 @@
     "history": "Previous / next selection",
     "modes": "Plan, Fly, Report, Evidence",
     "toggle3d": "2D / 3D",
-    "help": "Shortcut help"
+    "help": "Shortcut help",
+    "mouseSelect": "Map: select (drag the rover to move it)",
+    "mousePan": "Map: move",
+    "mouseRotate": "Map: rotate and tilt (3D)",
+    "mouseZoom": "Map: zoom",
+    "touch": "Touch: one finger moves, two fingers rotate, tilt and zoom"
   },
 
   "edit": {

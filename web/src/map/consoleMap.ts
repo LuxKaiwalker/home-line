@@ -31,6 +31,7 @@ import { storyParams, storyRequest } from '../story/query'
 import { CameraController, type ControllerMap } from './camera'
 import { installOverlays } from './overlays'
 import { MapSelection, SELECT_ROUTE_HIT, type SelectMap, type SelectSources } from './select'
+import { installMapInput, type InputMap, type MapInput } from './input'
 import { activeField, BINDING_LABEL, driveMargin, FIELD_TRUST, fieldModeQuery, fieldRequested, loadFieldData, loadFieldLayer, setActiveField, VARIANT_OF, webgl2Available, zeroEdgeLabels, type FieldData, type MarginState } from './field'
 
 /** The GPU field layer handle (field/layer.ts, loaded lazily). */
@@ -150,6 +151,7 @@ export class ConsoleMap {
   // WS16 task 11 (M11): U7 overlays + layer manager (all off by default)
   private stopOverlays: (() => void) | null = null
   private destroyed = false
+  private readonly input: MapInput
 
   constructor(container: HTMLElement, onStation: (id: string) => void) {
     this.onStation = onStation
@@ -166,10 +168,13 @@ export class ConsoleMap {
       // 2D until ui.view is '3d': TerrainController (terrain/index.ts) lifts maxPitch and rotation then
       maxPitch: 0,
       dragRotate: false,
+      boxZoom: false, // I1: left button interacts (select, drag the rover); a left drag on the map does nothing
       renderWorldCopies: false,
       canvasContextAttributes: { preserveDrawingBuffer: true }, // screen capture (Sun 12:00-16:00) reads the canvas
     })
     this.map.touchZoomRotate.disableRotation()
+    // I1: right drag pans, Ctrl/Shift + right drag or middle drag rotates / tilts, no context menu (map/input)
+    this.input = installMapInput(this.map as unknown as InputMap, { reduced: () => ui.reducedMotion.peek() })
     this.map.addControl(new NavigationControl({ showCompass: false }), 'top-left')
     this.map.addControl(new MarsScaleControl(CONFIG.marsRadiusM), 'bottom-left')
     this.ready = new Promise((res) => this.map.once('load', () => res()))
@@ -709,6 +714,7 @@ export class ConsoleMap {
     this.labels?.destroy()
     this.destroyed = true
     this.rover?.destroy()
+    this.input.destroy()
     this.furniture?.destroy()
     this.stopCollapse?.()
     this.headline?.destroy()

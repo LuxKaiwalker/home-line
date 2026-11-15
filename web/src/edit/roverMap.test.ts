@@ -237,6 +237,34 @@ describe('a plain click on the rover (official Pad marker) opens the pad card', 
   })
 })
 
+describe('I1: the rover moves with the left button only', () => {
+  it('a right or middle press on the rover leaves it to the map (no marker drag until release)', () => {
+    for (const button of [2, 1]) {
+      const store = createPlanEditStore({ catalog })
+      const rover = createRoverDrag(store, fields)
+      const m = new FakeMarker()
+      const win = new EventTarget()
+      const dispose = wireRoverMarker(m, { rover, store, project, place: () => {}, frame, cancelFrame, win })
+      expect(m.draggable).toBe(true)
+      m.el.fire('pointerdown', { button, pointerType: 'mouse' })
+      expect(m.draggable).toBe(false)
+      win.dispatchEvent(new Event('pointerup'))
+      expect(m.draggable).toBe(true)
+      expect(store.draft.value).toBeNull()
+      expect(selection.selected.value).toBeNull()
+      dispose()
+    }
+  })
+
+  it('a left press (mouse or touch) keeps the marker draggable', () => {
+    const { m } = setup()
+    m.el.fire('pointerdown', { button: 0, pointerType: 'mouse' })
+    expect(m.draggable).toBe(true)
+    m.el.fire('pointerdown', { button: 0, pointerType: 'touch' })
+    expect(m.draggable).toBe(true)
+  })
+})
+
 describe('movement beyond the slop still drags the rover', () => {
   it('a drag just beyond the slop runs the U15 drag (begin, moves, release); it selects nothing', () => {
     const { store, rover, m } = setup()

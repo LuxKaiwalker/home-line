@@ -215,7 +215,7 @@ describe('shell frame and islands', () => {
   it('help overlay is a labelled dialog with every shortcut; the top bar button opens it', () => {
     const dlg = one(byTag(root(), 'dialog'))
     expect(dlg.getAttribute('aria-labelledby')).toBe('hl-help-title')
-    expect(byClass(dlg, 'hl-help__row')).toHaveLength(11)
+    expect(byClass(dlg, 'hl-help__row')).toHaveLength(16) // 11 keyboard rows + 5 mouse / touch rows (I1)
     const btn = all(root(), (n) => n.getAttribute('aria-label') === t('nav.shortcuts'))[0]
     fire(btn, 'click')
     expect(shell.helpOpen.value).toBe(true)

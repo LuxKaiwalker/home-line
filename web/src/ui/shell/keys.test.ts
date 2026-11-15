@@ -60,6 +60,12 @@ describe('shortcutFor (§4.4 table)', () => {
       'shortcuts.modes',
       'shortcuts.toggle3d',
       'shortcuts.help',
+      // I1: the mouse model
+      'shortcuts.mouseSelect',
+      'shortcuts.mousePan',
+      'shortcuts.mouseRotate',
+      'shortcuts.mouseZoom',
+      'shortcuts.touch',
     ])
   })
 })
