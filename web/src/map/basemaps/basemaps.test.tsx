@@ -17,7 +17,7 @@ import { reliefBasemap, reliefLayerId, reliefSourceId, resetReliefCache, type Re
 const own = { basemaps: copyJson.route.basemaps }
 import { activeBasemap, DEFAULT_BASEMAP, reliefStatus, resetBasemaps, setBasemap } from './store'
 
-function fakeMap() {
+function fakeMap(style?: string[]) {
   const layers = new Map<string, { layout: Record<string, unknown>; before?: string }>()
   const sources = new Map<string, unknown>()
   const map = {
@@ -31,6 +31,8 @@ function fakeMap() {
     addLayer: (l: { id: string; layout?: Record<string, unknown> }, before?: string) => void layers.set(l.id, { layout: { ...(l.layout ?? {}) }, before }),
     removeLayer: (id: string) => void layers.delete(id),
     setLayoutProperty: (id: string, k: string, v: unknown) => void (layers.get(id)!.layout[k] = v),
+    moveLayer: (id: string, before?: string) => void (layers.get(id)!.before = before),
+    getStyle: style ? () => ({ layers: [...style, ...layers.keys()].map((id) => ({ id })) }) : undefined,
   }
   const ctx = { map, beforeId: (slot: string) => (slot === 'basemap' ? 'above-basemap' : undefined), marker: () => ({}), inShell: true } as unknown as MapExtensionContext
   return { ctx, layers, sources }
@@ -114,6 +116,16 @@ describe('L1c base maps', () => {
     offTopo()
     expect(layers.size).toBe(0)
     expect(sources.size).toBe(0)
+  })
+
+  it('lands just above the satellite tiles (basemap-*), not at the bottom of the style (F3 fix: "material draws nothing")', async () => {
+    off = install(deps())
+    const { ctx, layers } = fakeMap(['relief-shading', 'basemap-0', 'basemap-1', 'iso-fill', 'iso-lines'])
+    const host = installMapExtensions(ctx)
+    setBasemap('material')
+    await settle()
+    expect(layers.get(reliefLayerId('material'))).toEqual({ layout: { visibility: 'visible' }, before: 'iso-fill' })
+    host.destroy()
   })
 
   it('a failed load reports an error and keeps satellite usable', async () => {

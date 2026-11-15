@@ -1,6 +1,6 @@
 // L1c: the three base maps as ConsoleMap extensions (map/extensions.ts registerBasemap).
 //   satellite: the existing HiRISE `basemap` layer; nothing to add (the default).
-//   topo / material: one image source + raster layer just above `basemap` (ctx.beforeId('basemap')),
+//   topo / material: one image source + raster layer just above the satellite tiles (aboveSatellite),
 //   rendered once on first use from the relief source (relief.ts, ported from mission/relief.ts), hidden
 //   again when another base map is chosen. Each install follows activeBasemap itself.
 import type { Map as MlMap } from 'maplibre-gl'
@@ -43,6 +43,21 @@ function render(mode: ReliefMode, deps: ReliefDeps): Promise<Rendered> {
   return p
 }
 
+/**
+ * F3 (D146) fix: the layer just above the satellite imagery. ConsoleMap's HiRISE layers are `basemap-<i>`
+ * (added before 'iso-fill'); there is no layer called `basemap`, so ctx.beforeId('basemap') answers the
+ * BOTTOM layer and the relief raster landed under the opaque satellite tiles (drawn, never seen).
+ * Order: the layer after the last `basemap-*`, else 'iso-fill' (where the basemap layers go), else the slot.
+ */
+export function aboveSatellite(m: MlMap, ctx: MapExtensionContext, own: string): string | undefined {
+  const ids = (m.getStyle?.()?.layers ?? []).map((l) => l.id).filter((id) => id !== own)
+  let last = -1
+  ids.forEach((id, i) => id.startsWith('basemap-') && (last = i))
+  if (last >= 0) return ids[last + 1]
+  if (m.getLayer('iso-fill')) return 'iso-fill'
+  return ctx.beforeId('basemap')
+}
+
 /** Satellite: ConsoleMap's own basemap layer stays as it is; the relief layers hide themselves. */
 export const satelliteBasemap = (): BasemapSpec => ({
   id: 'satellite',
@@ -63,13 +78,16 @@ export function reliefBasemap(mode: ReliefMode, deps: ReliefDeps): BasemapSpec {
       const handle: BasemapHandle = {
         activate() {
           on = true
-          if (m.getLayer(reliefLayerId(mode))) return void vis(true)
+          if (m.getLayer(reliefLayerId(mode))) {
+            m.moveLayer(reliefLayerId(mode), aboveSatellite(m, ctx, reliefLayerId(mode))) // satellite tiles may have arrived since
+            return void vis(true)
+          }
           if (!rendered.has(mode)) setReliefStatus(mode, { kind: 'rendering' })
           render(mode, deps).then(
             (r) => {
               if (dead || m.getLayer(reliefLayerId(mode))) return vis(on)
               if (!m.getSource(reliefSourceId(mode))) m.addSource(reliefSourceId(mode), { type: 'image', url: r.url, coordinates: r.corners })
-              m.addLayer({ id: reliefLayerId(mode), type: 'raster', source: reliefSourceId(mode), layout: { visibility: on ? 'visible' : 'none' }, paint: { 'raster-fade-duration': 0, 'raster-resampling': 'linear' } }, ctx.beforeId('basemap'))
+              m.addLayer({ id: reliefLayerId(mode), type: 'raster', source: reliefSourceId(mode), layout: { visibility: on ? 'visible' : 'none' }, paint: { 'raster-fade-duration': 0, 'raster-resampling': 'linear' } }, aboveSatellite(m, ctx, reliefLayerId(mode)))
             },
             (e: unknown) => setReliefStatus(mode, { kind: 'error', message: e instanceof Error ? e.message : String(e) }),
           )
