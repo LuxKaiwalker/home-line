@@ -14,6 +14,18 @@ export const FLYTHROUGH = {
 } as const
 
 /**
+ * L10 (D111): the chase camera's own keys, camera.flythrough in design.yaml (assumed: true, L10).
+ * maxPitchDeg caps the chase pitch (T1: 55 deg; MapLibre 6.18 draws zero tiles above about 62 deg at
+ * our terrain offset); smoothMin is the centred box window (EVA minutes) over the camera's distance
+ * along the route; reducedCutS is the reduced-motion cut interval (story seconds / wall seconds).
+ */
+export const CHASE = {
+  maxPitchDeg: cfg<number>(designRaw, 'camera.flythrough.max_pitch_deg'),
+  smoothMin: cfg<number>(designRaw, 'camera.flythrough.smooth_min'),
+  reducedCutS: cfg<number>(designRaw, 'camera.flythrough.reduced_cut_s'),
+} as const
+
+/**
  * camera.flythrough.turn_deg_per_min: follow-camera turn rate, deg per simulated EVA minute (assumed
  * in design.yaml, M10). The routes go out and back, so the crew -> look-ahead direction flips by up to
  * 180 deg at a station; the camera swings round at this rate instead (mostly during the station dwell).
