@@ -78,6 +78,33 @@ export const LIMIT_TEXT: Record<RouteLimit, string> = {
   dose: 'Radiation dose',
 }
 
+/**
+ * WP12 (D117, team lead's science review): the infeasible answer as one sentence per limit. The O₂
+ * shortfall is a DEPARTURE-TIME shortfall. Leg numbers are 1-based for people; minutes are whole.
+ */
+export const INFEASIBLE_TEXT: Record<RouteLimit, { head: string; short: string; unknown: string }> = {
+  O2: { head: 'O₂ limit on leg {n} ({from} → {to})', short: 'you would need to set off {min} min earlier (conservative O₂ rule, D45)', unknown: 'you would need to set off earlier (conservative O₂ rule, D45; minutes not reported)' },
+  daylight: { head: 'Daylight limit on leg {n} ({from} → {to})', short: 'the walk would end after dark: set off {min} min earlier', unknown: 'the walk would end after dark (minutes not reported)' },
+  'EVA duration': { head: 'EVA length limit on leg {n} ({from} → {to})', short: 'the route exceeds the EVA length: {min} min too long', unknown: 'the route exceeds the EVA length (minutes not reported)' },
+  dose: { head: 'Radiation dose limit on leg {n} ({from} → {to})', short: 'the route exceeds the dose allowance on this leg ({min} min short)', unknown: 'the route exceeds the dose allowance on this leg (minutes not reported)' },
+}
+/** Any other limit the run record names (never guessed). */
+export const INFEASIBLE_OTHER = { head: 'Limit {limit} on leg {n} ({from} → {to})', short: 'short by {min} min', unknown: 'minutes not reported' }
+
+/** Short names on the map label "fails: O₂". */
+export const LIMIT_SHORT: Record<RouteLimit, string> = { O2: 'O₂', daylight: 'daylight', 'EVA duration': 'EVA length', dose: 'dose' }
+export const MAP_TEXT = {
+  fails: 'fails: {limit}',
+  end: 'route stops here · no way home planned',
+} as const
+
+/** "O₂ limit on leg 3 (S7 → S6)" + "you would need to set off 25 min earlier (…)"; shortfall null = not reported. */
+export function infeasibleText(f: { leg: number; from: string; to: string; limit: string; shortfallMin: number | null }, name: (s: string) => string = (s) => s): { head: string; short: string } {
+  const t = INFEASIBLE_TEXT[f.limit as RouteLimit] ?? INFEASIBLE_OTHER
+  const vars = { n: f.leg + 1, from: name(f.from), to: name(f.to), limit: f.limit }
+  return { head: fill(t.head, vars), short: f.shortfallMin === null ? t.unknown : fill(t.short, { min: Math.round(f.shortfallMin) }) }
+}
+
 export const STOP_PROBLEM_TEXT: Record<StopProblem, string> = {
   unknownStation: 'not a station of this site',
   duplicate: 'already in the route',

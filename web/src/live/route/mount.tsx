@@ -17,7 +17,7 @@ import { h } from 'preact'
 import { createRouteController, type RouteController } from '../../edit/route/controller'
 import type { StationGeo, StopProbe } from '../../edit/route/model'
 import { RoutePanel } from '../../edit/route/panel'
-import { createRouteStore } from '../../edit/route/store'
+import { createRouteStore, registerRouteDraftTarget } from '../../edit/route/store'
 import { createSharedUndo, type SharedUndo, type UndoWindow } from '../../edit/route/undo'
 import type { LonLat, PlanInputs } from '../types'
 import { installWaypointMap } from '../../edit/route/map'
@@ -29,7 +29,8 @@ import { data } from '../../data/loader'
 import type { Station } from '../../data/types'
 import { activeField, VARIANT_OF } from '../../map/field'
 import { mission } from '../../state/mission'
-import { effect, signal, useSignalValue, type ReadSignal } from '../../state/signal'
+import { effect, signal } from '../../state/signal'
+import { offlineNoteText, RouteOfflineNote } from '../../edit/route/offline'
 import { dockContent, registerRailSection, setDockContent, setRailCollapsed, shell, type Render } from '../../ui/shell/store'
 import { planUrl } from '../plan'
 import type { ApiClient } from '../client'
@@ -76,8 +77,12 @@ export interface RouteHandle {
   readonly undo: SharedUndo
 }
 
-/** The plan key H1 records (bind.ts followMission: scenario, budget, pad of mission.plan). */
-export const missionPlanKey = (): string => JSON.stringify([mission.plan.scenario.peek() ?? null, mission.plan.budgetMin.peek(), mission.plan.pad.peek() ?? null])
+/**
+ * The plan key H1 records (bind.ts followMission: scenario, budget, pad of mission.plan), with the
+ * defaults filled in (an unset scenario or pad IS the default one), so the same plan has one key.
+ */
+export const missionPlanKey = (c: Pick<EditCatalog, 'defaultScenario' | 'officialPadId'>) => (): string =>
+  JSON.stringify([mission.plan.scenario.peek() ?? c.defaultScenario, mission.plan.budgetMin.peek(), mission.plan.pad.peek() ?? c.officialPadId])
 
 /** Open the Plan rail so the section is on screen (desktop: expanded rail; tablet: the rail sheet). */
 function revealRail(): void {
@@ -146,15 +151,6 @@ export function routeDock(c: RouteController): () => void {
   }
 }
 
-/** L-05: the section's one line while live planning is unreachable (no controls, kit rule 4). */
-function RouteOfflineNote({ text }: { text: ReadSignal<string> }) {
-  return (
-    <p class="hl-route-offline" role="status" data-route-offline>
-      {useSignalValue(text)}
-    </p>
-  )
-}
-
 function RouteDockNote({ hash }: { hash: string | null }) {
   return (
     <p class="hl-route__docknote" role="status">
@@ -196,7 +192,7 @@ export function mountRoutePanel(o: MountRouteOptions): () => void {
       plan: () => missionPlan(catalog, o.pad?.pad() ?? null),
       // the crew panel's changed fields go with the same job (W-1); a field that is not a number blocks it
       extra: () => o.crew?.jobInputs() ?? null,
-      tag: missionPlanKey,
+      tag: missionPlanKey(catalog),
     })
     const blocked = signal<string | null>(o.crew?.blocked() ?? null)
     const padOf = () => {
@@ -225,7 +221,9 @@ export function mountRoutePanel(o: MountRouteOptions): () => void {
       canCompute: live,
       blocked,
     }))
-    const undo = createSharedUndo({ ctl: c, planKey: missionPlanKey, win: o.win === undefined ? (typeof window !== 'undefined' ? window : null) : o.win })
+    // WP12: setRouteDraft (edit/route/store.ts, for the search route builder) writes to this panel
+    offs.push(registerRouteDraftTarget(c.draftTarget()))
+    const undo = createSharedUndo({ ctl: c, planKey: missionPlanKey(catalog), win: o.win === undefined ? (typeof window !== 'undefined' ? window : null) : o.win })
     offs.push(undo.install())
     // the pad tool's spot and the crew panel change the inputs and the hash, not the route history
     if (o.pad) offs.push(o.pad.subscribe(() => store.planChanged()))
@@ -258,10 +256,10 @@ export function mountRoutePanel(o: MountRouteOptions): () => void {
     // the route and its undo history stay in memory and come back with the server.
     let unregister: (() => void) | null = null
     let noteOff: (() => void) | null = null
-    const noteText = signal<string>(ROUTE_TEXT.checkingLive)
+    const noteText = signal<string | null>(ROUTE_TEXT.checkingLive)
     // L-05 (D114): while the planner is unreachable the section shows one line, no controls (kit rule 4)
     const note = () =>
-      (o.register ?? registerRailSection)({ id: ROUTE_SECTION_ID, modes: ['plan'], title: 'nav.rail.stationsRoute', icon: 'station', render: () => h(RouteOfflineNote, { text: noteText, key: 'offline' }) })
+      (o.register ?? registerRailSection)({ id: ROUTE_SECTION_ID, modes: ['plan'], title: 'nav.rail.stationsRoute', icon: 'station', render: () => h(RouteOfflineNote, { note: noteText, key: 'offline' }) })
     const section = () => {
       const off = (o.register ?? registerRailSection)({ id: ROUTE_SECTION_ID, modes: ['plan'], title: 'nav.rail.stationsRoute', icon: 'station', render: () => h(RoutePanel, { ctl: c, live, reason, undo, key: ROUTE_TEXT.title }) })
       // WP6: free waypoints (markers, click to add) and the ghost route (estimate) on the console map,
@@ -287,11 +285,12 @@ export function mountRoutePanel(o: MountRouteOptions): () => void {
           c.reset()
           unregister?.()
           unregister = null
-          noteText.value = s.kind === 'offline' ? ROUTE_TEXT.offlineNote : (b.text ?? ROUTE_TEXT.checkingLive)
+          noteText.value = offlineNoteText(s, b.text)
           if (!noteOff && alive) noteOff = note()
           emit()
           return
         }
+        noteText.value = null
         noteOff?.()
         noteOff = null
         if (!unregister && alive) unregister = section()

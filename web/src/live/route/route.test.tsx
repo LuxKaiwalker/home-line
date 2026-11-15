@@ -26,9 +26,10 @@ import { validatePlanInputs, validateRunRecord } from '../schemacheck'
 import orderedExample from '../../../../contracts/backend/examples/plan_inputs.route_ordered.json'
 import { mockLiveLoader } from '../result'
 import { createRouteJobs } from './jobs'
-import { FAILING_LEG_ID, type RouteConsoleMap } from './map'
-import { mountRoutePanel, ROUTE_SECTION_ID } from './mount'
+import { FAILING_LEG_ID, ROUTE_END_ID, type RouteConsoleMap } from './map'
+import { mountRoutePanel, ROUTE_SECTION_ID, type RouteHandle } from './mount'
 import { readFeasibility } from './types'
+import { FakeWindow, keydown } from '../../edit/route/testing'
 
 const PUB = resolve(__dirname, '../../../public/data')
 const json = (p: string) => JSON.parse(readFileSync(resolve(PUB, p), 'utf8'))
@@ -82,8 +83,9 @@ async function until(fn: () => boolean, what: string) {
 }
 const text = (n: FakeNode) => n.textContent.replace(/\s+/g, ' ').trim()
 
-async function setup() {
+async function setup(extra: Partial<Parameters<typeof mountRoutePanel>[0]> = {}) {
   const fetch = withRouteMock(createMockFetch())
+  const win = new FakeWindow()
   const client = createApiClient({ base: 'http://api.test', fetch })
   const map = fakeConsoleMap()
   let section: RailSection | null = null
@@ -107,12 +109,16 @@ async function setup() {
       section = s
       return () => (section = null)
     },
+    win,
+    ...extra,
   })
   await until(() => section !== null, 'the rail section')
   const s = section as unknown as RailSection
   act(() => render(s.render() as ComponentChildren, root as unknown as Element))
   await until(() => byClass(root, 'hl-route__hash')[0]?.textContent.includes(ROUTE_TEXT.hashPending) === false, 'the engine identity')
-  return { fetch, map, restored, section: s, setLive: (st: LiveState) => act(() => live!(st)) }
+  // a key pressed with the focus on the map, outside the panel (W-5: the one global Ctrl/Cmd-Z)
+  const press = (init: Parameters<typeof keydown>[0]) => act(() => void win.dispatchEvent(keydown({ target: { localName: 'canvas' }, ...init })))
+  return { fetch, map, restored, section: s, win, press, setLive: (st: LiveState) => act(() => live!(st)) }
 }
 
 const q = (cls: string) => byClass(root, cls)
@@ -124,7 +130,13 @@ function check(id: string, on = true) {
   act(() => void cb.dispatch('change'))
 }
 const mode = (m: 'auto' | 'ordered') => click(all(root, (n) => n.getAttribute('data-value') === m)[0])
-const order = () => all(root, (n) => hasClass(n, 'hl-route__stop') && hasClass(n, 'is-checked')).map((n) => n.getAttribute('data-station'))
+/** the visiting order (W-7: rows keep their places on a tick; the order number says the order) */
+const order = () =>
+  all(root, (n) => hasClass(n, 'hl-route__stop') && hasClass(n, 'is-checked'))
+    .sort((a, b) => Number(a.getAttribute('data-index')) - Number(b.getAttribute('data-index')))
+    .map((n) => n.getAttribute('data-station'))
+/** the rows as they sit on screen */
+const rowsShown = () => all(root, (n) => hasClass(n, 'hl-route__stop')).map((n) => n.getAttribute('data-station') ?? n.getAttribute('data-point'))
 const posted = (fetch: ReturnType<typeof withRouteMock>) => fetch.calls.filter((c) => c.method === 'POST' && c.path === '/jobs').map((c) => (c.body as { inputs: { route?: unknown } }).inputs.route)
 
 describe('Edit-route panel (Plan rail, live builds)', () => {
@@ -137,7 +149,7 @@ describe('Edit-route panel (Plan rail, live builds)', () => {
   })
 
   it('checkbox + drag + Alt+Up/Down give the route payload in that order; the hash changes with the order; undo restores', async () => {
-    const { fetch } = await setup()
+    const { fetch, press } = await setup()
     const hash = () => text(q('hl-route__hash')[0])
     const autoHash = hash()
     mode('ordered')
@@ -160,13 +172,13 @@ describe('Edit-route panel (Plan rail, live builds)', () => {
     act(() => void row('S1').dispatch('keydown', { key: 'ArrowUp', altKey: true }))
     expect(order()).toEqual(['S4', 'S1', 'S2'])
     expect(hash()).toBe(h412) // same order, same hash
-    // undo (Ctrl+Z in the panel) walks back exactly: S4,S2,S1 -> S2,S4,S1
-    act(() => void q('hl-route')[0].dispatch('keydown', { key: 'z', ctrlKey: true }))
+    // undo (the global Ctrl+Z, focus outside the panel: W-5) walks back exactly: S4,S2,S1 -> S2,S4,S1
+    press({ key: 'z', ctrlKey: true })
     expect(order()).toEqual(['S4', 'S2', 'S1'])
-    act(() => void q('hl-route')[0].dispatch('keydown', { key: 'z', ctrlKey: true }))
+    press({ key: 'z', metaKey: true })
     expect(order()).toEqual(['S2', 'S4', 'S1'])
     expect(hash()).toBe(h241)
-    act(() => void q('hl-route')[0].dispatch('keydown', { key: 'z', ctrlKey: true, shiftKey: true }))
+    press({ key: 'z', ctrlKey: true, shiftKey: true })
     expect(order()).toEqual(['S4', 'S2', 'S1'])
     expect(posted(fetch)).toEqual([]) // D85: no job without Compute plan
   })
@@ -217,9 +229,8 @@ describe('Edit-route panel (Plan rail, live builds)', () => {
     expect(box.getAttribute('data-leg')).toBe('2')
     expect(box.getAttribute('data-limit')).toBe('O2')
     const s = text(box)
-    expect(s).toContain('Leg 3: S1 → S2')
-    expect(s).toContain('O₂ at the effort-cap rate (D45)')
-    expect(s).toContain(`Short by ${MOCK_INFEASIBLE_LEG.shortfall_min.toFixed(1)} min`)
+    // D117: a departure-time shortfall, leg 1-based, whole minutes
+    expect(s).toContain(`O₂ limit on leg 3 (S1 → S2): you would need to set off ${Math.round(MOCK_INFEASIBLE_LEG.shortfall_min)} min earlier (conservative O₂ rule, D45)`)
     const legs = q('hl-route__leg')
     expect(legs.map((l) => l.getAttribute('data-state'))).toEqual(['planned', 'planned', 'failing', 'not-planned'])
     expect(hasClass(legs[2], 'is-failing')).toBe(true)
@@ -231,6 +242,13 @@ describe('Edit-route panel (Plan rail, live builds)', () => {
     expect(map.layers.find((l) => l.id === FAILING_LEG_ID)).toMatchObject({ type: 'line', paint: { 'line-color': TOKENS.color.limit } })
     expect(order()).toEqual(['S4', 'S1', 'S2']) // nothing reordered
     expect(map.box.dataset.failingLeg).toBe('2')
+    // D117: the failing leg labelled with its limit, the route ends at S1 with no way home drawn
+    expect(fc.features[0].properties?.label).toBe('fails: O₂')
+    expect(fc.features[1]).toMatchObject({ geometry: { type: 'Point', coordinates: [s1.lon, s1.lat] }, properties: { state: 'end', label: 'route stops here · no way home planned' } })
+    expect(map.layers.find((l) => l.id === ROUTE_END_ID)).toMatchObject({ type: 'circle' })
+    expect(map.box.dataset.routeEnd).toBe('S1')
+    const drawn = map.calls.route.filter(Boolean).at(-1)!
+    expect(drawn.features.some((f) => f.properties?.to === 'pad' && f.properties?.from !== 'pad')).toBe(false)
     expect(q('hl-route')[0].getAttribute('data-state')).toBe('done')
     expect(q('hl-route')[0].getAttribute('data-feasible')).toBe('false')
     // the answer sits at the top of the panel, before the mode switch and the list (R5-C)
@@ -244,7 +262,7 @@ describe('Edit-route panel (Plan rail, live builds)', () => {
     expect(restored.n).toBe(1) // the console's static plan is put back
   })
 
-  it('API unreachable (kit rule 4 / F23): the panel is hidden behind the offline banner, comes back with the server, keeps the route; no errors', async () => {
+  it('API unreachable (kit rule 4 / F23, L-05): a one-line note replaces the panel (no controls), the panel comes back with the server, keeps the route; no errors', async () => {
     const errs: unknown[] = []
     const spy = [vi.spyOn(console, 'error').mockImplementation((...a) => void errs.push(a)), vi.spyOn(console, 'warn').mockImplementation((...a) => void errs.push(a))]
     let up = false
@@ -276,23 +294,34 @@ describe('Edit-route panel (Plan rail, live builds)', () => {
     })
     for (let i = 0; i < 20; i++) await act(async () => void (await flush()))
     expect(live).not.toBeNull()
-    expect(section).toBeNull() // hidden while offline: nothing half-done, no disabled shell
+    const shown = () => {
+      act(() => render(section ? ((section as RailSection).render() as ComponentChildren) : null, root as unknown as Element))
+      return { note: q('hl-route-offline').map(text), panel: q('hl-route').length, controls: all(root, (n) => ['button', 'input'].includes(n.nodeName.toLowerCase())).length }
+    }
+    // L-05 (D114): offline = one line in place of the section, no controls (kit rule 4: nothing half-done)
+    expect(section).not.toBeNull()
+    expect(shown()).toEqual({ note: [ROUTE_TEXT.offlineNote], panel: 0, controls: 0 })
     for (const st of [{ kind: 'checking' }, { kind: 'warming' }] as LiveState[]) {
       act(() => live!(st))
-      expect(section).toBeNull()
+      const v = shown()
+      expect(v.panel).toBe(0)
+      expect(v.controls).toBe(0)
+      expect(v.note).toHaveLength(1)
     }
+    act(() => live!({ kind: 'offline' } as LiveState))
+    expect(shown().note).toEqual([ROUTE_TEXT.offlineNote])
     up = true
     act(() => live!({ kind: 'ready', health: HEALTH_WARM } as LiveState))
-    expect(section).not.toBeNull()
-    act(() => render((section as unknown as RailSection).render() as ComponentChildren, root as unknown as Element))
+    // /health recovers: the note goes, the panel comes back without a reload
+    expect(shown()).toMatchObject({ note: [], panel: 1 })
     await until(() => !text(q('hl-route__hash')[0]).includes(ROUTE_TEXT.hashPending), 'the identity asked again on recovery')
     mode('ordered')
     check('S4')
     act(() => live!({ kind: 'offline' } as LiveState))
-    expect(section).toBeNull()
+    expect(shown()).toEqual({ note: [ROUTE_TEXT.offlineNote], panel: 0, controls: 0 })
     act(() => live!({ kind: 'ready', health: HEALTH_WARM } as LiveState))
-    expect(registrations).toBe(2)
-    act(() => render((section as unknown as RailSection).render() as ComponentChildren, root as unknown as Element))
+    expect(registrations).toBe(4) // note, panel, note, panel
+    expect(shown()).toMatchObject({ note: [], panel: 1 })
     expect(order()).toEqual(['S4']) // the route survives the outage
     expect(errs).toEqual([])
     spy.forEach((s) => s.mockRestore())
@@ -343,6 +372,90 @@ describe('Edit-route panel (Plan rail, live builds)', () => {
     act(() => void row('S2').dispatch('keydown', { key: 'ArrowUp', altKey: true }))
     expect(dockContent.peek()).toBe(before)
     setDockContent(undefined)
+  })
+})
+
+describe('WP12: one compute action, stable rows, reasons', () => {
+  const SPOT = { lon: 137.393301, lat: -4.776468 }
+  const jobsPosted = (fetch: ReturnType<typeof withRouteMock>) => fetch.calls.filter((c) => c.method === 'POST' && c.path === '/jobs').map((c) => (c.body as { inputs: Record<string, unknown> }).inputs)
+
+  it('pad tool spot + crew panel + route open: Compute plan (panel or Live pad card) runs ONE job carrying pad + crew + route', async () => {
+    let handle: RouteHandle | null = null
+    const padSubs = new Set<() => void>()
+    let spot: { lon: number; lat: number } | null = null
+    const { fetch } = await setup({
+      pad: { pad: () => spot, subscribe: (fn) => (padSubs.add(fn), () => void padSubs.delete(fn)) },
+      crew: { jobInputs: () => ({ crew: { body_mass_kg: 90 } }), blocked: () => null, subscribe: () => () => {} },
+      onReady: (h) => (handle = h),
+    })
+    expect(handle).not.toBeNull()
+    act(() => {
+      spot = SPOT
+      for (const f of padSubs) f()
+    })
+    expect(text(q('hl-route__inputs')[0])).toContain('your spot from Live pad, 137.393301°E -4.776468°N')
+    expect(text(q('hl-route__inputs')[0])).toContain(ROUTE_TEXT.inputsCrewChanged)
+    check('S4') // W-4: from "Engine chooses" straight into "My order"
+    check('S1')
+    expect(handle!.status()).toBe('ready')
+    act(() => handle!.compute()) // the Live pad card's button
+    expect(handle!.status()).toBe('running')
+    click(q('hl-route__compute')[0]) // a second press while it runs: no second job
+    act(() => handle!.compute())
+    await until(() => q('hl-route__result').length > 0, 'the result')
+    const jobs = jobsPosted(fetch)
+    expect(jobs).toHaveLength(1)
+    expect(jobs[0].pad).toEqual(SPOT)
+    expect(jobs[0].crew).toMatchObject({ body_mass_kg: 90 })
+    expect(jobs[0].route).toEqual({ mode: 'ordered', stops: [{ station: 'S4' }, { station: 'S1' }] })
+    expect(text(q('hl-route__result')[0])).toContain(ROUTE_TEXT.computedLabel)
+  })
+
+  it('W-7: ticking S4 then S1 at the same screen positions ticks both, in that order; rows do not move', async () => {
+    await setup()
+    const before = rowsShown()
+    const cbAt = (i: number) => all(all(root, (n) => hasClass(n, 'hl-route__stop'))[i], (n) => hasClass(n, 'hl-route__check'))[0] as FakeNode & { checked?: boolean }
+    const tick = (i: number) => {
+      const cb = cbAt(i)
+      cb.checked = true
+      act(() => void cb.dispatch('change'))
+    }
+    tick(before.indexOf('S4'))
+    tick(before.indexOf('S1'))
+    expect(rowsShown()).toEqual(before)
+    expect(order()).toEqual(['S4', 'S1'])
+    expect(q('hl-route')[0].getAttribute('data-mode')).toBe('ordered')
+  })
+
+  it('W-4 / W-5: no disabled control without a reason; undo and redo say "Nothing to undo / redo"', async () => {
+    const { setLive } = await setup()
+    const reasonOf = (n: FakeNode) => {
+      const id = n.getAttribute('aria-describedby')
+      const note = id ? all(root, (x) => x.getAttribute('id') === id)[0] : null
+      return { title: n.getAttribute('title'), note: note ? text(note) : null }
+    }
+    const disabled = () => all(root, (n) => ['button', 'input'].includes(n.nodeName.toLowerCase()) && n.hasAttribute('disabled'))
+    // at start: the checkboxes work in "Engine chooses"; undo / redo are disabled with their reason
+    expect(all(root, (n) => hasClass(n, 'hl-route__check')).every((n) => !n.hasAttribute('disabled'))).toBe(true)
+    expect(reasonOf(q('hl-route__undo')[0])).toEqual({ title: 'Nothing to undo', note: 'Nothing to undo' })
+    expect(reasonOf(q('hl-route__redo')[0])).toEqual({ title: 'Nothing to redo', note: 'Nothing to redo' })
+    for (const n of disabled()) expect(reasonOf(n).note, n.getAttribute('class') ?? '').toBeTruthy()
+    // heavy jobs off: Compute disabled, pointing at the reason
+    check('S2')
+    setLive({ kind: 'ready', health: { ...HEALTH_WARM, heavy_jobs: 'off' } } as LiveState)
+    for (const n of disabled()) expect(reasonOf(n).note, n.getAttribute('class') ?? '').toBeTruthy()
+    expect(reasonOf(q('hl-route__compute')[0]).note).toContain(ROUTE_TEXT.heavyJobsOff)
+    // while a job runs: the list, the mode and undo are locked and say why
+    setLive({ kind: 'ready', health: HEALTH_WARM } as LiveState)
+    click(q('hl-route__compute')[0])
+    expect(q('hl-route')[0].getAttribute('data-state')).toBe('running')
+    const locked = disabled()
+    expect(locked.length).toBeGreaterThan(0)
+    for (const n of locked) expect(reasonOf(n).note, n.getAttribute('class') ?? '').toBeTruthy()
+    const lockedHere = locked.filter((n) => ['hl-route__check', 'hl-route__modebtn', 'hl-route__undo'].some((c) => hasClass(n, c)))
+    expect(lockedHere.length).toBeGreaterThanOrEqual(3)
+    for (const n of lockedHere) expect(reasonOf(n).note).toBe(ROUTE_TEXT.whyLocked)
+    await until(() => q('hl-route__result').length > 0, 'the result')
   })
 })
 

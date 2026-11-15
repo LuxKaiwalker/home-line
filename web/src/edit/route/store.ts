@@ -18,7 +18,7 @@ import { batch, computed, signal, type ReadSignal } from '../../state/signal'
 import { canonicalJson, defaultInputs, hashCanonical, inputsKey, type CanonicalContext, type EngineIdentity, type PlanInputs } from '../canonical'
 import type { EditCatalog, EditPlan } from '../options'
 import { createPlanEditStore, UNDO_MAX } from '../store'
-import { AUTO_ROUTE, routeForHash, routePayload, sameRoute, type PlanRoute } from './model'
+import { AUTO_ROUTE, isStationStop, routeForHash, routePayload, sameRoute, type PlanRoute, type RouteCheck, type RouteStop, type StopProblem } from './model'
 
 export type RouteInputs = PlanInputs & { route?: ReturnType<typeof routePayload> }
 
@@ -162,3 +162,53 @@ export function createRouteStore(opts: RouteStoreOptions) {
 }
 
 export type RouteStore = ReturnType<typeof createRouteStore>
+
+// ---- setRouteDraft (WP12, for the search route builder S3a) --------------------------------------
+
+/** The route being edited, as setRouteDraft sees it (controller.draftTarget(); registered by the live mount). */
+export interface RouteDraftTarget {
+  route(): PlanRoute
+  /** the panel's own validity rules (stations, limits, spacing, field) for a route */
+  check(r: PlanRoute): RouteCheck
+  /** one undoable step on the Plan view's one undo (W-5); rows laid out in route order */
+  apply(r: PlanRoute): boolean
+}
+let draftTarget: RouteDraftTarget | null = null
+/** Make `t` the route setRouteDraft writes to (the mounted Edit-route panel); returns unregister. */
+export function registerRouteDraftTarget(t: RouteDraftTarget): () => void {
+  draftTarget = t
+  return () => {
+    if (draftTarget === t) draftTarget = null
+  }
+}
+
+const DROP: readonly StopProblem[] = ['unknownStation', 'duplicate']
+const ROUTE_TO_STOP = { tooManyStops: 'tooMany', tooManyFreePoints: 'tooMany', noStops: null } as const
+
+/**
+ * Apply a whole route draft (e.g. built by search) as ONE undoable step, validated like a manual edit:
+ *   - an unknown station or a repeated stop is dropped and reported (the rest still applies)
+ *   - too many stops or free points, a stop too close to another or to the pad, or a stop the field
+ *     refuses (outside the grid, unassessed, not walkable, unreachable): nothing is applied
+ * Free points are named W1, W2, … by their order among the free stops, as usual. `ok` = the draft (minus
+ * the dropped stops) is now the route; `problems` = every problem found, dropped stops included, in
+ * stop order. No Edit-route panel mounted (static build, live planning offline): ok false, no problems.
+ */
+export function setRouteDraft(stops: RouteStop[], mode: 'ordered' | 'auto' = 'ordered'): { ok: boolean; problems: StopProblem[] } {
+  const t = draftTarget
+  if (!t) return { ok: false, problems: [] }
+  const norm: RouteStop[] = stops.map((s) => (isStationStop(s) ? { station: s.station } : { lon: s.lon, lat: s.lat, ...(s.label ? { label: s.label } : {}) }))
+  const first = t.check({ mode: 'ordered', stops: norm })
+  const dropped: StopProblem[] = []
+  const kept = norm.filter((_, i) => {
+    const bad = (first.stops[i]?.problems ?? []).filter((p) => DROP.includes(p))
+    dropped.push(...bad)
+    return !bad.length
+  })
+  const next: PlanRoute = { mode, stops: kept }
+  const c = t.check({ mode: 'ordered', stops: kept })
+  const refused: StopProblem[] = [...c.stops.flatMap((s) => (s.valid === false ? s.problems : [])), ...c.route.map((p) => ROUTE_TO_STOP[p]).filter((p): p is 'tooMany' => p !== null)]
+  if (refused.length) return { ok: false, problems: [...dropped, ...[...new Set(refused)]] }
+  t.apply(next)
+  return { ok: true, problems: dropped }
+}

@@ -20,7 +20,7 @@ import { Button, IconButton } from '../../ui/components/Button'
 import { cx, Icon } from '../../ui/components/Icon'
 import type { ComputeState, RouteController } from './controller'
 import { isStationStop, layoutIds, ROUTE_LIMITS, type PlanRoute, type RouteCheck, type StationGeo, type StopCheck } from './model'
-import { failureText, fill, LIMIT_TEXT, ROUTE_PROBLEM_TEXT, ROUTE_TEXT as T, STOP_PROBLEM_TEXT } from './text'
+import { failureText, fill, infeasibleText, ROUTE_PROBLEM_TEXT, ROUTE_TEXT as T, STOP_PROBLEM_TEXT } from './text'
 import { AddPointButton, GhostSummary, PointRowBody } from './map/rows'
 import type { SharedUndo } from './undo'
 import './route.css'
@@ -161,17 +161,24 @@ function ResultView({ c }: { c: Extract<ComputeState, { kind: 'done' }> }) {
           <p class="hl-route__infeasible-title">
             <Icon name="triangle-alert" /> {T.infeasibleTitle}
           </p>
-          <p class="hl-route__infeasible-leg">{fill(T.infeasibleLeg, { n: f.leg + 1, from: f.from, to: f.to })}</p>
-          <p class="hl-route__infeasible-limit">{fill(T.infeasibleLimit, { limit: LIMIT_TEXT[f.limit as keyof typeof LIMIT_TEXT] ?? f.limit })}</p>
-          <p class="hl-route__infeasible-short">
-            {f.shortfallMin === null ? (
-              T.infeasibleShortUnknown
-            ) : (
-              <span class="num" data-trust="live" title={`${T.computedLabel} · run record ${r.hash}`}>
-                {fill(T.infeasibleShort, { min: f.shortfallMin.toFixed(1) })}
-              </span>
-            )}
-          </p>
+          {(() => {
+            // D117: one sentence per limit; the O₂ shortfall is a departure-time shortfall
+            const x = infeasibleText(f, (n) => (n === 'pad' ? T.pad : n))
+            return (
+              <p class="hl-route__infeasible-leg">
+                <span class="hl-route__infeasible-limit">{x.head}</span>:{' '}
+                <span class="hl-route__infeasible-short">
+                  {f.shortfallMin === null ? (
+                    x.short
+                  ) : (
+                    <span class="num" data-trust="live" title={`${T.computedLabel} · run record ${r.hash}`}>
+                      {x.short}
+                    </span>
+                  )}
+                </span>
+              </p>
+            )
+          })()}
           <p class="hl-route__note">{T.infeasibleNote}</p>
         </div>
       ) : null}

@@ -109,12 +109,13 @@ export function AddPointButton({ ctl }: { ctl: RouteController }) {
         aria-pressed={adding ? 'true' : 'false'}
         disabled={!!blocked && !adding}
         title={why ?? undefined}
+        aria-describedby={why && !adding ? 'hl-route-why-add' : undefined}
         onClick={() => ed.toggleAdd()}
       >
         <Icon name={adding ? 'x' : 'crosshair'} />
         {adding ? W.addCancel : W.add}
       </button>
-      <span class="hl-route__note" role="status">
+      <span class="hl-route__note" role="status" id="hl-route-why-add">
         {adding ? W.addArmed : (why ?? fill(W.addHint, { n: ROUTE_LIMITS.maxFreePoints }))}
       </span>
     </div>

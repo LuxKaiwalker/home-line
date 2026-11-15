@@ -6,7 +6,7 @@ import { LIVE_LABEL } from './config'
 import { bannerFor } from './health'
 import { checkField, CREW_FIELD_TEXT, CREW_FIELDS, EXTRAPOLATION_TEXT, FIXED_TEXT, invalidFields, type CrewActions, type CrewState, type FieldSpec } from './crew'
 
-/** Text for the pad tool when the crew blocks "Compute full plan", or null. */
+/** Text for the pad tool and Edit route when the crew blocks "Compute plan", or null. */
 export function crewBlockedText(state: CrewState): string | null {
   if (state.defaults.kind !== 'ready' || !state.text) return null
   const bad = invalidFields(state.defaults.spec, state.text)
@@ -98,7 +98,7 @@ export function CrewPanel({ state, actions, engineHref }: CrewPanelProps) {
           </table>
           <p class="caption">{FIXED_TEXT}</p>
           <p class="caption">
-            Only changed values are sent with "Compute full plan". The instant preview always uses the default crew.{' '}
+            Only changed values are sent with "Compute plan" (Edit route). The instant preview always uses the default crew.{' '}
             <button type="button" class="live-btn" onClick={() => actions.reset()}>
               Reset to defaults
             </button>

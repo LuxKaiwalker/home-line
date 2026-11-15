@@ -10,7 +10,8 @@
 // a station while the engine chooses switches to "My order" and adds it in one undo step.
 import { computed, signal, type ReadSignal } from '../../state/signal'
 import { checkRoute, legCoords, moveStop, routeLegs, rowIds, setMode, toggleStation, type PlanRoute, type RouteCheck, type RouteMode, type StationGeo, type StopProbe } from './model'
-import type { RouteStep, RouteStore } from './store'
+import type { RouteDraftTarget, RouteStep, RouteStore } from './store'
+import { fill, LIMIT_SHORT, MAP_TEXT } from './text'
 
 /** The limit an infeasible route breaks first (draft §4.2: O₂ at the effort-cap rule D45, daylight, EVA length D28, dose). */
 export type RouteLimit = 'O2' | 'daylight' | 'EVA duration' | 'dose'
@@ -69,9 +70,18 @@ export interface RouteMap {
   /** Draw a staged snapshot through the console map's own setters (one rendering path). */
   showStage(data: unknown): void | Promise<void>
   /** Highlight the failing leg `leg` (null clears it). */
-  highlightLeg(coords: [number, number][] | null, label?: string, leg?: number): void
+  highlightLeg(coords: [number, number][] | null, label?: string, leg?: number, end?: RouteEnd): void
   /** Give the map back to the static plan. */
   restore(): void
+}
+
+/** D117: where an infeasible route stops (the last reached stop: the failing leg's start); no way home is drawn. */
+export interface RouteEnd {
+  /** run-record name of the stop ('pad' when the first leg fails) */
+  name: string
+  label: string
+  /** the failing leg (contract numbering): route legs from it on are not drawn */
+  leg: number
 }
 
 export type ComputeState =
@@ -182,7 +192,8 @@ export function createRouteController(o: RouteControllerOptions) {
         if (out.status === 'done') {
           compute.value = { kind: 'done', job, stage, result: out.result, key: step.key }
           const f = out.result.feasibility
-          if (f && !f.feasible) o.map?.highlightLeg(legCoords(route, f.leg, { stations: o.stations, pad: o.pad() }), `${f.from} → ${f.to}`, f.leg)
+          if (f && !f.feasible)
+            o.map?.highlightLeg(legCoords(route, f.leg, { stations: o.stations, pad: o.pad() }), fill(MAP_TEXT.fails, { limit: LIMIT_SHORT[f.limit as RouteLimit] ?? f.limit }), f.leg, { name: f.from, label: MAP_TEXT.end, leg: f.leg })
         } else if (out.status === 'failed') compute.value = { kind: 'failed', job, stage, failure: out.failure, key: step.key }
         else compute.value = { kind: 'cancelled', key: step.key }
       }),
@@ -210,6 +221,12 @@ export function createRouteController(o: RouteControllerOptions) {
     move: (from: number, to: number) => edit(moveStop(store.route.peek(), from, to), 'resort'),
     /** Any other route edit (WP6 free points: add, move, rename, delete): one undo step, result cleared; rows stay. */
     edit: (next: PlanRoute) => edit(next),
+    /** setRouteDraft's view of this panel (store.ts): the same checks, one undo step, rows in route order. */
+    draftTarget: (): RouteDraftTarget => ({
+      route: () => store.route.peek(),
+      check: (r) => checkRoute(r, { stations: o.stations, pad: o.pad(), probe: o.probe }),
+      apply: (r) => edit(r, 'resort'),
+    }),
     /** W-7: the row layout of the stop list (null = route order). */
     layout: layout as ReadSignal<readonly string[] | null>,
     /** Drag gesture: start (no store change), drop (one undo step), cancel. */

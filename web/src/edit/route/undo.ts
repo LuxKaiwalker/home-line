@@ -60,6 +60,8 @@ export function createSharedUndo(o: SharedUndoOptions): SharedUndo {
   let lastKey = o.planKey()
   let dispatching = false
   let queued = false
+  /** the key just pressed belongs to a text field: the shell's announcement of it is not ours */
+  let fieldKey = false
 
   const running = () => ctl.compute.peek().kind === 'running'
 
@@ -125,7 +127,12 @@ export function createSharedUndo(o: SharedUndoOptions): SharedUndo {
       const k = e as KeyboardEvent
       if (k.defaultPrevented || k.isComposing) return
       const a = shortcutFor(k)
-      if (!isMod(a) || isTypingTarget(k.target)) return
+      if (!isMod(a)) return
+      if (isTypingTarget(k.target)) {
+        fieldKey = true
+        queueMicrotask(() => (fieldKey = false))
+        return
+      }
       const side = next(a.action)
       if (side === null) return // nothing here: the shell announces it as usual
       e.preventDefault()
@@ -134,7 +141,8 @@ export function createSharedUndo(o: SharedUndoOptions): SharedUndo {
     }
     // other sources of the action (the search palette runs shortcuts through the same event)
     const onShortcut = (e: Event) => {
-      if (dispatching) return
+      if (dispatching || fieldKey) return
+      if (typeof document !== 'undefined' && isTypingTarget(document.activeElement)) return
       const a = (e as CustomEvent<ShortcutAction>).detail
       if (!isMod(a) || next(a.action) !== 'route') return
       routeStep(a.action)
