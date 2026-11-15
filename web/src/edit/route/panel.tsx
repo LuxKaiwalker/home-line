@@ -181,7 +181,8 @@ function ResultView({ c, slot }: { c: Extract<ComputeState, { kind: 'done' }>; s
   return (
     <div class="hl-route__result" data-trust="live" data-hash={r.hash}>
       <p class="hl-route__label">
-        <Badge kind="computed" /> {T.computedLabel} ·{' '}
+        {/* WP13 (W-6): the Computed live badge carries "Computed live" (reads "Computed live · your route") */}
+        <Badge kind="computed" /> · {T.yourRoute} ·{' '}
         <a class="hl-route__prov" href={r.provenanceHref}>
           {T.provenance} {r.hash}
         </a>

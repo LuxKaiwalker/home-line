@@ -35,6 +35,8 @@ export const ROUTE_TEXT = {
   stageWaiting: 'waiting',
   stageShown: 'on the map',
   computedLabel: 'Computed live · your route',
+  /** WP13: after the Computed live badge (badge text + this = computedLabel) */
+  yourRoute: 'your route',
   provenance: 'Provenance',
   feasible: 'Every leg keeps its margins.',
   infeasibleTitle: 'This order does not work',

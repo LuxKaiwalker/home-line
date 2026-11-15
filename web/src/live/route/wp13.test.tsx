@@ -130,7 +130,7 @@ function padState(plan: PadToolState['plan']): PadToolState {
 describe('pad card and legacy plan view', () => {
   it('the card carries the Estimate badge (the shared Badge component)', () => {
     const html = toHtml(PadToolPanel({ state: padState({ kind: 'idle' }), actions: ACTIONS, engineHref: '#', route: { status: 'ready', compute() {} } }))
-    expect(html).toMatch(/<span class="hl-route-badge hl-route-badge--estimate live-estimate" data-badge="estimate"[^>]*>Estimate<\/span>/)
+    expect(html).toMatch(/<span class="hl-route-badge hl-route-badge--estimate" data-badge="estimate"[^>]*>Estimate<\/span>/)
     expect(html).not.toContain('data-badge="computed"')
   })
 

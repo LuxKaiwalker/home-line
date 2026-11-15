@@ -85,7 +85,7 @@ function PreviewCard({ screen, route, heavyOff, blocked, ownCompute, actions, no
   return (
     <section class="live-card live-preview" data-trust="estimate">
       <h3>
-        Instant preview <Badge kind="estimate" class="live-estimate" />
+        Instant preview <Badge kind="estimate" />
       </h3>
       <p class="muted">{t('edit.previewNote')}</p>
       <p>

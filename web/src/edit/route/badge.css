@@ -14,3 +14,4 @@
 }
 .hl-route-badge--estimate { border-style: dashed; border-color: var(--color-text-muted); color: var(--color-text-muted); }
 .hl-route__label .hl-route-badge { margin-left: 0; }
+.hl-route-badge .hl-chip__mark { width: 0.75em; height: 0.75em; margin-right: 0.25em; vertical-align: -0.05em; }
