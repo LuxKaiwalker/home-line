@@ -27,8 +27,13 @@ const TICK_HALF_M = 15
 /** Station ring radius and pulse growth, px. */
 const RING_R = 7
 const PULSE_GROW = 12
+/** Crew marker radius and halo radius, px (assumed: true, L10; one step larger than a station ring). */
+const CREW_R = 8
+const CREW_HALO_R = 14
 
-export const ROUTE_LAYERS = ['route-coming', 'route-done', 'route-ticks']
+/** L10 (D111): the crew marker (planned position at the mission clock), drawn with the route group. */
+export const CREW_LAYERS = ['crew-halo', 'crew-dot']
+export const ROUTE_LAYERS = ['route-coming', 'route-done', 'route-ticks', ...CREW_LAYERS]
 export const MARKER_LAYERS = ['station-pulse', 'station-halo', 'station-rings']
 const THREAD_LAYER = 'thread-line'
 
@@ -58,6 +63,8 @@ export class MapFurniture {
   private thread: ThreadPath | null = null
   private pulseWas = false
   private paused = false
+  private crewKey = ''
+  private pausedRenderAt = -Infinity
   private readonly stops: (() => void)[] = []
 
   constructor(map: MlMap) {
@@ -83,7 +90,10 @@ export class MapFurniture {
         const t = mission.clock.t.value
         void mission.clock.playing.value
         this.compass.setMinute(t)
+        // L10: the crew marker moves on every clock change (frame-exact in capture, also in a live story)
+        this.renderCrew(t)
         this.schedule()
+        if (this.paused) this.clockWhilePaused()
       }),
       effect(() => {
         void ui.reducedMotion.value
@@ -102,6 +112,7 @@ export class MapFurniture {
     m.addSource('route-m5', { type: 'geojson', data: EMPTY })
     m.addSource('stations-m5', { type: 'geojson', data: EMPTY })
     m.addSource('thread', { type: 'geojson', data: EMPTY })
+    m.addSource('crew', { type: 'geojson', data: EMPTY })
     // route: coming legs 50 % under done legs (solid); turn-back ticks across the route
     m.addLayer({ id: 'route-coming', type: 'line', source: 'route-m5', filter: ['==', ['get', 'part'], 'coming'], layout: { 'line-cap': 'round', 'line-join': 'round' }, paint: { 'line-color': c.safe, 'line-width': 2.5, 'line-opacity': 0.5 } })
     m.addLayer({ id: 'route-done', type: 'line', source: 'route-m5', filter: ['==', ['get', 'part'], 'done'], layout: { 'line-cap': 'round', 'line-join': 'round' }, paint: { 'line-color': c.safe, 'line-width': 2.5 } })
@@ -110,6 +121,9 @@ export class MapFurniture {
     m.addLayer({ id: 'station-pulse', type: 'circle', source: 'stations-m5', filter: ['==', ['get', 'next'], true], paint: { 'circle-radius': RING_R, 'circle-opacity': 0, 'circle-stroke-color': c.science, 'circle-stroke-width': 2, 'circle-stroke-opacity': 0 } })
     m.addLayer({ id: 'station-halo', type: 'circle', source: 'stations-m5', filter: ['==', ['get', 'scored'], true], paint: { 'circle-radius': RING_R + 5, 'circle-opacity': 0, 'circle-stroke-color': ['get', 'stroke'], 'circle-stroke-width': 1 } })
     m.addLayer({ id: 'station-rings', type: 'circle', source: 'stations-m5', paint: { 'circle-radius': RING_R, 'circle-color': ['get', 'fill'], 'circle-stroke-color': ['get', 'stroke'], 'circle-stroke-width': ['get', 'ring'] } })
+    // L10: the crew marker, above the route and the stations, under the thread home
+    m.addLayer({ id: 'crew-halo', type: 'circle', source: 'crew', paint: { 'circle-radius': CREW_HALO_R, 'circle-color': c.text, 'circle-opacity': TOKENS.overlayOpacity.min, 'circle-pitch-alignment': 'viewport' } })
+    m.addLayer({ id: 'crew-dot', type: 'circle', source: 'crew', paint: { 'circle-radius': CREW_R, 'circle-color': c.text, 'circle-stroke-color': c.bg, 'circle-stroke-width': 2, 'circle-pitch-alignment': 'viewport' } })
     // the thread home on top of everything
     m.addLayer({ id: THREAD_LAYER, type: 'line', source: 'thread', layout: { 'line-cap': 'butt', 'line-join': 'round' }, paint: { 'line-color': c.text, 'line-width': TOKENS.line.threadPx, 'line-dasharray': dashPattern(0) } })
   }
@@ -150,6 +164,7 @@ export class MapFurniture {
   setRouteVisible(on: boolean): void {
     const was = this.routeShown
     this.routeShown = on
+    this.markCrew()
     if (on && !was) this.drawOn()
   }
 
@@ -180,6 +195,33 @@ export class MapFurniture {
     this.ticks = plan ? turnBackTicks(plan, TICK_HALF_M) : []
     this.renderRoute()
     this.renderStations()
+    this.renderCrew(mission.clock.t.peek())
+  }
+
+  /** L10: while a live story pauses the thread, the legs and the next station follow the clock at the thread rate. */
+  private clockWhilePaused(): void {
+    const now = performance.now()
+    if (now - this.pausedRenderAt < THREAD_INTERVAL_MS) return
+    this.pausedRenderAt = now
+    this.renderRoute()
+    this.renderStations()
+  }
+
+  /** L10: the crew's planned position at EVA minute t (none before the clock has started, as the thread). */
+  private renderCrew(t: number): void {
+    const src = this.map.getSource('crew') as GeoJSONSource | undefined
+    if (!src) return
+    const st = this.plan && (mission.clock.playing.peek() || t > 0) ? this.plan.stateAt(t) : null
+    const key = st ? `${st.lon},${st.lat}` : ''
+    if (key === this.crewKey) return
+    this.crewKey = key
+    src.setData(st ? { type: 'Feature', geometry: { type: 'Point', coordinates: [st.lon, st.lat] }, properties: { phase: st.phase } } : EMPTY)
+    this.markCrew()
+  }
+
+  /** html hook for tests and dry runs: map container data-crew = shown (drawn with the route) | hidden | none */
+  private markCrew(): void {
+    this.map.getContainer().setAttribute('data-crew', !this.crewKey ? 'none' : this.routeShown ? 'shown' : 'hidden')
   }
 
   private drawOn(): void {
@@ -212,6 +254,7 @@ export class MapFurniture {
 
   // ---- cursor and clock: throttled to thread.update_hz ------------------------------------------
   private readonly onMove = (e: MapMouseEvent): void => {
+    if (this.paused) return // a story is playing: hover changes nothing (D111)
     this.cursor = [e.lngLat.lng, e.lngLat.lat]
     this.schedule()
   }
@@ -223,6 +266,8 @@ export class MapFurniture {
   /**
    * M10c pause hook: a live story (intro, kiosk) pauses the dash flow / pulse loop and the thread
    * updates (their layers are hidden or still while the camera flies); resume picks them up again.
+   * L10 (D111): the crew marker and the done / coming legs and next station still follow the clock
+   * while paused (clockWhilePaused), so the kiosk flythrough draws the route as it plays.
    */
   setPaused(on: boolean): void {
     if (this.paused === on) return
@@ -230,6 +275,7 @@ export class MapFurniture {
     if (on) {
       clearTimeout(this.timer)
       this.timer = 0
+      this.cursor = null
     } else this.schedule()
     this.loop()
   }
