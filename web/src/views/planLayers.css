@@ -11,12 +11,15 @@
 /* MapLibre's control margins belong to its corners, not to this column */
 .plan-tools .maplibregl-ctrl { margin: 0; float: none; clear: none; }
 .plan-tools .maplibregl-ctrl-group:not(:empty) { box-shadow: none; }
-/* the layers popover sits in the column: its panel opens to the left of the column */
-.plan-tools > .plan-pop--layers.hl-lay-pop { position: relative; top: auto; right: auto; }
+/* the layers popover sits in the column: its panel opens to the left of the whole column (2D/3D is wider
+   than the icons), sized to the map (the edge slot is the size container) */
+/* container-type makes the slot a stacking context: lift the whole slot above the card / drawer slots */
+.plan-layout > .plan-layout__edge { container-type: size; z-index: 28; }
+.plan-tools > .plan-pop--layers.hl-lay-pop { position: static; }
 .plan-tools > .plan-pop--layers .hl-lay-pop__panel {
   position: absolute; top: 0; right: calc(100% + var(--space-2));
-  width: min(calc(var(--layout-sidebar) + var(--space-5)), 80vw);
-  max-height: min(70vh, calc(var(--layout-sidebar) + var(--layout-sidebar)));
+  width: min(calc(var(--layout-sidebar) + var(--space-6)), calc(100cqw - var(--space-7) - var(--space-7)));
+  max-height: calc(100cqh - var(--space-4));
 }
 /* the 3D exaggeration slider lives in the layers popover; in the column only the 2D/3D switch shows */
 .plan-tools .hl-terrain-ctrl .hl-terrain-exag { display: none; }
@@ -37,10 +40,7 @@
 .plan-layers__group { display: flex; flex-direction: column; gap: var(--space-1); }
 .plan-layers__group + .plan-layers__group,
 .plan-pop--layers .hl-ovl { border-top: 1px solid var(--color-card-border); padding-top: var(--space-2); }
-.plan-layers__title, .plan-pop--layers .hl-ovl__group-title {
-  margin: 0; font-size: var(--font-size-small); line-height: var(--line-height-small);
-  font-weight: var(--font-weight-label); color: var(--color-text-muted);
-}
+.plan-layers__title { margin: 0; } /* the look of the U7 group titles (.hl-ovl__group-title) */
 .plan-layers__hint { margin: 0; color: var(--color-text-muted); }
 /* the hint stands in for the slider while 2D is on (the slider is hidden then) */
 .plan-layers__exag:has(.hl-terrain-exag:not([hidden])) + .plan-layers__hint { display: none; }
@@ -53,4 +53,13 @@
 
 /* ---------- legend corner chip: bottom left, above MapLibre's scale bar */
 .plan-pop--legend.hl-lay-pop--bottom-left { bottom: calc(var(--space-2) + var(--space-6)); }
-.plan-pop--legend .hl-lay-pop__panel { width: min(calc(var(--layout-sidebar) + var(--space-5)), 80vw); }
+.plan-pop--legend .hl-lay-pop__panel {
+  width: min(calc(var(--layout-sidebar) + var(--space-6)), calc(100cqw - var(--space-4)));
+  max-height: calc(100cqh - var(--space-7) - var(--space-7) - var(--space-2));
+}
+/* one legend row = swatch + running text (the side panel's flex row splits the text into columns here) */
+.plan-pop--legend .legend li { display: block; }
+.plan-pop--legend .legend li .sw { margin-right: var(--space-1); vertical-align: baseline; }
+
+/* the Flat vs real toggle lives in the layers popover (borrowed while it is open); never at the map corner */
+.console--layout .maplibregl-ctrl-top-right .collapse-toggle { display: none; }

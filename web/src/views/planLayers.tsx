@@ -16,7 +16,7 @@ import { LayerPanel } from '../map/overlays/LayerPanel'
 import { t } from '../ui/copy'
 import { Popover, useLayoutInsets } from '../ui/layout'
 import { hostIn } from '../ui/shell/store'
-import { registerPlanMount, SectionHost, type Sections } from './planSlots'
+import { registerPlanMount, SectionHost, type PlanMountCtx, type Sections } from './planSlots'
 import './planLayers.css'
 
 /** Layout store ids (L5 selector contract: DOM id hl-lay-<id>, opener aria-controls="hl-lay-<id>"). */
@@ -79,13 +79,13 @@ function LayersBody({ sections, mapEl }: { sections: Sections; mapEl: HTMLElemen
   return (
     <>
       <section class="plan-layers__group plan-layers__view" aria-label={t('layers.manager.view')}>
-        <h3 class="plan-layers__title">{t('layers.manager.view')}</h3>
+        <h3 class="plan-layers__title hl-ovl__group-title">{t('layers.manager.view')}</h3>
         <Borrow root={mapEl} sel={EDGE_CONTROLS.exaggeration} class="plan-layers__exag" />
         <p class="plan-layers__hint">{t('layers.manager.exaggerationIn3d')}</p>
         <Borrow root={mapEl} sel={EDGE_CONTROLS.collapse} class="plan-layers__collapse" />
       </section>
       <section class="plan-layers__group plan-layers__plan" aria-label={t('layers.groups.planning')}>
-        <h3 class="plan-layers__title">{t('layers.groups.planning')}</h3>
+        <h3 class="plan-layers__title hl-ovl__group-title">{t('layers.groups.planning')}</h3>
         <SectionHost name="layers" sections={sections} />
       </section>
       <LayerPanel />
@@ -115,16 +115,17 @@ export function PlanEdge({ sections, mapEl }: { sections: Sections; mapEl: HTMLE
   )
 }
 
-registerPlanMount('layers', (ctx) => {
+/** The L2c Plan mount (registered below): claims the console's layers + legend sections, hosts the U7 rail section. */
+export function mountPlanEdge(ctx: PlanMountCtx): () => void {
   ctx.claim(['layers', 'legend'])
   ctx.reveal('layers', [closedOpener(LAYERS_ID)])
   ctx.reveal('legend', [closedOpener(LEGEND_ID)])
-  ctx.mapEl.classList.add('plan-edge-host')
   const unhost = hostIn(LAYERS_ID) // the U7 rail section is not drawn in Plan: it is in the popover
   render(<PlanEdge sections={ctx.sections} mapEl={ctx.mapEl} />, ctx.el.edge)
   return () => {
     render(null, ctx.el.edge)
     unhost()
-    ctx.mapEl.classList.remove('plan-edge-host')
   }
-})
+}
+
+registerPlanMount('layers', mountPlanEdge)
