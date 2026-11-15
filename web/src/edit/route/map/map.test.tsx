@@ -393,6 +393,8 @@ describe('static first (VITE_LIVE off): the static build does not contain the ro
       }
     }
     visit(SRC)
-    expect(importers.sort()).toEqual(['edit/route/panel.tsx', 'live/route/mount.tsx'])
+    // I1a/I1b (D128): the browser compute core (edit/route/browser, reached only through the panel's
+    // instant estimate) reuses the grid and the router
+    expect(importers.filter((p) => !p.startsWith(`edit${sep}route${sep}browser${sep}`)).sort()).toEqual(['edit/route/panel.tsx', 'live/route/mount.tsx'].map((p) => p.split('/').join(sep)))
   })
 })
