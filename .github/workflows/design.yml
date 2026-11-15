@@ -1,6 +1,9 @@
 # Design checks (DESIGN §9 tests, §5.4 budgets; design kit rules 1, 2, 11, 12 and R7). Package D5.
 # Runs on PRs to main and design and on pushes to design. ci.yml stays the general gate (tsc, vitest,
 # vite build); these four jobs are independent of each other and of ci.yml.
+# CI diet (D134): visual-regression and a11y-perf (3D / click specs) run only on pushes to design and
+# on PRs into main; the other jobs' relevance gates skip their steps on PRs into design when nothing
+# they test changed. PRs into main always run the full suite.
 #   token-lint        no colour / font-size / radius / duration literal outside the tokens (A1)
 #   value-snapshot    every rendered number equals tests/fixtures/values_baseline.json (D4, rule 1)
 #   visual-regression 2D views + /styleguide at 1440x900 and 1024x768 (web/tests/visual, R7: no 3D)
@@ -36,7 +39,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 2 # the PR merge commit and its parents, so HEAD^1 is the base tip
-      - name: Relevance gate (D129; on PRs the steps below skip when nothing this job tests changed)
+      - name: Relevance gate (D129, D134; on PRs into design the steps below skip when nothing this job tests changed)
         id: gate
         working-directory: .
         env:
@@ -44,9 +47,12 @@ jobs:
           IGNORE: '^$'
         run: |
           # PR: diff the merge commit against its first parent (the base tip), i.e. what the PR changes
-          # on top of $GITHUB_BASE_REF. Push, no diff, or an empty diff: run (when in doubt, run).
+          # on top of $GITHUB_BASE_REF. Push, PR into main (promotion, D134), no diff, or an empty diff:
+          # run (when in doubt, run).
           run=true; why="event $GITHUB_EVENT_NAME"
-          if [ "$GITHUB_EVENT_NAME" = pull_request ]; then
+          if [ "$GITHUB_EVENT_NAME" = pull_request ] && [ "$GITHUB_BASE_REF" = main ]; then
+            why="promotion PR into main: full suite (D134)"
+          elif [ "$GITHUB_EVENT_NAME" = pull_request ]; then
             if ! files=$(git diff --name-only HEAD^1 HEAD); then why="diff unavailable"
             elif [ -z "$files" ]; then why="empty diff"
             else
@@ -73,17 +79,20 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 2 # the PR merge commit and its parents, so HEAD^1 is the base tip
-      - name: Relevance gate (D129; on PRs the steps below skip when nothing this job tests changed)
+      - name: Relevance gate (D129, D134; on PRs into design the steps below skip when nothing this job tests changed)
         id: gate
         working-directory: .
         env:
-          RELEVANT: '^(web/|contracts/|config/|tools/|tests/fixtures/|Makefile$|\.github/workflows/)'
+          RELEVANT: '^(web/|config/|tests/fixtures/|tools/values_snapshot\.ts$|\.github/workflows/)' # D134; web/ covers web/public/data/
           IGNORE: '^$'
         run: |
           # PR: diff the merge commit against its first parent (the base tip), i.e. what the PR changes
-          # on top of $GITHUB_BASE_REF. Push, no diff, or an empty diff: run (when in doubt, run).
+          # on top of $GITHUB_BASE_REF. Push, PR into main (promotion, D134), no diff, or an empty diff:
+          # run (when in doubt, run).
           run=true; why="event $GITHUB_EVENT_NAME"
-          if [ "$GITHUB_EVENT_NAME" = pull_request ]; then
+          if [ "$GITHUB_EVENT_NAME" = pull_request ] && [ "$GITHUB_BASE_REF" = main ]; then
+            why="promotion PR into main: full suite (D134)"
+          elif [ "$GITHUB_EVENT_NAME" = pull_request ]; then
             if ! files=$(git diff --name-only HEAD^1 HEAD); then why="diff unavailable"
             elif [ -z "$files" ]; then why="empty diff"
             else
@@ -131,13 +140,17 @@ jobs:
           if-no-files-found: ignore
 
   visual-regression:
+    # D134 CI diet: the 3D / click Playwright specs run only on pushes to design and on PRs into main
+    # (promotion: full suite). Skipped on PRs into design; a job skipped by its `if` still satisfies
+    # the required check.
+    if: github.event_name == 'push' || github.base_ref == 'main'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 2 # the PR merge commit and its parents, so HEAD^1 is the base tip
-      - name: Relevance gate (D129; on PRs the steps below skip when nothing this job tests changed)
+      - name: Relevance gate (D129, D134; on PRs into design the steps below skip when nothing this job tests changed)
         id: gate
         working-directory: .
         env:
@@ -145,9 +158,12 @@ jobs:
           IGNORE: '^$'
         run: |
           # PR: diff the merge commit against its first parent (the base tip), i.e. what the PR changes
-          # on top of $GITHUB_BASE_REF. Push, no diff, or an empty diff: run (when in doubt, run).
+          # on top of $GITHUB_BASE_REF. Push, PR into main (promotion, D134), no diff, or an empty diff:
+          # run (when in doubt, run).
           run=true; why="event $GITHUB_EVENT_NAME"
-          if [ "$GITHUB_EVENT_NAME" = pull_request ]; then
+          if [ "$GITHUB_EVENT_NAME" = pull_request ] && [ "$GITHUB_BASE_REF" = main ]; then
+            why="promotion PR into main: full suite (D134)"
+          elif [ "$GITHUB_EVENT_NAME" = pull_request ]; then
             if ! files=$(git diff --name-only HEAD^1 HEAD); then why="diff unavailable"
             elif [ -z "$files" ]; then why="empty diff"
             else
@@ -213,7 +229,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 2 # the PR merge commit and its parents, so HEAD^1 is the base tip
-      - name: Relevance gate (D129; on PRs the steps below skip when nothing this job tests changed)
+      - name: Relevance gate (D129, D134; on PRs into design the steps below skip when nothing this job tests changed)
         id: gate
         working-directory: .
         env:
@@ -221,9 +237,12 @@ jobs:
           IGNORE: '^$'
         run: |
           # PR: diff the merge commit against its first parent (the base tip), i.e. what the PR changes
-          # on top of $GITHUB_BASE_REF. Push, no diff, or an empty diff: run (when in doubt, run).
+          # on top of $GITHUB_BASE_REF. Push, PR into main (promotion, D134), no diff, or an empty diff:
+          # run (when in doubt, run).
           run=true; why="event $GITHUB_EVENT_NAME"
-          if [ "$GITHUB_EVENT_NAME" = pull_request ]; then
+          if [ "$GITHUB_EVENT_NAME" = pull_request ] && [ "$GITHUB_BASE_REF" = main ]; then
+            why="promotion PR into main: full suite (D134)"
+          elif [ "$GITHUB_EVENT_NAME" = pull_request ]; then
             if ! files=$(git diff --name-only HEAD^1 HEAD); then why="diff unavailable"
             elif [ -z "$files" ]; then why="empty diff"
             else
@@ -256,13 +275,17 @@ jobs:
   #            /styleguide, failing only on violations not in web/tests/a11y/baseline.json; lazy-loading and
   #            font budget on the production build (web/tests/perf). Frame rate stays with the RR lane.
   a11y-perf:
+    # D134 CI diet: the 3D / click Playwright specs run only on pushes to design and on PRs into main
+    # (promotion: full suite). Skipped on PRs into design; a job skipped by its `if` still satisfies
+    # the required check.
+    if: github.event_name == 'push' || github.base_ref == 'main'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 2 # the PR merge commit and its parents, so HEAD^1 is the base tip
-      - name: Relevance gate (D129; on PRs the steps below skip when nothing this job tests changed)
+      - name: Relevance gate (D129, D134; on PRs into design the steps below skip when nothing this job tests changed)
         id: gate
         working-directory: .
         env:
@@ -270,9 +293,12 @@ jobs:
           IGNORE: '^$'
         run: |
           # PR: diff the merge commit against its first parent (the base tip), i.e. what the PR changes
-          # on top of $GITHUB_BASE_REF. Push, no diff, or an empty diff: run (when in doubt, run).
+          # on top of $GITHUB_BASE_REF. Push, PR into main (promotion, D134), no diff, or an empty diff:
+          # run (when in doubt, run).
           run=true; why="event $GITHUB_EVENT_NAME"
-          if [ "$GITHUB_EVENT_NAME" = pull_request ]; then
+          if [ "$GITHUB_EVENT_NAME" = pull_request ] && [ "$GITHUB_BASE_REF" = main ]; then
+            why="promotion PR into main: full suite (D134)"
+          elif [ "$GITHUB_EVENT_NAME" = pull_request ]; then
             if ! files=$(git diff --name-only HEAD^1 HEAD); then why="diff unavailable"
             elif [ -z "$files" ]; then why="empty diff"
             else

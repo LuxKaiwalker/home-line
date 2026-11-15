@@ -20,16 +20,19 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 2 # the PR merge commit and its parents, so HEAD^1 is the base tip
-      - name: Relevance gate (D129; on PRs the steps below skip when nothing this job tests changed)
+      - name: Relevance gate (D129, D134; on PRs into design the steps below skip when nothing this job tests changed)
         id: gate
         env:
-          RELEVANT: '^(pipeline/|server/|contracts/|config/|tests/|tools/|web/public/data|pyproject\.toml$|uv\.lock$|\.python-version$|Makefile$|\.github/workflows/)'
+          RELEVANT: '^(pipeline/|server/|contracts/|config/|\.github/workflows/)' # D134 CI diet
           IGNORE: '^$'
         run: |
           # PR: diff the merge commit against its first parent (the base tip), i.e. what the PR changes
-          # on top of $GITHUB_BASE_REF. Push, no diff, or an empty diff: run (when in doubt, run).
+          # on top of $GITHUB_BASE_REF. Push, PR into main (promotion, D134), no diff, or an empty diff:
+          # run (when in doubt, run).
           run=true; why="event $GITHUB_EVENT_NAME"
-          if [ "$GITHUB_EVENT_NAME" = pull_request ]; then
+          if [ "$GITHUB_EVENT_NAME" = pull_request ] && [ "$GITHUB_BASE_REF" = main ]; then
+            why="promotion PR into main: full suite (D134)"
+          elif [ "$GITHUB_EVENT_NAME" = pull_request ]; then
             if ! files=$(git diff --name-only HEAD^1 HEAD); then why="diff unavailable"
             elif [ -z "$files" ]; then why="empty diff"
             else
@@ -70,16 +73,19 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 2 # the PR merge commit and its parents, so HEAD^1 is the base tip
-      - name: Relevance gate (D129; on PRs the steps below skip when nothing this job tests changed)
+      - name: Relevance gate (D129, D134; on PRs into design the steps below skip when nothing this job tests changed)
         id: gate
         env:
           RELEVANT: '^(web/|contracts/|config/|tools/|tests/fixtures/|Makefile$|\.github/workflows/)'
           IGNORE: '^$'
         run: |
           # PR: diff the merge commit against its first parent (the base tip), i.e. what the PR changes
-          # on top of $GITHUB_BASE_REF. Push, no diff, or an empty diff: run (when in doubt, run).
+          # on top of $GITHUB_BASE_REF. Push, PR into main (promotion, D134), no diff, or an empty diff:
+          # run (when in doubt, run).
           run=true; why="event $GITHUB_EVENT_NAME"
-          if [ "$GITHUB_EVENT_NAME" = pull_request ]; then
+          if [ "$GITHUB_EVENT_NAME" = pull_request ] && [ "$GITHUB_BASE_REF" = main ]; then
+            why="promotion PR into main: full suite (D134)"
+          elif [ "$GITHUB_EVENT_NAME" = pull_request ]; then
             if ! files=$(git diff --name-only HEAD^1 HEAD); then why="diff unavailable"
             elif [ -z "$files" ]; then why="empty diff"
             else
@@ -115,16 +121,19 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 2 # the PR merge commit and its parents, so HEAD^1 is the base tip
-      - name: Relevance gate (D129; on PRs the steps below skip when nothing this job tests changed)
+      - name: Relevance gate (D129, D134; on PRs into design the steps below skip when nothing this job tests changed)
         id: gate
         env:
           RELEVANT: '.'
           IGNORE: '^docs/'
         run: |
           # PR: diff the merge commit against its first parent (the base tip), i.e. what the PR changes
-          # on top of $GITHUB_BASE_REF. Push, no diff, or an empty diff: run (when in doubt, run).
+          # on top of $GITHUB_BASE_REF. Push, PR into main (promotion, D134), no diff, or an empty diff:
+          # run (when in doubt, run).
           run=true; why="event $GITHUB_EVENT_NAME"
-          if [ "$GITHUB_EVENT_NAME" = pull_request ]; then
+          if [ "$GITHUB_EVENT_NAME" = pull_request ] && [ "$GITHUB_BASE_REF" = main ]; then
+            why="promotion PR into main: full suite (D134)"
+          elif [ "$GITHUB_EVENT_NAME" = pull_request ]; then
             if ! files=$(git diff --name-only HEAD^1 HEAD); then why="diff unavailable"
             elif [ -z "$files" ]; then why="empty diff"
             else
