@@ -6,6 +6,8 @@ import { cfg } from '../config'
 
 export const STATIONS_SOURCE = 'config/stations.yaml'
 export const OBJECTIVE_SOURCE = 'SPEC §1.4'
+/** Citation of one stations.yaml key, as config.ts cites every other config value ("config/<file>: <path>"). */
+export const stationsKey = (path: string) => `${STATIONS_SOURCE}: ${path}`
 
 interface RawStation {
   id: string
@@ -23,6 +25,8 @@ const INDEX_WORDS = cfg<Record<string, string>>(stationsRaw, 'extras.index_words
 export const SCORING = {
   weights,
   weightsAssumed: cfg<boolean>(stationsRaw, 'scoring_weights_assumed'),
+  /** D44: the extras' placement assumptions (manual priority 0 among them) are labelled assumed. */
+  extrasAssumed: cfg<boolean>(stationsRaw, 'extras.assumed'),
   ridgeRadiusM: cfg<number>(stationsRaw, 'ridge_density_radius_m'),
   minSpacingM: cfg<number>(stationsRaw, 'min_spacing_m'),
   crismIndices: cfg<{ sulfate: string; clay: string }>(stationsRaw, 'crism_indices'),
@@ -51,6 +55,10 @@ export interface Selection {
   /** the placement rule, verbatim from stations.yaml */
   rule: string | null
   manualPriority: number | null
+  /** the stations.yaml key the manual priority is read from */
+  manualPrioritySource: string | null
+  /** true where config/stations.yaml (D44) labels the manual priority assumed */
+  manualPriorityAssumed: boolean
   /** CRISM index used in the score: an index name or 'max' (larger of the normalised ones) */
   crismIndex: string | null
   objective: string | null
@@ -62,7 +70,15 @@ const stationIndex = cfg<Record<string, string>>(stationsRaw, 'scoring_assumptio
 export function selectionFor(id: string): Selection {
   const named = raw.find((s) => s.id === id)
   if (named) {
-    return { id, kind: 'named', rule: named.rule, manualPriority: named.manual_priority, crismIndex: stationIndex[id] ?? null, objective: OBJECTIVES[id] ?? null }
+    return {
+      id,
+      kind: 'named',
+      rule: named.rule,
+      manualPriority: named.manual_priority,
+      manualPrioritySource: stationsKey(`stations[${id}].manual_priority`),
+      manualPriorityAssumed: false,
+      crismIndex: stationIndex[id] ?? null, objective: OBJECTIVES[id] ?? null,
+    }
   }
   if (extraIds.includes(id)) {
     return {
@@ -70,11 +86,13 @@ export function selectionFor(id: string): Selection {
       kind: 'extra',
       rule: `one of the ${SCORING.extrasMax} highest F7 scores in the ${SCORING.extrasDomain}`,
       manualPriority: cfg<number>(stationsRaw, 'extras.manual_priority'),
+      manualPrioritySource: stationsKey('extras.manual_priority'),
+      manualPriorityAssumed: SCORING.extrasAssumed,
       crismIndex: cfg<string>(stationsRaw, 'extras.crism_index'),
       objective: null,
     }
   }
-  return { id, kind: 'unknown', rule: null, manualPriority: null, crismIndex: null, objective: null }
+  return { id, kind: 'unknown', rule: null, manualPriority: null, manualPrioritySource: null, manualPriorityAssumed: false, crismIndex: null, objective: null }
 }
 
 /** Plain words for a CRISM index ('D2300' -> 'clay'); 'max' -> 'clay or sulfate, whichever is stronger'. */

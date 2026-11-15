@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { indexWords, SCORING, selectionFor } from './stationsWhy'
+import { indexWords, SCORING, selectionFor, stationsKey } from './stationsWhy'
 
 describe('why each station was chosen (stations.yaml F7 / D26 / D44)', () => {
   it('F7 weights are 0.4 / 0.4 / 0.2, sum to 1 and are labelled assumed (D32)', () => {
@@ -8,6 +8,8 @@ describe('why each station was chosen (stations.yaml F7 / D26 / D44)', () => {
     expect(SCORING.weightsAssumed).toBe(true)
     expect(SCORING.minSpacingM).toBe(300)
     expect(SCORING.ridgeRadiusM).toBe(25)
+    expect(SCORING.extrasAssumed).toBe(true)
+    expect(stationsKey('ridge_density_radius_m')).toBe('config/stations.yaml: ridge_density_radius_m')
   })
 
   it('named stations: own rule, manual priority, CRISM index and the SPEC objective', () => {
@@ -15,6 +17,8 @@ describe('why each station was chosen (stations.yaml F7 / D26 / D44)', () => {
     expect(s1.kind).toBe('named')
     expect(s1.rule).toContain('clay index')
     expect(s1.manualPriority).toBe(0.5)
+    expect(s1.manualPrioritySource).toBe('config/stations.yaml: stations[S1].manual_priority')
+    expect(s1.manualPriorityAssumed).toBe(false)
     expect(s1.crismIndex).toBe('D2300')
     expect(s1.objective).toMatch(/groundwater cementation/)
     const s4 = selectionFor('S4')
@@ -28,6 +32,8 @@ describe('why each station was chosen (stations.yaml F7 / D26 / D44)', () => {
       const s = selectionFor(id)
       expect(s.kind).toBe('extra')
       expect(s.manualPriority).toBe(0)
+      expect(s.manualPrioritySource).toBe('config/stations.yaml: extras.manual_priority')
+      expect(s.manualPriorityAssumed).toBe(true) // D44: scored stations get no manual priority, assumed
       expect(s.crismIndex).toBe('max')
       expect(s.objective).toBeNull()
     }
