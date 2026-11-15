@@ -6827,6 +6827,54 @@
     "utc": "2026-11-14T20:22:03Z",
     "value": 75.8
   },
+  "highlights.blocked.count": {
+    "commit": "175562c4753e983a4db5346780758e397647decf",
+    "file": "highlights/blocked.geojson",
+    "script": "pipeline/export/highlights.py",
+    "units": "1",
+    "utc": "2026-11-15T04:43:49Z",
+    "value": 8996
+  },
+  "highlights.mineral.count": {
+    "commit": "175562c4753e983a4db5346780758e397647decf",
+    "file": "highlights/mineral.geojson",
+    "script": "pipeline/export/highlights.py",
+    "units": "1",
+    "utc": "2026-11-15T04:43:49Z",
+    "value": 1212
+  },
+  "highlights.mineral.threshold_norm": {
+    "commit": "175562c4753e983a4db5346780758e397647decf",
+    "file": "highlights/mineral.geojson",
+    "script": "pipeline/export/highlights.py",
+    "units": "1",
+    "utc": "2026-11-15T04:43:49Z",
+    "value": 1.0
+  },
+  "highlights.ridges.count": {
+    "commit": "175562c4753e983a4db5346780758e397647decf",
+    "file": "highlights/ridges.geojson",
+    "script": "pipeline/export/highlights.py",
+    "units": "1",
+    "utc": "2026-11-15T04:43:49Z",
+    "value": 318
+  },
+  "highlights.ridges.min_length_m": {
+    "commit": "175562c4753e983a4db5346780758e397647decf",
+    "file": "highlights/ridges.geojson",
+    "script": "pipeline/export/highlights.py",
+    "units": "m",
+    "utc": "2026-11-15T04:43:49Z",
+    "value": 15.0
+  },
+  "highlights.ridges.threshold_m": {
+    "commit": "175562c4753e983a4db5346780758e397647decf",
+    "file": "highlights/ridges.geojson",
+    "script": "pipeline/export/highlights.py",
+    "units": "m",
+    "utc": "2026-11-15T04:43:49Z",
+    "value": 0.75
+  },
   "in_partner_line.S1": {
     "commit": "9833420c6592e94b4442d036722558319fdc97aa",
     "file": "stations.json",
@@ -9386,6 +9434,65 @@
     "units": "sol",
     "utc": "2026-11-14T18:14:27Z",
     "value": 3898
+  },
+  "overlays.contours.index_m": {
+    "commit": "175562c4753e983a4db5346780758e397647decf",
+    "file": "overlays/contours.geojson",
+    "script": "pipeline/export/contours.py",
+    "units": "m",
+    "utc": "2026-11-15T04:43:37Z",
+    "value": 50
+  },
+  "overlays.contours.interval_m": {
+    "commit": "175562c4753e983a4db5346780758e397647decf",
+    "file": "overlays/contours.geojson",
+    "script": "pipeline/export/contours.py",
+    "units": "m",
+    "utc": "2026-11-15T04:43:37Z",
+    "value": 10
+  },
+  "overlays.mineral_clay.norm_range": {
+    "commit": "175562c4753e983a4db5346780758e397647decf",
+    "file": "overlays/index.json",
+    "script": "pipeline/export/overlays.py",
+    "units": "1",
+    "utc": "2026-11-15T04:43:46Z",
+    "value": [
+      -0.011396,
+      0.001843
+    ]
+  },
+  "overlays.mineral_sulfate.norm_range": {
+    "commit": "175562c4753e983a4db5346780758e397647decf",
+    "file": "overlays/index.json",
+    "script": "pipeline/export/overlays.py",
+    "units": "1",
+    "utc": "2026-11-15T04:43:46Z",
+    "value": [
+      0.001326,
+      0.015804
+    ]
+  },
+  "overlays.rough.min_deg": {
+    "commit": "175562c4753e983a4db5346780758e397647decf",
+    "file": "overlays/index.json",
+    "script": "pipeline/export/overlays.py",
+    "units": "deg",
+    "utc": "2026-11-15T04:43:46Z",
+    "value": 20.0
+  },
+  "overlays.slope_class.breaks_deg": {
+    "commit": "175562c4753e983a4db5346780758e397647decf",
+    "file": "overlays/index.json",
+    "script": "pipeline/export/overlays.py",
+    "units": "deg",
+    "utc": "2026-11-15T04:43:46Z",
+    "value": [
+      0,
+      10,
+      17,
+      20
+    ]
   },
   "pad.alternatives.f8_proposal.elev_m": {
     "commit": "9833420c6592e94b4442d036722558319fdc97aa",

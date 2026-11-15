@@ -75,6 +75,13 @@ overlays:
   contours_m: {minor: 10, index: 50}
   mineral_threshold: null           # S confirms (readiness item R9); until then highlight layers are labelled preliminary
   ridge_index_threshold_m: null     # S confirms (R9); 0.75 m was the WS1 ridge rule, check before reuse
+  # --- added by P3 2026-11-15 (WS16 overlays/highlights exporters, DESIGN §6.1, U7) ---
+  simplify_m: 1                     # DESIGN §6.1 "simplified to 1 m" (contours); P3 applies it to the highlight polygons too (assumed: true)
+  rough_footing_variant: nominal    # assumed: true (P3): rough footing = max 1 m slope in the 3 m cell (maxslope_3m, D22) > site.yaml slope.nogo_deg[this variant] (the old max-slope rule, cellstate_3m_variants.json maxslope_rule_blocked_pct)
+  preliminary:                      # R9: used ONLY while the null keys above are unset; NOT confirmed by S. Every file made with them says preliminary: true
+    ridge_index_threshold_m: 0.75   # preliminary. Source: site.yaml ridge.threshold_m (WS1 ridge rule, assumed): ridge where elevation - 15 m median > this
+    ridge_min_length_m: 15          # preliminary. Source: site.yaml ridge.median_window_m (the ridge index window): a connected ridge shorter than its own window is not resolved; drops 1-px noise blobs
+    mineral_threshold: 1.0          # preliminary. Normalised index (stations.yaml scoring_assumptions: linear p2 -> 0, p98 -> 1 over the valid 18 m cells), i.e. patches at or above each index's p98. The station-naming 0.5 (stations.yaml extras.name_min_norm) is NOT reused: for D2300 it falls below 0 (no 2.3 um absorption)
 edit:
   max_requests_per_s: 2
   snap_access_radius_m: 50          # D27
