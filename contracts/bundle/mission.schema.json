@@ -2,10 +2,10 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "homeline/contracts/bundle/mission.schema.json",
   "title": "mission.json (the simulator plan format, D103)",
-  "description": "D103 (2026-11-15): mission.json is THE plan format the simulator reads; for routes it supersedes the bundle's route.json (route_local.schema.json, kept for v1 readers), while the plan bundle and world pack still give terrain and fields. One mission, built by hand in the web Mission Planer (/mission) or by a live engine job: the user's waypoints with notes, tags and planned stop times, the routed legs between them, the way home, and the planned state over time (O2 used, T_home, O2_home, margin and its binding term). It is the planner's answer to 'what should happen when', so the simulator can compare the live walk with it (deviation in time, O2 and position) without recomputing anything. Self-contained: one file, sent as a download, a POST to a local listener, or a WebGL SendMessage. Same pad-local frame as every bundle file (README 'Coordinate frame'). origin says who computed the numbers: 'mission_planer' = browser estimates on the planner's 5 m routing grid (mission/data.ts), not WS2's validated 3 m engine results; 'computed_live' = a live engine job: legs, path, timeline and summary come from the engine's route (its 3 m routing grid), not the 5 m browser grid, and are still not part of the validated scorecard. origin_label says so on screen. Unknown values are null, never guessed.",
-  "x-contract-version": "1.1.0",
-  "x-status": "accepted (D103, 2026-11-15): bundle family v1.1.0, additive; the v1 bundle schemas stay 1.0.0",
-  "x-source": "origin/waypoint-routing (N0CEO, 36bc6cc) web/src/mission/{plan,router,budget,margin,export}.ts; D103 (computed_live origin, for WP9b); config/backend.yaml labels.live; contracts/bundle/README.md (frame, plan.schema.json pad/scenario blocks); SPEC F18 alarm rules; config/hud.yaml margin_amber_min",
+  "description": "D103 (2026-11-15): mission.json is THE plan format the simulator reads; for routes it supersedes the bundle's route.json (route_local.schema.json, kept for v1 readers), while the plan bundle and world pack still give terrain and fields. One mission, built by hand in the web Mission Planer (/mission) or by a live engine job: the user's waypoints with notes, tags and planned stop times, the routed legs between them, the way home, and the planned state over time (O2 used, T_home, O2_home, margin and its binding term). It is the planner's answer to 'what should happen when', so the simulator can compare the live walk with it (deviation in time, O2 and position) without recomputing anything. Self-contained: one file, sent as a download, a POST to a local listener, or a WebGL SendMessage. Same pad-local frame as every bundle file (README 'Coordinate frame'). origin says who computed the numbers: 'mission_planer' = browser estimates on the planner's 5 m routing grid (mission/data.ts), not WS2's validated 3 m engine results; 'computed_live' = a live engine job: legs, path, timeline and summary come from the engine's route (its 3 m routing grid), not the 5 m browser grid, and are still not part of the validated scorecard; 'precomputed' (D110) = the official plan as published in web/public/data (the engine's own route, F9), its numbers copied, not recomputed (tools/make_mission.py --official). origin_label says so on screen. Unknown values are null, never guessed.",
+  "x-contract-version": "1.1.1",
+  "x-status": "accepted (D103, 2026-11-15): bundle family v1.1.0, additive; v1.1.1 (D110, 2026-11-15, additive): origin also precomputed; schema_version stays 1.1.0; the v1 bundle schemas stay 1.0.0",
+  "x-source": "origin/waypoint-routing (N0CEO, 36bc6cc) web/src/mission/{plan,router,budget,margin,export}.ts; D103 (computed_live origin, for WP9b); D110 (precomputed origin, for WP9c); config/backend.yaml labels.live and labels.precomputed; contracts/bundle/README.md (frame, plan.schema.json pad/scenario blocks); SPEC F18 alarm rules; config/hud.yaml margin_amber_min",
   "type": "object",
   "$defs": {
     "num_or_null": {"type": ["number", "null"]},
@@ -35,12 +35,12 @@
       "description": "when the user exported it"
     },
     "origin": {
-      "enum": ["mission_planer", "computed_live"],
-      "description": "'mission_planer' = built in the browser on the 5 m routing grid; 'computed_live' = built from a live engine job (D40 origin, as plan.json / run_record): the numbers come from the engine's route on its 3 m routing grid, not from the 5 m browser grid. Neither is part of the validated scorecard"
+      "enum": ["mission_planer", "computed_live", "precomputed"],
+      "description": "'mission_planer' = built in the browser on the 5 m routing grid; 'computed_live' = built from a live engine job (D40 origin, as plan.json / run_record): the numbers come from the engine's route on its 3 m routing grid, not from the 5 m browser grid; neither is part of the validated scorecard. 'precomputed' (D110) = the official plan's published numbers (web/public/data, the engine's 3 m grid), written by tools/make_mission.py --official"
     },
     "origin_label": {
       "type": "string",
-      "description": "shown with the mission in the simulator, e.g. 'Mission Planer: browser estimate on the 5 m grid, not part of the validated scorecard' (mission_planer) or config/backend.yaml labels.live 'Computed live · not part of the validated scorecard' (computed_live)"
+      "description": "shown with the mission in the simulator, e.g. 'Mission Planer: browser estimate on the 5 m grid, not part of the validated scorecard' (mission_planer) or config/backend.yaml labels.live 'Computed live · not part of the validated scorecard' (computed_live) or labels.precomputed 'Precomputed · official plan' (precomputed)"
     },
     "planner": {
       "type": "object",
@@ -52,11 +52,11 @@
           "pattern": "^sha256:[0-9a-f]{64}$",
           "description": "same rule as plan.json engine.config_hash; null when the web build does not carry it"
         },
-        "routing_grid_res_m": {"type": "number", "exclusiveMinimum": 0, "description": "cell size of the routing grid the legs were found on: the browser grid (5 m) for mission_planer, the engine grid (3 m) for computed_live"},
-        "elevation_res_m": {"type": "number", "exclusiveMinimum": 0, "description": "resolution of the heights the legs were costed on (mission_planer: fp3d far grid, 8 m; computed_live: the engine's terrain)"},
+        "routing_grid_res_m": {"type": "number", "exclusiveMinimum": 0, "description": "cell size of the routing grid the legs were found on: the browser grid (5 m) for mission_planer, the engine grid (3 m) for computed_live and precomputed"},
+        "elevation_res_m": {"type": "number", "exclusiveMinimum": 0, "description": "resolution of the heights the legs were costed on (mission_planer: fp3d far grid, 8 m; computed_live and precomputed: the engine's terrain)"},
         "files": {
           "type": "object",
-          "description": "data files the numbers came from (mission_planer: mission/data.ts MissionData.files; computed_live: the job's result files)",
+          "description": "data files the numbers came from (mission_planer: mission/data.ts MissionData.files; computed_live: the job's result files; precomputed: the web/public/data files)",
           "additionalProperties": {"type": ["string", "null"]}
         }
       },

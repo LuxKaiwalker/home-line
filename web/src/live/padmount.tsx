@@ -10,6 +10,7 @@ import type { MapPort } from './mapPort'
 import { createPadTool, type PadTool, type PadToolOptions } from './padtool'
 import type { LiveState } from './health'
 import { PadToolPanel, type RouteLinkView } from './view'
+import { officialPart } from '../state/official'
 
 /** WP12 (L6 W-1): the Edit-route panel as the card sees it (index.ts bridges it to the route mount). */
 export interface RouteLink {
@@ -52,6 +53,9 @@ export function mountPadTool(panel: Element, port: MapPort, opts: MountPadToolOp
     )
   }
   const offState = tool.subscribe(draw)
+  // design's "Official plan" action (L7b, D111 T9): a clicked pad or a live result differs from it
+  const op = officialPart('live-pad', () => tool.clear())
+  const offOp = tool.subscribe((s) => op.set(s.pad !== null || s.plan.kind !== 'idle'))
   const offCrew = crew ? crew.subscribe(draw) : () => {}
   const offRoute = route ? route.subscribe(draw) : () => {}
   ready = true
@@ -68,6 +72,8 @@ export function mountPadTool(panel: Element, port: MapPort, opts: MountPadToolOp
       offClick()
       offLive()
       offState()
+      offOp()
+      op.dispose()
       offCrew()
       offRoute()
       tool.dispose()
