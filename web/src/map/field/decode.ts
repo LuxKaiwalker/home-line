@@ -4,6 +4,7 @@
 // Encoding (contracts/README.md "Field PNGs", "Cell states"): counts = R*256 + G, A = 0 no value;
 // value = counts * scale. Bounds are the outer pixel edges [w, s, e, n]; rows run north to south.
 import { STATE, VARIANTS, type CellState, type Variant } from './constants'
+import { collapseBandClass, collapseT, flatMinutes } from './collapseMath'
 import { marginAt, marginClass, type Binding, type FieldClass, type MarginInputs } from './margin'
 
 export type Bounds = [number, number, number, number]
@@ -170,8 +171,12 @@ export interface FieldSample {
   // ---- margin mode (M3, contracts/field_shader.md §5), at the current clock minute ----
   /** The variant used for t, margin and cls (the plan's variant). */
   variant: Variant
-  /** T(x), min: drawn T_home of `variant` (u_k collapse not applied yet: task 4). */
+  /** T(x), min: drawn T_home of `variant` blended with the flat time by the collapse k (M4, contract §3.1). */
   t: number | null
+  /** Flat walk time from the pad, min (D25, distance in grid metres / 0.98 m/s); null when the pad is not set. */
+  flat: number | null
+  /** Collapse k used for t (1 = the real field). */
+  k: number
   /** m(x), min, for the current mission state; null when an input is missing or margin mode has no inputs. */
   margin: number | null
   /** The term that sets the margin; null when margin is null. */
@@ -193,9 +198,15 @@ export class FieldData {
   /** Margin-mode inputs at the current clock (set by the field driver); null = not known. */
   private marginInputs: MarginInputs | null = null
   private marginVariant: Variant = 'nom'
+  /** Collapse (M4): pad in grid metres and k; null pad = no flat field (k ignored, T = T_home). */
+  private collapsePad: [number, number] | null = null
+  private collapseK = 1
+  /** fields/index.json res_m (u_cell); null = unknown (no collapse). */
+  readonly resM: number | null
 
-  constructor(suitKg: number, t: Record<Variant, DecodedGrid>, o2: DecodedGrid | null, state: StateGrid | null, sources: string[]) {
+  constructor(suitKg: number, t: Record<Variant, DecodedGrid>, o2: DecodedGrid | null, state: StateGrid | null, sources: string[], resM: number | null = null) {
     this.suitKg = suitKg
+    this.resM = resM
     this.t = t
     this.o2 = o2
     this.state = state
@@ -217,6 +228,31 @@ export class FieldData {
     this.marginVariant = variant
   }
 
+  /** Collapse inputs (M4): the pad in grid metres (u_pad) and k (u_k). */
+  setCollapse(pad: [number, number] | null, k: number): void {
+    this.collapsePad = pad
+    this.collapseK = pad ? k : 1
+  }
+
+  /** Flat walk time (min) from the pad, as the shader computes it; null without pad or res_m. */
+  flatAt(lon: number, lat: number): number | null {
+    const pad = this.collapsePad
+    if (!pad || this.resM === null) return null
+    const [x, y] = gridXY(this.t.nom, lon, lat)
+    return flatMinutes(Math.hypot(x * this.resM - pad[0], y * this.resM - pad[1]))
+  }
+
+  /** Bands-mode class drawn at (lon, lat) for a budget at the current collapse k (shader order). */
+  bandClassAt(lon: number, lat: number, budget: number): BandClass {
+    if (pixelOf(this.t.nom, lon, lat) === null) return 'none'
+    const st = this.state ? stateAt(this.state, lon, lat) : null
+    const unknown = st === 'unknown' || st === 'outside'
+    const drawn = { opt: bilinear(this.t.opt, lon, lat), nom: bilinear(this.t.nom, lon, lat), con: bilinear(this.t.con, lon, lat) }
+    const flat = this.flatAt(lon, lat)
+    if (flat === null || this.collapseK >= 1) return bandClass(drawn, unknown, budget)
+    return collapseBandClass(drawn, flat, unknown, budget, this.collapseK)
+  }
+
   /** CPU lookup from the same decoded arrays the GPU layer uses. */
   at(lon: number, lat: number): FieldSample {
     const inside = pixelOf(this.t.nom, lon, lat) !== null
@@ -227,7 +263,9 @@ export class FieldData {
     const noRoute = (v: Variant): boolean => inside && !unknown && tHome[v] === null
     const variant = this.marginVariant
     const o2Drawn = this.o2 ? bilinear(this.o2, lon, lat) : null
-    const tv = drawn[variant]
+    const flat = this.flatAt(lon, lat)
+    const k = flat === null ? 1 : this.collapseK
+    const tv = flat === null ? drawn[variant] : drawn[variant] === null ? null : collapseT(flat, drawn[variant], k)
     const m = this.marginInputs && tv !== null && o2Drawn !== null ? marginAt(this.marginInputs, tv, o2Drawn) : null
     // class drawn in margin mode, the shader's order: outside the grid nothing is drawn; unknown
     // terrain is hatched (never a colour); no T_home / O2_home value -> none (contract §3.1)
@@ -245,6 +283,8 @@ export class FieldData {
       o2Drawn,
       variant,
       t: tv,
+      flat,
+      k,
       margin: m ? m.margin : null,
       binding: m ? m.binding : null,
       cls,

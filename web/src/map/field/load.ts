@@ -43,5 +43,5 @@ async function load(suitKg: number): Promise<FieldData> {
     state = decodeState(rgba, width, height, cs.bounds)
     sources.push(cs.image)
   }
-  return new FieldData(suitKg, t, o2, state, sources)
+  return new FieldData(suitKg, t, o2, state, sources, typeof fi.res_m === 'number' ? fi.res_m : null)
 }

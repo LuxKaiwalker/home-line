@@ -16,6 +16,9 @@ import { hatchDataUrl } from './hatch'
 import { edgeLabelPoints } from './labels'
 import { binEdges, stepColorExpression } from './legend'
 import { MarsScaleControl } from './scale'
+import { effect, ui } from '../state'
+import { collapseFade, collapseHeadline, collapseQuery, padGridMetres, playCollapse, setCollapse } from './field/collapse'
+import { CollapseHeadlineOverlay, CollapseToggle } from './field/collapseUi'
 import { activeField, BINDING_LABEL, driveMargin, FIELD_TRUST, fieldModeQuery, fieldRequested, loadFieldData, loadFieldLayer, setActiveField, VARIANT_OF, webgl2Available, zeroEdgeLabels, type FieldData, type MarginState } from './field'
 
 /** The GPU field layer handle (field/layer.ts, loaded lazily). */
@@ -95,6 +98,15 @@ export class ConsoleMap {
   private marginLabelTimer = 0
   private stopMargin: (() => void) | null = null
   private stationsScenario: string | null = null
+  // WS16 task 4: the collapse (U3). Pad in field-grid metres (u_pad), headline overlay, toggle.
+  private collapsePad: [number, number] | null = null
+  private fieldScenario: string | null = null
+  private headline: CollapseHeadlineOverlay | null = null
+  private collapseToggle: CollapseToggle | null = null
+  private stopCollapse: (() => void) | null = null
+  private collapseQueryDone = false
+  /** k < 1: the real band's edge causes (lines, labels) are hidden; they belong to k = 1 */
+  private collapseHidesEdges = false
 
   constructor(container: HTMLElement, onStation: (id: string) => void) {
     this.onStation = onStation
@@ -246,7 +258,7 @@ export class ConsoleMap {
       if (seq !== this.fieldSeq || this.fieldFailed) return
       const variant = VARIANT_OF[this.variant] ?? 'nom'
       if (!this.fieldLayer) {
-        const h = mod.addFieldLayer(this.map, fd, { budget: this.budget, variant, showBands: this.visible.bands, showHatch: this.visible.unknown, margin: null }, 'iso-lines', (e) => this.fieldError(e))
+        const h = mod.addFieldLayer(this.map, fd, { budget: this.budget, variant, showBands: this.visible.bands, showHatch: this.visible.unknown, margin: null, collapse: null }, 'iso-lines', (e) => this.fieldError(e))
         if (this.fieldFailed) return h.remove()
         this.fieldLayer = h
       } else this.fieldLayer.setData(fd)
@@ -254,8 +266,49 @@ export class ConsoleMap {
       this.showField(fd)
       this.stopMargin ??= driveMargin(() => this.fieldData?.suitKg ?? null, (s) => this.setMargin(s), fieldModeQuery(location.search, location.hash))
       this.setMargin(this.margin)
+      await this.syncCollapse(fd, entry.id)
     } catch (e) {
       this.fieldError(e)
+    }
+  }
+
+  /** Collapse (U3): pad -> u_pad, k from the UI store -> layer + fieldAt, headline, toggle, ?collapse=. */
+  private async syncCollapse(fd: FieldData, scenarioId: string): Promise<void> {
+    const L = data()
+    const [pad, manifest] = await Promise.all([L.optional(() => L.pad()), L.optional(() => L.manifest())])
+    if (this.fieldData !== fd || !this.fieldLayer) return
+    const p = pad?.pad
+    this.collapsePad = p && fd.resM !== null ? padGridMetres(fd.t.nom, fd.resM, p.lon, p.lat) : null
+    this.fieldScenario = scenarioId
+    this.headline ??= new CollapseHeadlineOverlay(this.map.getContainer())
+    this.headline.setHeadline(manifest ? collapseHeadline(manifest as unknown as Record<string, unknown>, scenarioId, this.budget) : null)
+    if (this.collapsePad && !this.collapseToggle) {
+      this.collapseToggle = new CollapseToggle()
+      this.map.addControl(this.collapseToggle, 'top-right')
+    }
+    this.stopCollapse ??= effect(() => {
+      const k = ui.collapseK.value
+      const kFrom = collapseFade.kFrom.value
+      const xfade = collapseFade.xfade.value
+      const pd = this.collapsePad
+      const on = k !== undefined && pd !== null
+      this.fieldData?.setCollapse(on ? pd : null, on ? k : 1)
+      this.fieldLayer?.update({ collapse: on ? { k, kFrom, xfade, pad: pd } : null })
+      this.map.getContainer().setAttribute('data-field-collapse', on ? String(k) : 'off')
+      const hide = on && (k < 1 || xfade < 1)
+      if (hide !== this.collapseHidesEdges) {
+        this.collapseHidesEdges = hide
+        this.applyVisibility()
+      }
+    })
+    if (!this.collapseQueryDone && this.collapsePad) {
+      this.collapseQueryDone = true
+      const q = collapseQuery(location.search, location.hash)
+      if (q?.kind === 'set') setCollapse(q.k)
+      else if (q?.kind === 'play') {
+        setCollapse(0)
+        this.map.once('idle', () => void playCollapse())
+      }
     }
   }
 
@@ -270,6 +323,7 @@ export class ConsoleMap {
   private showField(fd: FieldData | null): void {
     this.fieldOn = fd !== null && this.fieldLayer !== null
     if (!fd && this.fieldData && activeField() === this.fieldData) setActiveField(null)
+    if (!fd) this.headline?.setHeadline(null) // the collapse headline belongs to the published field
     const c = this.map.getContainer()
     c.setAttribute(FIELD_TRUST.renderAttr, this.fieldOn ? 'gpu' : 'polygons')
     if (fd) c.setAttribute(FIELD_TRUST.sourceAttr, fd.sources.join(' '))
@@ -431,6 +485,12 @@ export class ConsoleMap {
   setBudget(minutes: number): void {
     this.budget = minutes
     this.fieldLayer?.update({ budget: minutes })
+    if (this.headline && this.fieldScenario) {
+      const sid = this.fieldScenario
+      void data()
+        .optional(() => data().manifest())
+        .then((m) => this.budget === minutes && this.headline?.setHeadline(m ? collapseHeadline(m as unknown as Record<string, unknown>, sid, minutes) : null))
+    }
     this.applyFilters()
     this.renderEdgeLabels()
   }
@@ -465,13 +525,14 @@ export class ConsoleMap {
   private applyVisibility(): void {
     const m = this.map
     for (const [g, ids] of Object.entries(this.groupLayers) as [LayerGroup, string[]][]) {
-      for (const id of ids) if (m.getLayer(id)) m.setLayoutProperty(id, 'visibility', this.visible[g] ? 'visible' : 'none')
+      const on = this.visible[g] && !(g === 'edges' && this.collapseHidesEdges)
+      for (const id of ids) if (m.getLayer(id)) m.setLayoutProperty(id, 'visibility', on ? 'visible' : 'none')
     }
     for (const mk of this.stationMarkers) mk.getElement().hidden = !this.visible.stations
     if (this.padMarker) this.padMarker.getElement().hidden = !this.visible.stations
     for (const mk of this.padOptionMarkers) mk.getElement().hidden = !this.visible.stations
     for (const mk of this.sitingMarkers) mk.getElement().hidden = !this.visible.siting
-    for (const mk of this.edgeMarkers) mk.getElement().hidden = !this.visible.edges
+    for (const mk of this.edgeMarkers) mk.getElement().hidden = !this.visible.edges || this.collapseHidesEdges
     // GPU field: replaces the polygon bands (and the hatch image when it has the cell states).
     const fl = this.fieldLayer
     if (fl && m.getLayer(fl.id)) {
@@ -501,6 +562,8 @@ export class ConsoleMap {
   }
 
   destroy(): void {
+    this.stopCollapse?.()
+    this.headline?.destroy()
     this.stopMargin?.()
     clearTimeout(this.marginLabelTimer)
     this.fieldSeq++
