@@ -11,6 +11,7 @@ import { createPadTool, type PadTool, type PadToolOptions } from './padtool'
 import type { LiveState } from './health'
 import { PadToolPanel } from './view'
 import { editRouteHosted, setEditRouteCrew } from '../ui/shell/editroute'
+import { officialPart } from '../state/official'
 
 export interface MountPadToolOptions extends Omit<PadToolOptions, 'client' | 'port' | 'jobInputs'> {
   client: ApiClient
@@ -46,6 +47,9 @@ export function mountPadTool(panel: Element, port: MapPort, opts: MountPadToolOp
     )
   }
   const offState = tool.subscribe(draw)
+  // design's "Official plan" action (L7b, D111 T9): a clicked pad or a live result differs from it
+  const op = officialPart('live-pad', () => tool.clear())
+  const offOp = tool.subscribe((s) => op.set(s.pad !== null || s.plan.kind !== 'idle'))
   const offCrew = crew ? crew.subscribe(draw) : () => {}
   ready = true
   draw()
@@ -61,6 +65,8 @@ export function mountPadTool(panel: Element, port: MapPort, opts: MountPadToolOp
       offClick()
       offLive()
       offState()
+      offOp()
+      op.dispose()
       offCrew()
       tool.dispose()
       crew?.dispose()

@@ -34,6 +34,7 @@ import { MOCK_OFFICIAL_HASH } from './mock/hashes'
 import { mountPadTool } from './padmount'
 import { mountPlanRoute, resultDataUrl } from './planmount'
 import { mockLiveLoader } from './result'
+import { liveStatus } from '../state/live'
 
 export { ApiError, createApiClient, type ApiClient, type ApiClientOptions } from './client'
 export { API_BASE, LIVE_ENABLED, LIVE_LABEL, OFFLINE_LABEL, ROUTE_EDIT_ENABLED, SIM_EXPORT_MODE, WARMING_LABEL, type SimExportMode } from './config'
@@ -108,6 +109,8 @@ export function mountLive(anchor: Element, client: ApiClient = liveClient()): ()
   const official = SIM_EXPORT_MODE === 'all' ? officialMissionSource(client) : null
   const watch = watchHealth(client, (s) => {
     current = s
+    // design's seam (L7b, D111): static views (the rover-drag readout, T2) read the live status there
+    liveStatus.value = s.kind
     official?.(s)
     const b = bannerFor(s)
     line.hidden = b.text === null
@@ -124,6 +127,7 @@ export function mountLive(anchor: Element, client: ApiClient = liveClient()): ()
     stopPlan()
     if (official) setOfficialMissionSource(null)
     line.remove()
+    liveStatus.value = 'off'
   }
 }
 
