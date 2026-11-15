@@ -8,7 +8,7 @@
 //
 // Every step carries its canonical plan_inputs (canonical.ts), its identity-free inputs key, and,
 // once the engine identity is known (live), its D57 result hash: undo restores the exact previous
-// hash. Session only: kept in sessionStorage when one is given, never sent anywhere (no accounts, D69).
+// hash. Session only: kept in memory (the app passes no storage: privacy note, no browser storage), never sent anywhere (no accounts, D69).
 //
 // Honesty (U15, design-agents rule 5): the ghost carries no number while dragging; on release it is
 // "computing…" until a precomputed or live result is attached (resolveGhost). The browser never
@@ -72,7 +72,7 @@ export interface PlanEditOptions {
   undoMax?: number
   /** live planning on, with the engine identity of /engine/version */
   identity?: EngineIdentity | null
-  /** session persistence (window.sessionStorage); null = none */
+  /** optional persistence hook for tests; the app passes none (privacy note: no browser storage) */
   storage?: Pick<Storage, 'getItem' | 'setItem'> | null
   /** called after every change of the committed step (commit, undo, redo, live result) */
   onApply?: (step: PlanStep, result: ResultRef | undefined, store: PlanEditStore) => void
