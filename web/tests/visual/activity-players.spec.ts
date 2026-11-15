@@ -201,7 +201,7 @@ for (const drawer of DRAWERS)
 for (const drawer of DRAWERS)
   for (const p of ['replay', 'flythrough'] as const)
     // hidden, D145: the flythrough variant needs the Flythrough button
-    ;(p === 'flythrough' ? test.skip : test)(`a mode switch stops the ${p} (${drawer})${p === 'flythrough' ? ' (hidden, D145)' : ''}`, async ({ page }) => {
+    (p === 'flythrough' ? test.skip : test)(`a mode switch stops the ${p} (${drawer})${p === 'flythrough' ? ' (hidden, D145)' : ''}`, async ({ page }) => {
       await openPlan(page, drawer)
       await startPlayer(page, p)
       await expectRunning(page, p)
