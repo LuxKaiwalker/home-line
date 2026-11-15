@@ -36,15 +36,15 @@ COPY pipeline pipeline
 COPY tools tools
 COPY server server
 
-# Code identity (D57; /engine/version and the result hash). The image has no .git: these are baked
-# at build time and answered by a git stand-in (server/ops/git-identity.sh). Empty -> 503.
+# Code identity (D57; /engine/version and the result hash). The image has no .git and no git: these
+# are baked at build time (server/ops/up.sh) and server/engine/version.py reads them from the
+# environment (40-hex each). Empty or malformed -> 503 engine_identity_unavailable.
 ARG HL_COMMIT=""
 ARG HL_ENGINE_TREE=""
 ENV HL_COMMIT=${HL_COMMIT} \
     HL_ENGINE_TREE=${HL_ENGINE_TREE}
 LABEL org.opencontainers.image.title="homeline-api" \
       org.opencontainers.image.revision=${HL_COMMIT}
-COPY --chmod=0755 server/ops/git-identity.sh /usr/local/bin/git
 COPY server/ops/healthcheck.py /usr/local/lib/hl/healthcheck.py
 
 RUN useradd --system --uid 10001 --no-create-home --home-dir /nonexistent hl
@@ -58,7 +58,7 @@ EXPOSE 8000
 HEALTHCHECK --interval=10s --timeout=6s --start-period=120s --retries=3 \
     CMD ["python", "/usr/local/lib/hl/healthcheck.py", "http://127.0.0.1:8000/api/v1/health"]
 
-# Proxy headers are trusted only from FORWARDED_ALLOW_IPS (uvicorn's env; set by compose.yaml to
-# the Caddy address). Default: 127.0.0.1 only.
+# Proxy headers are trusted only from FORWARDED_ALLOW_IPS (uvicorn's --forwarded-allow-ips env; set
+# by compose.yaml to Caddy's fixed address 172.31.212.10). Default: 127.0.0.1 only.
 CMD ["uvicorn", "server.app:app", "--host", "0.0.0.0", "--port", "8000", "--proxy-headers", \
      "--no-server-header"]
