@@ -441,7 +441,9 @@
     "expand": "Show the plan table and the timeline",
     "collapse": "Hide the plan table and the timeline",
     "planTable": "Plan table",
-    "timeline": "Timeline"
+    "timeline": "Timeline",
+    "comparePlans": "Compare plans",
+    "comparePlansTip": "Compare the pads and plans side by side (trade table). Back returns to this plan."
   },
 
   "planChrome": {

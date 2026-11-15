@@ -15,15 +15,13 @@ import { controlSignal } from '../state/activity'
 import { toggleReplay } from '../state/activityClock'
 import { missionClock } from '../state/mission'
 import { IconButton, TrustChip } from '../ui/components'
-import { copyFrom, t } from '../ui/copy'
-import copyI1 from './copy.I1.json' // PORT I1: I4 merges into copy.json (planBottom.comparePlans*)
+import { t } from '../ui/copy'
 import { BottomDrawer, layoutInsets, onLayoutChange, type LayoutInsets } from '../ui/layout'
 import { dockContent, hostIn } from '../ui/shell/store'
 import { fmtEva } from '../ui/timeline/model'
 import { registerPlanMount, SectionHost, type PlanMountCtx, type SectionName } from './planSlots'
 import './planBottom.css'
 
-const tI1 = copyFrom(copyI1)
 
 /** Layout store ids (L5 selector contract: #hl-lay-plan-bottom, #hl-lay-plan-bottom-tab-<tab>). */
 export const PLAN_BOTTOM = 'plan-bottom'
@@ -108,8 +106,8 @@ function PlanBottom({ ctx }: { ctx: PlanMountCtx }) {
       // D142: "Compare plans" opens the trade table (#/trade); Back returns to Plan with the same pad and
       // route (the planning state is in the address, #/?route=…, views/planPort.tsx)
       actions={
-        <a class="plan-bottom__compare" href="#/trade" data-testid="plan-compare-plans" title={tI1('comparePlansTip')}>
-          {tI1('comparePlans')}
+        <a class="plan-bottom__compare" href="#/trade" data-testid="plan-compare-plans" title={t('planBottom.comparePlansTip')}>
+          {t('planBottom.comparePlans')}
         </a>
       }
       tabs={[
