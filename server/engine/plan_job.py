@@ -196,8 +196,8 @@ def build(inputs: dict, *, terrain_dir: Path, out_dir: Path, public_dir: Path | 
 
     ``preview``: only the default scenario (the job's nominal stage). An ordered route passes
     ``route`` (route.engine_route: station ids and {lon, lat} free points in visiting order) and
-    ``route_min_spacing_m`` (when build_plan takes it, WP2b); auto passes neither (the pre-D97
-    call). Returns the run summary."""
+    ``route_min_spacing_m`` (backend.yaml route.min_stop_spacing_m, WP2b); auto passes neither (the
+    pre-D97 call). Returns the run summary."""
     from pipeline.engine import scenarios
     from pipeline.engine.config import load
     from pipeline.engine.graph import load_ws1_grid
@@ -211,7 +211,7 @@ def build(inputs: dict, *, terrain_dir: Path, out_dir: Path, public_dir: Path | 
                                 "with the default suit mass, and a route (D97)")
     c = canonical_inputs(inputs)
     pad = c["pad"]
-    route_kw = _route_kwargs(c, build_plan)
+    route_kw = _route_kwargs(c)
     grid = load_ws1_grid(terrain_dir) if grid is None else grid
     ids = [load("variants")["scenarios"]["default"]] if preview else scenario_set(inputs)
     sids, skipped = scenarios.runnable(ids, None)
@@ -229,20 +229,15 @@ def build(inputs: dict, *, terrain_dir: Path, out_dir: Path, public_dir: Path | 
                       manifest_dir=manifest_dir, on_stage=on_stage, verbose=False, **route_kw)
 
 
-def _route_kwargs(c: dict, build_plan) -> dict:
+def _route_kwargs(c: dict) -> dict:
     """build_plan's route keywords for canonical inputs ``c`` (``build``'s doc)."""
-    import inspect
+    from server.settings import settings
 
     stops = route_mod.engine_route(c)
     if stops is None:
         return {}
-    kw: dict = {"route": stops}
-    params = inspect.signature(build_plan).parameters
-    if "route_min_spacing_m" in params or any(p.kind is p.VAR_KEYWORD for p in params.values()):
-        from server.settings import settings
-
-        kw["route_min_spacing_m"] = float(settings().route.min_stop_spacing_m)
-    return kw
+    return {"route": stops,
+            "route_min_spacing_m": float(settings().route.min_stop_spacing_m)}
 
 
 def route_answer(inputs: dict, summary: dict | None) -> dict:

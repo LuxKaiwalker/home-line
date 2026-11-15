@@ -117,21 +117,12 @@ def default_scenario() -> str:
 
 
 def point_problem(grid, lon: float, lat: float, scenario: str) -> tuple[str, str] | None:
-    """(code, message) of the cheap free-point checks 1-3 (waypoints module doc) under
-    ``scenario``, or None. No Dijkstra: only the cells within the access radius are read.
+    """(code, message) of the cheap free-point checks 1-3 under ``scenario``, or None:
+    ``waypoints.point_precheck`` (no Dijkstra, only the cells within the access radius; ~1 ms per
+    point on the real grid, where point_validity's check 4 costs ~10 s)."""
+    from pipeline.engine import waypoints
 
-    pipeline.engine.waypoints exports no cheap check (its point_validity adds check 4, the
-    station Dijkstra pair, ~7 s on the real grid); until it does (``point_precheck``, asked of the
-    waypoint orchestrator), this calls its checks 1-3 (``waypoints._check``) with the scenario's
-    no-go slope and the D27 access radius, exactly as point_validity does."""
-    from pipeline.engine import padpick, physio, waypoints
-
-    public = getattr(waypoints, "point_precheck", None)
-    if public is not None:
-        return public(grid, float(lon), float(lat), scenario=scenario)
-    radius = padpick.settings_from_config().access_radius_m
-    return waypoints._check(grid, float(lon), float(lat),
-                            physio.scenario_params(scenario).nogo_deg, radius)
+    return waypoints.point_precheck(grid, float(lon), float(lat), scenario=scenario)
 
 
 # ----------------------------------------------------------------------------- checking ----

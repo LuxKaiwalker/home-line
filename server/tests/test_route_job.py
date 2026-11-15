@@ -13,7 +13,7 @@ Known answers (written before the code):
   argument), the same hash, and the official pad attaches to the precomputed tree without a run;
 - the same stations in another order hash differently;
 - an ordered route passes its station ids, in order, to build_plan in the preview and the full
-  call (with route_min_spacing_m from config when build_plan takes it, WP2b);
+  call (with route_min_spacing_m from config, WP2b);
 - the run record carries route_mode (on every record) and the default scenario's feasibility,
   with the v1.1 ``infeasible`` mirror when false, and validates against run_record.schema.json;
   an infeasible answer is a job ``done``, not an error;

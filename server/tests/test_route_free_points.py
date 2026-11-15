@@ -221,13 +221,6 @@ def test_spacing_runs_before_the_grid_checks(grid):
     assert (e.code, e.stop) == ("route_stop_spacing", 1)
 
 
-def _engine_spacing():
-    from pipeline.engine import traverse
-
-    return getattr(traverse, "check_spacing", None)
-
-
-@pytest.mark.skipif(_engine_spacing() is None, reason="traverse.check_spacing is WP2b's")
 @pytest.mark.parametrize("case", ["pad_and_pair", "two_pairs", "pad_only"])
 def test_the_server_names_the_stop_the_engine_names(grid, case):
     from pipeline.engine import traverse
@@ -336,8 +329,11 @@ def test_no_server_data_is_503_for_a_free_point(api_data, grid):
     doc = body(grid, [ll(grid, OPEN[0])])
     with app_clients(IP_A) as (c,):
         r, imp = _post_both(c, doc)
-    assert r.status_code == 503 and r.json()["error"] == "server_data_missing"
-    assert imp.status_code == 503 and imp.json()["error"] == "server_data_missing"
+        assert c.runner.jobs_started == 0
+    assert r.status_code == 503 and assert_valid(r, "post", "/jobs")["error"] == \
+        "server_data_missing"
+    assert imp.status_code == 503 and assert_valid(imp, "post", "/plans/import")["error"] == \
+        "server_data_missing"
 
 
 # -------------------------------------------------------------------- the build_plan call ----
@@ -368,21 +364,13 @@ def test_free_points_go_to_build_plan_in_order_without_labels(monkeypatch, world
     assert call == plain  # everything else is today's call
 
 
-def test_spacing_kwarg_only_when_build_plan_takes_it():
+def test_the_route_keywords():
     doc = {"contract_version": settings().contract_version,
            "pad": {"lon": 137.393301, "lat": -4.776468},
            "route": {"mode": "ordered", "stops": st("S4")}}
-
-    def wp1(grid, *, route=None):  # build_plan before WP2b
-        return {}
-
-    def wp2b(grid, *, route=None, route_min_spacing_m=None):
-        return {}
-
-    c = canonical_inputs(doc)
-    assert plan_job._route_kwargs(c, wp1) == {"route": ["S4"]}
-    assert plan_job._route_kwargs(c, wp2b) == {"route": ["S4"], "route_min_spacing_m": 50.0}
-    assert plan_job._route_kwargs(canonical_inputs({**doc, "route": {"mode": "auto"}}), wp2b) == {}
+    assert plan_job._route_kwargs(canonical_inputs(doc)) == {"route": ["S4"],
+                                                             "route_min_spacing_m": 50.0}
+    assert plan_job._route_kwargs(canonical_inputs({**doc, "route": {"mode": "auto"}})) == {}
 
 
 def test_the_real_build_plan_takes_the_route():
@@ -390,10 +378,7 @@ def test_the_real_build_plan_takes_the_route():
 
     from pipeline.engine.plan import build_plan
 
-    params = inspect.signature(build_plan).parameters
-    assert "route" in params
-    if "route_min_spacing_m" not in params:
-        pytest.skip("build_plan has no route_min_spacing_m yet (WP2b)")
+    assert {"route", "route_min_spacing_m"} <= set(inspect.signature(build_plan).parameters)
 
 
 # ------------------------------------------------------------------------- the run record ----
@@ -447,16 +432,6 @@ def test_a_job_error_names_the_free_point(monkeypatch):
 
 
 # ------------------------------------------------- the real engine (synthetic world, WP2b) ----
-def _engine_has_free_points() -> bool:
-    import inspect
-
-    from pipeline.engine.plan import build_plan
-
-    return "route_min_spacing_m" in inspect.signature(build_plan).parameters
-
-
-@pytest.mark.skipif(not _engine_has_free_points(), reason="build_plan takes no free points yet "
-                    "(WP2b)")
 def test_free_point_job_on_the_synthetic_world(world, tmp_path, monkeypatch):
     from pipeline.engine import provenance
     from pipeline.engine.geo import xy_of_lonlat
