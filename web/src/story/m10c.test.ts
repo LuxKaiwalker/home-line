@@ -222,7 +222,7 @@ describe('intro content and timing unchanged', () => {
 
   it('the warm-up is bounded and the live runner starts t = 0 after it (capture does not warm)', () => {
     const src = readFileSync(new URL('./attach.ts', import.meta.url), 'utf8')
-    expect(src.indexOf('await warmUp(stage, d, signal)')).toBeGreaterThan(src.indexOf("if (req.kind === 'capture')"))
-    expect(src.indexOf('await warmUp(stage, d, signal)')).toBeLessThan(src.indexOf('await playLive('))
+    expect(src.indexOf('warmUp(stage, d, signal)')).toBeGreaterThan(src.indexOf("if (req.kind === 'capture')"))
+    expect(src.indexOf('warmUp(stage, d, signal)')).toBeLessThan(src.indexOf('await playLive('))
   })
 })

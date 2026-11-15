@@ -105,7 +105,7 @@ async function descentTileSets(): Promise<TileSet[]> {
 
 /**
  * M10c warm-up before a live story's t = 0 (warm.ts): every layer the storyboard shows is drawn once
- * with the canvas hidden (programs link, the field uploads its textures), the tiles along the camera
+ * under a cover (programs link, the field uploads its textures), the tiles along the camera
  * path go into the HTTP cache, then frame 0 is applied and its tiles awaited. Bounded by
  * WARMUP_MAX_MS + FIRST_FRAME_MAX_MS; input during it skips the story as usual.
  */
@@ -230,12 +230,24 @@ export function attachStory(cmap: ConsoleMap, req: StoryRequest = storyRequest(s
       window.__capture = runCapture(stage, d, sb)
       return
     }
-    // input during the warm-up skips the story like input during it
-    const skip = (): void => void (signal.stopped = true)
+    // input during the warm-up skips the story like input during it: the app is restored in the
+    // input's own microtasks, before its click lands (the click acts on the restored app, D9)
+    let skipped = (): void => undefined
+    const onSkip = new Promise<void>((r) => (skipped = r))
+    const skip = (): void => {
+      signal.stopped = true
+      skipped()
+    }
     for (const ev of INPUTS) window.addEventListener(ev, skip, { capture: true, passive: true })
-    await warmUp(stage, d, signal).finally(() => {
+    await Promise.race([warmUp(stage, d, signal), onSkip]).finally(() => {
       for (const ev of INPUTS) window.removeEventListener(ev, skip, true)
     })
+    if (signal.stopped) {
+      stage.restore(false)
+      stage = null
+      if (req.kind === 'demo') dropStoryParams()
+      return
+    }
     const why = await playLive(stage, d, { loop: req.kind === 'demo', signal })
     stage.restore(why === 'end')
     stage = null
