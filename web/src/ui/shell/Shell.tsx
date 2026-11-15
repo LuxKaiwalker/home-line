@@ -300,6 +300,13 @@ export function mountShell(frame: Frame, navigate: (hash: string) => void, win: 
   void import('../cards/sidebar').then((m) => {
     if (alive) stopSelection = m.installSelectionSidebar({ win })
   })
+  // U5 (A7): the timeline dock body, in its own chunk (replaces the dock placeholder once loaded).
+  // Its playback needs a frame loop, so a window without one (headless test stubs) keeps the placeholder.
+  let stopDock: (() => void) | undefined
+  if (typeof win.requestAnimationFrame === 'function')
+    void import('../timeline').then((m) => {
+      if (alive) stopDock = m.installTimelineDock(win)
+    })
   return {
     routed(route, _hash, userNav) {
       // applyRoute (store.ts) is called by main.ts before the view renders; here only title and focus
@@ -314,6 +321,7 @@ export function mountShell(frame: Frame, navigate: (hash: string) => void, win: 
     destroy() {
       alive = false
       stopSelection?.()
+      stopDock?.()
       stopKeys()
       stopLayout()
       win.removeEventListener('resize', measure)
