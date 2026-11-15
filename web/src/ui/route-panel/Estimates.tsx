@@ -6,7 +6,8 @@
 import type { ComponentChildren } from 'preact'
 import { CONFIG } from '../../config'
 import { planning, selectPad, selectStops, stopLabels, usePlanning, type PlanStop, type PlanningStore } from '../../state/planning'
-import { t } from '../copy'
+import { copyFrom, t } from '../copy'
+import ownCopy from './copy.F12.json'
 import { useRouteResults, type LegResult, type RouteResults } from './results'
 
 const fmt = (v: number | null, key: 'minutes' | 'litres'): string => (v === null || !Number.isFinite(v) ? t('route.panel.estimates.unknown') : t(`route.panel.estimates.${key}`, { v: v.toFixed(1) }))
@@ -32,6 +33,16 @@ export function legEnds(leg: LegResult, stops: readonly PlanStop[]): { from: str
     return i >= 0 ? labels[i] : t('route.panel.estimates.pad')
   }
   return { from: name(leg.fromStopId), to: name(leg.toStopId) }
+}
+
+const tF12 = copyFrom(ownCopy)
+
+/** PORT F12: "54.0 min · limited by O₂": the core's binding term next to the margin, so a switch that
+ *  moves a term which is not binding (the storm's dose term) never looks dead. */
+export function marginText(r: RouteResults | null): string {
+  const v = fmt(r?.marginMin ?? null, 'minutes')
+  const b = r && r.marginMin !== null && r.binding ? r.binding : null
+  return b ? `${v} · ${tF12('limitedBy', { term: tF12(`terms.${b}`) })}` : v
 }
 
 const reasonText = (r: string | undefined): string | null => {
@@ -75,7 +86,7 @@ function statusLine(r: RouteResults, stale: boolean, nLegs: number): ComponentCh
   return null
 }
 
-export function EstimatesBody({ results: r, stops, padId }: { results: RouteResults; stops: readonly PlanStop[]; padId: string }) {
+export function EstimatesBody({ results: r, stops, padId, storm = false }: { results: RouteResults; stops: readonly PlanStop[]; padId: string; storm?: boolean }) {
   // results for another pad are on their way out: say so instead of showing their numbers as this pad's
   const stale = r.status !== 'idle' && r.padId !== padId
   const shown = stale ? null : r
@@ -106,9 +117,10 @@ export function EstimatesBody({ results: r, stops, padId }: { results: RouteResu
         )}
       </div>
       {/* PORT I1 (Q1): data-status / data-pad let the e2e wait for "ready" instead of sleeping */}
-      <div class="hl-rp__est" data-estimates data-status={r.status} data-pad={r.padId}>
+      <div class="hl-rp__est" data-estimates data-status={r.status} data-pad={r.padId} data-binding={shown?.binding ?? undefined}>
         <Row k={t('route.panel.estimates.total')} v={fmt(shown?.totalMinutes ?? null, 'minutes')} />
-        <Row k={t('route.panel.estimates.margin')} v={fmt(shown?.marginMin ?? null, 'minutes')} tone={marginTone(shown?.marginMin ?? null)} title={t('route.panel.estimates.marginTitle')} />
+        <Row k={t('route.panel.estimates.margin')} v={marginText(shown)} tone={marginTone(shown?.marginMin ?? null)} title={t('route.panel.estimates.marginTitle')} />
+        {storm && shown && shown.doseMarginMin !== undefined && <Row k={tF12('dose')} v={fmt(shown?.doseMarginMin ?? null, 'minutes')} tone={marginTone(shown?.doseMarginMin ?? null)} title={tF12('doseTitle')} />}
         <Row k={t('route.panel.estimates.o2')} v={fmt(shown ? legsO2(shown.legs) : null, 'litres')} title={t('route.panel.estimates.o2Title')} />
       </div>
     </>
@@ -119,6 +131,7 @@ export function EstimatesBody({ results: r, stops, padId }: { results: RouteResu
 export function RouteEstimates({ store = planning }: { store?: PlanningStore }) {
   const stops = usePlanning(selectStops, store)
   const padId = usePlanning(selectPad, store)
+  const storm = usePlanning((s) => s.route.storm, store)
   const results = useRouteResults((r) => r)
-  return <EstimatesBody results={results} stops={stops} padId={padId} />
+  return <EstimatesBody results={results} stops={stops} padId={padId} storm={storm} />
 }

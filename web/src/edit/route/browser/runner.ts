@@ -160,6 +160,8 @@ export function toRouteResults(
     legs,
     totalMinutes: r.totals.evaMin,
     marginMin: r.tightest ? r.tightest.marginMin : null,
+    binding: r.tightest ? r.tightest.binding : null,
+    doseMarginMin: r.detail.margin?.dose ? r.detail.margin.dose.lowestDoseMarginMin : null,
     firstInfeasibleLeg: failLeg ?? (firstBad ? firstBad.index : null),
     fastRoute: fast,
     ...(o.timingMs !== undefined ? { timingMs: Math.round(o.timingMs * 10) / 10 } : {}),

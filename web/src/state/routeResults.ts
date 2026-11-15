@@ -31,6 +31,10 @@ export type RouteResults = {
   totalMinutes: number | null
   marginMin: number | null
   firstInfeasibleLeg: number | null
+  /** PORT F12: the core's binding margin term at the lowest point (D28 tie order); absent/null = unknown */
+  binding?: 'O2' | 'daylight' | 'dose' | 'EVA duration' | null
+  /** PORT F12: the lowest dose-term margin (D39 storm replay); only while the storm switch is on, else null */
+  doseMarginMin?: number | null
   /** true → show "Fast route · may not be the fastest" */
   fastRoute: boolean
   timingMs?: number
