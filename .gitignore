@@ -22,3 +22,5 @@ web/dist/
 # Secrets (NASA_API_KEY via environment only)
 .env
 .env.*
+web/test-results/
+web/playwright-report/

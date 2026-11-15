@@ -5,7 +5,7 @@ WS16).
 Same tiles as ``terrain_tiles.py`` (256 px Terrarium PNG, elevation x
 ``scale.elevation_factor``, XYZ with Mars lon/lat passed through, D4) at
 ``config/design.yaml terrain_tiles.lowzoom_intro`` (z6-10), no focus area, budget
-``lowzoom_budget_mb``.
+``lowzoom_budget_mb``, height step capped at ``height_step_cap_m.low`` m of true elevation.
 
 Extent: the IAU gazetteer box of the crater "Gale" (``config/horizon.yaml landmarks_source.csv``,
 columns min/max lon/lat), intersected with what the cached sources cover. Sources (DESIGN §6.1:
@@ -42,10 +42,6 @@ from pipeline.export import terrain_tiles as T  # noqa: E402
 
 NAME = "terrain_low"
 OUT = T.EXPORT / NAME
-# Coarsest height step (m of TRUE elevation) the budget fit may use: assumed, below the vertical
-# accuracy of the CTX 20 m / MOLA-HRSC 200 m sources at 81-1300 m pixels; needs a config home
-# (C-owned config/design.yaml terrain_tiles) - flagged in the PR.
-MAX_STEP_TRUE_M = 1.0
 GAZETTEER_NAME = "Gale"  # DESIGN §6.1 "Gale crater relief"; the IAU feature name
 ATTRIBUTION = ("Elevation: USGS controlled CTX DTMs; HRSC-MOLA blended DEM 200 m v2 "
                "(USGS Astrogeology)")
@@ -74,6 +70,8 @@ def load_config() -> dict:
             "zooms": tuple(int(z) for z in tt["lowzoom_intro"]),
             "focus_zooms": None, "focus_bounds": None,
             "budget_bytes": int(round(float(tt["lowzoom_budget_mb"]) * T.MIB)),
+            # coarsest height step, m of TRUE elevation (assumed: true in design.yaml)
+            "max_step_true_m": float(tt["height_step_cap_m"]["low"]),
             "sources": T.band_paths("ctx_20m", "mola_hrsc_200m")}
 
 
@@ -119,8 +117,7 @@ def main(argv: list[str] | None = None) -> int:
     if a.plan:
         return 0
     doc, rebuilt = T.run(cfg, a.out, force=a.force, scripts=[Path(__file__), Path(T.__file__)],
-                         edge_extend_last=True, attribution=ATTRIBUTION,
-                         max_step_true_m=MAX_STEP_TRUE_M)
+                         edge_extend_last=True, attribution=ATTRIBUTION)
     if not a.no_record and rebuilt:
         T.record_manifest(doc, __file__)
     if not math.isclose(doc.get("edge_extended_pixel_pct", 0.0), 0.0):

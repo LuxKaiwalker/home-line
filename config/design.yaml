@@ -15,6 +15,9 @@ terrain_tiles:
   lowzoom_intro: [6, 10]            # CTX 20 m + MOLA-HRSC 200 m over Gale
   budget_mb: 25
   lowzoom_budget_mb: 5
+  height_step_cap_m:                 # coarsest Terrarium height step the budget fit may use, m of TRUE elevation (precision_m / factor)
+    terrain: 0.1                      # = P2 brief tolerance: decoded pad pixel = 1 m DEM x factor +- 0.1 m x factor (U1)
+    low: 1.0                          # added by P2b 2026-11-15 (assumed: true): z6-10 intro relief, below the vertical accuracy of CTX 20 m / MOLA-HRSC 200 m at 81-1300 m pixels
 exaggeration: {min: 1.0, max: 3.0, default: 1.0}
 field_layer:
   sampling: nearest_then_manual_bilinear   # encoded values must not be filtered
