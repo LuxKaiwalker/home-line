@@ -9,7 +9,10 @@ Responses of POST /jobs:
 - 202 Job: queued, attached to the queued or running job with the same result hash
   (``attached: true``), or ``done`` at once when the hash's result tree is complete.
 - 422 Error: invalid_request (not a JobRequest object: unknown key, missing or unknown type,
-  inputs not an object), invalid_inputs (plan_inputs schema; detail = the error list).
+  inputs not an object), invalid_inputs (plan_inputs schema; detail = the error list), a route
+  code (D97, server.engine.route: route_too_many_stops, route_station_unknown, ...; ``stop`` = the
+  index of the stop the detail names, null for the whole route) and unsupported_inputs with
+  ``stop`` for a free point of an ordered route (not planned yet).
 - 429 Error + Retry-After: queue_full (compute.queue_max_waiting), retry_after_s set.
 - 503 Error: heavy_jobs_off (kill switch deploy.kill_switch_env), job_type_unavailable (a contract
   type with no handler on this server, e.g. siting before its package), server_data_missing /
@@ -24,6 +27,7 @@ from fastapi.responses import JSONResponse
 
 from server.api.compute.results import Identity
 from server.engine import jobs, version
+from server.engine import route as route_mod
 from server.engine.hashing import EngineIdentity, InvalidPlanInputs, canonical_inputs, result_hash
 from server.settings import settings
 
@@ -33,8 +37,9 @@ REQUEST_KEYS = {"type", "inputs", "replan"}  # openapi JobRequest (additionalPro
 router = APIRouter(tags=["compute"])
 
 
-def _error(status: int, code: str, detail, retry_after_s: int | None = None) -> JSONResponse:
-    body = {"error": code, "detail": detail}
+def _error(status: int, code: str, detail, retry_after_s: int | None = None,
+           **extra) -> JSONResponse:
+    body = {"error": code, "detail": detail, **extra}
     headers = dict(NO_STORE)
     if retry_after_s is not None:
         body["retry_after_s"] = retry_after_s
@@ -90,6 +95,10 @@ async def create_job(request: Request, identity: Identity) -> JSONResponse:
     except InvalidPlanInputs as e:
         return _error(422, "invalid_inputs", e.errors)
     try:
+        route_mod.validate(raw)
+    except route_mod.RouteError as e:
+        return _error(422, e.code, e.detail, stop=e.stop)
+    try:
         ident = EngineIdentity(*identity())
         code = version.code_identity()
     except version.Unavailable as e:
@@ -97,8 +106,9 @@ async def create_job(request: Request, identity: Identity) -> JSONResponse:
         return _error(503, "server_data_missing" if "manifest" in msg
                       else "engine_identity_unavailable", msg)
     h = result_hash(raw, ident)
-    # run record inputs: what was hashed, plus the title if any (run_record.schema.json)
-    job_inputs = {**canonical, **({"title": raw["title"]} if "title" in raw else {})}
+    # run record inputs: what was hashed, plus the title and free-point labels if any
+    # (run_record.schema.json)
+    job_inputs = route_mod.record_inputs(raw, canonical)
     runner: jobs.JobRunner = request.app.state.jobs
     try:
         job = runner.submit(body["type"], h, job_inputs, _record_base(h, job_inputs, ident, code),

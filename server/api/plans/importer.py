@@ -6,10 +6,14 @@ Checks, in order (the same order as the web client, web/src/live/planio.ts):
 2. JSON (UTF-8) → 422 ``invalid_json``;
 3. contracts/backend/plan_inputs.schema.json, unknown fields refused at every level → 422
    ``invalid_inputs`` with the error list as ``detail``;
-4. ``title`` at most ``limits.title_max_chars`` characters → 422 ``title_too_long``.
+4. ``title`` at most ``limits.title_max_chars`` characters → 422 ``title_too_long``;
+5. the route (D97), exactly as POST /jobs checks it (server.engine.route.validate): a route code
+   with ``Error.stop`` (the index of the stop the detail names), or ``unsupported_inputs`` with
+   ``stop`` for a free point (not planned yet).
 
 200 ImportResult: ``hash`` (the D57 result hash, the one POST /jobs takes for the same inputs),
-``inputs`` (canonical inputs plus the title, as the run record keeps them) and ``computed`` (a
+``inputs`` (canonical inputs plus the title and free-point labels, as the run record keeps
+them) and ``computed`` (a
 complete result tree exists: the precomputed official tree or a done cache tree). An import never
 starts a job; the client starts one when ``computed`` is false (U3).
 Without an engine identity (no server data manifest, no git) the hash cannot be taken: 503 Error
@@ -25,6 +29,7 @@ from fastapi.responses import JSONResponse
 
 from server.api.compute.results import Identity
 from server.engine import jobs, version
+from server.engine import route as route_mod
 from server.engine.hashing import EngineIdentity, InvalidPlanInputs, canonical_inputs, result_hash
 from server.settings import settings
 
@@ -33,8 +38,9 @@ NO_STORE = {"Cache-Control": "no-store"}
 router = APIRouter(tags=["plans"])
 
 
-def _error(status: int, code: str, detail) -> JSONResponse:
-    return JSONResponse({"error": code, "detail": detail}, status_code=status, headers=NO_STORE)
+def _error(status: int, code: str, detail, **extra) -> JSONResponse:
+    return JSONResponse({"error": code, "detail": detail, **extra}, status_code=status,
+                        headers=NO_STORE)
 
 
 async def _read_capped(request: Request, cap: int) -> bytes | None:
@@ -86,12 +92,16 @@ async def import_plan(request: Request, identity: Identity) -> JSONResponse:
                       f"the title has {len(title)} characters; at most {lim.title_max_chars} "
                       "(limits.title_max_chars)")
     try:
+        route_mod.validate(doc)
+    except route_mod.RouteError as e:
+        return _error(422, e.code, e.detail, stop=e.stop)
+    try:
         ident = EngineIdentity(*identity())
     except version.Unavailable as e:
         msg = str(e)
         return _error(503, "server_data_missing" if "manifest" in msg
                       else "engine_identity_unavailable", msg)
     h = result_hash(doc, ident)
-    inputs = {**canonical, **({"title": title} if title is not None else {})}
+    inputs = route_mod.record_inputs(doc, canonical)
     computed = jobs.result_done(h, lambda: ident)
     return JSONResponse({"hash": h, "inputs": inputs, "computed": computed}, headers=NO_STORE)
