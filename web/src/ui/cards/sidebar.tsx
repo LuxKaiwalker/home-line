@@ -7,6 +7,7 @@ import { data, type Loader } from '../../data/loader'
 import { ensureManifest } from '../../views/common'
 import { canGoBack, canGoForward, clearSelection, selection, stepHistory, type SelectionRef } from '../../state/selection'
 import { effect, useSignalValue } from '../../state/signal'
+import { ui } from '../../state/ui'
 import { t } from '../copy'
 import { CardSkeleton, IconButton } from '../components'
 import { openSidebar, setSidebarContent, shell } from '../shell/store'
@@ -96,7 +97,10 @@ export function installSelectionSidebar(opts: SidebarOptions = {}): () => void {
   let last: SelectionRef | null = selection.selected.peek()
   const stop = effect(() => {
     const s = selection.selected.value
-    if (s && s !== last) openSidebar() // §4.3: the sidebar opens on selection
+    // §4.3: the sidebar opens on selection. L2 (D111): once the Plan map view shows stations in its own
+    // station card (shell.hosted 'station'), a station selection leaves the sidebar closed in Plan.
+    const hosted = s?.kind === 'station' && ui.mode.peek() === 'plan' && shell.hosted.peek().includes('station')
+    if (s && s !== last && !hosted) openSidebar()
     last = s
   })
   const onKey = (e: Event) => {

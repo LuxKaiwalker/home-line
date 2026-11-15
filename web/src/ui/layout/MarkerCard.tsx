@@ -92,6 +92,15 @@ export function MarkerCard({ id, title, at, children, headingLevel = 3, closeLab
     }
   }, [open, map])
 
+  // content that grows after mount (a lazy card body) moves the card back inside the map (L2d)
+  useLayoutEffect(() => {
+    const el = root.current
+    if (!open || !el || typeof ResizeObserver === 'undefined') return
+    const ro = new ResizeObserver(() => bump((n) => n + 1))
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [open])
+
   const p = open ? pointOf(at) : null
   useLayoutEffect(() => {
     const el = root.current

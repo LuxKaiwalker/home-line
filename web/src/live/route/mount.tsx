@@ -1,4 +1,4 @@
-// Mount of the Edit-route panel (R5, D97 §3.1): a Plan rail section in live builds only. Started from
+// Mount of the Edit-route panel (R5, D97 §3.1): the Edit-route drawer (L3, D111) in live builds only. Started from
 // the live pad-tool hook of the console view (index.ts padTool, behind VITE_LIVE), so it exists only
 // while the Plan console is open and has the console map; with VITE_LIVE off none of this is in the
 // bundle path (isolation.test.ts). Text: edit/route/text.ts.
@@ -8,22 +8,37 @@
 //   jobs     live/route/jobs.ts (startJob + loadStage + run record feasibility)
 //   map      live/route/map.ts over the console map (staged layers, failing leg)
 //   validity the published field of the plan shown, over each stop's access disc (WP6) + stations.json
+//   WP12     ONE compute action (L6 W-1): the job's plan_inputs = the pad tool's valid spot (else the
+//            plan in use) + the crew panel's changed fields + the route; the Live pad card calls
+//            `compute()` of the handle given to onReady (opens this section, same controller action).
+//            One undo (W-5, edit/route/undo.ts) behind the global Ctrl/Cmd-Z and the panel buttons.
+//            I1b (D128, instant browser path): the panel is shown whatever /health says; every route
+//            edit recomputes the whole route in the browser (edit/route/instant, next animation frame,
+//            no server call) and "Send to simulator" exports that estimate. Offline only the server's
+//            Compute plan is unavailable (a small note next to it, L-05's text).
 import { h } from 'preact'
-import { createRouteController, type RouteController } from '../../edit/route/controller'
-import type { StationGeo, StopProbe } from '../../edit/route/model'
-import { RoutePanel } from '../../edit/route/panel'
-import { createRouteStore } from '../../edit/route/store'
+import { createRouteController, type RouteController, type RouteLimit } from '../../edit/route/controller'
+import { legCoords, type StationGeo, type StopProbe } from '../../edit/route/model'
+import { RoutePanel, type ResultSlot } from '../../edit/route/panel'
+import { createRouteStore, registerRouteDraftTarget } from '../../edit/route/store'
+import { createSharedUndo, type SharedUndo, type UndoWindow } from '../../edit/route/undo'
+import type { LonLat, PlanInputs } from '../types'
 import { installWaypointMap } from '../../edit/route/map'
 import { discProbe } from '../../edit/route/map/validity'
-import { ROUTE_TEXT } from '../../edit/route/text'
+import { fill, LIMIT_SHORT, MAP_TEXT, ROUTE_TEXT } from '../../edit/route/text'
 import { identityOf } from '../../edit/live'
 import { loadEditCatalog, planAvailability, type EditCatalog, type EditPlan } from '../../edit/options'
 import { data } from '../../data/loader'
 import type { Station } from '../../data/types'
 import { activeField, VARIANT_OF } from '../../map/field'
 import { mission } from '../../state/mission'
+import { officialPart } from '../../state/official'
 import { effect, signal } from '../../state/signal'
-import { dockContent, registerRailSection, setDockContent, type Render } from '../../ui/shell/store'
+import { offlineNoteText, RouteOfflineNote } from '../../edit/route/offline'
+import { createRouteEstimate, type RouteEstimateOptions } from '../../edit/route/instant/estimate'
+import { EDIT_ROUTE_ID, registerEditRoute, registerEditRouteNote } from '../../ui/shell/editroute'
+import { openContainer } from '../../ui/layout'
+import { dockContent, setDockContent, type registerRailSection, type Render } from '../../ui/shell/store'
 import { planUrl } from '../plan'
 import type { ApiClient } from '../client'
 import { bannerFor, type LiveState } from '../health'
@@ -48,12 +63,61 @@ export interface MountRouteOptions {
   stations?: readonly StationGeo[]
   probe?: (lon: number, lat: number) => StopProbe
   register?: typeof registerRailSection
+  /** I1b: where the offline note goes (default: the Edit-route drawer's note slot) */
+  registerNote?: typeof registerEditRouteNote
+  /** WP12: the Live pad tool's spot while it is a valid pad (null: the plan in use); subscribe = changes */
+  pad?: { pad(): LonLat | null; subscribe(fn: () => void): () => void } | null
+  /** WP12: the crew panel: inputs it adds ({crew: changed fields}; null = a field is not a number) and why */
+  crew?: { jobInputs(): PlanInputs | null; blocked(): string | null; subscribe(fn: () => void): () => void } | null
+  /** WP12: the handle the Live pad card uses (one compute action), once the panel exists */
+  onReady?: (h: RouteHandle) => void
+  /** S1: content of the route result box (Send to simulator); default: the S1 control when enabled */
+  resultSlot?: ResultSlot | null
+  /** WP12: the window for the one undo (default: window; null: none) */
+  win?: UndoWindow | null
+  /** I1b test seams of the browser estimate (compute core, frame scheduler, download) */
+  estimate?: Pick<RouteEstimateOptions, 'core' | 'raf' | 'now' | 'save'>
+}
+
+/** What the Live pad card may do with the route panel (W-1). */
+export interface RouteHandle {
+  /** open the section and run the panel's Compute plan (a job already running: focus its progress) */
+  compute(): void
+  /** 'unavailable' (offline, or the route cannot be computed now), 'ready', 'running' */
+  status(): 'unavailable' | 'ready' | 'running'
+  subscribe(fn: () => void): () => void
+  readonly ctl: RouteController
+  readonly undo: SharedUndo
+}
+
+/**
+ * The plan key H1 records (bind.ts followMission: scenario, budget, pad of mission.plan), with the
+ * defaults filled in (an unset scenario or pad IS the default one), so the same plan has one key.
+ */
+export const missionPlanKey = (c: Pick<EditCatalog, 'defaultScenario' | 'officialPadId'>) => (): string =>
+  JSON.stringify([mission.plan.scenario.peek() ?? c.defaultScenario, mission.plan.budgetMin.peek(), mission.plan.pad.peek() ?? c.officialPadId])
+
+/** Open the Edit-route drawer so the panel is on screen (L3). */
+function revealRail(): void {
+  try {
+    openContainer(EDIT_ROUTE_ID)
+  } catch {
+    // no drawer host registered (tests, or a console without the L3 host): nothing to open
+  }
 }
 
 /** The plan the console shows now (mission state), if the catalog has it; else the default plan. */
-export function missionPlan(c: EditCatalog): EditPlan {
-  const p: EditPlan = { scenario: mission.plan.scenario.peek() ?? c.defaultScenario, budgetMin: mission.plan.budgetMin.peek(), pad: mission.plan.pad.peek() ?? c.officialPadId, dwell: {} }
-  return planAvailability(p, c, true).ok ? p : { scenario: c.defaultScenario, budgetMin: c.bandBudgetsMin[0], pad: c.officialPadId, dwell: {} }
+export function missionPlan(c: EditCatalog, spot: LonLat | null = null): EditPlan {
+  const pad: EditPlan['pad'] = spot ? { lon: spot.lon, lat: spot.lat } : (mission.plan.pad.peek() ?? c.officialPadId)
+  const p: EditPlan = { scenario: mission.plan.scenario.peek() ?? c.defaultScenario, budgetMin: mission.plan.budgetMin.peek(), pad, dwell: {} }
+  if (planAvailability(p, c, true).ok) return p
+  // W-1: a spot of the pad tool is computed at the pads index scenario and a band budget (D81 / D21),
+  // never dropped for the official pad
+  if (spot) {
+    const q: EditPlan = { scenario: c.padScenario, budgetMin: c.bandBudgetsMin.includes(p.budgetMin) ? p.budgetMin : c.bandBudgetsMin[0], pad, dwell: {} }
+    if (planAvailability(q, c, true).ok) return q
+  }
+  return { scenario: c.defaultScenario, budgetMin: c.bandBudgetsMin[0], pad: c.officialPadId, dwell: {} }
 }
 
 /** Validity lookups at a stop from the published field (null where the browser has no field). */
@@ -124,6 +188,10 @@ export function mountRoutePanel(o: MountRouteOptions): () => void {
   const live = signal(false)
   const reason = signal<string | null>(ROUTE_TEXT.checkingLive)
   let ctl: RouteController | null = null
+  const subs = new Set<() => void>()
+  const emit = () => {
+    for (const fn of [...subs]) fn()
+  }
 
   void (async () => {
     const L = data()
@@ -135,7 +203,14 @@ export function mountRoutePanel(o: MountRouteOptions): () => void {
       lon: s.access_lon ?? s.lon,
       lat: s.access_lat ?? s.lat,
     }))
-    const store = createRouteStore({ catalog, plan: () => missionPlan(catalog) })
+    const store = createRouteStore({
+      catalog,
+      plan: () => missionPlan(catalog, o.pad?.pad() ?? null),
+      // the crew panel's changed fields go with the same job (W-1); a field that is not a number blocks it
+      extra: () => o.crew?.jobInputs() ?? null,
+      tag: missionPlanKey(catalog),
+    })
+    const blocked = signal<string | null>(o.crew?.blocked() ?? null)
     const padOf = () => {
       const p = store.step.peek().inputs.pad
       return { lon: p.lon, lat: p.lat }
@@ -151,16 +226,62 @@ export function mountRoutePanel(o: MountRouteOptions): () => void {
         .finally(() => (asking = false))
     }
     askIdentity()
+    // after unmount the console map is gone: never restore or draw into it (R5-B)
+    const rmap = o.cmap ? consoleRouteMap(o.cmap, () => (alive ? (o.restore ?? restoreStatic)(o.cmap!).catch((e) => void (alive && console.warn('edit route: static plan not restored:', e))) : undefined), () => alive) : null
     const c = (ctl = createRouteController({
       store,
       jobs: createRouteJobs({ client: o.client, loaderFor: o.loaderFor, job: o.job }),
       stations,
       pad: padOf,
       probe: o.probe ?? fieldProbe,
-      // after unmount the console map is gone: never restore or draw into it (R5-B)
-      map: o.cmap ? consoleRouteMap(o.cmap, () => (alive ? (o.restore ?? restoreStatic)(o.cmap!).catch((e) => void (alive && console.warn('edit route: static plan not restored:', e))) : undefined), () => alive) : null,
+      map: rmap,
       canCompute: live,
+      blocked,
     }))
+    // I1b (D128): the instant browser estimate, recomputed on every route / plan edit (no API involved)
+    const est = createRouteEstimate({ store, pad: padOf, ...o.estimate })
+    offs.push(() => est.dispose())
+    // I1b: an infeasible estimate marks its first failing leg on the map as a server result does (D117),
+    // while no server job or result owns the map
+    if (rmap) {
+      let marked = false
+      offs.push(
+        effect(() => {
+          const s = est.state.value
+          if (c.compute.value.kind !== 'idle') return void (marked = false)
+          if (s.kind === 'ready' && !s.result.feasibility.feasible) {
+            const f = s.result.feasibility
+            const route = store.route.peek()
+            rmap.highlightLeg(legCoords(route, f.leg, { stations, pad: padOf() }), fill(MAP_TEXT.fails, { limit: LIMIT_SHORT[f.term as RouteLimit] ?? f.term }), f.leg, { name: f.from, label: MAP_TEXT.end, leg: f.leg })
+            marked = true
+          } else if (marked) {
+            rmap.highlightLeg(null)
+            marked = false
+          }
+        }),
+      )
+    }
+    // W-9 (L7b, T9): the top bar's "Official plan" clears a shown route result or a running job
+    const op = officialPart('live-route', () => c.reset())
+    offs.push(
+      effect(() => op.set(c.compute.value.kind !== 'idle')),
+      op.dispose,
+    )
+    // WP12: setRouteDraft (edit/route/store.ts, for the search route builder) writes to this panel
+    offs.push(registerRouteDraftTarget(c.draftTarget()))
+    const undo = createSharedUndo({ ctl: c, planKey: missionPlanKey(catalog), win: o.win === undefined ? (typeof window !== 'undefined' ? window : null) : o.win })
+    offs.push(undo.install())
+    // the pad tool's spot and the crew panel change the inputs and the hash, not the route history
+    if (o.pad) offs.push(o.pad.subscribe(() => store.planChanged()))
+    if (o.crew) {
+      const crew = o.crew
+      offs.push(
+        crew.subscribe(() => {
+          blocked.value = crew.blocked()
+          store.planChanged()
+        }),
+      )
+    }
     // the console's plan (pad drag, scenario) changes the inputs and the hash, not the route history
     let first = true
     offs.push(
@@ -168,24 +289,38 @@ export function mountRoutePanel(o: MountRouteOptions): () => void {
         void mission.plan.pad.value
         void mission.plan.scenario.value
         void mission.plan.variant.value
+        void mission.plan.budgetMin.value
         if (first) first = false
-        else store.planChanged()
+        else {
+          store.planChanged()
+          undo.planChanged()
+        }
       }),
     )
-    // Kit rule 4 / F23: live controls hide behind the offline banner. The section is registered only
-    // while /health says the server is ready (heavy jobs off: shown, Compute disabled with the reason);
-    // the route and its undo history stay in memory and come back with the server.
+    // I1b (D128): the section is registered once and stays, API up or down: the browser estimate and
+    // Send to simulator need no server. Kit rule 4 / F23 now covers the server's Compute plan only:
+    // disabled with the offline note (L-05's text) as its reason; a running job is dropped.
     let unregister: (() => void) | null = null
     const section = () => {
-      const off = (o.register ?? registerRailSection)({ id: ROUTE_SECTION_ID, modes: ['plan'], title: 'nav.rail.stationsRoute', icon: 'station', render: () => h(RoutePanel, { ctl: c, live, reason, key: ROUTE_TEXT.title }) })
-      // WP6: free waypoints (markers, click to add) and the ghost route (estimate) on the console map,
-      // shown and hidden with the panel (offline: gone with the other live controls)
+      // L3 (D111): mounted in the Edit-route drawer (ui/shell/editroute.tsx), not the Plan rail
+      const off = (o.register ?? registerEditRoute)({
+        id: ROUTE_SECTION_ID,
+        modes: ['plan'],
+        title: 'nav.rail.stationsRoute',
+        icon: 'station',
+        render: () => h(RoutePanel, { ctl: c, live, reason, undo, resultSlot: o.resultSlot ?? null, estimate: est, key: ROUTE_TEXT.title }),
+      })
+      // WP6: free waypoints (markers, click to add) and the ghost route (estimate) on the console map
       const offMap = installWaypointMap(c, o.cmap)
       return () => {
         offMap()
         off()
       }
     }
+    if (alive) unregister = section()
+    // L-05 / I1b: the offline note inside the drawer (only the server Compute plan is unavailable)
+    const noteText = signal<string | null>(ROUTE_TEXT.checkingLive)
+    offs.push((o.registerNote ?? registerEditRouteNote)({ render: () => h(RouteOfflineNote, { note: noteText, key: 'offline' }) }))
     offs.push(() => {
       unregister?.()
       unregister = null
@@ -194,20 +329,38 @@ export function mountRoutePanel(o: MountRouteOptions): () => void {
       o.onLiveState((s) => {
         const b = bannerFor(s)
         live.value = b.controls && b.heavyJobs
-        reason.value = b.controls ? (b.heavyJobs ? null : ROUTE_TEXT.heavyJobsOff) : (b.text ?? ROUTE_TEXT.checkingLive)
-        if (!b.controls) {
-          c.reset()
-          unregister?.()
-          unregister = null
-          return
-        }
-        if (!unregister && alive) unregister = section()
+        reason.value = b.controls ? (b.heavyJobs ? null : ROUTE_TEXT.heavyJobsOff) : null
+        noteText.value = offlineNoteText(s, b.text)
+        if (!b.controls) c.reset()
+        emit()
         // the engine identity (plan hash) is asked again once the server is back
-        if (!store.identity.peek()) askIdentity()
+        if (b.controls && !store.identity.peek()) askIdentity()
       }),
     )
     // R5-C: while a route result is shown, the EVA-time dock must not show the official plan's timeline
     offs.push(routeDock(c))
+    // W-1: the Live pad card's handle (one compute action, one job, one progress)
+    offs.push(effect(() => {
+      void c.compute.value
+      void c.check.value
+      void live.value
+      void blocked.value
+      emit()
+    }))
+    o.onReady?.({
+      ctl: c,
+      undo,
+      status: () => (c.compute.peek().kind === 'running' ? 'running' : unregister && live.peek() ? 'ready' : 'unavailable'),
+      subscribe(fn) {
+        subs.add(fn)
+        return () => void subs.delete(fn)
+      },
+      compute() {
+        if (!unregister) return
+        revealRail()
+        if (!c.computePlan() && c.compute.peek().kind !== 'running') c.requestFocus()
+      },
+    })
   })().catch((e) => console.warn('edit route unavailable:', e))
 
   return () => {

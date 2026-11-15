@@ -9,6 +9,7 @@
  *       (live planner)"; never a "computing…" row that never computes.
  *   T2  dropping next to P5 (pad_default) says why P5 is refused (the browser spot check) while
  *       snapping elsewhere, as before.
+ * L2d (D111): the delta strip ("What this change costs") is in the rover card on the map (#hl-lay-rover).
  * Not a screenshot test. Run: cd web && npm run build && npx playwright test tests/visual/official-plan.spec.ts
  */
 import { expect, test, type Page } from 'playwright/test'
@@ -21,6 +22,9 @@ const LIVE_SNAP = 'Release to snap to a parking option · for a custom spot, cli
 
 const roverEl = (page: Page) => page.locator('.hl-edit-rover')
 const card = (page: Page) => page.locator('.hl-sidebar__body')
+/** L2d (D111): the delta strip shows in the rover card on the map (#hl-lay-rover), not the sidebar */
+const strip = (page: Page) => page.locator('#hl-lay-rover')
+const noStrip = (page: Page, timeout = 5_000) => expect(page.locator('.hl-edit-delta')).toHaveCount(0, { timeout })
 
 async function center(page: Page): Promise<Pt> {
   const b = (await roverEl(page).boundingBox())!
@@ -88,10 +92,10 @@ test('T9: "Official plan" is disabled with its reason on the official plan, and 
   await page.mouse.down()
   await page.mouse.move(at.x - 60, at.y + 10, { steps: 12 })
   await page.mouse.up()
-  await expect(card(page)).toContainText('What this change costs', { timeout: 10_000 })
+  await expect(strip(page)).toContainText('What this change costs', { timeout: 10_000 })
   await expect(btn).toBeEnabled() // an open draft already differs
   await page.keyboard.press('Enter')
-  await expect(card(page)).not.toContainText('What this change costs', { timeout: 5_000 })
+  await noStrip(page)
   await expect(roverEl(page)).not.toHaveAttribute('data-select-pad', 'rank1')
   await expect(btn).toBeEnabled()
   await expect(btn).toHaveAttribute('title', /^Back to the official plan/)
@@ -106,7 +110,7 @@ test('T9: "Official plan" is disabled with its reason on the official plan, and 
   // the rover sits on the official pad again (the camera may have moved with the selection)
   await expect.poll(async () => dist(await settled(page), await pointOf(page, 'PAD')), { timeout: 10_000 }).toBeLessThan(3)
   await expect(card(page)).not.toContainText('Parking option')
-  await expect(card(page)).not.toContainText('What this change costs')
+  await noStrip(page)
 })
 
 test('T9: "Official plan" discards a released draft that was not kept', async ({ page }) => {
@@ -115,9 +119,9 @@ test('T9: "Official plan" discards a released draft that was not kept', async ({
   await page.mouse.down()
   await page.mouse.move(at.x - 60, at.y + 10, { steps: 12 })
   await page.mouse.up()
-  await expect(card(page)).toContainText('What this change costs', { timeout: 10_000 })
+  await expect(strip(page)).toContainText('What this change costs', { timeout: 10_000 })
   await page.locator(OFFICIAL_BTN).click()
-  await expect(card(page)).not.toContainText('What this change costs', { timeout: 5_000 })
+  await noStrip(page)
   await expect(page.locator(OFFICIAL_BTN)).toBeDisabled()
   await expect.poll(async () => dist(await settled(page), await pointOf(page, 'PAD')), { timeout: 10_000 }).toBeLessThan(3)
 })
@@ -140,7 +144,7 @@ test('T2: the drag readout is truthful about the live planner (off vs ready), wi
   expect(box.x > drop.x + 12 || box.y > drop.y + 12, `readout ${JSON.stringify(box)} clear of the drop point ${JSON.stringify(drop)}`).toBe(true)
   await page.mouse.up()
   await page.keyboard.press('Escape')
-  await expect(card(page)).not.toContainText('What this change costs', { timeout: 5_000 })
+  await noStrip(page)
 
   // live ready (what the live layer reports through the seam)
   await page.evaluate(() => window.dispatchEvent(new CustomEvent('hl:live-status', { detail: 'ready' })))
@@ -151,7 +155,7 @@ test('T2: the drag readout is truthful about the live planner (off vs ready), wi
   await expect(readout).not.toContainText('offline')
   await expect(readout).not.toContainText('computing')
   await page.mouse.up()
-  await expect(card(page)).toContainText('What this change costs', { timeout: 10_000 })
+  await expect(strip(page)).toContainText('What this change costs', { timeout: 10_000 })
   await expect(card(page)).not.toContainText(STATIC_SNAP)
 
   // and unreachable again: back to the static text
@@ -183,7 +187,7 @@ test('T2: dropping next to P5 says why P5 is refused, and the rover still snaps 
   // snapping unchanged: the target is another pad
   await expect(page.locator('.hl-edit-drag__snap')).not.toContainText('P5')
   await page.mouse.up()
-  await expect(card(page)).toContainText('What this change costs', { timeout: 10_000 })
+  await expect(strip(page)).toContainText('What this change costs', { timeout: 10_000 })
   await expect(roverEl(page)).not.toHaveAttribute('data-select-pad', 'pad_default')
   await page.keyboard.press('Escape')
 })

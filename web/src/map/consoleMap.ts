@@ -28,6 +28,7 @@ import type { RoverHandle } from '../edit/roverMap'
 import { FlythroughControl } from './flythrough/control'
 import { installStorm } from './storm'
 import { storyParams, storyRequest } from '../story/query'
+import { whenIntroStarted } from '../story/loading'
 import { CameraController, type ControllerMap } from './camera'
 import { installOverlays } from './overlays'
 import { MapSelection, SELECT_ROUTE_HIT, type SelectMap, type SelectSources } from './select'
@@ -181,7 +182,8 @@ export class ConsoleMap {
     // X3 (fallback drill finding 1): the view may be gone before 'load'; never touch a removed map
     this.ready.then(() => !this.destroyed && this.initLayers())
     if (container.closest('.hl-shell'))
-      void this.ready.then(() => import('../edit/roverMap')).then((m) => {
+      // L12 (c): the edit code loads once the intro has started (or at once when none plays)
+      void this.ready.then(() => whenIntroStarted()).then(() => import('../edit/roverMap')).then((m) => {
         if (this.destroyed) return
         this.rover = m.installRoverDrag(this.map)
         if (this.padMarker) this.rover.attach(this.padMarker)
@@ -247,7 +249,8 @@ export class ConsoleMap {
     this.applyFilters()
     this.applyVisibility()
     void this.initLabels()
-    this.map.addControl(new FlythroughControl(), 'top-right')
+    // L10 (D111): the flythrough shows the route (with the crew marker) and the stations while it flies
+    this.map.addControl(new FlythroughControl({ get: (g) => this.layerVisible(g), set: (g, on) => this.setVisible(g, on) }), 'top-right')
     this.stopStorm = installStorm(this.map)
     this.selectMap = new MapSelection(m as unknown as SelectMap, this.selectSources, { setSelectedLabel, marker: (el) => new Marker({ element: el }) })
     this.selectMap.addLayers()

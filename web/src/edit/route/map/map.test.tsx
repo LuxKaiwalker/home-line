@@ -393,6 +393,8 @@ describe('static first (VITE_LIVE off): the static build does not contain the ro
       }
     }
     visit(SRC)
-    expect(importers.sort()).toEqual(['edit/route/panel.tsx', 'live/route/mount.tsx'])
+    // I1a: edit/route/browser/ (the in-browser route computation) builds on map/ and is itself live-only
+    // (the static-entry test above covers all of edit/route/)
+    expect(importers.filter((f) => !f.startsWith(`edit${sep}route${sep}browser${sep}`)).sort()).toEqual(['edit/route/panel.tsx', 'live/route/mount.tsx'])
   })
 })

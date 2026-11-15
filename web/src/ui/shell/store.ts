@@ -35,13 +35,16 @@ export interface ModeView {
 export const MODE_VIEWS: Readonly<Record<Mode, readonly ModeView[]>> = {
   plan: [
     { route: { name: 'console' }, label: 'modes.plan.label', icon: 'map' },
-    { route: { name: 'trade' }, label: 'nav.views.trade', icon: 'file-text' },
   ],
   fly: [
     { route: { name: 'hud' }, label: 'nav.views.hud', icon: 'gauge' },
     { route: { name: 'conditions' }, label: 'nav.views.conditions', icon: 'sun' },
   ],
-  report: [{ route: { name: 'cuff' }, label: 'nav.views.cuff', icon: 'printer' }],
+  // L2 (D111, L0 Q2): the trade table is document content, so it lives in Report
+  report: [
+    { route: { name: 'cuff' }, label: 'nav.views.cuff', icon: 'printer' },
+    { route: { name: 'trade' }, label: 'nav.views.trade', icon: 'file-text' },
+  ],
   evidence: [
     { route: { name: 'scorecard' }, label: 'nav.views.scorecard', icon: 'shield-check' },
     { route: { name: 'about' }, label: 'nav.views.about', icon: 'info' },
@@ -64,15 +67,38 @@ export const shell = {
   /** Tablet (768–1279) only: the rail is a 56 px icon column; its toggle opens the full rail as an
    *  overlay sheet over the map. Kept apart from ui.panels.leftRail so the desktop preference stays. */
   railSheet: signal<boolean>(false),
+  /** L2 (D111): what the Plan map view (views/console.tsx, shell frame) shows itself, by id:
+   *  'timeline' = the timeline is in its bottom drawer (the shell dock stays empty in Plan);
+   *  'station'  = station selections open its station card (no sidebar, no Details toggle in Plan);
+   *  any rail section id (e.g. 'layers') = that Plan rail section is drawn in a map popover instead.
+   *  Add with hostIn(id) from the mount that does it; its cleanup removes it again. */
+  hosted: signal<readonly string[]>([]),
   /** Last hash visited per mode, so a mode tab returns to where the user was (e.g. a station). */
   lastHash: signal<Readonly<Record<Mode, string>>>(Object.fromEntries(MODES.map((m) => [m, canonicalHref(MODE_VIEWS[m][0].route)])) as Record<Mode, string>),
 }
+
+/** L2 (D111): the rail is a 56 px icon column whose toggle opens a sheet over the map: on a tablet, and
+ *  on desktop in the map modes (Plan, Fly), so the map keeps the width. Report and Evidence keep the
+ *  desktop rail (documents). */
+export const railSheetMode = (): boolean => {
+  const bp = shell.breakpoint.value
+  return bp === 'tablet' || (bp === 'desktop' && isMapMode(ui.mode.value ?? 'plan'))
+}
+/** Mark `id` as hosted by the Plan map view (shell.hosted); returns the undo. */
+export function hostIn(id: string): () => void {
+  shell.hosted.value = [...shell.hosted.peek().filter((x) => x !== id), id]
+  return () => void (shell.hosted.value = shell.hosted.peek().filter((x) => x !== id))
+}
+/** In Plan, whether the map view hosts `id` (see shell.hosted). */
+export const hostedInPlan = (id: string): boolean => (ui.mode.value ?? 'plan') === 'plan' && shell.hosted.value.includes(id)
+/** Whether the Plan map view shows the timeline (its bottom drawer) instead of the shell dock. */
+export const dockHosted = (): boolean => hostedInPlan('timeline')
 
 export const railCollapsed = (): boolean => ui.panels.leftRail.value === TOKENS.layout.leftRailCollapsed
 /** Whether the rail shows as icons only: on a tablet unless its sheet is open, on desktop when collapsed. */
 export const railIconOnly = (): boolean => {
   const bp = shell.breakpoint.value
-  return bp === 'tablet' ? !shell.railSheet.value : bp === 'desktop' && railCollapsed()
+  return railSheetMode() ? !shell.railSheet.value : bp === 'desktop' && railCollapsed()
 }
 export function setRailCollapsed(c: boolean): void {
   ui.panels.leftRail.value = c ? TOKENS.layout.leftRailCollapsed : TOKENS.layout.leftRail

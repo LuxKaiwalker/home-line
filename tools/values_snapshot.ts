@@ -289,6 +289,7 @@ async function waitUntil(page: Page, cond: () => Promise<boolean>, what: string)
  */
 async function select(page: Page, ctl: Loc, name: string, isOn: () => Promise<boolean>, act: 'click' | 'check' = 'click', settleAfter = true): Promise<void> {
   await step(name, async () => {
+    await reveal(page, ctl)
     await ctl.waitFor({ state: 'visible', timeout: SETTLE_TIMEOUT_MS })
     if (await isOn()) return
     await waitUntil(page, () => ctl.isEnabled(), 'the control to be enabled')
@@ -297,6 +298,23 @@ async function select(page: Page, ctl: Loc, name: string, isOn: () => Promise<bo
     await waitUntil(page, isOn, 'the click to take effect')
     if (settleAfter) await settle(page, `${name} (after)`)
   })
+}
+
+/**
+ * Plan layout (L2, D111): a console control can sit in a closed container (bottom drawer, popover); its
+ * section names the openers to press in `data-hl-reveal` (JSON list of selectors, each pressed only when
+ * present: a closed container's opener). Opening a container changes no number (the closed sections stay
+ * in the page, so `collectInPage` sees the same values either way).
+ */
+async function reveal(page: Page, ctl: Loc): Promise<void> {
+  await ctl.waitFor({ state: 'attached', timeout: SETTLE_TIMEOUT_MS })
+  if (await ctl.isVisible()) return
+  const steps = await ctl.evaluate((el) => el.closest('[data-hl-reveal]')?.getAttribute('data-hl-reveal') ?? null)
+  if (!steps) return
+  for (const sel of JSON.parse(steps) as string[]) {
+    const b = page.locator(sel).first()
+    if (await b.count()) await b.click({ timeout: SETTLE_TIMEOUT_MS })
+  }
 }
 
 const ariaChecked = (b: Loc) => async () => (await b.getAttribute('aria-checked')) === 'true'
