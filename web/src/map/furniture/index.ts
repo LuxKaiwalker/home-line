@@ -20,6 +20,7 @@ import { MARKERS_TRUST, pulseFrame, stationFeatures, type MarkerStation } from '
 import { CursorReadout, readoutValues } from '../readout'
 import { playDrawOn, routeFeatures, routeLine, routeLineFromFC, turnBackTicks, type RouteLine, type TurnBackTick } from '../route'
 import { dashPattern, setThreadSources, threadColor, threadPath, threadTooltip, THREAD_INTERVAL_MS, type ThreadPath } from '../thread'
+import { hoverTipText, threadFrom, WAY_HOME_KEY, wayHomeHeld } from './hover'
 import './furniture.css'
 
 const EMPTY: GeoJSON.FeatureCollection = { type: 'FeatureCollection', features: [] }
@@ -50,6 +51,9 @@ export class MapFurniture {
   private readonly compass = new CompassControl()
   private readonly tooltip: HTMLDivElement
   private tooltipMarker: Marker | null = null
+  /** L7a: the passive hover tooltip (a field lookup at the pointer, labelled estimate) */
+  private readonly hoverTip: HTMLDivElement
+  private hoverMarker: Marker | null = null
   private scenario: string | null = null
   private planSeq = 0
   private plan: Plan | null = null
@@ -62,6 +66,8 @@ export class MapFurniture {
   private slope: FieldGrid | null = null
   private stations: MarkerStation[] = []
   private cursor: LonLat | null = null
+  /** L7a: the way-home key (hover.ts WAY_HOME_KEY) is held: the explicit "thread from the pointer" mode */
+  private wayHome = false
   private lastCompute = 0
   private timer = 0
   private raf = 0
@@ -89,11 +95,22 @@ export class MapFurniture {
     // trust-chip hook: the thread's numbers are Modelled (fieldAt over the WS2 fields)
     this.tooltip.setAttribute('data-trust', 'modelled')
     this.tooltip.setAttribute('data-trust-source', 'fields t_home.png o2_home.png pointer.png (fieldAt)')
+    this.hoverTip = document.createElement('div')
+    this.hoverTip.className = 'hl-thread-tooltip hl-hover-tip'
+    this.hoverTip.setAttribute('role', 'status')
+    this.hoverTip.setAttribute('data-trust', 'modelled')
+    this.hoverTip.setAttribute('data-estimate', 'true')
+    this.hoverTip.setAttribute('data-trust-source', 'fields t_home.png (fieldAt, nearest pixel)')
     this.addLayers()
     map.addControl(this.compass, 'top-right')
     map.addControl(this.readout, 'bottom-right')
     map.on('mousemove', this.onMove)
     map.on('mouseout', this.onOut)
+    if (typeof window !== 'undefined') {
+      window.addEventListener('keydown', this.onKey)
+      window.addEventListener('keyup', this.onKey)
+      window.addEventListener('blur', this.onBlur)
+    }
     // the clock: crew position thread, done / coming route, next station, sun direction
     this.stops.push(
       effect(() => {
@@ -277,13 +294,28 @@ export class MapFurniture {
   }
 
   // ---- cursor and clock: throttled to thread.update_hz ------------------------------------------
+  // L7a (D111): a move only records where the pointer is; update() turns it into a passive lookup,
+  // or into the thread from the pointer while the way-home key is held (never during the replay)
   private readonly onMove = (e: MapMouseEvent): void => {
     if (this.paused) return // a story is playing: hover changes nothing (D111)
     this.cursor = [e.lngLat.lng, e.lngLat.lat]
+    this.wayHome = wayHomeHeld(e.originalEvent)
     this.schedule()
   }
   private readonly onOut = (): void => {
     this.cursor = null
+    this.schedule()
+  }
+  private readonly onKey = (e: KeyboardEvent): void => {
+    if (e.key !== WAY_HOME_KEY) return
+    const on = e.type === 'keydown'
+    if (on === this.wayHome) return
+    this.wayHome = on
+    if (this.cursor) this.schedule()
+  }
+  private readonly onBlur = (): void => {
+    if (!this.wayHome) return
+    this.wayHome = false
     this.schedule()
   }
 
@@ -316,8 +348,14 @@ export class MapFurniture {
 
   private update(): void {
     const t = mission.clock.t.peek()
-    const crew = this.plan && (mission.clock.playing.peek() || t > 0) ? this.plan.stateAt(t) : null
-    const from: LonLat | null = this.cursor ?? (crew ? [crew.lon, crew.lat] : null)
+    const playing = mission.clock.playing.peek()
+    const crew = this.plan && (playing || t > 0) ? this.plan.stateAt(t) : null
+    // L7a (D111): hover never changes state: the replay keeps the crew's thread; the pointer gets one
+    // only in the explicit mode (way-home key held, clock not playing)
+    const start = threadFrom({ cursor: this.cursor, wayHome: this.wayHome, playing, crew: crew ? [crew.lon, crew.lat] : null })
+    const from = start.at
+    const c = this.map.getContainer()
+    if (c.getAttribute('data-thread-from') !== start.kind) c.setAttribute('data-thread-from', start.kind) // tests, RR
     this.thread = from ? threadPath(from[0], from[1], t) : null
     const src = this.map.getSource('thread') as GeoJSONSource | undefined
     src?.setData(this.thread ? { type: 'Feature', geometry: { type: 'LineString', coordinates: this.thread.coords }, properties: {} } : EMPTY)
@@ -333,7 +371,19 @@ export class MapFurniture {
       this.tooltipMarker?.remove()
       this.tooltipMarker = null
     }
-    this.readout.set(this.cursor ? readoutValues(this.cursor[0], this.cursor[1], this.cursor ? fieldAt(this.cursor[0], this.cursor[1]) : null, this.slope ? (lo, la) => this.slope!.valueAt(lo, la) : null) : null)
+    // the passive hover tooltip: a field lookup at the pointer (estimate), unless the thread starts there
+    const cs = this.cursor ? fieldAt(this.cursor[0], this.cursor[1]) : null
+    const tip = this.cursor && start.kind !== 'pointer' ? hoverTipText(cs) : null
+    if (this.cursor && tip !== null) {
+      this.hoverTip.textContent = tip
+      this.hoverTip.setAttribute(FIELD_TRUST.attr, FIELD_TRUST.chip)
+      this.hoverMarker ??= new Marker({ element: this.hoverTip, anchor: 'top-left', offset: [12, 12] })
+      this.hoverMarker.setLngLat(this.cursor).addTo(this.map)
+    } else {
+      this.hoverMarker?.remove()
+      this.hoverMarker = null
+    }
+    this.readout.set(this.cursor ? readoutValues(this.cursor[0], this.cursor[1], cs, this.slope ? (lo, la) => this.slope!.valueAt(lo, la) : null) : null)
     this.renderRoute()
     this.renderStations()
     this.loop()
@@ -390,7 +440,13 @@ export class MapFurniture {
     if (this.raf) cancelAnimationFrame(this.raf)
     this.map.off('mousemove', this.onMove)
     this.map.off('mouseout', this.onOut)
+    if (typeof window !== 'undefined') {
+      window.removeEventListener('keydown', this.onKey)
+      window.removeEventListener('keyup', this.onKey)
+      window.removeEventListener('blur', this.onBlur)
+    }
     this.tooltipMarker?.remove()
+    this.hoverMarker?.remove()
     setThreadSources(null)
   }
 }

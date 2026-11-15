@@ -195,3 +195,7 @@ html[data-story-chrome='hide'] .hl-shell .hl-dock, html[data-story-chrome='hide'
   outline: var(--line-focus-ring) solid var(--color-select);
   outline-offset: var(--line-focus-ring);
 }
+
+/* L7b (T9): the Official plan action in the Plan top bar */
+.hl-officialplan { display: inline-flex; }
+.hl-officialplan .hl-btn { white-space: nowrap; }
