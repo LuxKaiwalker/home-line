@@ -807,6 +807,7 @@
     "estimates": {
       "title": "Estimated times and consumption",
       "notRouted": "A leg could not be routed (see the waypoint list): times and O₂ are unknown until it is moved or removed.",
+      "routing": "Routing {n} new leg(s)… times and O₂ follow when the routes are in.",
       "timeHome": "Time home",
       "timeHomeFrom": "Time home from #{n}",
       "timeHomeTitle": "The engine's T_home at the last waypoint (fastest walk back to the pad)",
@@ -862,6 +863,7 @@
       "legFrom": "#{from} → #{to}",
       "legStats": "{minutes} min · {distance} · {o2} L O₂",
       "noRoute": "no walkable route from the previous point",
+      "routing": "routing…",
       "stationLink": "{id} details →",
       "stationLinkTitle": "Open the station card",
       "moveUp": "Move up",
@@ -894,6 +896,7 @@
     "export": {
       "button": "Download mission.json",
       "buttonTitle": "mission.json for the EVA simulator (contracts/bundle/mission.schema.json)",
+      "routingTitle": "Wait until every leg is routed",
       "lowestMargin": "lowest margin {margin} min ({binding})",
       "storm": "Replay the {date} storm during this EVA",
       "stormTitle": "The storm series is shifted so its tripwire fires at the route's largest T_home; the dose term joins the margin",
