@@ -128,6 +128,8 @@
     },
     "station": {
       "title": "Science target",
+      "open": "Open station",
+      "openTip": "The full station page: Navcam photo, panorama, timeline and tasks",
       "objective": "Objective",
       "tasks": "Tasks",
       "dwell": "Dwell",
@@ -482,6 +484,7 @@
 
   "edit": {
     "computing": "computing…",
+    "roverCard": "Rover move",
     "ghost": "Ghost: not yet computed",
     "deltaTitle": "What this change costs",
     "keepOrDiscard": "Enter to keep, Escape to discard",
