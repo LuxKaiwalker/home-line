@@ -3,7 +3,10 @@
 // trailing newline), so import(export(x)) gives x back and export(import(file)) gives the same bytes.
 // Import checks the file client-side before anything is sent: size cap and title cap from
 // config/backend.yaml limits, JSON, and plan_inputs.schema.json (unknown fields refused).
+// The route (D97) travels in the same file: `route` is checked against the draft v1.2.0 shape in
+// plans/route.ts and the rest against the schema, until R0 puts `route` into the schema itself.
 import { TITLE_MAX_CHARS, UPLOAD_MAX_BYTES } from './config'
+import { checkRoute } from './plans/route'
 import { validatePlanInputs } from './schemacheck'
 import type { PlanInputs } from './types'
 
@@ -54,11 +57,23 @@ export function checkPlanInputsText(text: string, bytes = utf8Bytes(text)): Impo
   } catch (e) {
     return { ok: false, errors: [`not JSON: ${e instanceof Error ? e.message : String(e)}`] }
   }
-  const errors = validatePlanInputs(doc)
-  if (errors.length) return { ok: false, errors: errors.map((e) => `plan_inputs.schema.json: ${e}`) }
+  const errors = checkPlanInputsDoc(doc)
+  if (errors.length) return { ok: false, errors }
   const title = (doc as { title?: string }).title
   if (title !== undefined && [...title].length > TITLE_MAX_CHARS) return { ok: false, errors: [`title is longer than ${TITLE_MAX_CHARS} characters (limits.title_max_chars)`] }
   return { ok: true, inputs: doc as PlanInputs }
+}
+
+/**
+ * Errors of a parsed plan_inputs document, readable: the schema's for everything but `route`, the
+ * draft route shape's for `route` (missing = auto). [] = valid.
+ */
+export function checkPlanInputsDoc(doc: unknown): string[] {
+  if (!doc || typeof doc !== 'object' || Array.isArray(doc)) return ['plan_inputs.schema.json: $: must be an object']
+  const { route, ...rest } = doc as Record<string, unknown>
+  const errors = validatePlanInputs(rest).map((e) => `plan_inputs.schema.json: ${e}`)
+  if (route !== undefined) errors.push(...checkRoute(route, '$.route').map((e) => `route (draft v1.2.0): ${e}`))
+  return errors
 }
 
 const tooLarge = (bytes: number) => `file is ${bytes} bytes; the limit is ${UPLOAD_MAX_BYTES} bytes (limits.upload_max_bytes)`

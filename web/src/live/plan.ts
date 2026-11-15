@@ -13,6 +13,7 @@ import { ApiError, type ApiClient } from './client'
 import { HASH_HEX_CHARS } from './config'
 import { startJob, type JobOptions, type JobOutcome } from './jobs'
 import { checkPlanInputsFile, type FileLike } from './planio'
+import { checkRoute, routeOf, ROUTE_MODES, type RouteSpec, type RouteMode } from './plans/route'
 import { liveLoader } from './result'
 import { validateRunRecord } from './schemacheck'
 import { loadStage, type LoaderFor, type StageResult } from './stage'
@@ -61,6 +62,37 @@ export interface LoadPlanOptions {
   onRecord?: (record: RunRecord) => void
 }
 
+// --- route in the run record (D97, draft v1.2.0) ---
+// R0 adds `route_mode` and `feasibility` to run_record and `route` to plan_inputs; the v1.0.x schemas
+// refuse unknown fields. Until R0 merges, those three are checked here (route_mode and inputs.route
+// against the draft shape; feasibility is R5's to read) and the rest against run_record.schema.json.
+
+/** A run record with the draft v1.2.0 route fields. */
+export type RouteRunRecord = RunRecord & { route_mode?: RouteMode; feasibility?: unknown }
+
+/** Contract errors of a run record, with the draft route fields allowed. [] = valid. */
+export function checkRunRecord(record: unknown): string[] {
+  if (!record || typeof record !== 'object' || Array.isArray(record)) return validateRunRecord(record)
+  const { route_mode, feasibility, ...rest } = record as Record<string, unknown>
+  void feasibility
+  const errs: string[] = []
+  let inputs = rest.inputs
+  if (inputs && typeof inputs === 'object' && !Array.isArray(inputs) && 'route' in inputs) {
+    const { route, ...other } = inputs as Record<string, unknown>
+    errs.push(...checkRoute(route, '$.inputs.route'))
+    inputs = other
+  }
+  if (route_mode !== undefined && !ROUTE_MODES.includes(route_mode as RouteMode)) errs.push(`$.route_mode: must be "auto" or "ordered", not ${JSON.stringify(route_mode)}`)
+  return [...validateRunRecord({ ...rest, inputs }), ...errs]
+}
+
+/** The route a result was computed with: the record's route_mode, else its inputs' route (missing = auto). */
+export function recordRoute(record: RunRecord): RouteSpec {
+  const r = routeOf(record.inputs)
+  const mode = (record as RouteRunRecord).route_mode
+  return mode && mode !== r.mode ? { ...r, mode } : r
+}
+
 const msg = (e: unknown) => (e instanceof Error ? e.message : String(e))
 
 /** Run record + result tree of `hash`. Never rejects: unknown, offline and broken answers are states. */
@@ -74,7 +106,7 @@ export async function loadPlan(client: ApiClient, hash: string, opts: LoadPlanOp
     if (e instanceof ApiError && e.transient) return { state: 'offline', hash, message: msg(e) }
     return { state: 'error', hash, message: msg(e) }
   }
-  const errs = validateRunRecord(record)
+  const errs = checkRunRecord(record)
   if (errs.length) return { state: 'error', hash, message: `run record fails run_record.schema.json: ${errs.slice(0, 3).join('; ')}` }
   if (record.hash !== hash) return { state: 'error', hash, message: `run record is for ${record.hash}, not ${hash}` }
   opts.onRecord?.(record)
