@@ -35,12 +35,24 @@ Stages (D81: the map fills in early; job.schema.json ``stages_done``):
 4. ``route``: stations.json, route, timeline, trade table, station cards (WS2's card part merged
    with the server data's WS3 horizon part by make web's merge_card; the parts themselves are
    not published).
-5. ``summary``: scenarios/index.json and manifest.json (written once, here), exporter files
-   (server.engine.exporters, D76), then the runner writes run_record.json last.
+5. ``summary``: the final scenarios/index.json and manifest.json (exactly the full call's index
+   and the merge of its manifest fragments), exporter files (server.engine.exporters, D76), then
+   the runner writes run_record.json last.
+Staged index and manifest (H5-1, D81; orchestrator decision E8c): the client finds every map file
+through scenarios/index.json and every number through manifest.json, so after each of stages 1-4
+the job writes a PARTIAL scenarios/index.json and manifest.json (``_publish_partial``) that list
+only what the tree holds so far and validate against the same contracts:
+- index: the engine's own index of the latest call (the preview's after stage 1, the full call's
+  once its web products exist), unmodified, published only when every file of every scenario it
+  lists is already in the tree; otherwise the previous index stays;
+- manifest: the entries of the preview's and the full call's manifest fragments (the full call's
+  win) whose ``file`` is in the tree with the bytes that call wrote (a merged card: present).
 A file is copied into the job tree only when its bytes changed, so a file of stage 1 that the full
-call reproduces byte for byte is published once. Files of a tree without run_record.json are
-served with ``Cache-Control: no-store`` (server.api.compute.results), so a rewritten band file is
-never cached.
+call reproduces byte for byte is published once; the files written more than once are
+scenarios/index.json, manifest.json and the band file. Every write is atomic (temp file plus
+rename). Files of a tree without run_record.json are served with ``Cache-Control: no-store``
+(server.api.compute.results), so a partial or rewritten file is never cached; once the run record
+exists the tree is immutable.
 
 World: ``$HL_SERVER_DATA/terrain`` (make serverdata's copy of the WS1 grids and stations.json).
 WS4 margin inputs are on when ``$HL_SERVER_DATA/conditions`` exists; the engine reads them from
@@ -68,7 +80,8 @@ STAGES = ("nominal", "bands", "partner", "route", "summary")
 # build_plan stage (pipeline/engine/plan.py on_stage) after which a job stage is published
 AT_BUILD_STAGE = {"web_products": "bands", "partner": "partner", "trade": "route"}
 CARD_PART = "cards/{S}.timeline.json"  # WS2's card part (cards.write); merged, never published
-HELD = ("scenarios/index.json",)  # written once, in the summary stage (with manifest.json)
+INDEX = "scenarios/index.json"
+HELD = (INDEX,)  # published by _publish_partial (once its files exist) and at summary
 MANIFEST = "manifest.json"
 WORK = ".work"  # hidden scratch dir inside the job's temp dir (never published or served)
 CONDITION_FILES = ("clock.json", "rad.json")  # what scenarios.conditions_inputs/storm_timing read
@@ -234,6 +247,59 @@ def _copy(ctx: JobContext, src_root: Path, rels) -> None:
         ctx.write_bytes(rel, src.read_bytes())
 
 
+def _index_ready(ctx: JobContext, src_pub: Path) -> bytes | None:
+    """The bytes of ``src_pub``'s scenarios/index.json if every file of every scenario it lists is
+    already in the job tree (so the client never follows the index to a missing file)."""
+    src = src_pub / INDEX
+    if not src.is_file():
+        return None
+    data = src.read_bytes()
+    need = {f for s in json.loads(data)["scenarios"] for f in s["files"].values()}
+    return data if all(ctx.path(f).is_file() for f in need) else None
+
+
+def partial_manifest(ctx: JobContext, sources: list[tuple[Path, Path]]) -> dict:
+    """The manifest of what the job tree holds now: the entries of each (fragment dir, public dir)
+    source, later sources winning, whose ``file`` is in the tree with the bytes that source wrote
+    (a file the source did not write itself, i.e. a merged card, only has to be present)."""
+    from pipeline.provenance import manifest
+
+    backed: dict[tuple[Path, str], bool] = {}
+
+    def ok(src_pub: Path, rel: str) -> bool:
+        if (src_pub, rel) not in backed:
+            try:
+                dst = ctx.path(rel)
+            except LookupError:  # not a servable path: never in the tree
+                backed[(src_pub, rel)] = False
+                return False
+            src = src_pub / rel
+            backed[(src_pub, rel)] = dst.is_file() and (
+                not src.is_file() or filecmp.cmp(src, dst, shallow=False))
+        return backed[(src_pub, rel)]
+
+    entries: dict = {}
+    for frag_dir, src_pub in sources:
+        for frag in manifest.load_fragments(frag_dir).values():
+            entries.update({k: e for k, e in frag.items() if ok(src_pub, e.get("file", ""))})
+    doc = {"dummy": False, **dict(sorted(entries.items()))}
+    manifest.validate(doc)
+    return doc
+
+
+def _publish_partial(ctx: JobContext, index_src: Path, sources: list[tuple[Path, Path]]) -> None:
+    """Stages 1-4 (H5-1): a partial scenarios/index.json and manifest.json, each written
+    (atomically) only when its bytes change."""
+    index = _index_ready(ctx, index_src)
+    if index is not None and not (ctx.path(INDEX).is_file()
+                                  and ctx.path(INDEX).read_bytes() == index):
+        ctx.write_bytes(INDEX, index)
+    doc = partial_manifest(ctx, sources)
+    data = (json.dumps(doc, indent=1, ensure_ascii=False) + "\n").encode("utf-8")
+    if not (ctx.path(MANIFEST).is_file() and ctx.path(MANIFEST).read_bytes() == data):
+        ctx.write_bytes(MANIFEST, data)
+
+
 def _check_conditions(cond_dir: Path) -> Path:
     """The engine reads WS4 margins from data/interim/conditions: they must be the server data's
     copies (which the terrain hash covers). Returns the rad.json the dose timing reads."""
@@ -267,11 +333,12 @@ def run_plan_job(inputs: dict, ctx: JobContext) -> dict:
     grid = load_ws1_grid(terrain)
     common = dict(terrain_dir=terrain, conditions=conditions, rad_json=rad, grid=grid)
 
-    # 1. nominal: the default scenario alone (preview call), published at once
-    pre = work / "preview"
-    build(inputs, out_dir=pre, public_dir=pre / "public", manifest_dir=work / "preview_manifest",
-          preview=True, **common)
-    _copy(ctx, pre / "public", nominal_files(pre / "public"))
+    # 1. nominal: the default scenario alone (preview call), published at once with a partial
+    # index and manifest (H5-1: the client finds the map files through them)
+    pre, pre_pub, pre_man = work / "preview", work / "preview" / "public", work / "preview_manifest"
+    build(inputs, out_dir=pre, public_dir=pre_pub, manifest_dir=pre_man, preview=True, **common)
+    _copy(ctx, pre_pub, nominal_files(pre_pub))
+    _publish_partial(ctx, pre_pub, [(pre_man, pre_pub)])
     ctx.stage("nominal")
 
     # 2-4. the full call, published as build_plan's stages finish
@@ -280,6 +347,7 @@ def run_plan_job(inputs: dict, ctx: JobContext) -> dict:
     def flush(upto: str) -> None:
         _copy(ctx, pub, [f for f in _files(pub) if f not in HELD])
         _cards(ctx, pub, sd / "cards")
+        _publish_partial(ctx, pub, [(pre_man, pre_pub), (work / "manifest", pub)])
         for name in STAGES[len(ctx.done):STAGES.index(upto) + 1]:
             ctx.stage(name)
 
@@ -301,7 +369,8 @@ def run_plan_job(inputs: dict, ctx: JobContext) -> dict:
         crew_mod.ensure_station_fields(grid, terrain / "stations.json",
                                        [load("variants")["scenarios"]["default"]], crew)
 
-    # 5. summary: the held files, exporters (D76), manifest.json, then the runner's run record
+    # 5. summary: the final index (the full call's), exporters (D76), the final manifest.json (the
+    # merge of the full call's fragments), then the runner's run record
     _copy(ctx, pub, _files(pub))
     _cards(ctx, pub, sd / "cards")
     extra = exporters.run_exporters(ctx.out_dir, manifest.git_commit(), _utc())
