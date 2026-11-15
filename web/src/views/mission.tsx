@@ -90,6 +90,8 @@ function MissionPanel({ mmap, handlers, mapsEl, initial }: { mmap: MissionMap; h
   // Science stations (stations.json): undefined while loading, null when they cannot be loaded.
   const [stations, setStations] = useState<Station[] | null | undefined>(undefined)
   const [copied, setCopied] = useState(false)
+  /** D39 storm switch: replay the 20 May 2024 RAD storm on this EVA's clock (dose term in the margin and the export) */
+  const [storm, setStorm] = useState(false)
 
   // Load once.
   useEffect(() => {
@@ -259,7 +261,7 @@ function MissionPanel({ mmap, handlers, mapsEl, initial }: { mmap: MissionMap; h
     [legs, home, wps],
   )
 
-  // The planned margin over time (storm replay off: the page has no storm switch yet).
+  // The planned margin over time; the storm switch (D39) adds the dose term when WS4's rad.json is loaded.
   const margin = useMemo(() => {
     if (!d || !wps.length || legs.some((l) => l === null)) return null
     const homeAt = (cell: number) => {
@@ -268,8 +270,8 @@ function MissionPanel({ mmap, handlers, mapsEl, initial }: { mmap: MissionMap; h
       return { tHomeMin: d.tHome.valueAtPixel(row, col), o2HomeL: d.o2Home ? d.o2Home.valueAtPixel(row, col) : null }
     }
     const track = buildTrack(legs.map((l) => legProfile(l!, homeAt)), wps.map((w) => w.stopMin))
-    return missionMargin(track, { tDarkMin: d.tDarkMin, rad: d.rad, storm: false })
-  }, [d, legs, wps])
+    return missionMargin(track, { tDarkMin: d.tDarkMin, rad: d.rad, storm })
+  }, [d, legs, wps, storm])
 
   const exportMission = async () => {
     if (!d || !wps.length) return
@@ -285,7 +287,7 @@ function MissionPanel({ mmap, handlers, mapsEl, initial }: { mmap: MissionMap; h
       scenario: { id: d.scenario.id, variant: d.scenario.variant, suit_kg: d.scenario.suit_kg },
       planner: { gridResM: d.grid.resM, elevationResM: d.elevationResM, files: d.files },
       constants: { ...BUDGET_CONSTANTS, marginAmberMin: CONFIG.marginAmberMin },
-      conditions: { evaStartLmst: d.evaStartLmst, tDarkMin: d.tDarkMin, storm: false },
+      conditions: { evaStartLmst: d.evaStartLmst, tDarkMin: d.tDarkMin, storm },
       wps,
       legs,
       homePath: home.path?.coords ?? null,
@@ -354,6 +356,10 @@ function MissionPanel({ mmap, handlers, mapsEl, initial }: { mmap: MissionMap; h
             {' '}lowest margin {margin.lowest.marginMin.toFixed(1)} min ({margin.lowest.binding})
           </span>
         )}
+        <label class="mp-storm" title={d.rad ? 'D39: the storm series is shifted so its tripwire fires at the route\'s largest T_home; the dose term joins the margin' : 'rad.json (WS4) is not loaded: no storm series to replay'}>
+          <input type="checkbox" checked={storm && !!d.rad} disabled={!d.rad} onChange={(e) => setStorm((e.target as HTMLInputElement).checked)} />{' '}
+          Replay the 20 May 2024 storm during this EVA
+        </label>
       </section>
 
       <section class="mp-card">

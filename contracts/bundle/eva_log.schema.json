@@ -1,0 +1,112 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "homeline/contracts/bundle/eva_log.schema.json",
+  "title": "eva_log.json (simulator -> web)",
+  "description": "One EVA walked in the Unity simulator against a mission.json from the web Mission Planer: the track (every 5 s of EVA time), the waypoint outcomes and the events, with the live comparison the simulator showed (cross-track, schedule and O2 against the plan, live margin, status). Written by the simulator (Assets/Mars/Scripts/Mission/EvaLogger.cs) when the EVA completes, or as incomplete when it is interrupted. Map coordinates (lon/lat, MOLA elevation), not pad-local metres. O2 comes from the simulator's own suit model, not the planner's budget rates (o2_model says so). Unknown values are null.",
+  "x-contract-version": "1.1.0",
+  "x-status": "draft (additive to the D41 bundle family; written unattended 2026-11-15 on branch claude/unity-link-web-fixes, awaiting review by C)",
+  "x-source": "Nasa-Space-App Assets/Mars/Scripts/Mission/{EvaLogger,MissionTracker}.cs; mission.schema.json",
+  "type": "object",
+  "$defs": {
+    "num_or_null": {"type": ["number", "null"]},
+    "status": {"enum": ["ON PLAN", "HEADING HOME", "BEHIND", "OFF ROUTE", "REPLAN", "TURN BACK", "RETURN NOW", "EVA COMPLETE", ""]},
+    "utc": {"type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$"}
+  },
+  "properties": {
+    "schema_version": {"const": "1.1.0"},
+    "kind": {"const": "homeline_eva_log"},
+    "mission_id": {"type": ["string", "null"], "description": "mission.json mission_id the EVA followed"},
+    "title": {"type": "string"},
+    "created_utc": {"$ref": "#/$defs/utc"},
+    "started_utc": {"$ref": "#/$defs/utc", "description": "wall-clock UTC when the mission was loaded (EVA minute 0)"},
+    "origin": {"const": "unity_simulator"},
+    "origin_label": {"type": "string"},
+    "label": {"const": "Simulated EVA · real terrain and data"},
+    "dummy": {"type": "boolean", "description": "the mission was built from dummy data"},
+    "o2_model": {"type": "string"},
+    "pad": {
+      "type": "object",
+      "properties": {"lon": {"type": "number"}, "lat": {"type": "number"}},
+      "required": ["lon", "lat"]
+    },
+    "summary": {
+      "type": "object",
+      "properties": {
+        "complete": {"type": "boolean", "description": "back at the pad with every waypoint done or skipped"},
+        "eva_min": {"$ref": "#/$defs/num_or_null"},
+        "planned_eva_min": {"$ref": "#/$defs/num_or_null"},
+        "final_status": {"anyOf": [{"$ref": "#/$defs/status"}, {"type": "null"}]},
+        "waypoints_done": {"type": "integer", "minimum": 0},
+        "waypoints_skipped": {"type": "integer", "minimum": 0},
+        "stops_left_early": {"type": "integer", "minimum": 0},
+        "lowest_margin_min": {"$ref": "#/$defs/num_or_null"},
+        "lowest_binding": {"enum": ["O2", "daylight", "EVA duration", null]},
+        "max_cross_track_m": {"$ref": "#/$defs/num_or_null"},
+        "max_behind_min": {"$ref": "#/$defs/num_or_null"},
+        "o2_used_l": {"$ref": "#/$defs/num_or_null"},
+        "planned_o2_used_l": {"$ref": "#/$defs/num_or_null"}
+      },
+      "required": ["complete", "eva_min", "planned_eva_min", "final_status", "waypoints_done", "waypoints_skipped", "stops_left_early",
+                   "lowest_margin_min", "lowest_binding", "max_cross_track_m", "max_behind_min", "o2_used_l", "planned_o2_used_l"]
+    },
+    "waypoints": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "index": {"type": "integer", "minimum": 1, "description": "= mission.json waypoints[].index"},
+          "state": {"enum": ["upcoming", "stopping", "done", "skipped"]},
+          "planned_arrive_min": {"$ref": "#/$defs/num_or_null"},
+          "planned_leave_min": {"$ref": "#/$defs/num_or_null"},
+          "arrived_min": {"$ref": "#/$defs/num_or_null", "description": "null = never reached (skipped, or closed with Complete)"},
+          "done_min": {"$ref": "#/$defs/num_or_null"},
+          "left_early": {"type": "boolean"}
+        },
+        "required": ["index", "state", "planned_arrive_min", "planned_leave_min", "arrived_min", "done_min", "left_early"]
+      }
+    },
+    "events": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "t_min": {"type": "number", "description": "EVA minute"},
+          "kind": {"enum": ["start", "arrive", "done", "skip", "status", "complete", "end"]},
+          "wp": {"type": ["integer", "null"], "minimum": 1},
+          "detail": {"type": "string", "description": "status label for 'status', 'left early' for an early 'done', the reason for 'end'"}
+        },
+        "required": ["t_min", "kind", "wp"]
+      }
+    },
+    "track": {
+      "type": "object",
+      "properties": {
+        "columns": {"const": ["t_min", "lon", "lat", "elev_m", "cross_track_m", "schedule_delta_min", "o2_used_l", "o2_delta_l", "margin_min", "status"]},
+        "sample_every_min": {"type": "number", "exclusiveMinimum": 0},
+        "rows": {
+          "type": "array",
+          "items": {
+            "type": "array",
+            "minItems": 10,
+            "maxItems": 10,
+            "prefixItems": [
+              {"type": "number"},
+              {"$ref": "#/$defs/num_or_null"},
+              {"$ref": "#/$defs/num_or_null"},
+              {"$ref": "#/$defs/num_or_null"},
+              {"$ref": "#/$defs/num_or_null"},
+              {"$ref": "#/$defs/num_or_null", "description": "live − planned EVA minute at this point of the route; + = behind"},
+              {"$ref": "#/$defs/num_or_null"},
+              {"$ref": "#/$defs/num_or_null", "description": "suit O2 used − planned O2 used here; + = more than planned"},
+              {"$ref": "#/$defs/num_or_null"},
+              {"$ref": "#/$defs/status"}
+            ]
+          }
+        }
+      },
+      "required": ["columns", "sample_every_min", "rows"]
+    }
+  },
+  "required": ["schema_version", "kind", "mission_id", "title", "created_utc", "started_utc", "origin", "origin_label", "label",
+               "dummy", "o2_model", "pad", "summary", "waypoints", "events", "track"]
+}
