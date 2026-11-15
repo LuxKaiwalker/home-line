@@ -18,6 +18,9 @@ import { BUDGET_CONSTANTS, missionBudget, stopMinutes, type MissionBudget } from
 import { loadMissionData, type MissionData } from '../mission/data'
 import { MissionMap } from '../mission/missionMap'
 import { MapsControl } from '../mission/MapsControl'
+import { LayersControl } from '../mission/LayersControl'
+import { evaClock } from '../mission/marstime'
+import { daylightFor, loadStart, saveStart, StartTime } from '../mission/StartTime'
 import { boundaryOptions, defaultBoundary, legPairs, moveWaypoint, removeWaypoint, replaceWaypoint, routeLegs, toggleTag, WAYPOINT_TAGS, type LonLat, type Waypoint } from '../mission/plan'
 import { LegRouter, type Leg } from '../mission/router'
 import { decodePlan, encodePlan } from '../mission/share'
@@ -39,12 +42,16 @@ export const view: View = async (el, route) => {
   const handlers = { onAdd: (_lon: number, _lat: number) => {}, onMove: (_i: number, _lon: number, _lat: number) => {} }
   const mmap = new MissionMap(mapEl, { onAdd: (a, b) => handlers.onAdd(a, b), onMove: (i, a, b) => handlers.onMove(i, a, b) })
   const mapsEl = document.createElement('div')
-  // The switcher sits inside the MapLibre container: keep its clicks from adding waypoints.
-  for (const ev of ['mousedown', 'mouseup', 'click', 'dblclick', 'pointerdown', 'pointerup', 'touchstart', 'touchend', 'wheel']) mapsEl.addEventListener(ev, (e) => e.stopPropagation())
-  mapEl.append(mapsEl)
-  render(<MissionPanel mmap={mmap} handlers={handlers} mapsEl={mapsEl} initial={initial} />, panelEl)
+  const layersEl = document.createElement('div')
+  // The switchers sit inside the MapLibre container: keep their clicks from adding waypoints.
+  for (const box of [mapsEl, layersEl]) {
+    for (const ev of ['mousedown', 'mouseup', 'click', 'dblclick', 'pointerdown', 'pointerup', 'touchstart', 'touchend', 'wheel']) box.addEventListener(ev, (e) => e.stopPropagation())
+    mapEl.append(box)
+  }
+  render(<MissionPanel mmap={mmap} handlers={handlers} mapsEl={mapsEl} layersEl={layersEl} initial={initial} />, panelEl)
   return () => {
     render(null, mapsEl)
+    render(null, layersEl)
     render(null, panelEl)
     mmap.destroy()
   }
@@ -76,7 +83,7 @@ function save(plan: string): void {
 
 type Initial = { plan?: string; add?: string }
 
-function MissionPanel({ mmap, handlers, mapsEl, initial }: { mmap: MissionMap; handlers: Handlers; mapsEl: HTMLElement; initial: Initial }) {
+function MissionPanel({ mmap, handlers, mapsEl, layersEl, initial }: { mmap: MissionMap; handlers: Handlers; mapsEl: HTMLElement; layersEl: HTMLElement; initial: Initial }) {
   const [d, setD] = useState<MissionData | null>(null)
   const [error, setError] = useState<unknown>(null)
   const [step, setStep] = useState('scenarios and pad')
@@ -92,6 +99,9 @@ function MissionPanel({ mmap, handlers, mapsEl, initial }: { mmap: MissionMap; h
   const [copied, setCopied] = useState(false)
   /** D39 storm switch: replay the 20 May 2024 RAD storm on this EVA's clock (dose term in the margin and the export) */
   const [storm, setStorm] = useState(false)
+  /** EVA start instant (UTC ms); default = WS4's simulated EVA (D31), kept in this browser */
+  const [startMs, setStartMs] = useState(loadStart)
+  useEffect(() => saveStart(startMs), [startMs])
 
   // Load once.
   useEffect(() => {
@@ -109,6 +119,8 @@ function MissionPanel({ mmap, handlers, mapsEl, initial }: { mmap: MissionMap; h
         await mmap.setBoundaryData(md)
         // Maps switcher (bottom left of the map): satellite / topography / material.
         render(<MapsControl mmap={mmap} src={{ grid: md.tHome, elev: md.grid.elev, resM: md.grid.resM, hasBasemap: !!md.tilejson }} />, mapsEl)
+        // Overlays (top right): slope classes, Curiosity's route and photos.
+        render(<LayersControl mmap={mmap} bounds={[md.tHome.w, md.tHome.s, md.tHome.e, md.tHome.n]} />, layersEl)
         setBoundary(defaultBoundary(boundaryOptions(md.bands, md.isochrones, md.edges), CONFIG.walkbackBudgetsMin[0]))
       },
       (e) => alive && setError(e),
@@ -117,6 +129,10 @@ function MissionPanel({ mmap, handlers, mapsEl, initial }: { mmap: MissionMap; h
       alive = false
     }
   }, [])
+
+  // Mars clock at the chosen start; the sun is computed at the pad (D21, as clock.json).
+  const clock = useMemo(() => (d ? evaClock(startMs, { lat: d.pad.lat, lon: d.pad.lon }) : null), [d, startMs])
+  const tDarkMin = clock ? daylightFor(clock) : (d?.tDarkMin ?? null)
 
   const router = useMemo(() => (d ? new LegRouter(d.grid, d.model) : null), [d])
   const padCell = useMemo(() => {
@@ -270,8 +286,8 @@ function MissionPanel({ mmap, handlers, mapsEl, initial }: { mmap: MissionMap; h
       return { tHomeMin: d.tHome.valueAtPixel(row, col), o2HomeL: d.o2Home ? d.o2Home.valueAtPixel(row, col) : null }
     }
     const track = buildTrack(legs.map((l) => legProfile(l!, homeAt)), wps.map((w) => w.stopMin))
-    return missionMargin(track, { tDarkMin: d.tDarkMin, rad: d.rad, storm })
-  }, [d, legs, wps, storm])
+    return missionMargin(track, { tDarkMin, rad: d.rad, storm })
+  }, [d, legs, wps, storm, tDarkMin])
 
   const exportMission = async () => {
     if (!d || !wps.length) return
@@ -287,7 +303,9 @@ function MissionPanel({ mmap, handlers, mapsEl, initial }: { mmap: MissionMap; h
       scenario: { id: d.scenario.id, variant: d.scenario.variant, suit_kg: d.scenario.suit_kg },
       planner: { gridResM: d.grid.resM, elevationResM: d.elevationResM, files: d.files },
       constants: { ...BUDGET_CONSTANTS, marginAmberMin: CONFIG.marginAmberMin },
-      conditions: { evaStartLmst: d.evaStartLmst, tDarkMin: d.tDarkMin, storm, evaStartUtc: d.evaStartUtc, mslSol: d.mslSol, rad: d.rad },
+      conditions: clock
+        ? { evaStartLmst: clock.lmst, tDarkMin: tDarkMin === null ? null : Math.round(tDarkMin * 100) / 100, storm, evaStartUtc: clock.startUtc, mslSol: clock.mslSol, rad: d.rad }
+        : { evaStartLmst: d.evaStartLmst, tDarkMin: d.tDarkMin, storm, evaStartUtc: d.evaStartUtc, mslSol: d.mslSol, rad: d.rad },
       wps,
       legs,
       homePath: home.path?.coords ?? null,
@@ -341,6 +359,15 @@ function MissionPanel({ mmap, handlers, mapsEl, initial }: { mmap: MissionMap; h
         Click the map to add a waypoint. Each leg is the fastest walk on the {d.grid.resM} m grid for <code>{d.scenario.id}</code>; the dashed line is the way home from the last waypoint.
       </p>
       {notice && <p class="mp-notice">{notice}</p>}
+
+      {clock && (
+        <section class="mp-card">
+          <details open>
+            <summary>EVA start</summary>
+            <StartTime startMs={startMs} clock={clock} onChange={setStartMs} sunSiteLabel={`the pad (${d.pad.lat.toFixed(5)}°, ${d.pad.lon.toFixed(5)}°E)`} />
+          </details>
+        </section>
+      )}
 
       <section class="mp-card">
         <h3>Estimated times and consumption</h3>

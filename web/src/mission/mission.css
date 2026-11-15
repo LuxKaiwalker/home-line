@@ -79,3 +79,28 @@
 .mp-st-pop button:disabled { opacity: 0.5; cursor: default; }
 .mp-st-pop a { color: #8a3b12; font-weight: 600; }
 .mp-st-link { margin-left: 0.5rem; font-size: 0.78rem; white-space: nowrap; }
+/* EVA start card (StartTime.tsx) */
+.mp-start-grid { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(0, 0.8fr) minmax(0, 0.9fr); gap: 6px; margin: 0.5rem 0; }
+.mp-start-grid label { display: flex; flex-direction: column; gap: 2px; font-size: 0.75rem; color: var(--muted); min-width: 0; }
+.mp-start-grid input { background: var(--bg); color: var(--ink); border: 1px solid var(--line); border-radius: 6px; padding: 3px 5px; font: inherit; font-size: 0.85rem; min-width: 0; width: 100%; box-sizing: border-box; color-scheme: dark; }
+.mp-start-foot { display: flex; justify-content: space-between; align-items: center; gap: 0.5rem; margin-top: 0.4rem; font-size: 0.8rem; }
+/* Layers panel (LayersControl.tsx), top right of the map */
+.mp-layers { position: absolute; top: 10px; right: 10px; z-index: 3; width: 230px; background: rgba(33, 26, 23, 0.94); border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4); font: 12px system-ui, sans-serif; color: var(--ink); }
+.mp-layers-head { width: 100%; background: transparent; border: 0; color: var(--ink); font-weight: 700; text-align: left; padding: 6px 10px; cursor: pointer; font-size: 12px; }
+.mp-layers-body { padding: 0 10px 8px; display: grid; gap: 4px; }
+.mp-layer { display: flex; align-items: center; gap: 6px; cursor: pointer; }
+.mp-layer:has(input:disabled) { cursor: progress; }
+.mp-layers-legend { list-style: none; margin: 0 0 0 20px; padding: 0; display: grid; gap: 2px; }
+.mp-layers-legend li { display: flex; align-items: center; gap: 5px; }
+.mp-layers-note { display: block; color: var(--muted); font-size: 11px; margin-left: 20px; }
+.mp-layers-note code { font-size: 10px; }
+/* Curiosity drive-end photo popup */
+.mp-pop-wide .maplibregl-popup-content { background: #211a17; color: var(--ink); max-height: 60vh; overflow: auto; }
+.mp-photos { font: 12px system-ui, sans-serif; display: grid; gap: 4px; }
+.mp-photos h4 { margin: 6px 0 2px; font-size: 12px; }
+.mp-photo-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(84px, 1fr)); gap: 4px; }
+.mp-photo-grid img { width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: 4px; background: #000; display: block; }
+.mp-photo-grid a:hover img { outline: 2px solid var(--accent); }
+@media (max-width: 760px) {
+  .mp-layers { width: 180px; }
+}

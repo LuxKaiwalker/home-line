@@ -19,6 +19,8 @@ const EMPTY: AnyFC = { type: 'FeatureCollection', features: [] }
 const NOTHING: FilterSpecification = ['==', ['literal', 1], 0]
 
 export type MapType = 'satellite' | 'topo' | 'material'
+/** Overlays drawn on top of any map type (LayersControl). */
+export type Overlay = 'slope' | 'curiosity'
 
 export interface MissionMapHandlers {
   onAdd: (lon: number, lat: number) => void
@@ -36,6 +38,8 @@ export class MissionMap {
   private basemapIds: string[] = []
   private reliefUrl: string | null = null
   private mapType: MapType = 'satellite'
+  private slopeUrl: string | null = null
+  private stopClick: ((i: number) => void) | null = null
   private readonly h: MissionMapHandlers
 
   constructor(container: HTMLElement, handlers: MissionMapHandlers) {
@@ -66,7 +70,7 @@ export class MissionMap {
 
   private init(): void {
     const m = this.map
-    for (const id of ['band', 'iso', 'edges', 'legs', 'home']) m.addSource(id, { type: 'geojson', data: EMPTY })
+    for (const id of ['band', 'iso', 'edges', 'legs', 'home', 'msl-trav', 'msl-stops']) m.addSource(id, { type: 'geojson', data: EMPTY })
     m.addLayer({ id: 'band-fill', type: 'fill', source: 'band', filter: NOTHING, paint: { 'fill-color': THEME.variant.nominal, 'fill-opacity': 0.18 } })
     m.addLayer({ id: 'band-line', type: 'line', source: 'band', filter: NOTHING, paint: { 'line-color': THEME.variant.nominal, 'line-width': 2.5 } })
     m.addLayer({ id: 'iso-fill', type: 'fill', source: 'iso', filter: NOTHING, paint: { 'fill-color': THEME.variant.nominal, 'fill-opacity': 0.15 } })
@@ -82,6 +86,17 @@ export class MissionMap {
         'line-width': 3,
       },
     })
+    // Curiosity's real traverse and drive ends (LayersControl "Curiosity"), under the plan.
+    m.addLayer({ id: 'msl-trav-line', type: 'line', source: 'msl-trav', layout: { visibility: 'none', 'line-cap': 'round', 'line-join': 'round' }, paint: { 'line-color': '#f2f2f2', 'line-width': 1.6, 'line-opacity': 0.85 } })
+    m.addLayer({
+      id: 'msl-stops-circle',
+      type: 'circle',
+      source: 'msl-stops',
+      layout: { visibility: 'none' },
+      paint: { 'circle-radius': ['interpolate', ['linear'], ['zoom'], 12, 2.5, 16, 6], 'circle-color': '#ffd166', 'circle-stroke-color': '#1a120e', 'circle-stroke-width': 1 },
+    })
+    m.on('mouseenter', 'msl-stops-circle', () => (m.getCanvas().style.cursor = 'pointer'))
+    m.on('mouseleave', 'msl-stops-circle', () => (m.getCanvas().style.cursor = 'crosshair'))
     m.addLayer({
       id: 'home-line',
       type: 'line',
@@ -91,7 +106,57 @@ export class MissionMap {
     })
     m.addLayer({ id: 'legs-casing', type: 'line', source: 'legs', layout: { 'line-cap': 'round', 'line-join': 'round' }, paint: { 'line-color': '#1a120e', 'line-width': 5 } })
     m.addLayer({ id: 'legs-line', type: 'line', source: 'legs', layout: { 'line-cap': 'round', 'line-join': 'round' }, paint: { 'line-color': THEME.route, 'line-width': 3 } })
-    m.on('click', (e: MapMouseEvent) => this.h.onAdd(e.lngLat.lng, e.lngLat.lat))
+    m.on('click', (e: MapMouseEvent) => {
+      // A click on a Curiosity drive end opens its pictures instead of adding a waypoint.
+      if (m.getLayoutProperty('msl-stops-circle', 'visibility') === 'visible') {
+        const hit = m.queryRenderedFeatures(e.point, { layers: ['msl-stops-circle'] })[0]
+        if (hit) {
+          this.stopClick?.(Number(hit.properties?.i))
+          return
+        }
+      }
+      this.h.onAdd(e.lngLat.lng, e.lngLat.lat)
+    })
+  }
+
+  /** Slope overlay raster (corners NW, NE, SE, SW), just under the boundary layers. */
+  async setSlopeImage(url: string, corners: [LonLat, LonLat, LonLat, LonLat]): Promise<void> {
+    await this.ready
+    const m = this.map
+    if (m.getLayer('slope')) m.removeLayer('slope')
+    if (m.getSource('slope')) m.removeSource('slope')
+    if (this.slopeUrl) URL.revokeObjectURL(this.slopeUrl)
+    this.slopeUrl = url
+    m.addSource('slope', { type: 'image', url, coordinates: corners })
+    m.addLayer({ id: 'slope', type: 'raster', source: 'slope', layout: { visibility: 'none' }, paint: { 'raster-fade-duration': 0, 'raster-resampling': 'nearest' } }, 'band-fill')
+  }
+
+  /** Curiosity's traverse (lines) and drive ends (points; a click calls onStop with the index). */
+  async setCuriosity(traverse: LonLat[][], stops: { lon: number; lat: number; sol: number }[], onStop: (i: number) => void): Promise<void> {
+    await this.ready
+    this.stopClick = onStop
+    ;(this.map.getSource('msl-trav') as GeoJSONSource).setData({
+      type: 'FeatureCollection',
+      features: traverse.map((coordinates) => ({ type: 'Feature', properties: {}, geometry: { type: 'LineString', coordinates } })),
+    })
+    ;(this.map.getSource('msl-stops') as GeoJSONSource).setData({
+      type: 'FeatureCollection',
+      features: stops.map((s, i) => ({ type: 'Feature', properties: { i, sol: s.sol }, geometry: { type: 'Point', coordinates: [s.lon, s.lat] } })),
+    })
+  }
+
+  async setOverlay(o: Overlay, on: boolean): Promise<void> {
+    await this.ready
+    const ids = o === 'slope' ? ['slope'] : ['msl-trav-line', 'msl-stops-circle']
+    for (const id of ids) if (this.map.getLayer(id)) this.map.setLayoutProperty(id, 'visibility', on ? 'visible' : 'none')
+  }
+
+  /** A popup with arbitrary content (closes the previous one); returns it so the caller can react to close. */
+  openPopup(at: LonLat, content: HTMLElement, maxWidth = '380px'): Popup {
+    this.popup?.remove()
+    for (const ev of ['mousedown', 'mouseup', 'click', 'dblclick', 'pointerdown', 'pointerup', 'touchstart', 'touchend', 'wheel']) content.addEventListener(ev, (e) => e.stopPropagation())
+    this.popup = new Popup({ offset: 10, closeButton: true, maxWidth, className: 'mp-pop-wide' }).setLngLat(at).setDOMContent(content).addTo(this.map)
+    return this.popup
   }
 
   async setBasemap(sources: BasemapSource[]): Promise<void> {
@@ -119,7 +184,8 @@ export class MissionMap {
     if (this.reliefUrl) URL.revokeObjectURL(this.reliefUrl)
     this.reliefUrl = url
     m.addSource('relief', { type: 'image', url, coordinates: corners })
-    m.addLayer({ id: 'relief', type: 'raster', source: 'relief', paint: { 'raster-fade-duration': 0, 'raster-resampling': 'linear' } }, 'band-fill')
+    // under the slope overlay when it exists, so a map switch never covers it
+    m.addLayer({ id: 'relief', type: 'raster', source: 'relief', paint: { 'raster-fade-duration': 0, 'raster-resampling': 'linear' } }, m.getLayer('slope') ? 'slope' : 'band-fill')
     this.applyMapType()
   }
 
@@ -252,6 +318,7 @@ export class MissionMap {
     this.popup?.remove()
     this.padMarker?.remove()
     if (this.reliefUrl) URL.revokeObjectURL(this.reliefUrl)
+    if (this.slopeUrl) URL.revokeObjectURL(this.slopeUrl)
     this.map.remove()
   }
 }
