@@ -21,6 +21,8 @@ export interface RouteMlMap {
   addSource(id: string, spec: { type: 'geojson'; data: FeatureCollection }): unknown
   addLayer(spec: Record<string, unknown>): unknown
   getLayer(id: string): unknown
+  /** the map's container: carries data-failing-leg for tests and the e2e harness */
+  getContainer?(): HTMLElement
 }
 /** The parts of ConsoleMap used here (ConsoleMap satisfies it). */
 export interface RouteConsoleMap {
@@ -40,7 +42,7 @@ export function failingLegData(coords: [number, number][] | null, label?: string
   }
 }
 
-export function consoleRouteMap(cm: RouteConsoleMap, restore: () => void | Promise<void>): RouteMap {
+export function consoleRouteMap(cm: RouteConsoleMap, restore: () => void | Promise<void>, alive: () => boolean = () => true): RouteMap {
   let layer: Promise<void> | null = null
   const ensure = () =>
     (layer ??= cm.whenReady().then(() => {
@@ -57,6 +59,7 @@ export function consoleRouteMap(cm: RouteConsoleMap, restore: () => void | Promi
     }))
   return {
     async showStage(data) {
+      if (!alive()) return
       const r = data as StageResult
       if (r.bands || r.isochrones || r.edges || r.partner)
         await cm.setScenarioData({
@@ -68,12 +71,20 @@ export function consoleRouteMap(cm: RouteConsoleMap, restore: () => void | Promi
         })
       if (r.route) await cm.setRoute(r.route)
     },
-    highlightLeg(coords, label) {
+    highlightLeg(coords, label, leg) {
+      if (!alive()) return
+      const box = cm.map.getContainer?.()
+      if (box) {
+        if (coords && leg !== undefined) box.dataset.failingLeg = String(leg)
+        else delete box.dataset.failingLeg
+      }
       if (!coords && !layer) return
-      void ensure().then(() => (cm.map.getSource(FAILING_LEG_ID) as GeoJsonSourceLike).setData(failingLegData(coords, label)))
+      void ensure()
+        .then(() => alive() && (cm.map.getSource(FAILING_LEG_ID) as GeoJsonSourceLike | undefined)?.setData(failingLegData(coords, label)))
+        .catch(() => {}) // the map went away meanwhile
     },
     restore() {
-      void restore()
+      if (alive()) void restore()
     },
   }
 }

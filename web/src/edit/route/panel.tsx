@@ -88,7 +88,7 @@ function ResultView({ c }: { c: Extract<ComputeState, { kind: 'done' }> }) {
   const r = c.result
   const f = r.feasibility
   return (
-    <div class="hl-route__result" data-trust="live">
+    <div class="hl-route__result" data-trust="live" data-hash={r.hash}>
       <p class="hl-route__label">
         {T.computedLabel} ·{' '}
         <a class="hl-route__prov" href={r.provenanceHref}>
@@ -152,7 +152,19 @@ export function RoutePanelView(p: RoutePanelViewProps) {
   }
 
   return (
-    <div class="hl-route" onKeyDown={onKey} data-mode={route.mode}>
+    <div class="hl-route" onKeyDown={onKey} data-mode={route.mode} data-state={c.kind} data-feasible={c.kind === 'done' && c.result.feasibility ? String(c.result.feasibility.feasible) : undefined}>
+      {/* the answer first: visible without scrolling the rail (R5-C); details below */}
+      {c.kind === 'done' ? <ResultView c={c} /> : null}
+      {c.kind === 'failed' ? (
+        <div class="hl-route__failed" role="alert" data-status={c.failure.status} data-code={c.failure.code}>
+          <p class="hl-route__infeasible-title">
+            <Icon name="circle-alert" /> {T.failedTitle}
+          </p>
+          <p>{failureText(c.failure, stopName)}</p>
+        </div>
+      ) : null}
+      {c.kind === 'cancelled' ? <p class="hl-route__note">{T.cancelled}</p> : null}
+      {c.kind === 'running' || c.kind === 'done' || c.kind === 'failed' ? <StageList c={c} /> : null}
       <div class="hl-route__mode" role="radiogroup" aria-label={T.modeLabel}>
         {(['auto', 'ordered'] as const).map((m) => (
           <button
@@ -263,17 +275,6 @@ export function RoutePanelView(p: RoutePanelViewProps) {
         {T.hash}: <code>{p.hash ?? T.hashPending}</code>
       </p>
 
-      {c.kind === 'running' || c.kind === 'done' || c.kind === 'failed' ? <StageList c={c} /> : null}
-      {c.kind === 'done' ? <ResultView c={c} /> : null}
-      {c.kind === 'failed' ? (
-        <div class="hl-route__failed" role="alert" data-status={c.failure.status} data-code={c.failure.code}>
-          <p class="hl-route__infeasible-title">
-            <Icon name="circle-alert" /> {T.failedTitle}
-          </p>
-          <p>{failureText(c.failure, stopName)}</p>
-        </div>
-      ) : null}
-      {c.kind === 'cancelled' ? <p class="hl-route__note">{T.cancelled}</p> : null}
     </div>
   )
 }

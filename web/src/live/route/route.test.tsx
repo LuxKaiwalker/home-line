@@ -14,10 +14,10 @@ import type { StationGeo, StopProbe } from '../../edit/route/model'
 import { ROUTE_TEXT } from '../../edit/route/text'
 import type { RouteFC } from '../../data/types'
 import { all, byClass, hasClass, installDom, type FakeNode } from '../../ui/testing/dom'
-import type { RailSection } from '../../ui/shell/store'
+import { dockContent, setDockContent, type RailSection } from '../../ui/shell/store'
 import { TOKENS } from '../../ui/tokens'
 import { createApiClient } from '../client'
-import { LIVE_LABEL, OFFLINE_LABEL } from '../config'
+import { LIVE_LABEL } from '../config'
 import type { LiveState } from '../health'
 import { HEALTH_WARM } from '../mock/fixtures'
 import { createMockFetch } from '../mock/fetch'
@@ -41,18 +41,20 @@ function fakeConsoleMap() {
   const data = new Map<string, unknown>()
   const layers: Record<string, unknown>[] = []
   const calls: { scenario: number; route: (RouteFC | null)[] } = { scenario: 0, route: [] }
+  const box = { dataset: {} as Record<string, string> }
   const cm: RouteConsoleMap = {
     map: {
       getSource: (id) => (data.has(id) ? { setData: (d: unknown) => data.set(id, d) } : undefined),
       addSource: (id, spec) => data.set(id, spec.data),
       addLayer: (spec) => layers.push(spec),
       getLayer: (id) => layers.find((l) => l.id === id),
+      getContainer: () => box as unknown as HTMLElement,
     },
     whenReady: async () => {},
     setScenarioData: async () => void calls.scenario++,
     setRoute: async (r) => void calls.route.push(r),
   }
-  return { cm, data, layers, calls }
+  return { cm, data, layers, calls, box }
 }
 
 let root: FakeNode
@@ -187,6 +189,7 @@ describe('Edit-route panel (Plan rail, live builds)', () => {
     expect(res).toContain(ROUTE_TEXT.feasible)
     const prov = q('hl-route__prov')[0]
     expect(prov.getAttribute('href')).toMatch(/^#\/plan\/[0-9a-f]{16}\/provenance$/)
+    expect(prov.getAttribute('href')).toContain(q('hl-route__result')[0].getAttribute('data-hash'))
     expect(q('hl-route__infeasible')).toHaveLength(0)
     expect(map.data.get(FAILING_LEG_ID) ?? null).toBeNull() // no highlight for a feasible route
     expect(q('hl-route__result')[0].getAttribute('data-trust')).toBe('live')
@@ -227,24 +230,37 @@ describe('Edit-route panel (Plan rail, live builds)', () => {
     expect((fc.features[0].geometry as GeoJSON.LineString).coordinates).toEqual([[s1.lon, s1.lat], [s2.lon, s2.lat]])
     expect(map.layers.find((l) => l.id === FAILING_LEG_ID)).toMatchObject({ type: 'line', paint: { 'line-color': TOKENS.color.limit } })
     expect(order()).toEqual(['S4', 'S1', 'S2']) // nothing reordered
+    expect(map.box.dataset.failingLeg).toBe('2')
+    expect(q('hl-route')[0].getAttribute('data-state')).toBe('done')
+    expect(q('hl-route')[0].getAttribute('data-feasible')).toBe('false')
+    // the answer sits at the top of the panel, before the mode switch and the list (R5-C)
+    const kids = q('hl-route')[0].childNodes.map((n) => n.getAttribute?.('class') ?? '')
+    expect(kids.indexOf('hl-route__result')).toBeLessThan(kids.findIndex((k) => k.startsWith('hl-route__mode')))
     // the next edit clears the answer and the highlight
     act(() => void row('S2').dispatch('keydown', { key: 'ArrowUp', altKey: true }))
     expect(q('hl-route__infeasible')).toHaveLength(0)
     await until(() => (map.data.get(FAILING_LEG_ID) as GeoJSON.FeatureCollection).features.length === 0, 'the highlight cleared')
+    expect(map.box.dataset.failingLeg).toBeUndefined()
     expect(restored.n).toBe(1) // the console's static plan is put back
   })
 
-  it('API unreachable (published build, server down): the panel renders whole, Compute is disabled with the offline label, no errors', async () => {
+  it('API unreachable (kit rule 4 / F23): the panel is hidden behind the offline banner, comes back with the server, keeps the route; no errors', async () => {
     const errs: unknown[] = []
     const spy = [vi.spyOn(console, 'error').mockImplementation((...a) => void errs.push(a)), vi.spyOn(console, 'warn').mockImplementation((...a) => void errs.push(a))]
-    const down = (async () => {
-      throw new TypeError('Failed to fetch')
+    let up = false
+    const real = withRouteMock(createMockFetch())
+    const flaky = (async (input: string, init?: RequestInit) => {
+      if (!up) throw new TypeError('Failed to fetch')
+      return real(input, init)
     }) as unknown as typeof fetch
-    const client = createApiClient({ base: 'http://api.test', fetch: down })
+    const client = createApiClient({ base: 'http://api.test', fetch: flaky })
     let section: RailSection | null = null
+    let registrations = 0
+    let live: ((s: LiveState) => void) | null = null
     cleanup = mountRoutePanel({
       client,
       onLiveState: (fn) => {
+        live = fn
         fn({ kind: 'offline' } as LiveState)
         return () => {}
       },
@@ -254,35 +270,79 @@ describe('Edit-route panel (Plan rail, live builds)', () => {
       probe,
       register: (s) => {
         section = s
+        registrations++
         return () => (section = null)
       },
     })
-    await until(() => section !== null, 'the rail section')
+    for (let i = 0; i < 20; i++) await act(async () => void (await flush()))
+    expect(live).not.toBeNull()
+    expect(section).toBeNull() // hidden while offline: nothing half-done, no disabled shell
+    for (const st of [{ kind: 'checking' }, { kind: 'warming' }] as LiveState[]) {
+      act(() => live!(st))
+      expect(section).toBeNull()
+    }
+    up = true
+    act(() => live!({ kind: 'ready', health: HEALTH_WARM } as LiveState))
+    expect(section).not.toBeNull()
     act(() => render((section as unknown as RailSection).render() as ComponentChildren, root as unknown as Element))
-    await act(async () => {
-      await flush()
-    })
+    await until(() => !text(q('hl-route__hash')[0]).includes(ROUTE_TEXT.hashPending), 'the identity asked again on recovery')
     mode('ordered')
     check('S4')
-    expect(order()).toEqual(['S4']) // editing works offline (undo steps), only computing needs the server
-    expect(q('hl-route__compute')[0].hasAttribute('disabled')).toBe(true)
-    const why = text(q('hl-route__reason')[0])
-    expect(why).toContain(ROUTE_TEXT.needsLive)
-    expect(why).toContain(OFFLINE_LABEL)
-    expect(text(q('hl-route__hash')[0])).toContain(ROUTE_TEXT.hashPending)
-    click(q('hl-route__compute')[0])
-    expect(q('hl-route__stages')).toHaveLength(0) // nothing half-done
+    act(() => live!({ kind: 'offline' } as LiveState))
+    expect(section).toBeNull()
+    act(() => live!({ kind: 'ready', health: HEALTH_WARM } as LiveState))
+    expect(registrations).toBe(2)
+    act(() => render((section as unknown as RailSection).render() as ComponentChildren, root as unknown as Element))
+    expect(order()).toEqual(['S4']) // the route survives the outage
     expect(errs).toEqual([])
     spy.forEach((s) => s.mockRestore())
   })
 
-  it('offline: Compute plan is disabled and says why', async () => {
+  it('heavy jobs off: shown, Compute disabled with the reason', async () => {
     const { setLive } = await setup()
     mode('ordered')
     check('S1')
-    setLive({ kind: 'offline' } as LiveState)
+    setLive({ kind: 'ready', health: { ...HEALTH_WARM, heavy_jobs: 'off' } } as LiveState)
     expect(q('hl-route__compute')[0].hasAttribute('disabled')).toBe(true)
-    expect(text(root)).toContain(ROUTE_TEXT.needsLive)
+    expect(text(q('hl-route__reason')[0])).toContain(ROUTE_TEXT.heavyJobsOff)
+  })
+
+  it('leaving the console after a result: no restore or draw into the gone map, no warning (R5-B)', async () => {
+    const warns: unknown[] = []
+    const spy = vi.spyOn(console, 'warn').mockImplementation((...a) => void warns.push(a))
+    const { restored } = await setup()
+    mode('ordered')
+    check('S2')
+    click(q('hl-route__compute')[0])
+    await until(() => q('hl-route__result').length > 0, 'the result')
+    act(() => {
+      cleanup?.()
+      cleanup = null
+    })
+    await act(async () => void (await flush()))
+    expect(restored.n).toBe(0)
+    expect(warns).toEqual([])
+    spy.mockRestore()
+  })
+
+  it('the dock never shows the official timeline under a route result: a note with the result link, the old dock back after an edit (R5-C)', async () => {
+    const before = () => 'official-dock'
+    setDockContent(before)
+    await setup()
+    mode('ordered')
+    for (const id of ['S4', 'S1', 'S2']) check(id)
+    click(q('hl-route__compute')[0])
+    await until(() => q('hl-route__result').length > 0, 'the result')
+    const note = dockContent.peek()
+    expect(note).not.toBe(before)
+    const box = installDom().container
+    act(() => render(note!() as ComponentChildren, box as unknown as Element))
+    const hash = q('hl-route__result')[0].getAttribute('data-hash')!
+    expect(text(box)).toContain(ROUTE_TEXT.dockNote)
+    expect(all(box, (n) => n.localName === 'a')[0].getAttribute('href')).toBe(`#/plan/${hash}`)
+    act(() => void row('S2').dispatch('keydown', { key: 'ArrowUp', altKey: true }))
+    expect(dockContent.peek()).toBe(before)
+    setDockContent(undefined)
   })
 })
 

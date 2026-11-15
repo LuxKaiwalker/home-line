@@ -63,8 +63,8 @@ export interface RouteJobs {
 export interface RouteMap {
   /** Draw a staged snapshot through the console map's own setters (one rendering path). */
   showStage(data: unknown): void | Promise<void>
-  /** Highlight the failing leg (null clears it). */
-  highlightLeg(coords: [number, number][] | null, label?: string): void
+  /** Highlight the failing leg `leg` (null clears it). */
+  highlightLeg(coords: [number, number][] | null, label?: string, leg?: number): void
   /** Give the map back to the static plan. */
   restore(): void
 }
@@ -155,7 +155,7 @@ export function createRouteController(o: RouteControllerOptions) {
         if (out.status === 'done') {
           compute.value = { kind: 'done', job, stage, result: out.result, key: step.key }
           const f = out.result.feasibility
-          if (f && !f.feasible) o.map?.highlightLeg(legCoords(route, f.leg, { stations: o.stations, pad: o.pad() }), `${f.from} → ${f.to}`)
+          if (f && !f.feasible) o.map?.highlightLeg(legCoords(route, f.leg, { stations: o.stations, pad: o.pad() }), `${f.from} → ${f.to}`, f.leg)
         } else if (out.status === 'failed') compute.value = { kind: 'failed', job, stage, failure: out.failure, key: step.key }
         else compute.value = { kind: 'cancelled', key: step.key }
       }),

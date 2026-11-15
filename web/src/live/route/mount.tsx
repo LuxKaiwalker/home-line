@@ -21,7 +21,8 @@ import type { Station } from '../../data/types'
 import { fieldAt, VARIANT_OF } from '../../map/field'
 import { mission } from '../../state/mission'
 import { effect, signal } from '../../state/signal'
-import { registerRailSection } from '../../ui/shell/store'
+import { dockContent, registerRailSection, setDockContent, type Render } from '../../ui/shell/store'
+import { planUrl } from '../plan'
 import type { ApiClient } from '../client'
 import { bannerFor, type LiveState } from '../health'
 import type { LoaderFor } from '../stage'
@@ -78,6 +79,48 @@ async function restoreStatic(cm: RouteConsoleMap): Promise<void> {
   await cm.setRoute(route)
 }
 
+/**
+ * The dock while a route result (or its staged part) is on the map: the official timeline would be the
+ * wrong plan, so the dock shows a note with a link to the result instead; the previous dock comes back
+ * when the result is cleared.
+ */
+export function routeDock(c: RouteController): () => void {
+  let prev: Render | undefined
+  let mine: Render | null = null
+  const put = (hash: string | null) => {
+    if (!mine) prev = dockContent.peek()
+    mine = () => h(RouteDockNote, { hash })
+    setDockContent(mine)
+  }
+  const back = () => {
+    if (mine && dockContent.peek() === mine) setDockContent(prev)
+    mine = null
+  }
+  const off = effect(() => {
+    const s = c.compute.value
+    if ((s.kind === 'running' && s.stage) || s.kind === 'done' || (s.kind === 'failed' && s.stage)) put(s.kind === 'done' ? s.result.hash : (s.job?.hash ?? null))
+    else back()
+  })
+  return () => {
+    off()
+    back()
+  }
+}
+
+function RouteDockNote({ hash }: { hash: string | null }) {
+  return (
+    <p class="hl-route__docknote" role="status">
+      {ROUTE_TEXT.dockNote}
+      {hash ? (
+        <>
+          {' '}
+          <a href={planUrl(hash)}>{ROUTE_TEXT.dockOpen}</a>
+        </>
+      ) : null}
+    </p>
+  )
+}
+
 /** Register the panel once its catalog is loaded; returns cleanup (also before the load finishes). */
 export function mountRoutePanel(o: MountRouteOptions): () => void {
   let alive = true
@@ -118,7 +161,8 @@ export function mountRoutePanel(o: MountRouteOptions): () => void {
       stations,
       pad: padOf,
       probe: o.probe ?? fieldProbe,
-      map: o.cmap ? consoleRouteMap(o.cmap, () => (o.restore ?? restoreStatic)(o.cmap!).catch((e) => console.warn('edit route: static plan not restored:', e))) : null,
+      // after unmount the console map is gone: never restore or draw into it (R5-B)
+      map: o.cmap ? consoleRouteMap(o.cmap, () => (alive ? (o.restore ?? restoreStatic)(o.cmap!).catch((e) => void (alive && console.warn('edit route: static plan not restored:', e))) : undefined), () => alive) : null,
       canCompute: live,
     }))
     // the console's plan (pad drag, scenario) changes the inputs and the hash, not the route history
@@ -132,17 +176,33 @@ export function mountRoutePanel(o: MountRouteOptions): () => void {
         else store.planChanged()
       }),
     )
+    // Kit rule 4 / F23: live controls hide behind the offline banner. The section is registered only
+    // while /health says the server is ready (heavy jobs off: shown, Compute disabled with the reason);
+    // the route and its undo history stay in memory and come back with the server.
+    let unregister: (() => void) | null = null
+    const section = () => (o.register ?? registerRailSection)({ id: ROUTE_SECTION_ID, modes: ['plan'], title: 'nav.rail.stationsRoute', icon: 'station', render: () => h(RoutePanel, { ctl: c, live, reason, key: ROUTE_TEXT.title }) })
+    offs.push(() => {
+      unregister?.()
+      unregister = null
+    })
     offs.push(
       o.onLiveState((s) => {
         const b = bannerFor(s)
         live.value = b.controls && b.heavyJobs
         reason.value = b.controls ? (b.heavyJobs ? null : ROUTE_TEXT.heavyJobsOff) : (b.text ?? ROUTE_TEXT.checkingLive)
-        if (!b.controls) c.reset()
+        if (!b.controls) {
+          c.reset()
+          unregister?.()
+          unregister = null
+          return
+        }
+        if (!unregister && alive) unregister = section()
         // the engine identity (plan hash) is asked again once the server is back
-        else if (!store.identity.peek()) askIdentity()
+        if (!store.identity.peek()) askIdentity()
       }),
     )
-    offs.push((o.register ?? registerRailSection)({ id: ROUTE_SECTION_ID, modes: ['plan'], title: 'nav.rail.stationsRoute', icon: 'station', render: () => h(RoutePanel, { ctl: c, live, reason, key: ROUTE_TEXT.title }) }))
+    // R5-C: while a route result is shown, the EVA-time dock must not show the official plan's timeline
+    offs.push(routeDock(c))
   })().catch((e) => console.warn('edit route unavailable:', e))
 
   return () => {

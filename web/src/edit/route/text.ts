@@ -48,6 +48,8 @@ export const ROUTE_TEXT = {
   stopValid: 'valid',
   stopUnknown: 'not checked here',
   pad: 'Rover pad',
+  dockNote: 'Route result on the map: the EVA timeline of the official plan is not shown.',
+  dockOpen: 'Open this plan',
 } as const
 
 export const LIMIT_TEXT: Record<RouteLimit, string> = {
