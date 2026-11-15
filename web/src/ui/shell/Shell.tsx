@@ -4,6 +4,7 @@
 import { render } from 'preact'
 import { useEffect, useRef, useState } from 'preact/hooks'
 import { canonicalHref, type Route } from '../../router'
+import { listenLiveStatus } from '../../state/live'
 import { effect, useSignalValue } from '../../state/signal'
 import { MODES, ui, type Mode } from '../../state/ui'
 import { cx, Icon, IconButton } from '../components'
@@ -12,6 +13,7 @@ import { bindBrowserStorage, installLayoutKeys } from '../layout'
 import { SearchButton } from '../search/button'
 import type { Frame } from './frame'
 import { HELP_ROWS, installShortcuts } from './keys'
+import { OfficialPlanButton } from './OfficialPlan'
 import {
   breakpointFor,
   closeSidebar,
@@ -108,8 +110,10 @@ export function TopBar() {
         )}
       </nav>
       <div class="hl-topbar__plan" id="hl-topbar-plan">
-        {/* L2 (D111): the Plan headline strip renders here (views/console.tsx, a portal into this host) */}
+        {/* L2 (D111): the Plan headline strip renders here (views/planStrip.tsx, a portal into this host);
+            L7b's Official plan button sits next to it */}
         <div class="hl-strip" id="hl-headline-strip" />
+        {mode === 'plan' && <OfficialPlanButton />}
       </div>
       <div class="hl-topbar__end">
         <SearchButton />
@@ -330,6 +334,8 @@ export function mountShell(frame: Frame, navigate: (hash: string) => void, win: 
   bindBrowserStorage()
   const stopLayoutKeys = installLayoutKeys(win, { blocked: () => shell.helpOpen.peek() })
   const stopKeys = installShortcuts(win, navigate)
+  // the live layer reports its status through this window event (state/live.ts seam, L7b)
+  const stopLive = listenLiveStatus(win)
   // U14 (A5): the sidebar follows the selection store; cards load in their own chunk.
   let alive = true
   let stopSelection: (() => void) | undefined
@@ -360,6 +366,7 @@ export function mountShell(frame: Frame, navigate: (hash: string) => void, win: 
       stopDock?.()
       stopKeys()
       stopLayoutKeys()
+      stopLive()
       stopLayout()
       win.removeEventListener('resize', measure)
       for (const el of [s.skip, s.top, s.rail, s.sidebar, s.dock, s.overlay]) render(null, el)

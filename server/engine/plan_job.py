@@ -387,6 +387,21 @@ def _utc() -> str:
     return datetime.now(UTC).isoformat(timespec="seconds").replace("+00:00", "Z")
 
 
+def export_context(inputs: dict, answer: dict, grid, sd: Path, full: Path) -> dict:
+    """What the exporters (D76, D110 mission.json) get beside the tree: the record inputs, the
+    route feasibility, the engine's DEM and the default scenario's WS2 fields (the full call's
+    rasters, still in the job's scratch dir) and the routing grid size."""
+    from pipeline.engine.config import load
+
+    default = load("variants")["scenarios"]["default"]
+    rasters = {"elev": sd / "terrain" / "elev_3m.tif", "t_home": full / default / "t_home.tif",
+               "o2_home": full / default / "o2_home.tif"}
+    return {"inputs": inputs, "feasibility": answer.get("feasibility"),
+            "rasters": {k: p for k, p in rasters.items() if p.is_file()},
+            "routing_grid_res_m": float(grid.res_m),
+            "conditions_dir": sd / "conditions" if (sd / "conditions").is_dir() else None}
+
+
 # ------------------------------------------------------------------------- the job ----
 def run_plan_job(inputs: dict, ctx: JobContext) -> dict:
     """Job handler (server.engine.jobs JobType.run; runs in a worker process)."""
@@ -435,7 +450,9 @@ def run_plan_job(inputs: dict, ctx: JobContext) -> dict:
     # merge of the full call's fragments), then the runner's run record
     _copy(ctx, pub, _files(pub))
     _cards(ctx, pub, sd / "cards")
-    extra = exporters.run_exporters(ctx.out_dir, manifest.git_commit(), _utc())
+    answer = route_answer(inputs, summary)
+    extra = exporters.run_exporters(ctx.out_dir, manifest.git_commit(), _utc(),
+                                    context=export_context(inputs, answer, grid, sd, full))
     merged = manifest.merge(work / "manifest", out_path=work / MANIFEST)
     if extra:
         dup = sorted(set(extra) & set(merged))
@@ -446,7 +463,7 @@ def run_plan_job(inputs: dict, ctx: JobContext) -> dict:
     ctx.write_json(MANIFEST, merged)
     ctx.stage("summary")
     shutil.rmtree(work, ignore_errors=True)
-    return {"range_flags": flags, **route_answer(inputs, summary)}
+    return {"range_flags": flags, **answer}
 
 
 PLAN_JOB = JobType(run=run_plan_job, stages=STAGES)

@@ -12,7 +12,7 @@ import { decodeGrid, decodeState, FieldData, fieldAt, setActiveField, type Bound
 import { hashCanonical, type EngineIdentity } from './canonical'
 import { CLICK_SLOP_PX, cyclePad, dragRows, isDragMove, PAD_VALIDITY, snapTarget, spotValues, type DragFields } from './drag'
 import { buildCatalog, planAvailability } from './options'
-import { createRoverDrag } from './rover'
+import { createRoverDrag, refusedNearest } from './rover'
 import { createPlanEditStore } from './store'
 
 const PUB = resolve(REPO, 'web/public/data')
@@ -152,6 +152,35 @@ describe('snap target = nearest valid precomputed pad', () => {
       expect(rd.move(p).target!.id).toBe(want.id)
     }
     rd.cancel()
+  })
+
+  it('L7b (T2): a drop next to P5 (pad_default) snaps elsewhere and says why P5 is refused (steep, block not assessed)', () => {
+    const store = createPlanEditStore({ catalog })
+    const rd = createRoverDrag(store, fields)
+    const p5 = catalog.pads.find((x) => x.id === 'pad_default')!
+    rd.begin()
+    const s = rd.move({ lon: p5.lon + 0.0002, lat: p5.lat - 0.0001 })
+    expect(s.target).not.toBeNull()
+    expect(s.target!.id).not.toBe('pad_default') // snapping is unchanged: P5 is never a target
+    expect(s.refused).toMatchObject({ pad: p5, failed: ['steep', 'unknown'] })
+    // the block's max slope (slope field lookup), as the spot check measured it
+    expect(s.refused!.maxSlopeDeg).toBe(spotValues(fields, p5).maxSlopeDeg)
+    expect(s.refused!.maxSlopeDeg!).toBeGreaterThan(PAD_VALIDITY.maxSlopeDeg)
+    expect(rd.padFailed(p5)).toEqual(['steep', 'unknown'])
+    // next to a valid pad, nothing is refused
+    const r4 = catalog.pads.find((x) => x.id === 'rank4')!
+    expect(rd.move({ lon: r4.lon + 0.0001, lat: r4.lat }).refused).toBeNull()
+    rd.cancel()
+  })
+
+  it('refusedNearest: only the nearest pad, only when the check refuses it', () => {
+    const r4 = catalog.pads.find((x) => x.id === 'rank4')!
+    const other = catalog.pads.find((x) => x.id === OFFICIAL)!
+    const base = spotValues(fields, r4)
+    const refuse = (p: { id: string }) => (p.id === 'rank4' ? { ...base, validity: 'invalid' as const, failed: ['steep' as const], maxSlopeDeg: 7.5 } : { ...base, validity: 'valid' as const, failed: [] })
+    expect(refusedNearest(catalog.pads, r4, r4, refuse)).toBeNull()
+    expect(refusedNearest(catalog.pads, r4, other, refuse)).toEqual({ pad: r4, failed: ['steep'], maxSlopeDeg: 7.5 })
+    expect(refusedNearest(catalog.pads, r4, other, () => ({ ...base, validity: 'valid', failed: [] }))).toBeNull()
   })
 
   it('an invalid pad is skipped for the next nearest', () => {

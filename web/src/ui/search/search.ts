@@ -12,7 +12,21 @@ import { MODES } from '../../state/ui'
 import type { ChipKind, IconName } from '../components'
 import type { CopyKey } from '../copy'
 
-export type SearchGroup = 'pad' | 'parking' | 'stations' | 'sites' | 'landmarks' | 'coordinates' | 'commands'
+export type SearchGroup =
+  | 'pad'
+  | 'parking'
+  | 'stations'
+  | 'sites'
+  | 'landmarks'
+  | 'coordinates'
+  | 'commands'
+  // the expanded "Find" index (index/sources.ts; built lazily by index/lazy.ts, never during load)
+  | 'areas'
+  | 'legs'
+  | 'events'
+  | 'scenarios'
+  | 'report'
+  | 'glossary'
 
 /** Kind label per group (copy.json). Pads have no search.groups.* key yet: the card titles are reused. */
 export const GROUP_LABEL: Readonly<Record<SearchGroup, CopyKey>> = {
@@ -23,6 +37,18 @@ export const GROUP_LABEL: Readonly<Record<SearchGroup, CopyKey>> = {
   landmarks: 'search.groups.landmarks',
   coordinates: 'search.groups.coordinates',
   commands: 'search.groups.commands',
+  areas: 'search.groups.areas',
+  legs: 'search.groups.legs',
+  events: 'search.groups.events',
+  scenarios: 'search.groups.scenarios',
+  report: 'search.groups.report',
+  glossary: 'search.groups.glossary',
+}
+
+/** What a non-selection item's `run` may use (the palette passes its own). */
+export interface RunEnv {
+  navigate: (hash: string) => void
+  win?: Window
 }
 
 export interface SearchItem {
@@ -42,6 +68,12 @@ export interface SearchItem {
   command?: ShortcutAction
   /** Shortcut keys shown beside a command (DESIGN §4.4). */
   keys?: string[]
+  /** Non-selection target (layer on, clock seek, scenario, route): runs only when the row is chosen. */
+  run?: (env: RunEnv) => void
+  /** Secondary text (copy key; glossary definitions). Never a number. */
+  hint?: CopyKey
+  /** Extra words that find the item but are not shown (its kind, in the copy deck's words). */
+  keywords?: string
 }
 
 /** labels.json row (contracts/labels.schema.json), the part search reads. */
@@ -132,20 +164,36 @@ export function parseCoordinates(q: string): Extract<SelectionRef, { kind: 'cell
 }
 
 // ---- Fuzzy ranking --------------------------------------------------------------------------------
-const norm = (s: string): string =>
+const normRaw = (s: string): string =>
   s
     .toLowerCase()
     .normalize('NFKD')
     .replace(/[̀-ͯ]/g, '')
+// Index texts repeat on every keystroke: normalise and split each once (keystroke budget, < 16 ms).
+const NORM = new Map<string, { s: string; words: string[] }>()
+function normed(text: string): { s: string; words: string[] } {
+  let n = NORM.get(text)
+  if (!n) {
+    const s = normRaw(text)
+    n = { s, words: s.split(/[^a-z0-9]+/).filter(Boolean) }
+    if (NORM.size > 20_000) NORM.clear()
+    NORM.set(text, n)
+  }
+  return n
+}
+const COLLATOR = new Intl.Collator('en', { numeric: true })
+/** The expanded index (index/sources.ts) ranks below objects for a match of the same strength, so a
+ *  word in an object's name still finds the object first (e.g. "clay" → the S8 site, then the layer). */
+const EXPANDED: ReadonlySet<SearchGroup> = new Set<SearchGroup>(['areas', 'legs', 'events', 'scenarios', 'report', 'glossary'])
+const EXPANDED_WEIGHT = 0.65
 
 /** Score one query token against one text (0 = no match). Exact > prefix > word start > substring > in-order letters. */
 export function scoreText(token: string, text: string, exact: number): number {
-  const q = norm(token)
-  const s = norm(text)
+  const q = normed(token).s
+  const { s, words } = normed(text)
   if (!q || !s) return 0
   if (s === q) return exact
   if (s.startsWith(q)) return 800 - Math.min(s.length - q.length, 50)
-  const words = s.split(/[^a-z0-9]+/).filter(Boolean)
   const w = words.findIndex((x) => x.startsWith(q))
   if (w >= 0) return 600 - Math.min(w * 10, 100) - Math.min(words[w].length - q.length, 50)
   const i = s.indexOf(q)
@@ -169,11 +217,16 @@ export function scoreText(token: string, text: string, exact: number): number {
 function scoreItem(tokens: string[], it: SearchItem, labelText: string): number {
   let total = 0
   for (const tok of tokens) {
-    const s = Math.max(it.code ? scoreText(tok, it.code, 1000) : 0, scoreText(tok, labelText, 900), it.label ? scoreText(tok, it.name, 700) : 0)
+    const s = Math.max(
+      it.code ? scoreText(tok, it.code, 1000) : 0,
+      scoreText(tok, labelText, 900),
+      it.label ? scoreText(tok, it.name, 700) : 0,
+      it.keywords ? scoreText(tok, it.keywords, 800) * 0.5 : 0, // kind words rank below the shown text
+    )
     if (s === 0) return 0 // every token must match
     total += s
   }
-  return total / tokens.length
+  return (total / tokens.length) * (EXPANDED.has(it.group) ? EXPANDED_WEIGHT : 1)
 }
 
 export interface SearchResult {
@@ -197,6 +250,6 @@ export function rank(items: readonly SearchItem[], query: string, label: (i: Sea
     const score = scoreItem(tokens, item, label(item))
     if (score > 0) out.push({ item, score })
   }
-  out.sort((a, b) => b.score - a.score || a.item.priority - b.item.priority || a.item.code.localeCompare(b.item.code, 'en', { numeric: true }))
+  out.sort((a, b) => b.score - a.score || a.item.priority - b.item.priority || COLLATOR.compare(a.item.code, b.item.code))
   return out.slice(0, limit)
 }
