@@ -17,8 +17,9 @@ export const ROUTE_TEXT = {
   moveHint: 'Drag to reorder, or Alt+Up / Alt+Down',
   dragHandle: 'Move {station}',
   include: 'Include {station}',
-  undo: 'Undo route change',
-  redo: 'Redo route change',
+  // WP12 (W-5): the buttons run the one undo of the Plan view (route edits and rover / plan edits)
+  undo: 'Undo (Ctrl+Z)',
+  redo: 'Redo (Ctrl+Shift+Z)',
   compute: 'Compute plan',
   computing: 'Computing your route…',
   cancel: 'Cancel',
@@ -50,6 +51,24 @@ export const ROUTE_TEXT = {
   pad: 'Rover pad',
   dockNote: 'Route result on the map: the EVA timeline of the official plan is not shown.',
   dockOpen: 'Open this plan',
+  // WP12 (L6 W-1): one compute action; what goes into it
+  inputsPadOfficial: 'Rover pad: official',
+  inputsPad: 'Rover pad: {pad}',
+  inputsPadCustom: 'Rover pad: your spot from Live pad, {lon}°E {lat}°N',
+  inputsCrewDefault: 'Crew: default',
+  inputsCrewChanged: 'Crew: your changes from the crew panel',
+  // WP12 (L6 W-4): why a control is disabled (every disabled control names its reason)
+  whyLocked: 'Locked while your route is computed. Cancel to change it.',
+  whyStops: 'Fix the stops marked in the list first.',
+  whyDragging: 'Drop the station first.',
+  // WP12 (L-05, D114): in place of the section while the live planner is unreachable (no controls)
+  offlineNote: 'Route editing needs the live planner · it is offline right now',
+  // WP12 (L6 W-1): the Live pad card hands the compute to this panel
+  cardCompute: 'Compute in Edit route',
+  cardRunning: 'Computing in Edit route…',
+  cardNote: 'The full plan is computed in Edit route: this spot, your crew changes and the route, as one job.',
+  cardNoRoute: 'Edit route is not ready yet.',
+  whyPointsAuto: 'Your points take part only in “My order”: press it to edit them.',
 } as const
 
 export const LIMIT_TEXT: Record<RouteLimit, string> = {

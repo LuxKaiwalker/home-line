@@ -8,11 +8,18 @@
 //   jobs     live/route/jobs.ts (startJob + loadStage + run record feasibility)
 //   map      live/route/map.ts over the console map (staged layers, failing leg)
 //   validity the published field of the plan shown, over each stop's access disc (WP6) + stations.json
+//   WP12     ONE compute action (L6 W-1): the job's plan_inputs = the pad tool's valid spot (else the
+//            plan in use) + the crew panel's changed fields + the route; the Live pad card calls
+//            `compute()` of the handle given to onReady (opens this section, same controller action).
+//            One undo (W-5, edit/route/undo.ts) behind the global Ctrl/Cmd-Z and the panel buttons.
+//            Offline (L-05, D114): a one-line note in place of the section, no controls.
 import { h } from 'preact'
 import { createRouteController, type RouteController } from '../../edit/route/controller'
 import type { StationGeo, StopProbe } from '../../edit/route/model'
 import { RoutePanel } from '../../edit/route/panel'
 import { createRouteStore } from '../../edit/route/store'
+import { createSharedUndo, type SharedUndo, type UndoWindow } from '../../edit/route/undo'
+import type { LonLat, PlanInputs } from '../types'
 import { installWaypointMap } from '../../edit/route/map'
 import { discProbe } from '../../edit/route/map/validity'
 import { ROUTE_TEXT } from '../../edit/route/text'
@@ -22,8 +29,8 @@ import { data } from '../../data/loader'
 import type { Station } from '../../data/types'
 import { activeField, VARIANT_OF } from '../../map/field'
 import { mission } from '../../state/mission'
-import { effect, signal } from '../../state/signal'
-import { dockContent, registerRailSection, setDockContent, type Render } from '../../ui/shell/store'
+import { effect, signal, useSignalValue, type ReadSignal } from '../../state/signal'
+import { dockContent, registerRailSection, setDockContent, setRailCollapsed, shell, type Render } from '../../ui/shell/store'
 import { planUrl } from '../plan'
 import type { ApiClient } from '../client'
 import { bannerFor, type LiveState } from '../health'
@@ -48,12 +55,48 @@ export interface MountRouteOptions {
   stations?: readonly StationGeo[]
   probe?: (lon: number, lat: number) => StopProbe
   register?: typeof registerRailSection
+  /** WP12: the Live pad tool's spot while it is a valid pad (null: the plan in use); subscribe = changes */
+  pad?: { pad(): LonLat | null; subscribe(fn: () => void): () => void } | null
+  /** WP12: the crew panel: inputs it adds ({crew: changed fields}; null = a field is not a number) and why */
+  crew?: { jobInputs(): PlanInputs | null; blocked(): string | null; subscribe(fn: () => void): () => void } | null
+  /** WP12: the handle the Live pad card uses (one compute action), once the panel exists */
+  onReady?: (h: RouteHandle) => void
+  /** WP12: the window for the one undo (default: window; null: none) */
+  win?: UndoWindow | null
+}
+
+/** What the Live pad card may do with the route panel (W-1). */
+export interface RouteHandle {
+  /** open the section and run the panel's Compute plan (a job already running: focus its progress) */
+  compute(): void
+  /** 'unavailable' (offline, or the route cannot be computed now), 'ready', 'running' */
+  status(): 'unavailable' | 'ready' | 'running'
+  subscribe(fn: () => void): () => void
+  readonly ctl: RouteController
+  readonly undo: SharedUndo
+}
+
+/** The plan key H1 records (bind.ts followMission: scenario, budget, pad of mission.plan). */
+export const missionPlanKey = (): string => JSON.stringify([mission.plan.scenario.peek() ?? null, mission.plan.budgetMin.peek(), mission.plan.pad.peek() ?? null])
+
+/** Open the Plan rail so the section is on screen (desktop: expanded rail; tablet: the rail sheet). */
+function revealRail(): void {
+  if (shell.breakpoint.peek() === 'tablet') shell.railSheet.value = true
+  else setRailCollapsed(false)
 }
 
 /** The plan the console shows now (mission state), if the catalog has it; else the default plan. */
-export function missionPlan(c: EditCatalog): EditPlan {
-  const p: EditPlan = { scenario: mission.plan.scenario.peek() ?? c.defaultScenario, budgetMin: mission.plan.budgetMin.peek(), pad: mission.plan.pad.peek() ?? c.officialPadId, dwell: {} }
-  return planAvailability(p, c, true).ok ? p : { scenario: c.defaultScenario, budgetMin: c.bandBudgetsMin[0], pad: c.officialPadId, dwell: {} }
+export function missionPlan(c: EditCatalog, spot: LonLat | null = null): EditPlan {
+  const pad: EditPlan['pad'] = spot ? { lon: spot.lon, lat: spot.lat } : (mission.plan.pad.peek() ?? c.officialPadId)
+  const p: EditPlan = { scenario: mission.plan.scenario.peek() ?? c.defaultScenario, budgetMin: mission.plan.budgetMin.peek(), pad, dwell: {} }
+  if (planAvailability(p, c, true).ok) return p
+  // W-1: a spot of the pad tool is computed at the pads index scenario and a band budget (D81 / D21),
+  // never dropped for the official pad
+  if (spot) {
+    const q: EditPlan = { scenario: c.padScenario, budgetMin: c.bandBudgetsMin.includes(p.budgetMin) ? p.budgetMin : c.bandBudgetsMin[0], pad, dwell: {} }
+    if (planAvailability(q, c, true).ok) return q
+  }
+  return { scenario: c.defaultScenario, budgetMin: c.bandBudgetsMin[0], pad: c.officialPadId, dwell: {} }
 }
 
 /** Validity lookups at a stop from the published field (null where the browser has no field). */
@@ -103,6 +146,15 @@ export function routeDock(c: RouteController): () => void {
   }
 }
 
+/** L-05: the section's one line while live planning is unreachable (no controls, kit rule 4). */
+function RouteOfflineNote({ text }: { text: ReadSignal<string> }) {
+  return (
+    <p class="hl-route-offline" role="status" data-route-offline>
+      {useSignalValue(text)}
+    </p>
+  )
+}
+
 function RouteDockNote({ hash }: { hash: string | null }) {
   return (
     <p class="hl-route__docknote" role="status">
@@ -124,6 +176,10 @@ export function mountRoutePanel(o: MountRouteOptions): () => void {
   const live = signal(false)
   const reason = signal<string | null>(ROUTE_TEXT.checkingLive)
   let ctl: RouteController | null = null
+  const subs = new Set<() => void>()
+  const emit = () => {
+    for (const fn of [...subs]) fn()
+  }
 
   void (async () => {
     const L = data()
@@ -135,7 +191,14 @@ export function mountRoutePanel(o: MountRouteOptions): () => void {
       lon: s.access_lon ?? s.lon,
       lat: s.access_lat ?? s.lat,
     }))
-    const store = createRouteStore({ catalog, plan: () => missionPlan(catalog) })
+    const store = createRouteStore({
+      catalog,
+      plan: () => missionPlan(catalog, o.pad?.pad() ?? null),
+      // the crew panel's changed fields go with the same job (W-1); a field that is not a number blocks it
+      extra: () => o.crew?.jobInputs() ?? null,
+      tag: missionPlanKey,
+    })
+    const blocked = signal<string | null>(o.crew?.blocked() ?? null)
     const padOf = () => {
       const p = store.step.peek().inputs.pad
       return { lon: p.lon, lat: p.lat }
@@ -160,7 +223,21 @@ export function mountRoutePanel(o: MountRouteOptions): () => void {
       // after unmount the console map is gone: never restore or draw into it (R5-B)
       map: o.cmap ? consoleRouteMap(o.cmap, () => (alive ? (o.restore ?? restoreStatic)(o.cmap!).catch((e) => void (alive && console.warn('edit route: static plan not restored:', e))) : undefined), () => alive) : null,
       canCompute: live,
+      blocked,
     }))
+    const undo = createSharedUndo({ ctl: c, planKey: missionPlanKey, win: o.win === undefined ? (typeof window !== 'undefined' ? window : null) : o.win })
+    offs.push(undo.install())
+    // the pad tool's spot and the crew panel change the inputs and the hash, not the route history
+    if (o.pad) offs.push(o.pad.subscribe(() => store.planChanged()))
+    if (o.crew) {
+      const crew = o.crew
+      offs.push(
+        crew.subscribe(() => {
+          blocked.value = crew.blocked()
+          store.planChanged()
+        }),
+      )
+    }
     // the console's plan (pad drag, scenario) changes the inputs and the hash, not the route history
     let first = true
     offs.push(
@@ -168,16 +245,25 @@ export function mountRoutePanel(o: MountRouteOptions): () => void {
         void mission.plan.pad.value
         void mission.plan.scenario.value
         void mission.plan.variant.value
+        void mission.plan.budgetMin.value
         if (first) first = false
-        else store.planChanged()
+        else {
+          store.planChanged()
+          undo.planChanged()
+        }
       }),
     )
     // Kit rule 4 / F23: live controls hide behind the offline banner. The section is registered only
     // while /health says the server is ready (heavy jobs off: shown, Compute disabled with the reason);
     // the route and its undo history stay in memory and come back with the server.
     let unregister: (() => void) | null = null
+    let noteOff: (() => void) | null = null
+    const noteText = signal<string>(ROUTE_TEXT.checkingLive)
+    // L-05 (D114): while the planner is unreachable the section shows one line, no controls (kit rule 4)
+    const note = () =>
+      (o.register ?? registerRailSection)({ id: ROUTE_SECTION_ID, modes: ['plan'], title: 'nav.rail.stationsRoute', icon: 'station', render: () => h(RouteOfflineNote, { text: noteText, key: 'offline' }) })
     const section = () => {
-      const off = (o.register ?? registerRailSection)({ id: ROUTE_SECTION_ID, modes: ['plan'], title: 'nav.rail.stationsRoute', icon: 'station', render: () => h(RoutePanel, { ctl: c, live, reason, key: ROUTE_TEXT.title }) })
+      const off = (o.register ?? registerRailSection)({ id: ROUTE_SECTION_ID, modes: ['plan'], title: 'nav.rail.stationsRoute', icon: 'station', render: () => h(RoutePanel, { ctl: c, live, reason, undo, key: ROUTE_TEXT.title }) })
       // WP6: free waypoints (markers, click to add) and the ghost route (estimate) on the console map,
       // shown and hidden with the panel (offline: gone with the other live controls)
       const offMap = installWaypointMap(c, o.cmap)
@@ -189,6 +275,8 @@ export function mountRoutePanel(o: MountRouteOptions): () => void {
     offs.push(() => {
       unregister?.()
       unregister = null
+      noteOff?.()
+      noteOff = null
     })
     offs.push(
       o.onLiveState((s) => {
@@ -199,15 +287,43 @@ export function mountRoutePanel(o: MountRouteOptions): () => void {
           c.reset()
           unregister?.()
           unregister = null
+          noteText.value = s.kind === 'offline' ? ROUTE_TEXT.offlineNote : (b.text ?? ROUTE_TEXT.checkingLive)
+          if (!noteOff && alive) noteOff = note()
+          emit()
           return
         }
+        noteOff?.()
+        noteOff = null
         if (!unregister && alive) unregister = section()
+        emit()
         // the engine identity (plan hash) is asked again once the server is back
         if (!store.identity.peek()) askIdentity()
       }),
     )
     // R5-C: while a route result is shown, the EVA-time dock must not show the official plan's timeline
     offs.push(routeDock(c))
+    // W-1: the Live pad card's handle (one compute action, one job, one progress)
+    offs.push(effect(() => {
+      void c.compute.value
+      void c.check.value
+      void live.value
+      void blocked.value
+      emit()
+    }))
+    o.onReady?.({
+      ctl: c,
+      undo,
+      status: () => (c.compute.peek().kind === 'running' ? 'running' : unregister && live.peek() ? 'ready' : 'unavailable'),
+      subscribe(fn) {
+        subs.add(fn)
+        return () => void subs.delete(fn)
+      },
+      compute() {
+        if (!unregister) return
+        revealRail()
+        if (!c.computePlan() && c.compute.peek().kind !== 'running') c.requestFocus()
+      },
+    })
   })().catch((e) => console.warn('edit route unavailable:', e))
 
   return () => {

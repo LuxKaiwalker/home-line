@@ -30,7 +30,10 @@ import { bannerFor, watchHealth, type LiveState } from './health'
 import { consoleMapPort as basePort, type ConsoleMapLike, type MapPort } from './mapPort'
 import type { RouteConsoleMap } from './route/map'
 import { MOCK_OFFICIAL_HASH } from './mock/hashes'
-import { mountPadTool } from './padmount'
+import { mountPadTool, type RouteLink } from './padmount'
+import { crewBlockedText } from './crewview'
+import type { PadToolState } from './padtool'
+import type { RouteHandle } from './route/mount'
 import { mountPlanRoute, resultDataUrl } from './planmount'
 import { mockLiveLoader } from './result'
 
@@ -132,17 +135,67 @@ function planRoute(app: HTMLElement, client: ApiClient): () => void {
  */
 export function padTool(panel: Element, port: MapPort, client: ApiClient = liveClient()): () => void {
   const loader = USE_MOCK ? { loaderFor: mockLiveLoader(lazyMockFetch) } : {}
+  // WP12 (L6 W-1): ONE compute action. The pad tool's card hands the compute to the Edit-route panel
+  // (link below); the panel's job carries the pad tool's valid spot, the crew panel's changes and the route.
+  let handle: RouteHandle | null = null
+  const linkSubs = new Set<() => void>()
+  const linkChanged = () => {
+    for (const fn of [...linkSubs]) fn()
+  }
+  const link: RouteLink = {
+    compute: () => handle?.compute(),
+    status: () => handle?.status() ?? 'unavailable',
+    subscribe(fn) {
+      linkSubs.add(fn)
+      return () => void linkSubs.delete(fn)
+    },
+  }
+  const mounted = mountPadTool(panel, port, { client, onLiveState, ...loader, route: link })
+  const { tool, crew } = mounted
   // R5 (D97): the Edit-route panel in the Plan rail, on the same console map (lazy, live builds only)
   let offRoute: (() => void) | null = null
+  let offHandle: (() => void) | null = null
   let gone = false
   const cmap = (port as MapPort & { consoleMap?: RouteConsoleMap }).consoleMap ?? null
-  void import('./route/mount').then((m) => !gone && (offRoute = m.mountRoutePanel({ client, onLiveState, cmap, ...loader })))
-  const off = mountPadTool(panel, port, { client, onLiveState, ...loader }).cleanup
+  void import('./route/mount').then((m) => {
+    if (gone) return
+    offRoute = m.mountRoutePanel({
+      client,
+      onLiveState,
+      cmap,
+      ...loader,
+      pad: { pad: () => validSpot(tool.state), subscribe: (fn) => onSpot(tool, fn) },
+      crew: crew ? { jobInputs: () => crew.jobInputs(), blocked: () => crewBlockedText(crew.state), subscribe: (fn) => crew.subscribe(() => fn()) } : null,
+      onReady: (h) => {
+        handle = h
+        offHandle = h.subscribe(linkChanged)
+        linkChanged()
+      },
+    })
+  })
   return () => {
     gone = true
+    offHandle?.()
     offRoute?.()
-    off()
+    handle = null
+    mounted.cleanup()
   }
+}
+
+/** The pad tool's spot while it is a checked, valid pad (else null: the plan in use). */
+export function validSpot(s: PadToolState): { lon: number; lat: number } | null {
+  return s.pad && s.check.kind === 'done' && s.check.result.valid ? { lon: s.pad.lon, lat: s.pad.lat } : null
+}
+
+/** Call `fn` when the valid spot changes (not on every pad-tool state change). */
+function onSpot(tool: { subscribe(fn: (s: PadToolState) => void): () => void; readonly state: PadToolState }, fn: () => void): () => void {
+  let last = JSON.stringify(validSpot(tool.state))
+  return tool.subscribe((s) => {
+    const k = JSON.stringify(validSpot(s))
+    if (k === last) return
+    last = k
+    fn()
+  })
 }
 
 /** consoleMapPort (mapPort.ts); the port also carries the console map for the Edit-route panel (R5). */
