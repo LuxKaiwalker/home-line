@@ -5,3 +5,7 @@ export { allOptions, buildCatalog, isCustomPad, isPrecomputed, loadEditCatalog, 
 export { canonicalJson, CONTRACT_VERSION, defaultInputs, hashCanonical, inputsKey, resultHash, type EngineIdentity, type PlanInputs } from './canonical'
 export { applyToMission, editButtons, followMission, handleEditKey, handleEditShortcut, installPlanEdit, missionApply, planFromMission, registerEditActions, type EditButton } from './bind'
 export { connectLive, identityOf, loadLivePort, type LiveEditPort } from './live'
+// Drag the rover, static mode (H2, WS18 task 2). The map binding (roverMap.ts) is loaded lazily by ConsoleMap.
+export { cyclePad, dragRows, PAD_VALIDITY, snapTarget, spotValues, type DragFields, type DragGrid, type SpotValues, type Validity } from './drag'
+export { createRoverDrag, type RoverDrag, type RoverDragState } from './rover'
+export { afterimageOpacity, crossfadeFrom, crossfadeMs } from './crossfade'
