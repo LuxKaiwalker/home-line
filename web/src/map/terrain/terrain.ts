@@ -15,7 +15,7 @@ import type { CustomLayerInterface, Map as MlMap } from 'maplibre-gl'
 import { TOKENS } from '../../ui/tokens'
 import { TERRAIN } from './config'
 import { FAR_FIELD, farDemSource, pitchCap, type TileSet } from './farfield'
-import { DEM_PROTOCOL, installDemProtocol } from './protocol'
+import { DEM_PROTOCOL, installDemProtocol, lowestFarHeight, type DemTileUrls } from './protocol'
 import { DEM_SOURCE, demSource, type TerrainTiles } from './tiles'
 
 export const RELIEF_LAYER_ID = 'relief-shading'
@@ -87,10 +87,19 @@ export function addTerrain(
   const nearSpec = demSource(tj, prefix)
   let uninstallProtocol: (() => void) | null = null
   let spec = nearSpec
+  /** lowest far-field height (map m, exaggeration 1); null until read */
+  let floor: number | null = null
   if (far && typeof (globalThis as { OffscreenCanvas?: unknown }).OffscreenCanvas === 'function') {
     const nearSet: TileSet = { minzoom: tj.minzoom, maxzoom: nearSpec.maxzoom ?? tj.maxzoom, bounds: tj.bounds }
     const farSet: TileSet = { minzoom: far.minzoom, maxzoom: far.maxzoom, bounds: far.bounds }
-    uninstallProtocol = installDemProtocol({ near: nearSet, far: farSet, nearUrl: tileUrl(tj, prefix), farUrl: tileUrl(far, prefix) })
+    const urls: DemTileUrls = { near: nearSet, far: farSet, nearUrl: tileUrl(tj, prefix), farUrl: tileUrl(far, prefix) }
+    uninstallProtocol = installDemProtocol(urls)
+    void lowestFarHeight(urls)
+      .then((h) => {
+        floor = h
+        clipFloor()
+      })
+      .catch(() => undefined)
     spec = farDemSource(nearSet, farSet, DEM_PROTOCOL, [tj.attribution, far.attribution].filter(Boolean).join('; ') || undefined)
   }
   const farOn = spec !== nearSpec
@@ -123,6 +132,20 @@ export function addTerrain(
   }
   let exag = initial.exaggeration
   let on = false
+  /**
+   * V1: MapLibre 6.18 puts the camera's far plane on a flat plane at the lowest point of the tile under
+   * the map centre (Terrain.getMinTileElevationForLngLatZoom -> transform.minElevationForCurrentTile), so
+   * from a ridge the lower ground beyond fell behind the far plane and was clipped (a black top edge with
+   * every tile loaded). The floor is held at or below the lowest point of the Gale pyramid.
+   */
+  function clipFloor(): void {
+    type T = { getMinTileElevationForLngLatZoom(l: unknown, z: number): number; __hlFloor?: true }
+    const t = (map as unknown as { terrain?: T | null }).terrain
+    if (!t || floor === null || t.__hlFloor) return
+    const orig = t.getMinTileElevationForLngLatZoom.bind(t)
+    t.getMinTileElevationForLngLatZoom = (l, z) => Math.min(orig(l, z), (floor ?? 0) * exag)
+    t.__hlFloor = true
+  }
   // V1: the manual tilt cap follows the camera height (zoom); a story sets its own camera
   // V1: in 3D (not in a story) the far relief replaces the planning-extent one (same tiles inside the extent)
   let farShown = false
@@ -169,6 +192,7 @@ export function addTerrain(
       on = next
       if (next) {
         map.setTerrain({ source: DEM_SOURCE.terrain, exaggeration: exag })
+        clipFloor()
         map.setMaxPitch(TERRAIN.maxPitch3d)
         capPitch()
         sky(true)
@@ -195,7 +219,10 @@ export function addTerrain(
     },
     setExaggeration(x) {
       exag = x
-      if (on) map.setTerrain({ source: DEM_SOURCE.terrain, exaggeration: x })
+      if (on) {
+        map.setTerrain({ source: DEM_SOURCE.terrain, exaggeration: x })
+        clipFloor()
+      }
     },
     setLightAzimuth(az) {
       for (const id of [RELIEF_LAYER_ID, RELIEF_FAR.layer]) if (map.getLayer(id)) map.setPaintProperty(id, 'hillshade-illumination-direction', az ?? undefined)

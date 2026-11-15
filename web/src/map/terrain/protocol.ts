@@ -2,7 +2,8 @@
 // from terrain/ (planning extent), terrain_low/ (Gale), or upsampled from terrain_low's finest zoom
 // (farfield.ts routeDemTile). Loaded with terrain.ts (import() on the first 3D), main thread.
 import { addProtocol, removeProtocol } from 'maplibre-gl'
-import { routeDemTile, upsampleTerrarium, type TileSet } from './farfield'
+import { routeDemTile, tileRange, upsampleTerrarium, type TileSet } from './farfield'
+import { terrariumHeight } from './tiles'
 
 export const DEM_PROTOCOL = 'hl-dem'
 
@@ -18,7 +19,7 @@ export interface DemTileUrls {
 /** Decoded far tiles kept for upsampling (a pitched view asks for many children of a few z10 tiles). */
 const DECODED_MAX = 24
 
-async function decode(buf: ArrayBuffer): Promise<Uint8ClampedArray> {
+export async function decode(buf: ArrayBuffer): Promise<Uint8ClampedArray> {
   const bmp = await createImageBitmap(new Blob([buf], { type: 'image/png' }), { premultiplyAlpha: 'none', colorSpaceConversion: 'none' })
   const c = new OffscreenCanvas(bmp.width, bmp.height)
   const g = c.getContext('2d', { willReadFrequently: true })
@@ -70,4 +71,22 @@ export function installDemProtocol(u: DemTileUrls): () => void {
     removeProtocol(DEM_PROTOCOL)
     decoded.clear()
   }
+}
+
+/**
+ * Lowest height (map metres: factor and vertical offset included) in the far set's coarsest tiles: the
+ * floor of the 3D camera's far plane (terrain.ts clipFloor). Null when they cannot be read.
+ */
+export async function lowestFarHeight(u: DemTileUrls): Promise<number | null> {
+  const z = u.far.minzoom
+  const r = tileRange(u.far.bounds, z)
+  let lo = Infinity
+  for (let y = r.y0; y <= r.y1; y++)
+    for (let x = r.x0; x <= r.x1; x++) {
+      const res = await fetch(u.farUrl(z, x, y))
+      if (!res.ok) continue
+      const d = await decode(await res.arrayBuffer())
+      for (let p = 0; p < d.length; p += 4) lo = Math.min(lo, terrariumHeight(d[p], d[p + 1], d[p + 2]))
+    }
+  return Number.isFinite(lo) ? lo : null
 }
