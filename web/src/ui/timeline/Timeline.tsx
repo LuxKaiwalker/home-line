@@ -17,7 +17,10 @@ import { useRef } from 'preact/hooks'
 import { DerivedNum, Num } from '../../components/Num'
 import { FIELD_LAYER } from '../../map/field/constants'
 import { marginClass, type Binding } from '../../map/field/margin'
+import { controlSignal } from '../../state/activity'
+import { toggleReplay } from '../../state/activityClock'
 import type { ClockDriver } from '../../state/clock'
+import { missionClock } from '../../state/mission'
 import { useSignalValue } from '../../state/signal'
 import { linear, linePath, areaPath, pct, splitByClass, stepTicks, type Pt } from '../charts'
 import { cx, Icon, IconButton, Readout, Segmented, Tag, TrustChip } from '../components'
@@ -67,8 +70,14 @@ export function Timeline({ model, clock, ticker, amberMin }: TimelineProps) {
   const sc = chartScales(model)
   const P = (v: number) => pct(Math.min(Math.max(v, 0), tMax), 0, tMax)
 
+  // L7c: Play is the replay player of the activity store (state/activity.ts): pressed while the replay
+  // runs (not while the flythrough or the intro drives the clock); disabled with the store's reason
+  const replay = useSignalValue(controlSignal('replay'))
+  const shared = clock === missionClock
+  const replaying = shared ? replay.running : playing
   const play = () => {
-    clock.toggle()
+    if (shared && !replay.enabled) return
+    toggleReplay(clock)
     if (clock.playing) ticker?.start()
   }
   const seekAt = (clientX: number) => {
@@ -114,10 +123,12 @@ export function Timeline({ model, clock, ticker, amberMin }: TimelineProps) {
         <div class="hl-tl__transport">
           <IconButton
             class="hl-tl__play"
-            icon={playing ? 'pause' : 'play'}
-            label={t(playing ? 'buttons.pause' : 'buttons.play')}
-            pressed={playing}
-            title={t('hints.timeline.play')}
+            icon={replaying ? 'pause' : 'play'}
+            label={t(replaying ? 'buttons.pause' : 'buttons.play')}
+            pressed={replaying}
+            disabled={shared && !replay.enabled}
+            title={shared && !replay.enabled ? replay.title : t('hints.timeline.play')}
+            data-activity-reason={shared ? (replay.reason ?? undefined) : undefined}
             aria-keyshortcuts="Space"
             onClick={play}
             onKeyDown={(e: KeyboardEvent) => {

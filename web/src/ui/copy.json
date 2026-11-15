@@ -11,7 +11,7 @@
   },
 
   "nav": {
-    "wordmark": "HOMELINE",
+    "wordmark": "MARVIS",
     "modesMenu": "Modes",
     "share": "Share",
     "liveIndicator": "Live",
@@ -42,6 +42,8 @@
       "expand": "Expand panel"
     },
     "views": {
+      "console": "Official plan",
+      "mission": "Plan your EVA (estimate)",
       "trade": "Trade table",
       "conditions": "Conditions",
       "cuff": "Cuff card",
@@ -130,6 +132,8 @@
       "title": "Science target",
       "open": "Open station",
       "openTip": "The full station page: Navcam photo, panorama, timeline and tasks",
+      "addToRoute": "Add to route",
+      "addToRouteTip": "Add this station to the route in Plan your EVA (estimate)",
       "objective": "Objective",
       "tasks": "Tasks",
       "dwell": "Dwell",
@@ -203,7 +207,7 @@
       "area": "Area"
     },
     "homelineEdge": {
-      "title": "Homeline edge",
+      "title": "Home line edge",
       "cause": "Cause",
       "physiology": "Physiology: oxygen, daylight, dose or EVA duration runs out",
       "slope": "Slope: the ground beyond is too steep to walk",
@@ -299,7 +303,7 @@
   },
 
   "glossary": {
-    "homeline": "Homeline",
+    "homeline": "Home line",
     "homelineHint": "Where the crew can go and still walk back to the rover within the {budget_min}-minute walkback budget",
     "margin": "Margin",
     "marginHint": "Minutes left before a limit binds",
@@ -402,9 +406,16 @@
     "dataQuality": { "name": "Data quality", "what": "Assessed, blocked and unknown cells" },
     "siting": { "name": "Siting heatmap", "what": "Where a rover pad scores best for science within reach" },
     "partner": { "name": "Partner line", "what": "How far one crewmember could haul the other back on the cart" },
-    "parking": { "name": "Rover parking options", "what": "Alternative rover pads and their homelines" },
-    "edgeCauses": { "name": "Homeline edge causes", "what": "What sets each part of the edge: physiology, slope or data" },
-    "flatCircle": { "name": "Flat circle", "what": "NASA's walkback on flat ground at walking pace, in every direction (dashed)" }
+    "parking": { "name": "Rover parking options", "what": "Alternative rover pads and their home lines" },
+    "edgeCauses": { "name": "Home line edge causes", "what": "What sets each part of the edge: physiology, slope or data" },
+    "flatCircle": { "name": "Flat circle", "what": "NASA's walkback on flat ground at walking pace, in every direction (dashed)" },
+    "manager": {
+      "label": "Layers",
+      "legend": "Legend",
+      "tools": "Map tools",
+      "view": "Map view",
+      "exaggerationIn3d": "Vertical exaggeration applies in 3D (key T)"
+    }
   },
 
   "timeline": {
@@ -420,6 +431,14 @@
     "collapse": "Hide elevation profile",
     "title": "Mission timeline",
     "notReady": "The mission timeline is not available yet"
+  },
+
+  "planBottom": {
+    "label": "Plan details",
+    "expand": "Show the plan table and the timeline",
+    "collapse": "Hide the plan table and the timeline",
+    "planTable": "Plan table",
+    "timeline": "Timeline"
   },
 
   "gauges": {
@@ -519,12 +538,14 @@
     "undoEmpty": "Nothing to undo",
     "redoEmpty": "Nothing to redo",
     "previewEstimates": "Feasible EVAs and reachable stations are estimates until the full plan is computed",
+    "planInMission": "Plan a route → Plan your EVA (estimate)",
+    "planInMissionTip": "Route stops, stop times and the browser estimate are in the Plan your EVA (estimate) tab",
     "reasons": {
       "customPad": "A rover pad spot of your own needs live planning",
       "dwell": "A changed dwell needs live planning",
       "parkingSuit": "Parking options are precomputed for the default suit only",
       "padSuit": "Rover pads other than the official one are computed for the default suit only",
-      "budget": "No precomputed homeline for a {budget_min}-minute walkback budget at this rover pad"
+      "budget": "No precomputed home line for a {budget_min}-minute walkback budget at this rover pad"
     }
   },
 
@@ -550,14 +571,14 @@
     "empty": {
       "noSelection": "Nothing selected. Click a station, ridge, mineral patch or any spot on the map.",
       "noRoute": "No planned route for this scenario: no station is reachable on foot",
-      "noLayers": "No overlays on. Turn one on to see why the homeline has its shape.",
+      "noLayers": "No overlays on. Turn one on to see why the home line has its shape.",
       "noBookmarks": "No saved views yet",
       "noStorm": "No storm in this plan"
     },
     "loading": {
       "generic": "Loading {what}…",
       "map": "Loading the map…",
-      "fields": "Loading the homeline fields…",
+      "fields": "Loading the home line fields…",
       "terrain3d": "Loading 3D terrain…",
       "preview": "Loading the instant preview…",
       "checkingPad": "Checking the pad…"
@@ -585,7 +606,7 @@
   },
 
   "onboarding": {
-    "budget": "Move the walkback budget and watch the homeline change.",
+    "budget": "Move the walkback budget and watch the home line change.",
     "station": "Click a station to see its card: time home, margin and what limits it.",
     "planYourOwn": "Plan your own: drag the rover and the plan is computed live.",
     "dismiss": "Got it, don't show again"
@@ -600,10 +621,10 @@
 
   "collapse": {
     "flat": "Flat walk: {walkback_min} minutes at walking pace, in every direction",
-    "real": "Real homeline: the same walk over the real terrain",
+    "real": "Real home line: the same walk over the real terrain",
     "headline": "Reachable within the walkback budget",
     "toggleToFlat": "Flat vs real: show the flat circle",
-    "toggleToReal": "Flat vs real: collapse to the real homeline",
+    "toggleToReal": "Flat vs real: collapse to the real home line",
     "flatWorld": "Flat world: the {budget_min}-min walk circle on flat ground",
     "reachableInData": "reachable on foot within {budget_min} min (part of the circle inside the terrain data)",
     "reachableAssessed": "reachable on foot within {budget_min} min of the assessed flat circle",
@@ -677,7 +698,7 @@
       "turnBack": "Turn-back"
     },
     "permalinkHint": "Scan to open this plan",
-    "printFooter": "HOMELINE · Space Apps project · simulated EVA over real terrain and data"
+    "printFooter": "MARVIS · Space Apps project · simulated EVA over real terrain and data"
   },
 
   "evidence": {
@@ -695,6 +716,18 @@
     "privacy": "Privacy",
     "addOns": "Optional add-ons",
     "independence": "Independent team project for the Space Apps Challenge; not affiliated with any space agency."
+  },
+
+  "activity": {
+    "reason": {
+      "jobRunning": "A plan is still computing: its partial result cannot be played. Play, Flythrough and the intro are available when it is ready",
+      "jobBusy": "Another plan is already computing in this view: wait for it, or change the inputs to cancel it",
+      "busy": "Another player is running: stop it first"
+    },
+    "confirm": {
+      "inputChange": "A plan is still computing. Change the inputs and cancel that computation?"
+    },
+    "stormSetting": "Storm is a setting: Play replays the EVA with the storm on"
   },
 
   "hints": {
@@ -754,11 +787,200 @@
       "stations": "{n} stations"
     },
     "storageTitle": "Stored in this browser",
-    "privacy": "No accounts, logins or cookies. Saved plans, and which panels and view you left open, stay in this browser; nothing else uses browser storage."
+    "privacy": "No accounts, logins or cookies. Saved plans, and which panels and view you left open, stay in this browser; nothing else uses browser storage.",
+    "curiosity": "The Mission Planer's Curiosity layer is off by default; turning it on loads the rover's drives and pictures from mars.nasa.gov, so it contacts NASA's site."
   },
 
   "a11y": {
-    "mapSummary": "Map: the homeline covers {reachable} of the {budget_min}-minute flat circle around the rover pad",
+    "mapSummary": "Map: the home line covers {reachable} of the {budget_min}-minute flat circle around the rover pad",
     "mapSummaryStations": "{reachable_count} of {station_count} science targets are reachable on foot"
+  },
+
+  "mission": {
+    "loading": {
+      "what": "Mission Planer data",
+      "firstStep": "scenarios and pad",
+      "step": "Loading {step}…"
+    },
+    "notices": {
+      "outside": "That spot is outside the terrain data: no waypoint added.",
+      "blocked": "No walk home from that spot in {scenario} (blocked, too steep, unknown terrain or not reached): no waypoint there.",
+      "noStation": "No science station \"{id}\" in stations.json: nothing added.",
+      "stationInPlan": "{id} is already in the plan.",
+      "stationNoAccess": "{id} has no walkable access cell in {scenario}: not added.",
+      "stationAdded": "Added {id} as waypoint #{n}, with a {stop_min}-min stop.",
+      "planDamaged": "The plan in this link is damaged or from another version: starting empty.",
+      "lostOne": "{n} waypoint of the saved plan has no walk home in {scenario} and was left out.",
+      "lostMany": "{n} waypoints of the saved plan have no walk home in {scenario} and were left out.",
+      "copyFailed": "Could not copy: copy the address from the browser bar instead.",
+      "routeFull": "The route already has {n} stops, the most one route can have: {id} not added.",
+      "padLostOne": "{n} waypoint with no walk home to this pad was left out.",
+      "padLostMany": "{n} waypoints with no walk home to this pad were left out."
+    },
+    "pads": {
+      "label": "Start: rover pad",
+      "official": "Official pad",
+      "loading": "Loading the walk-home fields of {pad}…",
+      "noFields": "No browser fields for this pad in this scenario",
+      "note": "The official pad and the next three of the pad ranking (scenarios/pads/index.json), each with its own walk-home fields."
+    },
+    "estimates": {
+      "title": "Estimated times and consumption",
+      "notRouted": "A leg could not be routed (see the waypoint list): times and O₂ are unknown until it is moved or removed.",
+      "routing": "Routing {n} new leg(s)… times and O₂ follow when the routes are in.",
+      "timeHome": "Time home",
+      "timeHomeFrom": "Time home from #{n}",
+      "timeHomeTitle": "The engine's T_home at the last waypoint (fastest walk back to the pad)",
+      "walkOut": "Walk out (all legs)",
+      "atWaypoints": "Time at waypoints",
+      "atWaypointsTitle": "Sum of the planned stop times",
+      "evaTotal": "EVA total",
+      "evaTotalValue": "{used} of {limit} min",
+      "timeMargin": "Time margin",
+      "timeMarginTitle": "EVA limit − walk out − time home",
+      "o2Left": "O₂ left at the last waypoint",
+      "o2LeftTitle": "{capacity} L primary supply − {used} used (legs + {stops} L at stops)",
+      "o2Stops": "O₂ for stops",
+      "o2StopsTitle": "{minutes} min × {rate} L/min station task rate",
+      "o2Need": "O₂ needed (home + reserve)",
+      "o2NeedTitle": "O₂ home {home} + reserve {reserve} L",
+      "o2Margin": "O₂ margin",
+      "o2MarginValue": "{litres} L · {minutes} min at max effort"
+    },
+    "start": {
+      "title": "EVA start",
+      "sunSite": "the pad ({lat}°, {lon}°E)",
+      "earth": "Earth (UTC)",
+      "sol": "Mars sol",
+      "lmst": "LMST",
+      "localTime": "Local time at Gale",
+      "localTimeValue": "Sol {sol}, {lmst} LMST",
+      "season": "Season",
+      "seasonTitle": "Areocentric solar longitude (season) and Mars year",
+      "seasonValue": "Ls {ls}°, MY {year}",
+      "sun": "Sun at start",
+      "sunTitle": "Sun's centre at {site}, no refraction ({ref})",
+      "sunValue": "{elevation}° up, az {azimuth}°",
+      "sunset": "Sunset",
+      "sunsetTitle": "Flat horizon at {deg}° (config clock.sun_horizon_elevation_deg)",
+      "sunsetUtc": "{utc} UTC",
+      "sunsetLmst": "{utc} UTC · {lmst} LMST",
+      "daylight": "Daylight left",
+      "daylightTitle": "Minutes from EVA start until the sun sets on a flat horizon: the margin's daylight term",
+      "sunDown": "sun is down",
+      "sunDownNotice": "The sun is below the horizon at this start: the daylight margin is negative from the first minute.",
+      "isDefault": "Default: {lmst} LMST on the sol of {date} (clock.json).",
+      "changed": "Changed from the default {lmst} LMST, sol of {date}.",
+      "reset": "Reset"
+    },
+    "waypoints": {
+      "title": "Waypoints",
+      "count": "({n})",
+      "empty": "No waypoints yet: click the map.",
+      "copyLink": "Copy link to this plan",
+      "linkCopied": "Link copied ✓",
+      "legFromPad": "Pad → #{to}",
+      "legFrom": "#{from} → #{to}",
+      "legStats": "{minutes} min · {distance} · {o2} L O₂",
+      "noRoute": "no walkable route from the previous point",
+      "routing": "routing…",
+      "stationLink": "{id} details →",
+      "stationLinkTitle": "Open the station card",
+      "moveUp": "Move up",
+      "moveUpLabel": "Move waypoint {n} up",
+      "moveUpIcon": "↑",
+      "moveDown": "Move down",
+      "moveDownLabel": "Move waypoint {n} down",
+      "moveDownIcon": "↓",
+      "remove": "Delete",
+      "removeLabel": "Delete waypoint {n}",
+      "removeIcon": "✕",
+      "clearAll": "Clear all",
+      "markerStop": "stop {minutes} min"
+    },
+    "editor": {
+      "addDetails": "Add stop time, tags, note",
+      "plannedStop": "Planned stop",
+      "plannedStopLabel": "Planned stop time at waypoint {n} in minutes",
+      "unit": "min",
+      "stopO2": "≈ {o2} L O₂",
+      "tagsLabel": "Tags for waypoint {n}",
+      "notePlaceholder": "Note: resource, task, what to carry out here…",
+      "noteLabel": "Note for waypoint {n}"
+    },
+    "boundary": {
+      "title": "Reachable-area boundary",
+      "selectLabel": "Boundary shown on the map",
+      "caption": "From {file} ({scenario}): the area from which the crew can walk back to the pad within that time."
+    },
+    "export": {
+      "button": "Download mission.json",
+      "buttonTitle": "mission.json for the EVA simulator (contracts/bundle/mission.schema.json)",
+      "routingTitle": "Wait until every leg is routed",
+      "lowestMargin": "lowest margin {margin} min ({binding})",
+      "storm": "Replay the {date} storm during this EVA",
+      "stormTitle": "The storm series is shifted so its tripwire fires at the route's largest T_home; the dose term joins the margin",
+      "stormNoRad": "rad.json is not loaded: no storm series to replay"
+    },
+    "help": {
+      "howto": "Click the map to add a waypoint. Each leg is the fastest walk on the {res_m} m grid for {scenario}; the dashed line is the way home from the last waypoint.",
+      "sourcesLead": "Estimates.",
+      "sources": "Leg times and leg O₂ are computed in your browser with the engine's walking model ({crew}, {variants}) on the {res_m} m grid with {elevation_res_m} m terrain heights ({elevation_file}), so they can differ from the engine's {route_res_m} m routes. Time home and O₂ home come from the engine's fields ({fields}). O₂ capacity: primary supply per {o2_source} (computed from its formula); reserve: {reserve_min} min at the effort cap; EVA limit: {eva_h} h. Planned time at a waypoint is station work at the station task rate ({crew_file} {rate_key}, {rate} L/min); tags and notes are labels only.",
+      "basemap": "Basemap: {credit}."
+    },
+    "maps": {
+      "button": "Maps",
+      "buttonTitle": "Change the map type",
+      "satellite": "Satellite",
+      "topo": "Topography",
+      "material": "Material",
+      "noBasemap": "No basemap tiles in this data tree",
+      "rendering": "Rendering {type}…",
+      "encodeError": "could not encode the relief image",
+      "topoLegend": "Contours every {step} m (bold every {bold} m) · {low} to {high} m (MOLA areoid), {res_m} m terrain heights",
+      "materialTitle": "Rock unit, inferred from elevation",
+      "unitTitle": "{name}: Curiosity samples from {low} to {high} m",
+      "noUnit": "No unit band reaches this terrain.",
+      "grey": "Grey: no sample at that height",
+      "greyTitle": "Heights above or below every Curiosity sample in the database (it ends at sol {sol}, before the boxwork region)",
+      "materialNote": "Mount Sharp's layers are nearly flat, so each unit is drawn at the heights where Curiosity sampled it (± {margin_m} m, fading beyond). Not a mineral survey. Data: Curiosity APXS (PDS), via the team's Unity rock database."
+    },
+    "layers": {
+      "head": "Layers",
+      "openIcon": "▾",
+      "closedIcon": "▸",
+      "loading": "loading…",
+      "slope": "Slope",
+      "slopeTitle": "Ground slope in classes from config/site.yaml (pad-flat, walkable, beyond tested, no-go)",
+      "noSlopeField": "fields/index.json has no slope field",
+      "encodeError": "could not encode the slope image",
+      "opacity": "Opacity",
+      "opacityLabel": "Slope layer opacity",
+      "slopeNote": "Cell slope, {file}; edges from {site}. Unknown ground is left clear.",
+      "curiosity": "Curiosity route + photos",
+      "curiosityTitle": "Curiosity's real drives inside this map, live from NASA. Click a yellow drive end for its pictures",
+      "curiosityError": "Could not reach NASA: {error}",
+      "curiosityStops": "{n} drive ends, sols {first}–{last}. Click a yellow dot for its pictures. Live: NASA/JPL-Caltech MMGIS.",
+      "curiosityNone": "No Curiosity drive end inside this map."
+    },
+    "photos": {
+      "title": "Curiosity drive end {rmc} · sol {sol}",
+      "meta": "This drive {distance} · odometer {odometer} · {lat}°, {lon}°E",
+      "sol": "sol {sol}",
+      "sols": "sols {first}–{last}",
+      "loading": "Loading pictures from NASA…",
+      "loadError": "Could not load the pictures: {error}",
+      "mastcam": "Mastcam (colour)",
+      "navcam": "Navcam",
+      "noneAtStop": "None at this stop.",
+      "noneOn": "None on {sols}.",
+      "showAll": "Show all {n}",
+      "imageTitle": "{instrument} · sol {sol} · {taken}",
+      "imageAlt": "{instrument} sol {sol}",
+      "note": "Navcam: frames with this stop's site/drive. Mastcam has no position in NASA's data, so it is matched by {sols} (frames from before the drive on sol {sol} can be included).",
+      "truncated": "Long stay or many frames: only the first sols/pages were searched.",
+      "credit": "Raw images, NASA/JPL-Caltech/MSSS ·",
+      "archive": "raw-image archive"
+    }
   }
 }

@@ -27,6 +27,14 @@ export const PLAN_VIEW = {
 } as const
 if (!isView(PLAN_VIEW.default)) throw new Error(`plan_view.default must be 2d or 3d, not ${String(PLAN_VIEW.default)}`)
 
+/**
+ * P4a: the camera pose the app opens with in `view`: in 3D the default tilt (plan_view.pitch_deg) and
+ * bearing; in 2D pitch 0, north up (2D never tilts, RR1).
+ */
+export function openPose(view: View = '3d'): { pitch: number; bearing: number } {
+  return view === '3d' ? { pitch: PLAN_VIEW.pitch, bearing: PLAN_VIEW.bearing } : { pitch: 0, bearing: 0 }
+}
+
 /** The layout-store entry that remembers the choice (a remembered "section" whose tab is the view). */
 export const VIEW_PREF_ID = 'plan.view'
 

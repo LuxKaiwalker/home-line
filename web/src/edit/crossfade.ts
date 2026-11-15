@@ -1,4 +1,4 @@
-// Homeline cross-fade for drag-the-rover (U15 "their homelines cross-fade"). The planning map draws
+// Home line cross-fade for drag-the-rover (U15 "their homelines cross-fade"). The planning map draws
 // the new pad's precomputed homeline itself (the console switches its files); this module lays the
 // previous homeline over it as an afterimage that fades out over tokens.motion.dataMs, so the eye
 // reads one homeline turning into the other. Reduced motion: no afterimage, the swap is instant.

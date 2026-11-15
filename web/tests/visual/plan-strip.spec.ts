@@ -11,7 +11,7 @@
 import { expect, test } from 'playwright/test'
 
 test('the headline strip shows three numbers with trust chips', async ({ page }) => {
-  await page.goto('/?intro=0#/')
+  await page.goto('/?intro=0&view=2d#/')
   const strip = page.locator('#hl-topbar-plan .hl-strip__nums')
   await expect(strip.locator('.hl-strip__item')).toHaveCount(3, { timeout: 30_000 })
   await expect(strip.locator('.num')).toHaveCount(3, { timeout: 30_000 })
@@ -28,7 +28,7 @@ test('the headline strip shows three numbers with trust chips', async ({ page })
 })
 
 test('the scenario and budget chips open their sections in a popover; Esc returns focus to the chip', async ({ page }) => {
-  await page.goto('/?intro=0#/')
+  await page.goto('/?intro=0&view=2d#/')
   const scenario = page.locator('.hl-strip__chip[aria-controls="hl-lay-scenario"]')
   const budget = page.locator('.hl-strip__chip[aria-controls="hl-lay-budget"]')
   await scenario.waitFor({ timeout: 30_000 })
@@ -58,7 +58,7 @@ test('the scenario and budget chips open their sections in a popover; Esc return
 })
 
 test('?legacy=1 keeps the old side panel and has no strip', async ({ page }) => {
-  await page.goto('/?intro=0&legacy=1#/')
+  await page.goto('/?intro=0&legacy=1&view=2d#/')
   await expect(page.locator('.console-panel [role="radiogroup"][aria-label="Variant"]')).toBeVisible({ timeout: 30_000 })
   await expect(page.locator('.hl-strip__row')).toHaveCount(0)
 })

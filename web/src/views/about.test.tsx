@@ -45,6 +45,18 @@ describe('/about: what is fetched live (D86)', () => {
     expect(live.mounted).toBe(0)
   })
 
+  it('static build (J1, D132): the privacy section names mars.nasa.gov, the Curiosity layer that is off by default', async () => {
+    vi.stubEnv('VITE_LIVE', '')
+    const t = await render()
+    expect(t).toContain('Stored in this browser')
+    expect(t).toContain("The Mission Planer's Curiosity layer is off by default; turning it on loads the rover's drives and pictures from mars.nasa.gov")
+    // and it is off by default in the code: the Layers control starts with the Curiosity overlay off, and only its toggle loads it
+    const { readFileSync } = await import('node:fs')
+    const src = readFileSync(new URL('../mission/LayersControl.tsx', import.meta.url), 'utf8')
+    expect(src).toContain("useState<Record<Overlay, Status>>({ slope: 'off', curiosity: 'off' })")
+    expect(src.match(/loadCuriosity\(/g)).toHaveLength(1) // the toggle's load(), nowhere on mount
+  })
+
   it('live build (VITE_LIVE=1): the live sentence replaces it and points to the privacy note', async () => {
     vi.stubEnv('VITE_LIVE', '1')
     vi.stubGlobal('document', {})

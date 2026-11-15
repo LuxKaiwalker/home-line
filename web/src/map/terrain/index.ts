@@ -11,12 +11,15 @@
 // state/view.ts resolves (?view=, else the viewer's remembered choice, else plan_view.default: 3D) at
 // plan_view.pitch_deg / bearing_deg with the route framed (opts.frame); the low-frame-rate fallback
 // (performance.fps_3d_min, D38) shows a dismissible note, never under ?view=3d.
-import type { Map as MlMap } from 'maplibre-gl'
+// P4a: the app starts tilted: plan_view.pitch_deg is the default tilt of the first 3D view on the Plan
+// map and the Mission Planer (first load, reload, after the intro whether it ended or was skipped);
+// 2D stays at pitch 0; reduced motion jumps to the tilt instead of easing.
+import type { ControlPosition, Map as MlMap } from 'maplibre-gl'
 import { DATA_MODE, dataUrl } from '../../env'
 import { data } from '../../data/loader'
 import { parseClockSun, type ClockFile, type SunData } from '../../hud/sun'
 import { effect, mission, ui } from '../../state'
-import { noteFallback, planView, viewOverride, type View } from '../../state/view'
+import { noteFallback, openPose, planView, viewOverride, type View } from '../../state/view'
 import { TOKENS } from '../../ui/tokens'
 import { COPY_PENDING, t } from './config'
 import { TerrainControl, TerrainNotice, TERRAIN_TRUST } from './controls'
@@ -29,13 +32,19 @@ export { TerrainControl, TERRAIN_TRUST } from './controls'
 export { chooseToggle, chooseView, clampExaggeration, exaggeration, setExaggeration, setView, toggleView } from './state'
 
 export interface TerrainControllerOptions {
-  /** L13: this is the Plan map: open in state/view.ts planView() (3D by default) */
+  /**
+   * L13: this is the Plan map: open in state/view.ts planView() (3D by default). P4a: the Mission
+   * Planer map (the landing page, D132) opens the same way, so the app starts tilted in 3D.
+   */
   planView?: boolean
   /**
    * L13: put the camera at Plan mode's open pose (plan_view pitch/bearing) with the route in view
-   * (ConsoleMap.frameRoute); called when the opening 3D view is on, and by openPlanView().
+   * (ConsoleMap.frameRoute); called when the opening 3D view is on, and by openPlanView(). P4a:
+   * without it (the Mission Planer) the camera goes to the open pose where it is (openPose()).
    */
   frame?: (animate: boolean) => void
+  /** where the 2D/3D control sits (the Plan map: top-left, the default; the Mission Planer: bottom-right) */
+  position?: ControlPosition
 }
 
 export type TerrainState = 'off' | 'loading' | '3d' | 'flat' | 'unavailable'
@@ -93,7 +102,7 @@ export class TerrainController {
     this.beforeId = beforeId
     this.opts = opts
     this.forced = opts.planView ? viewOverride() : null
-    map.addControl(this.control, 'top-left')
+    map.addControl(this.control, opts.position ?? 'top-left')
     this.notice = new TerrainNotice(map.getContainer())
     this.setState('off')
     if (opts.planView) {
@@ -182,7 +191,7 @@ export class TerrainController {
     const v = planView()
     const anim = animate && !ui.reducedMotion.peek()
     if (v === '3d' && ui.view.peek() === '3d' && this.state === '3d') {
-      this.opts.frame?.(anim)
+      this.frame(anim)
       return
     }
     this.opening = v === '3d' ? { animate: anim } : null
@@ -225,8 +234,22 @@ export class TerrainController {
     }
     h.setTerrainOn(true, { animate })
     this.setState('3d')
-    // L13: the opening pose and framing; never while a story moves the camera (it restores its own)
-    if (opening && !storyOn()) this.opts.frame?.(animate)
+    // L13: the opening pose and framing; never while a story moves the camera (it restores its own).
+    // P4a: also an opening asked for while the terrain was loading (openPlanView() from the end-of-intro
+    // hook or a skipped intro): it was set after this apply() began, and is used up here, not left for
+    // the next 2D -> 3D switch
+    const late = this.opening
+    this.opening = null
+    const open = opening ?? late
+    if (open && !storyOn()) this.frame(open.animate && !ui.reducedMotion.peek())
+  }
+
+  /** The open pose: the map's own framing (opts.frame), else plan_view's tilt and bearing where the camera is. */
+  private frame(animate: boolean): void {
+    if (this.opts.frame) return this.opts.frame(animate)
+    const pose = openPose()
+    if (animate) this.map.easeTo({ ...pose, duration: TOKENS.motion.cameraMs[0] })
+    else this.map.jumpTo(pose)
   }
 
   /**

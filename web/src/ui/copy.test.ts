@@ -56,6 +56,16 @@ function termRegex(term: string): RegExp {
   return new RegExp(`\\b${words.join('[\\s-]*')}(?:s|es)?\\b`, 'i')
 }
 
+/**
+ * §3.8 forbids "Waypoint (except user points)"; the parenthetical is dropped by forbiddenTerms(). The
+ * Mission Planer's waypoints (#/mission, copy under mission.*) are the user's own points, so the word
+ * is allowed there and nowhere else (J1c, D135).
+ */
+const USER_POINT_PREFIX = 'mission.'
+function userPointException(term: string, path: string): boolean {
+  return term.toLowerCase() === 'waypoint' && path.startsWith(USER_POINT_PREFIX)
+}
+
 const PLACEHOLDER = /\{[a-z][a-z0-9_]*\}/g
 /** Proper names that legitimately contain digits. Codes (S7, IST-2, D76 …) never belong in copy. */
 const DIGIT_ALLOW = ['2D', '3D']
@@ -132,9 +142,17 @@ describe('copy.json: wording (DESIGN §3.8)', () => {
     const hits: string[] = []
     for (const term of terms) {
       const re = termRegex(term)
-      for (const l of ALL) if (re.test(l.text)) hits.push(`${l.path}: "${term}" in "${l.text}"`)
+      for (const l of ALL) if (re.test(l.text) && !userPointException(term, l.path)) hits.push(`${l.path}: "${term}" in "${l.text}"`)
     }
     expect(hits).toEqual([])
+  })
+
+  it('allows "waypoint" only for user points, i.e. the Mission Planer (§3.8 "Waypoint (except user points)", D135)', () => {
+    expect(terms.map((s) => s.toLowerCase())).toContain('waypoint')
+    expect(userPointException('Waypoint', 'mission.waypoints.title')).toBe(true)
+    expect(userPointException('Waypoint', 'cards.station.title')).toBe(false)
+    expect(userPointException('Waypoint', 'missionary.x')).toBe(false)
+    expect(userPointException('Buffer', 'mission.estimates.timeMargin')).toBe(false)
   })
 
   it('the matcher catches the forbidden terms (self-check)', () => {

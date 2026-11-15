@@ -89,6 +89,22 @@ test('a left drag on the empty map does nothing (no pan, no selection)', async (
   await expect(stationCard(page)).toHaveCount(0) // L2d: nor a station card on the map
 })
 
+/**
+ * Screen point of parking option #2 (labels.json code P2): a drop there changes the plan at any map
+ * size. A fixed 60 px offset depended on the zoom: with the timeline in the plan-bottom drawer (L2b) the
+ * Plan map is taller, the fit zooms in, and 60 px from the pad landed on steep ground (snap back, no draft).
+ */
+async function p2(page: Page): Promise<{ x: number; y: number }> {
+  return page.evaluate(() => {
+    const el = document.querySelector<HTMLElement>('.hl-label[data-code="P2"]')
+    const map = el?.closest('.maplibregl-map')
+    const m = /translate\(([-\d.]+)px,\s*([-\d.]+)px\)/.exec(el?.style.transform ?? '')
+    if (!el || !map || !m) throw new Error('no label P2')
+    const r = map.getBoundingClientRect()
+    return { x: r.left + Number(m[1]), y: r.top + Number(m[2]) }
+  })
+}
+
 test('a left drag on the rover moves the rover (drag readout appears)', async ({ page }) => {
   await open(page)
   const before = await center(page)
@@ -96,7 +112,8 @@ test('a left drag on the rover moves the rover (drag readout appears)', async ({
   const at = { x: b.x + b.width / 2, y: b.y + b.height / 2 }
   await page.mouse.move(at.x, at.y)
   await page.mouse.down()
-  await page.mouse.move(at.x - 60, at.y + 10, { steps: 12 })
+  const to = await p2(page)
+  await page.mouse.move(to.x, to.y, { steps: 12 })
   await expect(page.locator('.hl-edit-rover')).toHaveClass(/is-dragging/)
   await expect(page.locator('.hl-edit-drag-host')).not.toBeEmpty({ timeout: 5_000 })
   await page.mouse.up()

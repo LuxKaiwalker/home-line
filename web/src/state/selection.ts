@@ -19,7 +19,7 @@ export type SelectionRef =
   | { kind: 'cell'; lon: number; lat: number }
   /** Landmark from labels.json (its `code`, e.g. GDV). */
   | { kind: 'landmark'; code: string }
-  /** Homeline edge segment (edges.geojson feature properties); lon/lat = where it was picked. */
+  /** Home line edge segment (edges.geojson feature properties); lon/lat = where it was picked. */
   | { kind: 'edge'; cause: EdgeCauseRef; budget: number; lon?: number; lat?: number }
 
 export type SelectionKind = SelectionRef['kind']

@@ -29,7 +29,7 @@ import type { StageResult } from './stage'
 import { createApiClient, type ApiClient, type FetchLike } from './client'
 import { dataUrl } from '../env'
 import { isMissionText, officialMissionUrl, setOfficialMissionSource } from '../ui/cards/simslot'
-import { API_BASE, ROUTE_EDIT_ENABLED, SIM_EXPORT_ENABLED, SIM_EXPORT_MODE } from './config'
+import { API_BASE, PLAN_ROUTE_EDIT, ROUTE_EDITOR_IN_DRAWER, SIM_EXPORT_ENABLED, SIM_EXPORT_MODE } from './config'
 import { bannerFor, watchHealth, type LiveState } from './health'
 import { consoleMapPort as basePort, type ConsoleMapLike, type MapPort } from './mapPort'
 import type { RouteConsoleMap } from './route/map'
@@ -43,7 +43,7 @@ import { mockLiveLoader } from './result'
 import { liveStatus } from '../state/live'
 
 export { ApiError, createApiClient, type ApiClient, type ApiClientOptions } from './client'
-export { API_BASE, LIVE_ENABLED, LIVE_LABEL, OFFLINE_LABEL, ROUTE_EDIT_ENABLED, SIM_EXPORT_MODE, WARMING_LABEL, type SimExportMode } from './config'
+export { API_BASE, EDIT_ROUTE_DRAWER, LIVE_ENABLED, LIVE_LABEL, OFFLINE_LABEL, PLAN_ROUTE_EDIT, ROUTE_EDIT_ENABLED, ROUTE_EDITOR_IN_DRAWER, SIM_EXPORT_MODE, WARMING_LABEL, type SimExportMode } from './config'
 export { bannerFor, checkHealth, watchHealth, type Banner, type HealthWatch, type LiveState } from './health'
 export { startJob, type JobCallbacks, type JobHandle, type JobOptions, type JobOutcome } from './jobs'
 export { liveLoader } from './result'
@@ -203,8 +203,9 @@ export function padTool(panel: Element, port: MapPort, client: ApiClient = liveC
       return () => void linkSubs.delete(fn)
     },
   }
-  // D116: VITE_ROUTE_EDIT=0 has no Edit-route panel: the card keeps its own "Compute full plan" (still one action)
-  const mounted = mountPadTool(panel, port, { client, onLiveState, ...loader, ...(ROUTE_EDIT_ENABLED ? { route: link } : {}) })
+  // D116: VITE_ROUTE_EDIT=0 has no Edit-route panel: the card keeps its own "Compute full plan" (still one action);
+  // J1f: so does the default build without Plan's Edit-route drawer (VITE_EDIT_ROUTE_DRAWER unset)
+  const mounted = mountPadTool(panel, port, { client, onLiveState, ...loader, ...(PLAN_ROUTE_EDIT ? { route: link } : {}) })
   const { tool, crew } = mounted
   // R5 (D97): the Edit-route panel in the Plan rail, on the same console map (lazy, live builds only).
   // D116: VITE_ROUTE_EDIT=0 skips it, and with it the map waypoints the panel installs (WP6).
@@ -212,7 +213,8 @@ export function padTool(panel: Element, port: MapPort, client: ApiClient = liveC
   let offHandle: (() => void) | null = null
   let gone = false
   const cmap = (port as MapPort & { consoleMap?: RouteConsoleMap }).consoleMap ?? null
-  if (ROUTE_EDIT_ENABLED) void import('./route/mount').then((m) => {
+  // J1f: and without the Edit-route drawer (VITE_EDIT_ROUTE_DRAWER unset, the default) it has nowhere to show
+  if (PLAN_ROUTE_EDIT) void import('./route/mount').then((m) => {
     if (gone) return
     offRoute = m.mountRoutePanel({
       client,
@@ -220,6 +222,8 @@ export function padTool(panel: Element, port: MapPort, client: ApiClient = liveC
       cmap,
       ...loader,
       pad: { pad: () => validSpot(tool.state), subscribe: (fn) => onSpot(tool, fn) },
+      // J1d: the route editor in the drawer only with VITE_ROUTE_EDITOR_IN_DRAWER=1 (else the Mission Planer link)
+      editor: ROUTE_EDITOR_IN_DRAWER,
       crew: crew ? { jobInputs: () => crew.jobInputs(), blocked: () => crewBlockedText(crew.state), subscribe: (fn) => crew.subscribe(() => fn()) } : null,
       // S1 (D110): "Send to simulator" in the route result box (done and infeasible results only)
       resultSlot: SIM_EXPORT_ENABLED ? (c) => routeSimSlot(client, c.result.hash, (c.stage?.data as StageResult | undefined)?.manifest ?? null) : null,
