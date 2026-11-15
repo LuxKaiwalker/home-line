@@ -13,6 +13,8 @@ import { createRouteController, type RouteController } from '../../edit/route/co
 import type { StationGeo, StopProbe } from '../../edit/route/model'
 import { RoutePanel } from '../../edit/route/panel'
 import { createRouteStore } from '../../edit/route/store'
+import { installWaypointMap } from '../../edit/route/map'
+import { probeFromSample } from '../../edit/route/map/validity'
 import { ROUTE_TEXT } from '../../edit/route/text'
 import { identityOf } from '../../edit/live'
 import { loadEditCatalog, planAvailability, type EditCatalog, type EditPlan } from '../../edit/options'
@@ -56,16 +58,8 @@ export function missionPlan(c: EditCatalog): EditPlan {
 
 /** Validity lookups at a stop from the published field (null where the browser has no field). */
 export function fieldProbe(lon: number, lat: number): StopProbe {
-  const s = fieldAt(lon, lat)
-  if (!s) return { inGrid: null, assessed: null, walkable: null, reachable: null }
-  if (!s.inside) return { inGrid: false, assessed: null, walkable: null, reachable: null }
-  const v = VARIANT_OF[mission.plan.variant.peek() ?? 'nominal'] ?? 'nom'
-  return {
-    inGrid: true,
-    assessed: s.state === null ? null : s.state !== 'unknown' && s.state !== 'outside',
-    walkable: s.state === null ? null : s.state !== 'blocked',
-    reachable: s.tHome[v] !== null,
-  }
+  // WP6: the same rule, moved to edit/route/map/validity.ts (tested on a synthetic field there)
+  return probeFromSample(fieldAt(lon, lat), VARIANT_OF[mission.plan.variant.peek() ?? 'nominal'] ?? 'nom')
 }
 
 /** Put the console's own static plan back after a live result (bands, isochrones, edges, partner, route). */
@@ -165,6 +159,8 @@ export function mountRoutePanel(o: MountRouteOptions): () => void {
       map: o.cmap ? consoleRouteMap(o.cmap, () => (alive ? (o.restore ?? restoreStatic)(o.cmap!).catch((e) => void (alive && console.warn('edit route: static plan not restored:', e))) : undefined), () => alive) : null,
       canCompute: live,
     }))
+    // WP6: free waypoints (markers, click to add) and the ghost route (estimate) on the console map
+    offs.push(installWaypointMap(c, o.cmap))
     // the console's plan (pad drag, scenario) changes the inputs and the hash, not the route history
     let first = true
     offs.push(
