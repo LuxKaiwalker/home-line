@@ -6,15 +6,30 @@ import { buildBrowserMission, computeBrowserRoute, type BrowserRouteResult } fro
 import type { RouteStop } from '../model'
 import type { EstimateCore, EstimateResult } from './types'
 
-/** Official-pad fields of the published data (I2 adds the picker pads' fields here). */
+/** Official-pad fields of the published data. */
 export const OFFICIAL_FIELDS = 'fields/index.json'
 
 /**
- * Seam for I2's picker pads: the fields the browser estimate runs on for this pad, or null when the
- * browser has no fields for it (custom spot, a picker pad without fields yet).
+ * I2b: the picker pads with their own browser fields (I2: fields/index.json `pads/{id}/nom_104/...`; ids of
+ * scenarios/pads/index.json). With the official pad these are the four pads of the Edit-route pad picker.
+ */
+export const FIELD_PADS: readonly string[] = ['rank2', 'rank3', 'rank4']
+
+const PAD_FIELDS_PREFIX = `${OFFICIAL_FIELDS}#pads/`
+
+/**
+ * The fields the browser estimate runs on for this pad: the official pad's ('fields/index.json'), a picker
+ * pad's own ('fields/index.json#pads/{id}'), or null when the browser has none (a custom spot, any other pad).
  */
 export function padFields(padId: string | null, officialPadId: string): string | null {
-  return padId !== null && padId === officialPadId ? OFFICIAL_FIELDS : null
+  if (padId === null) return null
+  if (padId === officialPadId) return OFFICIAL_FIELDS
+  return FIELD_PADS.includes(padId) ? `${PAD_FIELDS_PREFIX}${padId}` : null
+}
+
+/** padFields' value -> loadBrowserRouteData's pad (null = the official fields). */
+export function fieldsPadId(fields: string): string | null {
+  return fields.startsWith(PAD_FIELDS_PREFIX) ? fields.slice(PAD_FIELDS_PREFIX.length) : null
 }
 
 const ISSUE_TEXT: Record<string, string> = {
@@ -41,8 +56,8 @@ export function fromBrowser(r: BrowserRouteResult): EstimateResult {
 }
 
 export const browserCore: EstimateCore = {
-  // the official fields = the default scenario's published tree (I2: per-pad fields by URL)
-  load: () => loadBrowserRouteData(),
+  // the default scenario only (P2–P4 have nom_104 fields only); cached per (pad, scenario) in data.ts
+  load: (fields) => loadBrowserRouteData(undefined, fieldsPadId(fields)),
   compute: (data, pad, stops: readonly RouteStop[]) => fromBrowser(computeBrowserRoute(data as BrowserRouteData, pad, stops)),
   mission: (result, ctx) => buildBrowserMission(result.raw as BrowserRouteResult, { data: ctx.data as BrowserRouteData }),
 }

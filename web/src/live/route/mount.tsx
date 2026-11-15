@@ -16,7 +16,7 @@
 //            edit recomputes the whole route in the browser (edit/route/instant, next animation frame,
 //            no server call) and "Send to simulator" exports that estimate. Offline only the server's
 //            Compute plan is unavailable (a small note next to it, L-05's text).
-import { h } from 'preact'
+import { Fragment, h } from 'preact'
 import { createRouteController, type RouteController, type RouteLimit } from '../../edit/route/controller'
 import { legCoords, type StationGeo, type StopProbe } from '../../edit/route/model'
 import { RoutePanel, type ResultSlot } from '../../edit/route/panel'
@@ -36,6 +36,7 @@ import { officialPart } from '../../state/official'
 import { effect, signal } from '../../state/signal'
 import { offlineNoteText, RouteOfflineNote } from '../../edit/route/offline'
 import { createRouteEstimate, type RouteEstimateOptions } from '../../edit/route/instant/estimate'
+import { RoutePadPick } from '../../edit/route/instant/padpick'
 import { EDIT_ROUTE_ID, registerEditRoute, registerEditRouteNote } from '../../ui/shell/editroute'
 import { openContainer } from '../../ui/layout'
 import { dockContent, setDockContent, type registerRailSection, type Render } from '../../ui/shell/store'
@@ -65,8 +66,9 @@ export interface MountRouteOptions {
   register?: typeof registerRailSection
   /** I1b: where the offline note goes (default: the Edit-route drawer's note slot) */
   registerNote?: typeof registerEditRouteNote
-  /** WP12: the Live pad tool's spot while it is a valid pad (null: the plan in use); subscribe = changes */
-  pad?: { pad(): LonLat | null; subscribe(fn: () => void): () => void } | null
+  /** WP12: the Live pad tool's spot while it is a valid pad (null: the plan in use); subscribe = changes;
+   *  I2b: clear() drops the spot when the drawer's pad picker picks a pad */
+  pad?: { pad(): LonLat | null; subscribe(fn: () => void): () => void; clear?(): void } | null
   /** WP12: the crew panel: inputs it adds ({crew: changed fields}; null = a field is not a number) and why */
   crew?: { jobInputs(): PlanInputs | null; blocked(): string | null; subscribe(fn: () => void): () => void } | null
   /** WP12: the handle the Live pad card uses (one compute action), once the panel exists */
@@ -300,6 +302,13 @@ export function mountRoutePanel(o: MountRouteOptions): () => void {
     // I1b (D128): the section is registered once and stays, API up or down: the browser estimate and
     // Send to simulator need no server. Kit rule 4 / F23 now covers the server's Compute plan only:
     // disabled with the offline note (L-05's text) as its reason; a running job is dropped.
+    // I2b (D128): the drawer's start = a picker of the four pads with browser fields. A pick writes
+    // mission.plan.pad as the console's parking-option picker does (H1 records the undo step, the rover
+    // snaps, the effect above recomputes); a pad tool spot is dropped first (it would win over the pad).
+    const pickPad = (id: string) => {
+      if (o.pad?.pad()) o.pad.clear?.()
+      mission.plan.pad.value = id === catalog.officialPadId ? null : id
+    }
     let unregister: (() => void) | null = null
     const section = () => {
       // L3 (D111): mounted in the Edit-route drawer (ui/shell/editroute.tsx), not the Plan rail
@@ -308,7 +317,13 @@ export function mountRoutePanel(o: MountRouteOptions): () => void {
         modes: ['plan'],
         title: 'nav.rail.stationsRoute',
         icon: 'station',
-        render: () => h(RoutePanel, { ctl: c, live, reason, undo, resultSlot: o.resultSlot ?? null, estimate: est, key: ROUTE_TEXT.title }),
+        render: () =>
+          h(
+            Fragment,
+            null,
+            h(RoutePadPick, { step: store.step, catalog, onPick: pickPad, key: 'pad-pick' }),
+            h(RoutePanel, { ctl: c, live, reason, undo, resultSlot: o.resultSlot ?? null, estimate: est, key: ROUTE_TEXT.title }),
+          ),
       })
       // WP6: free waypoints (markers, click to add) and the ghost route (estimate) on the console map
       const offMap = installWaypointMap(c, o.cmap)

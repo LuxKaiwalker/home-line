@@ -7,6 +7,9 @@
 .hl-route__ok { margin: 0; color: var(--color-safe); }
 .hl-route__subtitle { margin: 0; font-size: var(--font-size-label); line-height: var(--line-height-label); font-weight: var(--font-weight-label); color: var(--color-text-muted); }
 
+/* I2b: the start = pad picker (official + P2–P4), above the panel; its buttons are the mode buttons */
+.hl-route__start { display: grid; gap: var(--space-1); margin-bottom: var(--space-2); }
+
 /* mode: engine chooses / my order */
 .hl-route__mode { display: flex; gap: var(--space-1); }
 .hl-route__modebtn {
