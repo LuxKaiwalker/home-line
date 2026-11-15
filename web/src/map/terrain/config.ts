@@ -48,6 +48,8 @@ export { t } from '../../ui/copy'
 /** Text copy.json does not have yet (asked for in notes/M8.md). */
 export const COPY_PENDING = {
   noTiles: '3D terrain is not published in this data tree',
+  /** L13 (team lead 12:54, D38): the dismissible note of the automatic low-frame-rate fallback; replaces states.error.slow3d on the map until copy.json has a key */
+  slow3dNote: 'Switched to 2D: low frame rate · T to try 3D',
   trustNote: 'Measured: 1 m DEM (CTX 20 m, MOLA-HRSC 200 m at the edges); heights ×{factor} in the tiles for the Earth-sized map, so 1× is true shape',
 } as const
 

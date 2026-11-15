@@ -32,6 +32,7 @@ import { choosePlanScenario, mission, resolvePlanScenario } from '../state/missi
 import { useSignalValue } from '../state/signal'
 import type { View } from './types'
 import { makeSections, mountPlanSlots, PlanSummary, S, SectionsCtx } from './planSlots'
+import { HeadlineStrip } from './planStrip' // L2a: the headline strip (registers its Plan mount)
 import './planStation' // L2d: station + rover marker cards
 
 const LAYER_LABELS: Record<LayerGroup, string> = {
@@ -393,6 +394,15 @@ function ConsolePanel({ cmap }: { cmap: ConsoleMap }) {
         {error != null && <DataProblem error={error} what="Scenario layers" />}
       </S>
 
+      <HeadlineStrip
+        h30={padSel && padF ? null : { v: h.reachable_pct, k: `reachable_pct.${scenario.id}.${hb}`, file: 'scenarios/index.json', budget: hb }}
+        h60={padSel && padF ? null : headline60(scenario)}
+        sid={scenario.id}
+        pad={padSel && padF ? { id: padSel, summary: padSummary?.id === padSel ? padSummary : null, file: padF.summary } : null}
+        route={rd ? { timeline: rd.timeline, file: routeProps.timelineFile, key: routeProps.timelineKey } : null}
+        scenarioText={`${scenario.variant} · ${scenario.suit_kg} kg`}
+        budget={budget}
+      />
       <S name="summary">
         <PlanSummary route={rd?.route ?? null} label={routeProps.label} file={routeProps.timelineFile} routeKey={routeProps.routeKey} loading={!rd} stations={stations?.length ?? null} />
       </S>

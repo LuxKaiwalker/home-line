@@ -231,7 +231,7 @@ for (const s of SCREENS) {
     const errors: string[] = []
     page.on('pageerror', (e) => errors.push(e.message))
     await page.clock.setFixedTime(new Date(FIXED_NOW))
-    await page.goto(s.hash)
+    await page.goto(`/?view=2d${s.hash}`) // L13: 3D is the Plan default; the baseline counts are the 2D view
     await settle(page)
     expect(await page.getByRole('heading', { name: 'Not found', exact: true }).count(), `${s.hash} renders`).toBe(0)
 

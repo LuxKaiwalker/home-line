@@ -130,12 +130,13 @@ export function TopBar() {
           <IconButton
             icon="panel-right"
             label={t('cards.common.details')}
+            title={t('hints.shell.details')}
             pressed={sidebarOpen}
             aria-controls="hl-sidebar"
             onClick={() => (shell.sidebarOpen.value = !sidebarOpen)}
           />
         )}
-        <IconButton icon="keyboard" label={t('nav.shortcuts')} aria-haspopup="dialog" aria-keyshortcuts="?" onClick={() => (shell.helpOpen.value = true)} />
+        <IconButton icon="keyboard" label={t('nav.shortcuts')} title={t('hints.shell.shortcuts')} aria-haspopup="dialog" aria-keyshortcuts="?" onClick={() => (shell.helpOpen.value = true)} />
       </div>
     </>
   )

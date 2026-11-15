@@ -7,7 +7,7 @@ import './ui/tokens.css'
 import './ui/fonts/fonts.css'
 import './ui/components/components.css'
 import './ui/shell/shell.css'
-import { DATA_MODE, IS_DEV } from './env'
+import { DATA_MODE, IS_DEV, dataUrl } from './env'
 import { clearUnbacked, onUnbackedChange, unbackedNumbers } from './prov/store'
 import { isSpikeHash, isStyleguideHash, parseRoute, redirectFor, type Route } from './router'
 import { applyRoute, withPanel } from './ui/shell/store'
@@ -15,8 +15,42 @@ import { buildLegacyFrame, buildShellFrame, frameKindFor, type Frame, type Frame
 import type { ShellHandle } from './ui/shell/Shell'
 import { mountShell } from './ui/shell/Shell'
 import { VIEWS } from './views'
+import { bootLoading, loadingActive, loadingDone, setLoadProgress, STAGE, whenIntroStarted } from './story/loading'
+import { storyParams, storyRequest } from './story/query'
+import { ui } from './state/ui'
 
 const app = document.querySelector<HTMLDivElement>('#app')!
+
+// L12 (D111): the inline loading screen (index.html) stays only when the descent intro will play on
+// this load: the planning map in the shell frame, no capture / kiosk, no ?intro=0, no reduced motion.
+function introExpected(): boolean {
+  const hash = redirectFor(location.hash) ?? location.hash
+  if (isSpikeHash(hash) || isStyleguideHash(hash) || parseRoute(hash).name !== 'console') return false
+  const legacy = frameKindFor(location.search, location.hash) === 'legacy'
+  return storyRequest(storyParams(location.search, location.hash), { reduced: ui.reducedMotion.peek(), introSeen: ui.introSeen.peek(), legacy })?.kind === 'intro'
+}
+const intro = introExpected()
+bootLoading(intro)
+
+// L12 (c): intro first. When the intro will play, fetch what it needs before it starts in parallel with
+// the app code (the waterfall was: view -> manifest -> map 'load' -> story chunk -> storyboard ->
+// tile indexes): the small JSON files as <link rel=preload> (the later fetch() takes them from the
+// preload cache), the story code as a lazy chunk. Everything else waits for whenIntroStarted().
+if (intro) {
+  const files = [
+    `${import.meta.env.BASE_URL}story/intro.json`,
+    ...['manifest.json', 'scenarios/index.json', 'labels.json', 'fields/index.json', 'terrain_low/tiles.json', 'terrain/tiles.json', 'tiles/basemap/tilejson.json'].map((p) => dataUrl(p, DATA_MODE)),
+  ]
+  for (const href of files) {
+    const l = document.createElement('link')
+    l.rel = 'preload'
+    l.as = 'fetch'
+    l.crossOrigin = 'anonymous' // = fetch()'s default mode for same-origin files, so the preload is reused
+    l.href = href
+    document.head.append(l)
+  }
+  void import('./story/attach').catch(() => undefined)
+}
 document.body.classList.toggle('is-dummy', DATA_MODE === 'dummy')
 document.body.classList.toggle('is-dev', IS_DEV)
 
@@ -55,8 +89,9 @@ function setFrame(kind: FrameKind): Frame {
   }
 
   // Live layer (D48, WS13): lazy, only in builds with VITE_LIVE=1; static builds contain no live code.
+  // L12 (c): after the intro has started (or when none plays): its health check never delays the intro.
   const topbar = f.topbar
-  if (import.meta.env.VITE_LIVE === '1') void import('./live').then((m) => {
+  if (import.meta.env.VITE_LIVE === '1') void whenIntroStarted().then(() => import('./live')).then((m) => {
     if (frame === f) liveCleanup = m.mountLive(topbar)
   })
   frame = f
@@ -99,10 +134,14 @@ async function render(): Promise<void> {
   if (f.nav) for (const a of f.nav.querySelectorAll<HTMLAnchorElement>('a')) a.classList.toggle('active', a.dataset.route === route.name)
   if (!internal) document.body.dataset.mode = applyRoute(route, location.hash)
   shellHandle?.routed(route, location.hash, userNav)
+  // L12: navigated away from the planning map before the intro: the loading screen goes
+  if (loadingActive() && (internal || legacy || route.name !== 'console')) loadingDone()
   try {
     const view = spike ? (await import('./map/spike/view')).view : styleguide ? (await import('./ui/styleguide/view')).view : await VIEWS[route.name]()
     if (seq !== renderSeq) return
+    setLoadProgress(STAGE.view)
     const c = await view(outlet, route)
+    setLoadProgress(STAGE.built)
     if (seq !== renderSeq) {
       c?.()
       return
@@ -110,6 +149,7 @@ async function render(): Promise<void> {
     cleanup = c ?? undefined
   } catch (err) {
     console.error(err)
+    loadingDone() // L12: a failed view never keeps the loading screen up
     if (seq !== renderSeq) return
     const box = document.createElement('div')
     box.className = 'page error'
