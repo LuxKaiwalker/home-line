@@ -325,6 +325,9 @@ export function attachStory(cmap: ConsoleMap, req: StoryRequest = storyRequest(s
     const why = await playLive(stage, d, { loop: req.kind === 'demo', signal })
     stage.restore(why === 'end')
     stage = null
+    // L13b (L12 <-> L13 hook, notes/L13.md): a played-out intro ends in Plan's default view (3D unless
+    // ?view=2d, the low-fps fallback or the viewer's choice says otherwise); a skip keeps the restored view
+    if (req.kind === 'intro' && why === 'end') cmap.applyDefaultView({ animate: true })
     if (req.kind === 'demo') dropStoryParams()
   })()
     .catch((e) => {
