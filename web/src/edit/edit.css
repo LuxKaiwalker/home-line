@@ -6,13 +6,16 @@
 .hl-edit-rover.is-dragging { cursor: grabbing; outline: var(--line-focus-ring) solid var(--color-select); }
 .hl-edit-rover:focus-visible { outline: var(--line-focus-ring) solid var(--color-select); outline-offset: var(--space-1); }
 
-/* readout under the dragged rover: exact lookups, then ghost rows */
+/* readout under the dragged rover: exact lookups, then rows pending until release (L7b) */
 /* above the U13 label pills (labels.css z 1-4, hover / focus 4): the readout card is never drawn under S4/S6 (D9) */
 .hl-edit-drag-host { pointer-events: none; z-index: 5; }
 .hl-edit-drag {
   display: grid;
   gap: var(--space-1);
   min-width: var(--layout-left-rail-collapsed);
+  /* L6/L7b: compact (one line per value, wrapped notes) so it never hides the drop point; the marker
+     sits below-right of the pointer (roverMap.ts READOUT_OFFSET) */
+  max-width: calc(var(--layout-left-rail) - var(--space-5));
   padding: var(--space-2) var(--space-3);
   border: 1px solid var(--color-card-border);
   border-radius: var(--radius-card);
@@ -23,16 +26,26 @@
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
+.hl-edit-drag .hl-readout {
+  display: flex; flex-direction: row; align-items: baseline; justify-content: space-between; gap: var(--space-3);
+  padding: 0; border: 0; background: none;
+}
+.hl-edit-drag .hl-readout__label { font-weight: var(--font-weight-body); }
+.hl-edit-drag .hl-readout__value { font-size: var(--font-size-small); line-height: var(--line-height-small); }
 .hl-edit-drag__validity { font-weight: var(--font-weight-label); }
 .hl-edit-drag[data-validity='invalid'] .hl-edit-drag__validity { color: var(--color-text-muted); }
 .hl-edit-drag__snap { color: var(--color-text-muted); }
+/* long lines (snap, refusal) wrap at the rail width instead of widening the card */
+.hl-edit-drag__validity, .hl-edit-drag__snap, .hl-edit-drag__refused { white-space: normal; }
 
-/* ghost: not computed during a drag (purple = live, dashed = not yet a result) */
-.hl-edit-ghost .hl-readout__value {
-  color: var(--color-live);
-  border-bottom: 1px dashed var(--color-live);
+/* pending: not computed during a drag (D85); names the pad whose precomputed value shows on release */
+.hl-edit-pending .hl-readout__value {
+  color: var(--color-text-muted);
+  border-bottom: 1px dashed var(--color-card-border);
   font-style: italic;
 }
+/* the nearest precomputed pad is refused by the spot check: say why (L7b, T2) */
+.hl-edit-drag__refused { color: var(--color-text-muted); }
 
 /* delta strip (sidebar, above the selection card) */
 .hl-edit-delta {
