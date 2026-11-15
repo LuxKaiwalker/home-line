@@ -236,7 +236,7 @@ export async function settle(stage: Pick<StoryStage, 'map' | 'pending'>): Promis
       // GeoJSON updates, images) and every in-view tile being loaded means the frame is drawn. L10 found
       // the same for paint transitions and the zoom cross-fade, which run on the clock capture freezes
       // (8.5 min for frame 0 in software GL, notes/L10.md).
-      if (renders > 0 && settled(map)) break
+      if (renders > 0 && map.isStyleLoaded() && map.areTilesLoaded() && map.getContainer().getAttribute('data-terrain') !== 'loading') break // = settled(map)
     }
   } finally {
     map.off('render', counted)
