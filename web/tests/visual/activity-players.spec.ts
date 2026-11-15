@@ -25,13 +25,17 @@ const storm = (page: Page) => page.locator('.hl-storm-btn')
 const clock = (page: Page) => page.locator('.hl-tl__clockvalue').first()
 const CLICK = { timeout: 30_000 }
 
+/** Pages whose map has flown (it stays in 3D afterwards). */
+const flown = new WeakSet<Page>()
 /**
- * Click `loc`. While the 3D flythrough flies, software GL starves the page's main thread and the real
- * click's after-action wait outlasts its timeout (#131, notes/L7a.md): then the button gets a DOM click
- * (the same handler; what is under test is the store, not the pointer path).
+ * Click `loc`. Once the flythrough has flown, the map is in 3D and software GL starves the page's main
+ * thread: a real click's after-action wait outlasts its timeout (#131, notes/L7a.md), in CI even after
+ * the flight. Then the button gets a DOM click (the same handler; what is under test is the store, not
+ * the pointer path, which shell-layout / story-intro / hover-replay cover).
  */
 async function press(page: Page, loc: Locator): Promise<void> {
-  if ((await html(page).getAttribute('data-activity')) === 'flythrough') await loc.evaluate((b: HTMLElement) => b.click())
+  if ((await html(page).getAttribute('data-activity')) === 'flythrough') flown.add(page)
+  if (flown.has(page)) await loc.evaluate((b: HTMLElement) => b.click())
   else await loc.click(CLICK)
 }
 
@@ -58,6 +62,7 @@ async function setStorm(page: Page, on: boolean): Promise<void> {
 async function startPlayer(page: Page, p: P): Promise<void> {
   if (p === 'flythrough') {
     await press(page, fly(page))
+    flown.add(page)
     return
   }
   await setStorm(page, p === 'storm')
@@ -158,7 +163,7 @@ for (const p of ['replay', 'flythrough'] as const)
     await expect(page).toHaveURL(/#\/report/)
     await expect(html(page)).toHaveAttribute('data-activity', 'none')
     // back in Plan: nothing plays, the clock stands still
-    await page.locator('.hl-modes__tab', { hasText: 'Plan' }).first().click(CLICK)
+    await press(page, page.locator('.hl-modes__tab', { hasText: 'Plan' }).first())
     await play(page).waitFor({ timeout: 60_000 })
     await expect(play(page)).toHaveAttribute('aria-pressed', 'false')
     const t0 = await clock(page).innerText()
