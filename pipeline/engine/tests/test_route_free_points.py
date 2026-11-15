@@ -202,6 +202,30 @@ def test_point_error_maps_to_route_stop_error(world, where, code, index):
     assert e.value.message.startswith("W2: " if index == 2 else "W1: ")
 
 
+@pytest.mark.parametrize("scenario", [SID, CON])
+def test_point_precheck_equals_validity_codes_1_to_3(world, scenario):
+    """waypoints.point_precheck (WP4's cheap 422 check): checks 1-3 only, no Dijkstra; its
+    code equals point_validity's for codes 1-3 and it is None for a valid point (and for a
+    sealed pocket, code 4, which only point_validity finds)."""
+    from pipeline.engine import waypoints
+
+    g, _, _, _ = world
+    cases = [({"lon": 120.0, "lat": 10.0}, "route_point_outside_grid"),
+             ({"lon": float("nan"), "lat": 0.0}, "route_point_outside_grid"),
+             (_pt(g, HOLE), "route_point_unassessed"), (_pt(g, CLIFF), "route_point_not_walkable"),
+             (_pt(g, MID), None if scenario == SID else "route_point_not_walkable"),
+             (_pt(g, A), None)]  # fmt: skip
+    for pt, code in cases:
+        pre = waypoints.point_precheck(g, pt["lon"], pt["lat"], scenario=scenario)
+        v = waypoints.point_validity(g, pt["lon"], pt["lat"], scenario=scenario)
+        assert v["code"] == code and (pre is None if code is None else pre[0] == code), pt
+        assert pre is None or isinstance(pre[1], str) and pre[1]
+    sealed = _pt(g, SEALED)
+    assert waypoints.point_precheck(g, sealed["lon"], sealed["lat"], scenario=scenario) is None
+    assert waypoints.point_validity(g, sealed["lon"], sealed["lat"],
+                                    scenario=scenario)["code"] == "route_point_unreachable"
+
+
 def test_resolve_route_without_resolver(world):
     """Without point_station a free point is only named (the cheap check before any work);
     traverse.plan needs the resolver; a malformed stop is route_station_unknown."""
