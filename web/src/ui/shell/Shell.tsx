@@ -8,6 +8,7 @@ import { effect, useSignalValue } from '../../state/signal'
 import { MODES, ui, type Mode } from '../../state/ui'
 import { cx, Icon, IconButton } from '../components'
 import { t } from '../copy'
+import { SearchButton } from '../search/button'
 import type { Frame } from './frame'
 import { HELP_ROWS, installShortcuts } from './keys'
 import {
@@ -102,6 +103,7 @@ export function TopBar() {
       </nav>
       <div class="hl-topbar__plan" id="hl-topbar-plan" />
       <div class="hl-topbar__end">
+        <SearchButton />
         {isMapMode(mode) && (
           <IconButton
             icon="panel-right"
