@@ -1,8 +1,9 @@
 // PORT U4: the Route panel's export section (U1 mounts it: registerRoutePanelSection('export', ExportSection)).
-//   ONE primary button: "Send to MARVIS" where MARVIS is reachable (served by MARVIS: POST through the
-//   bridge, MARVIS then hides the planner and starts the EVA = back to the simulator; inside MARVIS's
-//   planner window: the download is caught by the window), else the same button = "Download mission.json".
-//   The target starts as Download and switches when the bridge's probe answers (never blocks the panel).
+//   F4 (user spec): "Send to MARVIS" is ALWAYS the primary button and "Download mission.json" ALWAYS the
+//   secondary one. Send: served by MARVIS = POST through the bridge (MARVIS then hides the planner and
+//   starts the EVA); inside MARVIS's planner window = the download the window catches; MARVIS not
+//   detected yet = try the bridge on the click (detect, then sendMission, as the Mission Planer did);
+//   any failure says why and offers "Download mission.json instead". The probe never blocks the panel.
 //   Payload: payload.ts (the core exporter's mission.json of your route; no route = the pad's official plan).
 //   Share link: #/?route=… copied with a confirmation; no clipboard -> the link shown selected.
 import { useEffect, useMemo, useState } from 'preact/hooks'
@@ -53,7 +54,7 @@ export function ExportSection({ store = planning, core, marvis = BRIDGE, save = 
   useEffect(() => () => mt.dispose(), [mt])
   const target = useSignalValue(mt.target)
   const notice = useSignalValue(planLinkNotice)
-  const [busy, setBusy] = useState(false)
+  const [busy, setBusy] = useState<false | 'send' | 'download'>(false)
   const [msg, setMsg] = useState<Msg | null>(null)
   const [share, setShare] = useState<{ state: 'copied' | 'select'; url: string } | null>(null)
   // a changed plan: the last result and link no longer describe it
@@ -63,28 +64,40 @@ export function ExportSection({ store = planning, core, marvis = BRIDGE, save = 
   }, [doc])
 
   const hasRoute = route.stops.length > 0
-  const toMarvis = target !== 'download'
 
   const download = (p: ExportPayload) => {
     save(p.text, p.name)
     return p.name
   }
 
-  async function run(forceDownload = false) {
+  /** the bridge's answer on a click (MARVIS not detected yet): never throws */
+  async function detectNow(): Promise<boolean> {
+    try {
+      return await marvis.detect()
+    } catch {
+      return false
+    }
+  }
+
+  async function run(how: 'send' | 'download') {
     if (busy) return
-    setBusy(true)
+    setBusy(how)
     setMsg(null)
     try {
       const p = await buildExportPayload(doc, core, now)
-      if (!forceDownload && target === 'api') {
+      if (how === 'download') {
+        setMsg({ ok: true, text: t('route.export.result.saved', { file: download(p) }) })
+      } else if (target === 'viewer') {
+        download(p) // MARVIS's planner window catches the download and loads it
+        setMsg({ ok: true, text: t('route.export.result.sent') })
+      } else if (target === 'api' || (await detectNow())) {
         const r = await marvis.send(p.doc)
-        setMsg(r.ok ? { ok: true, text: t('route.export.result.sent') } : { ok: false, text: t('route.export.result.refused', { reason: r.error ?? '' }), fallback: true })
+        setMsg(r.ok ? { ok: true, text: t('route.export.result.sent') } : { ok: false, text: t('route.export.result.refused', { reason: r.error || t('route.export.result.noReason') }), fallback: true })
       } else {
-        const name = download(p)
-        setMsg({ ok: true, text: !forceDownload && target === 'viewer' ? t('route.export.result.sent') : t('route.export.result.saved', { file: name }) })
+        setMsg({ ok: false, text: t('route.export.result.notFound'), fallback: true })
       }
     } catch (e) {
-      setMsg({ ok: false, text: exportErrorText(e) })
+      setMsg({ ok: false, text: exportErrorText(e), fallback: how === 'send' })
     } finally {
       setBusy(false)
     }
@@ -101,9 +114,14 @@ export function ExportSection({ store = planning, core, marvis = BRIDGE, save = 
         <Banner kind={notice.kind === 'error' ? 'caution' : 'info'} title={notice.text} onDismiss={clearPlanLinkNotice} />
       )}
       <p class="hl-route-export__what">{hasRoute ? t('route.export.what.route') : t('route.export.what.official')}</p>
-      <Button variant="primary" icon={toMarvis ? 'external-link' : 'download'} busy={busy} onClick={() => void run()} data-export-action={toMarvis ? 'marvis' : 'download'}>
-        {busy ? t('route.export.busy') : toMarvis ? t('route.export.marvis') : t('route.export.download')}
-      </Button>
+      <div class="hl-route-export__actions">
+        <Button variant="primary" icon="external-link" busy={busy === 'send'} disabled={!!busy && busy !== 'send'} onClick={() => void run('send')} data-export-action="marvis">
+          {busy === 'send' ? t('route.export.busy') : t('route.export.marvis')}
+        </Button>
+        <Button variant="secondary" icon="download" busy={busy === 'download'} disabled={!!busy && busy !== 'download'} onClick={() => void run('download')} data-export-action="download">
+          {busy === 'download' ? t('route.export.busy') : t('route.export.download')}
+        </Button>
+      </div>
       <div role="status" data-live="export">
         {msg && (
           <p class="hl-route-export__status" data-ok={msg.ok ? 'true' : 'false'}>
@@ -112,7 +130,7 @@ export function ExportSection({ store = planning, core, marvis = BRIDGE, save = 
         )}
       </div>
       {msg?.fallback && (
-        <Button variant="ghost" icon="download" onClick={() => void run(true)} data-export-action="download-fallback">
+        <Button variant="ghost" icon="download" onClick={() => void run('download')} data-export-action="download-fallback">
           {t('route.export.result.fallback')}
         </Button>
       )}

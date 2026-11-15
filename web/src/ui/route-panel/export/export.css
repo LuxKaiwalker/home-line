@@ -14,6 +14,11 @@
 .hl-route-export__status[data-ok='false'] {
   color: var(--color-limit);
 }
+.hl-route-export__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
 .hl-route-export__share {
   display: flex;
   flex-wrap: wrap;

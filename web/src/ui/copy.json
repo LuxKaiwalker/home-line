@@ -1078,7 +1078,9 @@
         "sent": "Sent: MARVIS starts the EVA.",
         "refused": "MARVIS did not start the EVA: {reason}",
         "saved": "Saved as {file}. In MARVIS, load it from the Missions tab of the map.",
-        "fallback": "Download mission.json instead"
+        "fallback": "Download mission.json instead",
+        "notFound": "MARVIS was not found: open HOMELINE from MARVIS to send the plan straight to the simulator.",
+        "noReason": "no reason given"
       },
       "errors": {
         "route": "The route cannot be exported yet: {reason}",

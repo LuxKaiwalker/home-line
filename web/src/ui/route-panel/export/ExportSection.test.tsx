@@ -1,5 +1,6 @@
-// PORT U4: the export section with the bridge mocked: one primary button that is "Download mission.json"
-// until MARVIS answers, then "Send to MARVIS" (POST, no download); failures say why and offer Download;
+// PORT U4 / F4: the export section with the bridge mocked: "Send to MARVIS" is ALWAYS the primary button,
+// "Download mission.json" ALWAYS the secondary one; Send without a detected MARVIS tries the bridge on the
+// click (detect, then send); failures say why and offer "Download mission.json instead";
 // the share link is copied with a confirmation, or shown selected without a clipboard.
 import { render } from 'preact'
 import { act } from 'preact/test-utils'
@@ -58,14 +59,18 @@ function mount(props: Parameters<typeof ExportSection>[0]) {
 }
 
 describe('ExportSection', () => {
-  it('MARVIS not reachable: ONE primary button "Download mission.json"; no route = the official plan, saved under its file name', async () => {
+  it('MARVIS not reachable: primary "Send to MARVIS" and secondary "Download mission.json" both shown; no route = the official plan, saved under its file name', async () => {
     const store = createPlanningStore()
     const save = vi.fn()
     const core = fakeCore()
     const m = marvis()
     mount({ store, core, marvis: m, save })
     await settle()
-    expect(buttons().filter((b) => (b.getAttribute('class') ?? '').includes('hl-btn--primary'))).toHaveLength(1)
+    const primary = buttons().filter((b) => (b.getAttribute('class') ?? '').includes('hl-btn--primary'))
+    expect(primary).toHaveLength(1)
+    expect(primary[0].getAttribute('data-export-action')).toBe('marvis')
+    expect(text(action('marvis')!)).toBe('Send to MARVIS')
+    expect(action('download')!.getAttribute('class') ?? '').toContain('hl-btn--secondary')
     expect(text(action('download')!)).toBe('Download mission.json')
     expect(section().getAttribute('data-source')).toBe('official')
     await click(action('download'))
@@ -75,16 +80,63 @@ describe('ExportSection', () => {
     expect(text(root)).toContain('Saved as homeline-mission-d32c8e0e.json')
   })
 
-  it('the panel does not wait for the probe: Download at once, Send to MARVIS when MARVIS answers', async () => {
+  it('the panel does not wait for the probe: both buttons at once, before and after MARVIS answers', async () => {
     let answer!: (v: boolean) => void
     const m = marvis({ detect: vi.fn(() => new Promise<boolean>((r) => (answer = r))) })
     mount({ store: createPlanningStore(), core: fakeCore(), marvis: m, save: vi.fn() })
+    expect(text(action('marvis')!)).toBe('Send to MARVIS')
     expect(text(action('download')!)).toBe('Download mission.json')
     await act(async () => answer(true))
     await settle()
-    expect(action('download')).toBeUndefined()
     expect(text(action('marvis')!)).toBe('Send to MARVIS')
+    expect(text(action('download')!)).toBe('Download mission.json')
     expect(section().getAttribute('data-target')).toBe('api')
+  })
+
+  it('Send while MARVIS is not detected: tries the bridge on the click (detect, then send)', async () => {
+    const store = createPlanningStore()
+    store.addStop({ kind: 'station', station: 'S4' })
+    const save = vi.fn()
+    let yes = false
+    const m = marvis({ detect: vi.fn(async () => yes) })
+    mount({ store, core: fakeCore(), marvis: m, save })
+    await settle()
+    expect(section().getAttribute('data-target')).toBe('download')
+    yes = true // MARVIS came up after the panel's probe
+    await click(action('marvis'))
+    expect(m.detect).toHaveBeenCalledTimes(2)
+    expect(m.send).toHaveBeenCalledWith(ROUTE_DOC)
+    expect(save).not.toHaveBeenCalled()
+    expect(text(root)).toContain('Sent: MARVIS starts the EVA.')
+  })
+
+  it('Send while MARVIS is not found: the reason, no download, and "Download mission.json instead" saves the file', async () => {
+    const store = createPlanningStore()
+    store.addStop({ kind: 'station', station: 'S4' })
+    const save = vi.fn()
+    const m = marvis()
+    mount({ store, core: fakeCore(), marvis: m, save })
+    await settle()
+    await click(action('marvis'))
+    expect(m.send).not.toHaveBeenCalled()
+    expect(save).not.toHaveBeenCalled()
+    expect(text(root)).toContain('MARVIS was not found')
+    expect(text(action('download-fallback')!)).toBe('Download mission.json instead')
+    await click(action('download-fallback'))
+    expect(save).toHaveBeenCalledWith(JSON.stringify(ROUTE_DOC, null, 1), 'homeline-mission-01234567.json')
+  })
+
+  it('Download is always available, also when MARVIS is detected (no send)', async () => {
+    const store = createPlanningStore()
+    store.addStop({ kind: 'station', station: 'S4' })
+    const save = vi.fn()
+    const m = marvis({ detect: vi.fn(async () => true) })
+    mount({ store, core: fakeCore(), marvis: m, save })
+    await settle()
+    await click(action('download'))
+    expect(m.send).not.toHaveBeenCalled()
+    expect(save).toHaveBeenCalledWith(JSON.stringify(ROUTE_DOC, null, 1), 'homeline-mission-01234567.json')
+    expect(text(root)).toContain('Saved as homeline-mission-01234567.json')
   })
 
   it('MARVIS available: sends your route (no download) and says MARVIS starts the EVA', async () => {
