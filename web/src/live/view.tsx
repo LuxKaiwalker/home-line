@@ -2,18 +2,24 @@
 // WP12 (L6 W-1): the card no longer starts a job of its own. Its numbers are labelled "Estimate"; its
 // one button hands the compute to the Edit-route panel (the one compute action: this spot + the crew
 // panel's changes + the route, one job, one progress, one result on the map).
+// WP13 (L6 W-2, W-6; 10.7 F2, N5): the card's "Estimate" is the shared Badge (the route panel's result
+// carries "Computed live"); while the panel's job runs the card says "Queued · position N" or the stage,
+// elapsed and expected time; the legacy full plan (VITE_ROUTE_EDIT=0, the published site) shows the
+// stage list and queue position too, and a 429 "not now" reads as a sentence, never the raw code.
 // Pure function components of PadToolState (no hooks), so tests render them without a DOM.
 // Every live view carries LIVE_LABEL and a provenance link (kit rule 6): #/plan/{hash} once a job
 // has a hash, before that the engine identity that answered (GET /engine/version).
-import { ROUTE_TEXT } from '../edit/route/text'
+import { Badge } from '../edit/route/badge'
+import { JobProgress } from '../edit/route/progress'
+import { busyText, ROUTE_TEXT } from '../edit/route/text'
 import { t } from '../ui/copy'
-import { LIVE_LABEL } from './config'
+import { JOB_TIMING, LIVE_LABEL } from './config'
 import { bannerFor } from './health'
 import { LiveNum, planHref, ScreenNum } from './num'
 import type { PadToolActions, PadToolState, PlanState, RecordState } from './padtool'
 import { RangeFlags } from './rangeflags'
 import type { StageResult } from './stage'
-import type { PadCheck, PadReason, PadScreen } from './types'
+import type { Job, PadCheck, PadReason, PadScreen } from './types'
 
 /** Plain-language text per PadCheck.reason (openapi enum). */
 export const REASON_TEXT: Record<Exclude<PadReason, null>, string> = {
@@ -60,11 +66,16 @@ function CheckView({ check, actions }: { check: PadCheck; actions: PadToolAction
 export interface RouteLinkView {
   status: 'unavailable' | 'ready' | 'running'
   compute(): void
+  /** WP13: the panel's running job (live/route/mount.tsx RouteProgress); null/absent = none */
+  progress?: { job: { status: string; stage: string | null; stagesDone: readonly string[]; queuePosition?: number | null } | null; since: number; freePoints: number } | null
 }
+
+/** A live Job as the shared progress reads it (WP13). */
+const progressJob = (j: Job | null) => (j ? { status: j.status, stage: j.stage ?? null, stagesDone: j.stages_done, queuePosition: j.queue_position ?? null } : null)
 
 const WHY_CARD = 'live-why-compute'
 
-function PreviewCard({ screen, route, heavyOff, blocked, ownCompute, actions }: { screen: PadScreen; route: RouteLinkView | null | undefined; heavyOff: boolean; blocked: string | null; ownCompute: boolean; actions: PadToolActions }) {
+function PreviewCard({ screen, route, heavyOff, blocked, ownCompute, actions, now }: { screen: PadScreen; route: RouteLinkView | null | undefined; heavyOff: boolean; blocked: string | null; ownCompute: boolean; actions: PadToolActions; now?: number }) {
   // D116: a build without the Edit-route panel (VITE_ROUTE_EDIT=0, route undefined) keeps the card's own
   // "Compute full plan": still the one compute action of that build
   const legacy = route === undefined
@@ -74,7 +85,7 @@ function PreviewCard({ screen, route, heavyOff, blocked, ownCompute, actions }: 
   return (
     <section class="live-card live-preview" data-trust="estimate">
       <h3>
-        Instant preview <span class="live-estimate" title={t('tags.estimate.explanation')}>Estimate</span>
+        Instant preview <Badge kind="estimate" class="live-estimate" />
       </h3>
       <p class="muted">{t('edit.previewNote')}</p>
       <p>
@@ -125,9 +136,12 @@ function PreviewCard({ screen, route, heavyOff, blocked, ownCompute, actions }: 
         </>
       )}
       {running ? (
-        <p class="muted live-route-running" role="status">
-          {ROUTE_TEXT.cardRunning}
-        </p>
+        <div class="muted live-route-running" role="status">
+          <p>{ROUTE_TEXT.cardRunning}</p>
+          {route?.progress ? (
+            <JobProgress job={route.progress.job} elapsedMs={now === undefined ? null : now - route.progress.since} timing={JOB_TIMING} freePoints={route.progress.freePoints} block="live" compact />
+          ) : null}
+        </div>
       ) : null}
       {why ? (
         <p id={WHY_CARD} class={blocked && !heavyOff ? 'live-failed' : 'muted'} role={blocked && !heavyOff ? 'alert' : 'status'}>
@@ -167,7 +181,7 @@ function RecordFlags({ record }: { record: RecordState }) {
   return flags.length ? <RangeFlags flags={flags} title="Range flags (run record)" /> : <p class="live-ok live-no-flags">No range flags: every input is inside its validated range.</p>
 }
 
-function PlanView({ plan, record, actions }: { plan: Exclude<PlanState, { kind: 'idle' }>; record: RecordState; actions: PadToolActions }) {
+function PlanView({ plan, record, actions, now }: { plan: Exclude<PlanState, { kind: 'idle' }>; record: RecordState; actions: PadToolActions; now?: number }) {
   const job = plan.job
   const r = plan.result
   return (
@@ -175,19 +189,25 @@ function PlanView({ plan, record, actions }: { plan: Exclude<PlanState, { kind: 
       <h3>Full plan</h3>
       {job ? <LiveTag href={planHref(job.hash)} text={`provenance of plan ${job.hash}`} /> : <p class="live-label">{LIVE_LABEL}</p>}
       {plan.kind === 'running' ? (
-        <p class="live-progress">
-          {!job || job.status === 'queued' ? 'Queued' : `Running stage ${job.stage ?? '…'}`}
-          {job ? <progress max={1} value={job.progress} /> : null}{' '}
-          <button type="button" class="live-btn" onClick={() => actions.cancelPlan()}>
-            Cancel
-          </button>
-        </p>
+        <div class="live-progress">
+          <JobProgress job={progressJob(job)} elapsedMs={now !== undefined && plan.since !== undefined ? now - plan.since : null} timing={JOB_TIMING} block="live" />
+          <p>
+            {job ? <progress max={1} value={job.progress} /> : null}{' '}
+            <button type="button" class="live-btn" onClick={() => actions.cancelPlan()}>
+              Cancel
+            </button>
+          </p>
+        </div>
       ) : null}
       {plan.kind === 'done' ? <p class="live-ok">All stages done.</p> : null}
       {plan.kind === 'failed' ? (
         <p class="live-failed" role="alert">
-          The plan failed: {plan.error}
-          {plan.retryAfterS ? `; try again in ${plan.retryAfterS} s` : ''}.
+          {busyText(plan.error, plan.retryAfterS) ?? (
+            <>
+              The plan failed: {plan.error}
+              {plan.retryAfterS ? `; try again in ${plan.retryAfterS} s` : ''}.
+            </>
+          )}
         </p>
       ) : null}
       {plan.kind === 'cancelled' ? <p class="muted">Cancelled.</p> : null}
@@ -217,10 +237,12 @@ export interface PadToolPanelProps {
   computeBlocked?: string | null
   /** WP12: the Edit-route panel that computes the plan (null: not there yet; undefined: none in this build) */
   route?: RouteLinkView | null
+  /** WP13: the clock reading the elapsed time is shown at (ms); absent = not shown */
+  now?: number
 }
 
 /** null while live planning is offline, warming or checking: the controls hide behind U1's banner. */
-export function PadToolPanel({ state, actions, engineHref, computeBlocked = null, route }: PadToolPanelProps) {
+export function PadToolPanel({ state, actions, engineHref, computeBlocked = null, route, now }: PadToolPanelProps) {
   const banner = bannerFor(state.live)
   if (!banner.controls) return null
   const { pad, check, preview, plan } = state
@@ -259,9 +281,10 @@ export function PadToolPanel({ state, actions, engineHref, computeBlocked = null
           blocked={computeBlocked}
           ownCompute={banner.heavyJobs && plan.kind !== 'running' && !computeBlocked}
           actions={actions}
+          now={now}
         />
       ) : null}
-      {plan.kind !== 'idle' ? <PlanView plan={plan} record={state.record} actions={actions} /> : null}
+      {plan.kind !== 'idle' ? <PlanView plan={plan} record={state.record} actions={actions} now={now} /> : null}
     </section>
   )
 }

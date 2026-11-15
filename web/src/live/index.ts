@@ -194,6 +194,7 @@ export function padTool(panel: Element, port: MapPort, client: ApiClient = liveC
   const link: RouteLink = {
     compute: () => handle?.compute(),
     status: () => handle?.status() ?? 'unavailable',
+    progress: () => handle?.progress() ?? null,
     subscribe(fn) {
       linkSubs.add(fn)
       return () => void linkSubs.delete(fn)

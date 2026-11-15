@@ -13,6 +13,7 @@
 //                        published Pages build sets 0 until route editing is cleared for it)
 import backendRaw from '../../../config/backend.yaml'
 import { cfg } from '../config'
+import type { JobTiming } from '../edit/route/progress'
 
 function str(path: string): string {
   const v = cfg(backendRaw, path)
@@ -72,6 +73,18 @@ export const CLIENT = {
    */
   healthPollMs: 3_000,
 } as const
+
+/**
+ * WP13 (L6 W-2): measured stage timings of a plan job on the demo server (assumed constants, from the
+ * WP3/WP11 runs; config/backend.yaml has no key for them). Typical [low, high] seconds per stage
+ * (server/engine/plan_job.py STAGES) and the expected whole job: ~360 s with stations only, ~60 s more
+ * per free point. Shown as "expected ~6 min", never as a promise.
+ */
+export const JOB_TIMING: JobTiming = {
+  stageS: { nominal: [110, 135], bands: [210, 300], partner: [20, 20], route: [20, 80], summary: [0, 5] },
+  stationsOnlyS: 360,
+  perFreePointS: 60,
+}
 
 type EnvValue = string | boolean | undefined
 

@@ -19,7 +19,8 @@ export type CheckState = { kind: 'idle' } | { kind: 'checking' } | { kind: 'done
 export type PreviewState = { kind: 'idle' } | { kind: 'loading' } | { kind: 'done'; screen: PadScreen } | { kind: 'error'; message: string }
 export type PlanState =
   | { kind: 'idle' }
-  | { kind: 'running'; job: Job | null; result: StageResult | null; attached?: boolean }
+  /** since: ms (Date.now) when the plan was asked for (WP13 W-2: elapsed time) */
+  | { kind: 'running'; job: Job | null; result: StageResult | null; attached?: boolean; since?: number }
   | { kind: 'done'; job: Job; result: StageResult | null; attached?: boolean }
   | { kind: 'failed'; job: Job | null; error: string; retryAfterS: number | null; result: StageResult | null }
   | { kind: 'cancelled'; job: Job | null; result: StageResult | null }
@@ -187,7 +188,7 @@ export function createPadTool(opts: PadToolOptions): PadTool {
       if (my !== seq || state.plan.kind !== 'running') return
       set({ plan: { ...state.plan, ...p } })
     }
-    set({ plan: { kind: 'running', job: null, result: null }, record: { kind: 'idle' } })
+    set({ plan: { kind: 'running', job: null, result: null, since: Date.now() }, record: { kind: 'idle' } })
     job = startJob(
       client,
       { type: 'plan', inputs: jobPlanInputs(pad, opts.inputs, extra) },

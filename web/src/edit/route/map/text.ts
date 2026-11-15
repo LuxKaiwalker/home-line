@@ -15,7 +15,7 @@ export const WAYPOINT_TEXT = {
   labelPlaceholder: '{name} (optional name)',
   delete: 'Delete {name}',
   markerTitle: '{name}{label}: drag to move',
-  ghostTitle: 'Ghost route · estimate',
+  ghostTitle: 'Ghost route', // WP13: the Estimate badge follows (badge.tsx)
   ghostLoading: 'Ghost route · estimate: loading the terrain grid…',
   ghostUnavailable: 'Ghost route · estimate: not available in this browser.',
   ghostTotal: '≈ {min} min walking (estimate)',

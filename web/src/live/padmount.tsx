@@ -15,6 +15,8 @@ import { PadToolPanel, type RouteLinkView } from './view'
 export interface RouteLink {
   compute(): void
   status(): RouteLinkView['status']
+  /** WP13: the panel's running job (queue position, stage, elapsed); null when none runs */
+  progress?(): RouteLinkView['progress']
   subscribe(fn: () => void): () => void
 }
 
@@ -35,8 +37,17 @@ export function mountPadTool(panel: Element, port: MapPort, opts: MountPadToolOp
   const tool = createPadTool({ client, port, ...rest, ...(crew ? { jobInputs: () => crew.jobInputs() } : {}) })
   const engineHref = `${client.root}/engine/version`
   let ready = false
+  // WP13 (W-2): the elapsed time ticks once a second while a job runs (the card's or the panel's)
+  let ticker: ReturnType<typeof setInterval> | null = null
   const draw = () => {
     if (!ready) return
+    const progress = route?.progress?.() ?? null
+    const busy = tool.state.plan.kind === 'running' || !!progress
+    if (busy && !ticker) ticker = setInterval(draw, 1000)
+    if (!busy && ticker) {
+      clearInterval(ticker)
+      ticker = null
+    }
     render(
       <>
         {crew ? <CrewPanel state={crew.state} actions={crew} engineHref={engineHref} /> : null}
@@ -45,7 +56,8 @@ export function mountPadTool(panel: Element, port: MapPort, opts: MountPadToolOp
           actions={tool}
           engineHref={engineHref}
           computeBlocked={crew ? crewBlockedText(crew.state) : null}
-          route={route ? { status: route.status(), compute: () => route.compute() } : undefined}
+          route={route ? { status: route.status(), compute: () => route.compute(), progress } : undefined}
+          now={Date.now()}
         />
       </>,
       panel,
@@ -70,6 +82,8 @@ export function mountPadTool(panel: Element, port: MapPort, opts: MountPadToolOp
       offState()
       offCrew()
       offRoute()
+      if (ticker) clearInterval(ticker)
+      ready = false
       tool.dispose()
       crew?.dispose()
       render(null, panel)

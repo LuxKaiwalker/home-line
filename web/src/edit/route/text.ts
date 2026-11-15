@@ -71,6 +71,50 @@ export const ROUTE_TEXT = {
   whyPointsAuto: 'Your points take part only in “My order”: press it to edit them.',
 } as const
 
+/**
+ * WP13 (L6 W-2, 10.7 F2, N5): job progress. Stage names the copy deck has (stepper.stages.nominal,
+ * .partner) come from the deck; the rest are here. The expected time is labelled as an expectation.
+ */
+export const PROGRESS_TEXT = {
+  stages: { bands: 'Variant bands', route: 'Route', summary: 'Summary' },
+  queued: 'Queued',
+  queuedAt: 'Queued · position {n}',
+  running: 'Starting',
+  runningStage: 'Running: {stage}',
+  elapsed: '{t} elapsed',
+  expected: 'expected ~{min} min',
+  expectedNote: 'From measured stage times on this server; the real time depends on the queue and the route. Not a promise.',
+  busy: {
+    job_in_progress: { later: 'You already have a plan computing · try again in {s} s', now: 'You already have a plan computing · try again when it is done' },
+    queue_full: { later: 'Live planning is full right now · try again in {s} s', now: 'Live planning is full right now · try again in a minute' },
+    rate_limited: { later: 'Too many plans in a short time · try again in {s} s', now: 'Too many plans in a short time · try again later' },
+  },
+} as const
+
+/**
+ * N5: a refused submit that only says "not now" (429): one heavy job per visitor (job_in_progress,
+ * WP11), the queue is full (queue_full), too many plans (rate_limited). null for any other code.
+ */
+export function busyText(code: string, retryAfterS: number | null | undefined): string | null {
+  const b = (PROGRESS_TEXT.busy as Record<string, { now: string; later: string }>)[code]
+  if (!b) return null
+  return retryAfterS && retryAfterS > 0 ? fill(b.later, { s: Math.ceil(retryAfterS) }) : b.now
+}
+
+/** WP13 (L6 W-6): the two trust badges (Badge in badge.tsx). */
+export const BADGE_TEXT = {
+  estimate: { label: 'Estimate' },
+  computed: { label: 'Computed live' },
+} as const
+
+/** WP13 (L6 W-6): a feasible result's tightest margin and the limit that sets it (the result's timeline). */
+export const MARGIN_TEXT = {
+  tightest: 'Tightest margin {min} min',
+  binding: 'binding: {limit}',
+  where: 'at {station}',
+  unknown: 'Tightest margin: not in this result',
+} as const
+
 export const LIMIT_TEXT: Record<RouteLimit, string> = {
   O2: 'O₂ at the effort-cap rate (D45)',
   daylight: 'Daylight',
@@ -137,6 +181,8 @@ export const ROUTE_ERROR_TEXT: Record<string, string> = {
   route_mode_conflict: 'the route conflicts with the station settings',
   invalid_input: 'the server refused the inputs',
   rate_limited: 'too many plans at once; try again later',
+  job_in_progress: 'you already have a plan computing',
+  queue_full: 'live planning is full right now',
   heavy_jobs_off: 'live planning is not taking new plans now',
   timeout: 'the plan took too long',
   client_timeout: 'the plan took too long',
@@ -153,6 +199,9 @@ export function fill(s: string, vars: Record<string, string | number>): string {
 
 /** "Stop 2 (S4): too steep to walk" for a 422 naming a stop; otherwise the reason alone. */
 export function failureText(f: RouteFailure, stopName: (i: number) => string | null): string {
+  // N5: a 429 that only says "not now" reads as one plain sentence (never the raw code)
+  const busy = f.status === 0 || f.status === 429 ? busyText(f.code, f.retryAfterS) : null
+  if (busy) return busy
   const reason = ROUTE_ERROR_TEXT[f.code] ?? f.message
   const head = f.status === 422 && f.stop !== null ? `Stop ${f.stop + 1}${stopName(f.stop) ? ` (${stopName(f.stop)})` : ''}: ` : ''
   const retry = f.retryAfterS ? ` (retry in ${f.retryAfterS} s)` : ''

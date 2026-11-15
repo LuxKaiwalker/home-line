@@ -13,15 +13,22 @@
 // WP12 (L6 W-4): ticking a station while the engine chooses switches to "My order" (controller); every
 // control that stays disabled names its reason (title + aria-describedby on a visible or hidden note).
 // WP12 (L6 W-1): the one compute action; the inputs line says which pad and crew go with it.
+// WP13 (L6 W-2, W-6; 10.7 F2, N5): a running job shows its stage list, the current stage, the elapsed
+// time and the expected total (measured stage times, an expectation), or "Queued · position N"; a
+// feasible result shows its tightest margin and binding limit; "Computed live" / "Estimate" badges; a
+// 429 "not now" reads as a sentence.
 import type { ComponentChildren } from 'preact'
-import { useEffect, useRef } from 'preact/hooks'
+import { useEffect, useRef, useState } from 'preact/hooks'
 import { signal, useSignalValue, type ReadSignal } from '../../state/signal'
 import { t } from '../../ui/copy'
 import { Button, IconButton } from '../../ui/components/Button'
 import { cx, Icon } from '../../ui/components/Icon'
-import type { ComputeState, RouteController } from './controller'
+import type { ComputeState, RouteController, RouteLimit } from './controller'
 import { isStationStop, layoutIds, ROUTE_LIMITS, type PlanRoute, type RouteCheck, type StationGeo, type StopCheck } from './model'
-import { failureText, fill, infeasibleText, ROUTE_PROBLEM_TEXT, ROUTE_TEXT as T, STOP_PROBLEM_TEXT } from './text'
+import { failureText, fill, infeasibleText, LIMIT_SHORT, MARGIN_TEXT, ROUTE_PROBLEM_TEXT, ROUTE_TEXT as T, STOP_PROBLEM_TEXT } from './text'
+import { Badge } from './badge'
+import { JobProgress, type JobTiming } from './progress'
+import { TrustChip } from '../../ui/components/TrustChip'
 import { AddPointButton, GhostSummary, PointRowBody } from './map/rows'
 import type { SharedUndo } from './undo'
 import './route.css'
@@ -94,6 +101,10 @@ export interface RoutePanelViewProps {
   resultSlot?: ResultSlot | null
   /** WP12: the root element (the panel focuses the progress through it) */
   rootRef?: { current: HTMLDivElement | null }
+  /** WP13 (W-2): measured stage timings (live/config.ts JOB_TIMING); absent = no expected time shown */
+  timing?: JobTiming | null
+  /** WP13 (W-2): the clock reading the elapsed time is shown at (ms, ctl.now()); absent = not shown */
+  now?: number
 }
 
 /** ids of the reason notes the disabled controls point at (aria-describedby); one panel per page */
@@ -119,7 +130,7 @@ function inputsLine(ctl: RouteController): string {
 }
 
 
-function StageList({ c }: { c: Extract<ComputeState, { kind: 'running' | 'done' | 'failed' }> }) {
+function StageList({ c, now, timing, freePoints }: { c: Extract<ComputeState, { kind: 'running' | 'done' | 'failed' }>; now?: number; timing?: JobTiming | null; freePoints: number }) {
   const layers = c.stage?.layers ?? []
   const first = layers.includes('bands') && layers.includes('route')
   const rest = ['isochrones', 'edges', 'partner'].some((l) => layers.includes(l)) && (c.kind !== 'running' || (c.job?.stagesDone.length ?? 0) > 1)
@@ -134,13 +145,30 @@ function StageList({ c }: { c: Extract<ComputeState, { kind: 'running' | 'done' 
           {T.stageRest} · {rest ? T.stageShown : T.stageWaiting}
         </li>
       </ol>
-      {c.kind === 'running' && c.job ? (
-        <p class="hl-route__progress" role="status" tabIndex={-1}>
-          {c.job.stage ?? c.job.status} · {Math.round(c.job.progress * 100)} %
-        </p>
+      {c.kind === 'running' ? (
+        <div class="hl-route__progress" role="status" tabIndex={-1}>
+          <JobProgress job={c.job} elapsedMs={now === undefined ? null : now - c.since} timing={timing} freePoints={freePoints} block="hl-route" />
+        </div>
       ) : null}
       {c.stage?.errors.length ? <p class="hl-route__warn">{c.stage.errors.join('; ')}</p> : null}
     </div>
+  )
+}
+
+/** W-6: the tightest margin of a feasible route and the limit that sets it, with its trust chip. */
+function MarginLine({ r }: { r: Extract<ComputeState, { kind: 'done' }>['result'] }) {
+  const m = r.margin
+  if (!m) return <p class="hl-route__note hl-route__margin" data-margin="none">{MARGIN_TEXT.unknown}</p>
+  const limit = m.binding ? (LIMIT_SHORT[m.binding as RouteLimit] ?? m.binding) : null
+  return (
+    <p class="hl-route__margin" data-margin={m.min} data-binding={m.binding ?? ''}>
+      <TrustChip kind="live" />{' '}
+      <span class="num" data-trust="live" title={`${T.computedLabel} · run record ${r.hash}`}>
+        {fill(MARGIN_TEXT.tightest, { min: Math.round(m.min) })}
+      </span>
+      {limit ? ` · ${fill(MARGIN_TEXT.binding, { limit })}` : ''}
+      {m.station ? ` · ${fill(MARGIN_TEXT.where, { station: m.station })}` : ''}
+    </p>
   )
 }
 
@@ -153,7 +181,7 @@ function ResultView({ c, slot }: { c: Extract<ComputeState, { kind: 'done' }>; s
   return (
     <div class="hl-route__result" data-trust="live" data-hash={r.hash}>
       <p class="hl-route__label">
-        {T.computedLabel} ·{' '}
+        <Badge kind="computed" /> {T.computedLabel} ·{' '}
         <a class="hl-route__prov" href={r.provenanceHref}>
           {T.provenance} {r.hash}
         </a>
@@ -162,6 +190,7 @@ function ResultView({ c, slot }: { c: Extract<ComputeState, { kind: 'done' }>; s
       {r.recordError ? <p class="hl-route__warn">{r.recordError}</p> : null}
       {f === null ? <p class="hl-route__note">{T.feasibilityUnknown}</p> : null}
       {f?.feasible ? <p class="hl-route__ok">{T.feasible}</p> : null}
+      {f?.feasible ? <MarginLine r={r} /> : null}
       {f && !f.feasible ? (
         <div class="hl-route__infeasible" role="alert" data-leg={f.leg} data-limit={f.limit}>
           <p class="hl-route__infeasible-title">
@@ -238,7 +267,7 @@ export function RoutePanelView(p: RoutePanelViewProps) {
         </div>
       ) : null}
       {c.kind === 'cancelled' ? <p class="hl-route__note">{T.cancelled}</p> : null}
-      {c.kind === 'running' || c.kind === 'done' || c.kind === 'failed' ? <StageList c={c} /> : null}
+      {c.kind === 'running' || c.kind === 'done' || c.kind === 'failed' ? <StageList c={c} now={p.now} timing={p.timing} freePoints={route.stops.filter((s) => !isStationStop(s)).length} /> : null}
       <div class="hl-route__mode" role="radiogroup" aria-label={T.modeLabel}>
         {(['auto', 'ordered'] as const).map((m) => (
           <button
@@ -409,14 +438,23 @@ export function RoutePanelView(p: RoutePanelViewProps) {
 const NO_REASON = signal<string | null>(null)
 
 /** The panel bound to the controller (re-renders on every signal it shows). */
-export function RoutePanel({ ctl, live, reason, undo, resultSlot }: { ctl: RouteController; live: ReadSignal<boolean>; reason?: ReadSignal<string | null>; undo?: SharedUndo | null; resultSlot?: ResultSlot | null }) {
+export function RoutePanel({ ctl, live, reason, undo, resultSlot, timing }: { ctl: RouteController; live: ReadSignal<boolean>; reason?: ReadSignal<string | null>; undo?: SharedUndo | null; resultSlot?: ResultSlot | null; timing?: JobTiming | null }) {
   const why = useSignalValue(reason ?? NO_REASON)
   const rootRef = useRef<HTMLDivElement | null>(null)
+  const compute = useSignalValue(ctl.compute)
+  // W-2: the elapsed time ticks once a second while a job runs (the map stays usable: nothing blocks)
+  const [, tick] = useState(0)
+  const running = compute.kind === 'running'
+  useEffect(() => {
+    if (!running) return
+    const id = setInterval(() => tick((n) => n + 1), 1000)
+    return () => clearInterval(id)
+  }, [running])
   const props: RoutePanelViewProps = {
     ctl,
     route: useSignalValue(ctl.store.route),
     check: useSignalValue(ctl.check),
-    compute: useSignalValue(ctl.compute),
+    compute,
     hash: useSignalValue(ctl.store.hash),
     canUndo: useSignalValue(undo ? undo.canUndo : ctl.store.canUndo),
     canRedo: useSignalValue(undo ? undo.canRedo : ctl.store.canRedo),
@@ -428,6 +466,8 @@ export function RoutePanel({ ctl, live, reason, undo, resultSlot }: { ctl: Route
     rootRef,
     layout: useSignalValue(ctl.layout),
     resultSlot,
+    timing,
+    now: ctl.now(),
   }
   useSignalValue(ctl.legs)
   useSignalValue(ctl.store.step) // the inputs line (pad, crew)

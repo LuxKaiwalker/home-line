@@ -14,6 +14,7 @@ import { stopTexts } from './plans/route'
 import { planId } from './plans/store'
 import { MyPlans, SavePlan, type MyPlansProps } from './plans/view'
 import { RangeFlags } from './rangeflags'
+import { queueText } from '../edit/route/progress'
 import { SimSlot, type MissionFetchFor, type MissionProbe } from './simslot'
 import type { RunOrigin, RunRecord } from './types'
 
@@ -273,7 +274,7 @@ export function ImportStatus({ state }: { state: ImportState }) {
           <p>
             Computing the plan{state.job ? ` ${state.job.hash}` : ''}
             {state.job?.stage ? ` · stage ${state.job.stage}` : ''}
-            {state.job?.status === 'queued' ? ' · queued' : ''}…
+            {state.job?.status === 'queued' ? ` · ${queueText(state.job.queue_position)}` : ''}…
           </p>
         </div>
       )

@@ -1,0 +1,9 @@
+/* WP13 (L6 W-2, F2): job progress (stage list, elapsed, expected) */
+.hl-progress { display: grid; gap: var(--space-1); }
+.hl-progress p { margin: 0; }
+.hl-progress__head { font-variant-numeric: tabular-nums; }
+.hl-progress__expected { color: var(--color-text-muted); }
+.hl-progress__stages { margin: 0; padding-left: var(--space-4); }
+.hl-progress__stage { color: var(--color-text-muted); }
+.hl-progress__stage.is-running { color: var(--color-live); font-weight: var(--font-weight-label); }
+.hl-progress__stage.is-done { color: var(--color-text); }

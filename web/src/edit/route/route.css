@@ -98,3 +98,6 @@
 /* WP12 (L6 W-4, L-05): reasons and the offline note */
 .hl-route__why { color: var(--color-text-muted); }
 .hl-route-offline { margin: 0; color: var(--color-text-muted); font-size: var(--font-size-small); line-height: var(--line-height-small); }
+
+/* WP13 (L6 W-6): a feasible result's tightest margin */
+.hl-route__margin { margin: 0; display: flex; flex-wrap: wrap; gap: var(--space-1); align-items: center; }

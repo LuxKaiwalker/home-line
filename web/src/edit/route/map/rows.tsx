@@ -8,6 +8,7 @@ import { cx, Icon } from '../../../ui/components/Icon'
 import type { RouteController } from '../controller'
 import { ROUTE_LIMITS } from '../model'
 import { fill } from '../text'
+import { Badge } from '../badge'
 import { editorOf, type WaypointEditor } from './editor'
 import { LABEL_MAX_CHARS } from './points'
 import { estimateMin, WAYPOINT_TEXT as W } from './text'
@@ -135,7 +136,9 @@ function GhostBody({ ed }: { ed: WaypointEditor }) {
   return (
     <>
       <p class="hl-route__ghost-title">
-        <span>{W.ghostTitle}</span>
+        <span>
+          {W.ghostTitle} <Badge kind="estimate" />
+        </span>
         <span class="hl-route__ghost-total">{totalS === null ? W.ghostTotalPartial : fill(W.ghostTotal, { min: estimateMin(totalS) })}</span>
       </p>
       <ol class="hl-route__ghost-legs">

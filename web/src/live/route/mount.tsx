@@ -39,6 +39,8 @@ import { bannerFor, type LiveState } from '../health'
 import type { LoaderFor } from '../stage'
 import { consoleRouteMap, type RouteConsoleMap } from './map'
 import { createRouteJobs, type RouteJobsOptions } from './jobs'
+import { JOB_TIMING } from '../config'
+import { isStationStop } from '../../edit/route/model'
 
 export const ROUTE_SECTION_ID = 'edit-route'
 
@@ -75,9 +77,19 @@ export interface RouteHandle {
   compute(): void
   /** 'unavailable' (offline, or the route cannot be computed now), 'ready', 'running' */
   status(): 'unavailable' | 'ready' | 'running'
+  /** WP13 (F2, W-2): the running job as the card shows it (queue position, stage, elapsed); null when none runs */
+  progress(): RouteProgress | null
   subscribe(fn: () => void): () => void
   readonly ctl: RouteController
   readonly undo: SharedUndo
+}
+
+/** WP13: what the Live pad card shows of the panel's running job. */
+export interface RouteProgress {
+  job: { status: string; stage: string | null; stagesDone: readonly string[]; queuePosition?: number | null } | null
+  /** ms (ctl.now) when Compute was pressed */
+  since: number
+  freePoints: number
 }
 
 /**
@@ -270,7 +282,7 @@ export function mountRoutePanel(o: MountRouteOptions): () => void {
     const note = () =>
       (o.register ?? registerRailSection)({ id: ROUTE_SECTION_ID, modes: ['plan'], title: 'nav.rail.stationsRoute', icon: 'station', render: () => h(RouteOfflineNote, { note: noteText, key: 'offline' }) })
     const section = () => {
-      const off = (o.register ?? registerRailSection)({ id: ROUTE_SECTION_ID, modes: ['plan'], title: 'nav.rail.stationsRoute', icon: 'station', render: () => h(RoutePanel, { ctl: c, live, reason, undo, resultSlot: o.resultSlot ?? null, key: ROUTE_TEXT.title }) })
+      const off = (o.register ?? registerRailSection)({ id: ROUTE_SECTION_ID, modes: ['plan'], title: 'nav.rail.stationsRoute', icon: 'station', render: () => h(RoutePanel, { ctl: c, live, reason, undo, resultSlot: o.resultSlot ?? null, timing: JOB_TIMING, key: ROUTE_TEXT.title }) })
       // WP6: free waypoints (markers, click to add) and the ghost route (estimate) on the console map,
       // shown and hidden with the panel (offline: gone with the other live controls)
       const offMap = installWaypointMap(c, o.cmap)
@@ -322,6 +334,11 @@ export function mountRoutePanel(o: MountRouteOptions): () => void {
       ctl: c,
       undo,
       status: () => (c.compute.peek().kind === 'running' ? 'running' : unregister && live.peek() ? 'ready' : 'unavailable'),
+      progress: () => {
+        const s = c.compute.peek()
+        if (s.kind !== 'running') return null
+        return { job: s.job, since: s.since, freePoints: c.store.route.peek().stops.filter((x) => !isStationStop(x)).length }
+      },
       subscribe(fn) {
         subs.add(fn)
         return () => void subs.delete(fn)

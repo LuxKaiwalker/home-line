@@ -25,6 +25,8 @@ export interface RouteJobView {
   progress: number
   stagesDone: readonly string[]
   hash: string
+  /** WP13 (F2): 0-based place in the queue while queued (job.queue_position); null = not reported */
+  queuePosition?: number | null
 }
 
 /** One staged snapshot of the result tree (live/stage.ts loadStage, summarised); `data` goes to the map as is. */
@@ -54,6 +56,16 @@ export interface RouteResultView {
   provenanceHref: string
   engineCommit: string | null
   recordError: string | null
+  /** WP13 (W-6): the tightest margin of the computed route and its binding limit (result timeline); null = not in the result */
+  margin?: RouteMargin | null
+}
+
+/** WP13 (W-6): the lowest margin on the route (turn-back rows left out) and the limit that sets it. */
+export interface RouteMargin {
+  min: number
+  binding: string | null
+  /** the timeline row's station, when it names one */
+  station: string | null
 }
 
 export type RouteOutcome = { status: 'done'; result: RouteResultView } | { status: 'failed'; failure: RouteFailure } | { status: 'cancelled' }
@@ -86,7 +98,8 @@ export interface RouteEnd {
 
 export type ComputeState =
   | { kind: 'idle' }
-  | { kind: 'running'; job: RouteJobView | null; stage: RouteStageView | null; key: string }
+  /** since: ms (options.now) when Compute was pressed; runningSince: when the job left the queue (WP13 W-2) */
+  | { kind: 'running'; job: RouteJobView | null; stage: RouteStageView | null; key: string; since: number; runningSince: number | null }
   | { kind: 'done'; job: RouteJobView | null; stage: RouteStageView | null; result: RouteResultView; key: string }
   | { kind: 'failed'; job: RouteJobView | null; stage: RouteStageView | null; failure: RouteFailure; key: string }
   | { kind: 'cancelled'; key: string }
@@ -103,6 +116,8 @@ export interface RouteControllerOptions {
   canCompute?: ReadSignal<boolean>
   /** WP12: why the job cannot start although the route is fine (crew panel: a field is not a number); null = nothing */
   blocked?: ReadSignal<string | null>
+  /** WP13: clock for the elapsed time (default Date.now) */
+  now?: () => number
 }
 
 export function createRouteController(o: RouteControllerOptions) {
@@ -163,7 +178,8 @@ export function createRouteController(o: RouteControllerOptions) {
     const my = ++seq
     const step = store.step.peek()
     const route = step.route
-    compute.value = { kind: 'running', job: null, stage: null, key: step.key }
+    const now = o.now ?? Date.now
+    compute.value = { kind: 'running', job: null, stage: null, key: step.key, since: now(), runningSince: null }
     const live = (fn: () => void) => {
       if (my === seq) fn()
     }
@@ -171,7 +187,7 @@ export function createRouteController(o: RouteControllerOptions) {
       onUpdate: (job) =>
         live(() => {
           const s = compute.peek()
-          if (s.kind === 'running') compute.value = { ...s, job }
+          if (s.kind === 'running') compute.value = { ...s, job, runningSince: s.runningSince ?? (job.status !== 'queued' ? now() : null) }
         }),
       onStage: (stage) =>
         live(() => {
@@ -254,6 +270,8 @@ export function createRouteController(o: RouteControllerOptions) {
       return true
     },
     computePlan: runCompute,
+    /** WP13: the clock the elapsed time is read with */
+    now: o.now ?? Date.now,
     cancel(): void {
       handle?.cancel()
     },

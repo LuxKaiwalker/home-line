@@ -3,7 +3,10 @@
 // contract-checking loader: one rendering path), and once done the run record answers whether the
 // route as given is feasible (types.ts readFeasibility). A refused submit (422 for a bad stop, 429,
 // 503) keeps its HTTP status, code and the stop it names, so the panel can say what is wrong.
-import type { Feasibility as EditFeasibility, RouteFailure, RouteJobs, RouteOutcome, RouteStageView } from '../../edit/route/controller'
+import type { Feasibility as EditFeasibility, RouteFailure, RouteJobs, RouteMargin, RouteOutcome, RouteStageView } from '../../edit/route/controller'
+import { tightestMargin } from '../../views/decisions'
+import { DataError } from '../../data/loader'
+import { liveLoader } from '../result'
 import { ApiError, type ApiClient } from '../client'
 import { LIVE_LABEL } from '../config'
 import { startJob, type JobOptions } from '../jobs'
@@ -66,7 +69,7 @@ export function createRouteJobs(o: RouteJobsOptions): RouteJobs {
         { type: 'plan', inputs: inputs as unknown as PlanInputs },
         {
           ...o.job,
-          onUpdate: (j: Job) => cb.onUpdate({ status: j.status, stage: j.stage ?? null, progress: j.progress, stagesDone: [...j.stages_done], hash: j.hash }),
+          onUpdate: (j: Job) => cb.onUpdate({ status: j.status, stage: j.stage ?? null, progress: j.progress, stagesDone: [...j.stages_done], hash: j.hash, queuePosition: j.queue_position ?? null }),
           onStage: (_s, j, base) => {
             const stages = [...j.stages_done]
             chain = chain.then(async () => {
@@ -87,7 +90,8 @@ export function createRouteJobs(o: RouteJobsOptions): RouteJobs {
         // the done state may list no new stage: read the final tree once more
         if (!latest || latest.stages.length !== out.job.stages_done.length) {
           try {
-            cb.onStage(view(await loadStage(out.resultBase, out.job.stages_done, o.loaderFor)))
+            latest = await loadStage(out.resultBase, out.job.stages_done, o.loaderFor)
+            cb.onStage(view(latest))
           } catch {
             /* the run record still answers */
           }
@@ -106,11 +110,28 @@ export function createRouteJobs(o: RouteJobsOptions): RouteJobs {
         } catch (e) {
           recordError = `run record unavailable: ${failureOf(e, 'network').message}`
         }
-        return { status: 'done', result: { hash: out.job.hash, feasibility, label, provenanceHref: planUrl(out.job.hash, 'provenance'), engineCommit, recordError } }
+        // W-6: a feasible route shows its tightest margin and the limit that sets it (the result's timeline)
+        let margin: RouteMargin | null = null
+        const sid = latest?.scenario?.id ?? null
+        if (feasibility?.feasible && sid) {
+          try {
+            margin = routeMargin(await (o.loaderFor ?? liveLoader)(out.resultBase).timeline(sid))
+          } catch (e) {
+            if (!(e instanceof DataError && e.kind === 'missing')) recordError = [recordError, `timeline_${sid}.json: ${msg(e)}`].filter(Boolean).join('; ')
+          }
+        }
+        return { status: 'done', result: { hash: out.job.hash, feasibility, label, provenanceHref: planUrl(out.job.hash, 'provenance'), engineCommit, recordError, margin } }
       })
       return { promise, cancel: () => handle.cancel() }
     },
   }
+}
+
+/** W-6: the lowest margin of a result timeline (views/decisions.ts tightestMargin) as the panel shows it. */
+export function routeMargin(tl: Parameters<typeof tightestMargin>[0]): RouteMargin | null {
+  const m = tightestMargin(tl)
+  if (!m || typeof m.e.margin_min !== 'number') return null
+  return { min: m.e.margin_min, binding: m.e.margin_binding ?? null, station: m.e.station ?? null }
 }
 
 function view(r: StageResult): RouteStageView {
