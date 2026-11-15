@@ -149,7 +149,7 @@ describe('privacy note text', () => {
     const rr = JSON.parse(read('contracts/backend/run_record.schema.json'))
     expect(rr.additionalProperties).toBe(false)
     expect(Object.keys(rr.properties).sort()).toEqual(
-      ['contract_version', 'hash', 'origin', 'label', 'inputs', 'engine', 'terrain_hash', 'status', 'started_utc', 'finished_utc', 'stages', 'files', 'range_flags', 'infeasible', 'error', 'dummy'].sort(),
+      ['contract_version', 'hash', 'origin', 'label', 'inputs', 'engine', 'terrain_hash', 'status', 'started_utc', 'finished_utc', 'stages', 'files', 'range_flags', 'route_mode', 'feasibility', 'infeasible', 'error', 'dummy'].sort(),
     )
   })
 
