@@ -176,3 +176,14 @@
 /* Compass (MapLibre's, in the zoom group): 3D only; own icon (red north tip + N) so it reads on the dark buttons */
 .mission-map:not(.mp-3d) .maplibregl-ctrl-compass { display: none; }
 .mission-map .maplibregl-ctrl-compass .maplibregl-ctrl-icon { background-image: url('data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 29 29"%3E%3Ccircle cx="14.5" cy="14.5" r="12.5" fill="none" stroke="%239a8f88" stroke-width="1"/%3E%3Cpath d="M14.5 6.5 L17.5 15 H11.5 Z" fill="%23e5604d"/%3E%3Cpath d="M14.5 23.5 L11.5 15 H17.5 Z" fill="%23e9e2dc"/%3E%3Ctext x="14.5" y="5.2" font-family="system-ui,sans-serif" font-size="5.5" font-weight="700" fill="%23e5604d" text-anchor="middle"%3EN%3C/text%3E%3C/svg%3E') !important; background-size: 100% 100%; filter: none !important; }
+/* EVA time strip: Margin / Elevation switch and the elevation view */
+.mp-dock__tabs { display: flex; gap: 3px; margin-left: var(--space-2); }
+.mp-dock__tabs .mp-chip[aria-selected='true'] { background: var(--accent); border-color: var(--accent); color: #1a120e; font-weight: 600; }
+.mp-tl__track--static { cursor: default; }
+.mp-elev__area { fill: var(--color-text-faint); opacity: 0.18; stroke: none; }
+.mp-elev__line { fill: none; stroke: var(--color-text-muted); stroke-width: 2; stroke-linejoin: round; }
+.mp-elev__ylab { position: absolute; left: 2px; z-index: 1; padding: 1px 3px; border-radius: 3px; background: color-mix(in srgb, var(--color-sidebar) 80%, transparent); font-size: 10px; line-height: 1; color: var(--color-text-muted); font-variant-numeric: tabular-nums; pointer-events: none; }
+.mp-elev__ylab--top { top: 1px; }
+.mp-elev__ylab--bot { bottom: 2px; }
+.mp-elev__legend { list-style: none; margin: 0; padding: 0; display: grid; gap: 1px; font-size: var(--font-size-label); color: var(--color-text-muted); }
+.mp-elev__legend li { display: flex; align-items: center; gap: 5px; white-space: nowrap; }

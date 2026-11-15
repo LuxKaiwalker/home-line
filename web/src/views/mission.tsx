@@ -31,6 +31,7 @@ import { href, type Route } from '../router'
 import { buildTrack, legProfile, missionMargin } from '../mission/margin'
 import { buildMission, downloadJson, finalizeMission } from '../mission/export'
 import { detect, inMarvisViewer, sendMission } from '../marvis/bridge'
+import { elevationProfile } from '../mission/elevation'
 import { PlanDock, type PlanDockState } from '../mission/PlanDock'
 import { planTimeline, stopLabel } from '../mission/planTimeline'
 import { ensureManifest } from './common'
@@ -311,12 +312,30 @@ function MissionPanel({
     return missionMargin(track, { tDarkMin, rad: d.rad, storm })
   }, [d, legs, wps, storm, tDarkMin])
 
+  // Height along the plan for the strip's Elevation view: legs, stops, and WS2's way home to the pad.
+  const elev = useMemo(() => {
+    if (!d || !wps.length || legs.some((l) => l === null)) return null
+    const w = d.tHome.width
+    let homeCells: { cells: number[]; tHomeMin: (number | null)[] } | null = null
+    if (home.path && lastCell !== null) {
+      const cells: number[] = [lastCell]
+      for (const [lon, lat] of home.path.coords) {
+        const p = d.tHome.pixelOf(lon, lat)
+        if (!p) continue
+        const c = p.row * w + p.col
+        if (c !== cells[cells.length - 1]) cells.push(c)
+      }
+      homeCells = { cells, tHomeMin: cells.map((c) => d.tHome.valueAtPixel(Math.floor(c / w), c % w)) }
+    }
+    return elevationProfile({ legs: legs as Leg[], stopsMin: wps.map((x) => stopMinutes(x.stopMin)), width: d.grid.width, resM: d.grid.resM, elev: d.grid.elev, home: homeCells })
+  }, [d, legs, wps, home, lastCell])
+
   // EVA time strip under the map: the plan's margin over time, in the timeline dock's style (no playback).
   const labels = useMemo(() => wps.map((w, i) => stopLabel(i, w.station)), [wps])
   useEffect(() => {
-    const state: PlanDockState = !wps.length ? { kind: 'empty' } : margin ? { kind: 'ready', tl: planTimeline(margin, labels, tDarkMin) } : { kind: 'unrouted' }
+    const state: PlanDockState = !wps.length ? { kind: 'empty' } : margin ? { kind: 'ready', tl: planTimeline(margin, labels, tDarkMin), elev } : { kind: 'unrouted' }
     render(<PlanDock state={state} amberMin={CONFIG.marginAmberMin} />, dockEl)
-  }, [margin, labels, tDarkMin, wps.length])
+  }, [margin, labels, tDarkMin, wps.length, elev])
 
   /** mission.json of the plan on screen (contracts/bundle/mission.schema.json); null without waypoints */
   const missionDoc = async () => {
