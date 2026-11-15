@@ -10,6 +10,7 @@
 // Open / close: panelState.ts (openRoutePanel / closeRoutePanel). Esc closes it (layout store), focus
 // moves into it on open and back to the opener on close (Drawer). Filled into the Plan view's
 // 'route-panel' slot by installRoutePanel() (register.ts).
+import { createPortal } from 'preact'
 import { planning, selectHasRoute, usePlanning, type PlanningStore } from '../../state/planning'
 import { useSignalValue } from '../../state/signal'
 import { registerPlanSlot } from '../../views/planPortSlots'
@@ -83,7 +84,19 @@ export function RoutePanel({ store = planning, loader }: RoutePanelProps) {
   )
 }
 
-/** Fill the Plan view's 'route-panel' slot (views/planPortSlots.tsx). Returns unregister. */
+/** The map container the drawer is positioned in (like the station card and the Edit-route drawer);
+ *  null when the slot has no real map (tests). */
+function mapHost(cmap: unknown): Element | null {
+  const m = (cmap as { map?: { getContainer?: () => Element } } | null)?.map
+  return typeof m?.getContainer === 'function' ? m.getContainer() : null
+}
+
+/** Fill the Plan view's 'route-panel' slot (views/planPortSlots.tsx). Returns unregister.
+ *  PORT I5: the slot sits in the console's section tree, which the shell keeps hidden (its sections are
+ *  moved into place one by one), so the drawer renders into the map container instead, like P2's pad card. */
 export function installRoutePanel(): () => void {
-  return registerPlanSlot('route-panel', () => <RoutePanel />)
+  return registerPlanSlot('route-panel', ({ cmap }) => {
+    const host = mapHost(cmap)
+    return host ? createPortal(<RoutePanel />, host) : <RoutePanel />
+  })
 }

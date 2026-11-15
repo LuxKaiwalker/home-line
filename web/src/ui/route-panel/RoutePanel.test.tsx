@@ -253,6 +253,10 @@ describe('Route panel: pad picker', () => {
     const b = one(attr('data-pad', 'pad_default'))
     expect(b.hasAttribute('disabled')).toBe(true)
     expect(b.getAttribute('title')).toContain('No walk-home fields')
+    // a11y (I5): the reason is also the radio's accessible description, not only a hover title
+    const why = one(attr('id', b.getAttribute('aria-describedby') ?? '-'), 'description')
+    expect(why.textContent).toBe(b.getAttribute('title'))
+    expect(one(attr('data-pad', 'official')).hasAttribute('aria-describedby')).toBe(false)
     fire(b, 'click')
     expect(store.state.peek().padId).toBe('official')
   })
@@ -337,5 +341,19 @@ describe('Route panel: sub-package regions and the Plan slot', () => {
     expect(attr('id', 'hl-lay-route-panel')).toHaveLength(1)
     act(() => off())
     expect(attr('id', 'hl-lay-route-panel')).toHaveLength(0)
+  })
+
+  // PORT I5 (e2e): the slot lives in the console's hidden section tree; the drawer must land in the map
+  // container, or "Plan a route" opens a panel nobody can see
+  it('installRoutePanel renders the drawer into the map container, not the hidden slot', () => {
+    const host = doc.createElement('div')
+    const cmap = { map: { getContainer: () => host } } as unknown as ConsoleMap
+    mount(<PlanSlot name="route-panel" cmap={cmap} />)
+    let off = () => {}
+    act(() => void (off = installRoutePanel()))
+    expect(attr('id', 'hl-lay-route-panel')).toHaveLength(0)
+    expect(all(host, (n) => n.getAttribute('id') === 'hl-lay-route-panel')).toHaveLength(1)
+    act(() => off())
+    expect(all(host, (n) => n.getAttribute('id') === 'hl-lay-route-panel')).toHaveLength(0)
   })
 })

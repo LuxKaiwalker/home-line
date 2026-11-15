@@ -96,6 +96,8 @@ function Official({ strip }: { strip: StripProps | null }) {
           {SEP}
           <span class="hl-ctx__margin" title={`${t('route.strip.marginTitle')}: ${m.why}`}>
             <span class="hl-ctx__k">{t('route.strip.margin')}</span> <Num v={m.v} units="min" file={m.file} k={m.k} />
+            {/* a11y: the reason is text for screen readers too (the title is for pointer hover only) */}
+            <span class="hl-ctx__sr">{`${t('route.strip.marginTitle')}: ${m.why}`}</span>
             <TrustChip kind="simulated" prov={{ key: m.k, file: m.file, value: m.v }} align="start" />
           </span>
         </>

@@ -78,6 +78,13 @@ describe('ContextLine', () => {
     const nums = byClass(root, 'num')
     expect(nums).toHaveLength(1)
     expect(nums[0].textContent).toContain('41.21')
+    // a11y (I5): the margin's reason is text for screen readers too, not only a hover title
+    const margin = byClass(root, 'hl-ctx__margin')[0]
+    const why = byClass(margin, 'hl-ctx__sr')
+    expect(why).toHaveLength(1)
+    expect(why[0].textContent).toBe(attr(margin, 'title'))
+    expect(why[0].textContent!.startsWith(`${t('route.strip.marginTitle')}: `)).toBe(true)
+    expect(why[0].textContent!.length).toBeGreaterThan(t('route.strip.marginTitle').length + 2)
     const chips = buttons().filter((b) => (attr(b, 'class') ?? '').includes('hl-ctx__chip'))
     expect(chips.map((b) => attr(b, 'aria-controls'))).toEqual(['hl-lay-scenario', 'hl-lay-budget'])
     expect(chips.map((b) => attr(b, 'aria-label'))).toEqual([`${t('route.strip.scenario')}: nominal · 104 kg`, `${t('route.strip.budget')}: ${t('route.strip.budgetValue', { budget: 30 })}`])

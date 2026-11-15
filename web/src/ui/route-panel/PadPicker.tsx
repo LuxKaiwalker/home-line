@@ -78,7 +78,8 @@ export function PadPicker({ store = planning }: { store?: PlanningStore }) {
         <div class="hl-rp__tags" role="radiogroup" aria-labelledby={labelId} onKeyDown={onKey}>
           {pads.map((p) => {
             const on = p.id === padId
-            return (
+            const whyId = p.hasRoutingFields ? undefined : `hl-rp-pad-why-${p.id}`
+            return [
               <button
                 type="button"
                 role="radio"
@@ -89,11 +90,18 @@ export function PadPicker({ store = planning }: { store?: PlanningStore }) {
                 data-pad={p.id}
                 disabled={!p.hasRoutingFields && !on}
                 title={p.hasRoutingFields ? undefined : t('route.panel.pads.noFields')}
+                aria-describedby={whyId}
                 onClick={() => pick(p)}
               >
                 {padName(p)}
-              </button>
-            )
+              </button>,
+              // a11y: the reason is the radio's accessible description, not only a hover title
+              whyId && (
+                <span key={whyId} id={whyId} hidden>
+                  {t('route.panel.pads.noFields')}
+                </span>
+              ),
+            ]
           })}
         </div>
       )}
