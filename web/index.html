@@ -4,8 +4,24 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>HOMELINE</title>
+    <!-- L12 (D111): the intro loading screen's style, part of the render-blocking stylesheet -->
+    <link rel="stylesheet" href="/src/story/loading.css" />
   </head>
   <body>
+    <!-- L12 (D111): the intro loading screen. On screen with the first paint, no JS needed; story/loading.ts
+         drives its progress bar from the real loads, fades it into the intro, or removes it at once when no
+         intro plays. Without JS, 'Skip intro' reloads with ?intro=0. -->
+    <div id="hl-loading" class="hl-loading">
+      <div class="hl-loading__panel">
+        <p class="hl-loading__mark">HOMELINE</p>
+        <div class="hl-loading__bar" role="progressbar" aria-label="Loading the intro" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" aria-busy="true"><span class="hl-loading__fill"></span></div>
+        <p class="hl-loading__still" role="status" hidden>Still loading…</p>
+      </div>
+      <div class="hl-loading__ctl" data-hl-intro-keep>
+        <button type="button" class="hl-loading__btn" data-hl-act="fullscreen" aria-pressed="false" title="Full screen (F)" hidden>Full screen</button>
+        <a class="hl-loading__btn" data-hl-act="skip" href="?intro=0#/">Skip intro</a>
+      </div>
+    </div>
     <div id="app"></div>
     <script type="module" src="/src/main.ts"></script>
   </body>

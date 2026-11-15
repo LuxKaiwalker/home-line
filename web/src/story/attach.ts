@@ -20,6 +20,7 @@ import { data } from '../data/loader'
 import { DATA_MODE, dataUrl } from '../env'
 import { ELEVATION_FACTOR, FIRST_FRAME_MAX_MS, WARMUP_MAX_MS } from './config'
 import { after, descentTiles, mapIdle, prefetch, storyPoses, until, type TileSet } from './warm'
+import { introSkipRequested, loadingDone, onIntroSkip, setLoadProgress, STAGE } from './loading'
 
 const INPUTS = ['keydown', 'pointerdown', 'wheel', 'touchstart'] as const
 
@@ -118,17 +119,28 @@ async function warmUp(stage: StoryStage, d: Director, signal: { stopped: boolean
   stage.apply({ ...s0, layers: { ...s0.layers, ...all }, camera: null })
   const c = map.getContainer()
   const url = (p: string): string => dataUrl(p, DATA_MODE)
-  void descentTileSets()
-    .then((sets) => prefetch(descentTiles(storyPoses(d), sets, { width: c.clientWidth, height: c.clientHeight }, { factor: ELEVATION_FACTOR, exaggeration: exaggeration() }, url)))
-    .catch(() => 0)
   const terrainSettled = (): boolean => !['loading', 'off'].includes(c.getAttribute('data-terrain') ?? 'off') || !all.terrain
   const fieldSettled = (): boolean => c.getAttribute('data-bands-render') === 'gpu' || !all.homeline
+  // L12: the loading screen's bar follows the warm-up's real loads (tiles fetched, terrain, field)
+  let tiles = { done: 0, total: 0 }
+  const report = (): void => {
+    const parts = [tiles.total ? tiles.done / tiles.total : 0, terrainSettled() ? 1 : 0, fieldSettled() ? 1 : 0]
+    setLoadProgress(STAGE.warm + (STAGE.frame0 - STAGE.warm) * (parts.reduce((a, b) => a + b, 0) / parts.length))
+  }
+  void descentTileSets()
+    .then((sets) => {
+      const urls = descentTiles(storyPoses(d), sets, { width: c.clientWidth, height: c.clientHeight }, { factor: ELEVATION_FACTOR, exaggeration: exaggeration() }, url)
+      tiles = { done: 0, total: urls.length }
+      return prefetch(urls, { onEach: () => ((tiles.done += 1), report()) })
+    })
+    .catch(() => 0)
   const end = performance.now() + WARMUP_MAX_MS
   const left = (): number => Math.max(0, end - performance.now())
-  await until(map, () => signal.stopped || (terrainSettled() && fieldSettled()), left())
+  await until(map, () => (report(), signal.stopped || (terrainSettled() && fieldSettled())), left())
   await Promise.race([stage.pending, after(left())])
   if (!signal.stopped) await mapIdle(map, left())
   if (signal.stopped) return
+  setLoadProgress(STAGE.frame0)
   stage.apply(s0)
   const end0 = performance.now() + FIRST_FRAME_MAX_MS
   await Promise.race([stage.pending, after(FIRST_FRAME_MAX_MS)])
@@ -214,15 +226,29 @@ function runCapture(stage: StoryStage, d: Director, sb: Storyboard): CaptureApi 
 /** Start the story the page asks for, if any; returns a stop function. */
 export function attachStory(cmap: ConsoleMap, req: StoryRequest = storyRequest(storyParams(location.search, location.hash), { reduced: ui.reducedMotion.peek(), introSeen: ui.introSeen.peek(), legacy: false })): () => void {
   const signal = { stopped: false }
-  if (!req) return () => undefined
+  // L12: the viewer skipped from the loading screen before the story got here
+  if (!req || (req.kind === 'intro' && introSkipRequested())) {
+    loadingDone()
+    return () => undefined
+  }
   if (req.kind === 'intro') ui.introSeen.value = true // in memory: once per page session (no browser storage)
   let stage: StoryStage | null = null
+  // L12: 'Skip intro' on the loading screen stops the story wherever it is (loading, warm-up, playing)
+  let skipped = (): void => undefined
+  const onSkip = new Promise<void>((r) => (skipped = r))
+  const skip = (): void => {
+    signal.stopped = true
+    skipped()
+  }
+  const unSkip = req.kind === 'capture' ? () => undefined : onIntroSkip(skip)
   void (async () => {
     const id = req.kind === 'capture' ? req.id : req.kind === 'demo' ? 'kiosk' : 'intro'
     const reduced = req.kind === 'capture' ? false : ui.reducedMotion.peek()
+    setLoadProgress(STAGE.map)
     const [sb] = await Promise.all([loadStoryboard(id), cmap.whenReady()])
     const d = await makeDirector(sb, reduced)
-    if (signal.stopped) return
+    if (signal.stopped) return loadingDone()
+    setLoadProgress(STAGE.warm)
     const chrome: ChromePolicy = req.kind === 'capture' ? (req.chrome ? 'shown' : 'hidden') : 'story'
     stage = new StoryStage(cmap, chrome)
     if (req.kind === 'capture') {
@@ -232,12 +258,6 @@ export function attachStory(cmap: ConsoleMap, req: StoryRequest = storyRequest(s
     }
     // input during the warm-up skips the story like input during it: the app is restored in the
     // input's own microtasks, before its click lands (the click acts on the restored app, D9)
-    let skipped = (): void => undefined
-    const onSkip = new Promise<void>((r) => (skipped = r))
-    const skip = (): void => {
-      signal.stopped = true
-      skipped()
-    }
     for (const ev of INPUTS) window.addEventListener(ev, skip, { capture: true, passive: true })
     await Promise.race([warmUp(stage, d, signal), onSkip]).finally(() => {
       for (const ev of INPUTS) window.removeEventListener(ev, skip, true)
@@ -252,13 +272,19 @@ export function attachStory(cmap: ConsoleMap, req: StoryRequest = storyRequest(s
     stage.restore(why === 'end')
     stage = null
     if (req.kind === 'demo') dropStoryParams()
-  })().catch((e) => {
-    console.warn('story unavailable:', e)
-    stage?.restore(false)
-    stage = null
-  })
+  })()
+    .catch((e) => {
+      console.warn('story unavailable:', e)
+      stage?.restore(false)
+      stage = null
+    })
+    .finally(() => {
+      unSkip()
+      if (req.kind !== 'capture') loadingDone() // L12: never leave the loading screen up
+    })
   return () => {
     signal.stopped = true
+    skipped()
     if (req.kind === 'capture') delete window.__capture
   }
 }

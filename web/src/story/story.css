@@ -73,3 +73,27 @@ html[data-story-capture] .dummy-banner:not([hidden]) {
   inset: 0 0 auto 0;
   z-index: 11;
 }
+
+/* L12 (D111): a live story (intro, kiosk) fills the whole viewport, 100dvw x 100dvh, until the chrome is
+   revealed or the story ends (stage.ts, html[data-story-full]). The map leaves the shell grid; the
+   shell chrome (top bar, rail, drawers, dock / timeline, panel) stays invisible (opacity 0 above) but
+   is lifted above the map, so the first click still both skips the story and reaches its target (D9).
+   The collapse headline waits for the end of the intro too. */
+html[data-story-full] .console-map {
+  position: fixed;
+  inset: 0;
+  width: 100dvw;
+  height: 100dvh;
+  z-index: 10;
+}
+html[data-story-full] :is(.hl-topbar, .hl-rail, .hl-sidebar, .hl-dock, .hl-shell__overlay, .console-panel) {
+  position: relative;
+  z-index: 11;
+}
+html[data-story-full] .collapse-headline { visibility: hidden; }
+/* dummy data is never shown unmarked: the banner stays on top of the full-screen story */
+html[data-story-full] .dummy-banner:not([hidden]) {
+  position: fixed;
+  inset: 0 0 auto 0;
+  z-index: 12;
+}

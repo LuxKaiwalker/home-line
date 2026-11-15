@@ -15,6 +15,7 @@ import { t, type CopyKey } from '../ui/copy'
 import { CAMERA_MS, ELEVATION_FACTOR, PANEL_MS } from './config'
 import { addReliefLow, removeReliefLow, setReliefLowVisible } from './descent'
 import type { DirectorState } from './director'
+import { introPlaying, loadingDone } from './loading'
 import './story.css'
 
 /** Storyboard layer id -> console layer groups. terrain and relief_low are handled apart. */
@@ -86,6 +87,8 @@ export class StoryStage {
     this.caption.setAttribute('aria-live', 'polite')
     this.map.getContainer().append(this.caption)
     document.documentElement.dataset.story = 'on'
+    // L12 (D111): a live story fills the viewport (story.css) until its chrome is revealed or it ends
+    if (chrome === 'story') document.documentElement.dataset.storyFull = 'on'
     this.setChrome(chrome === 'shown' ? 'reveal' : chrome === 'hidden' ? 'hide' : undefined)
     // live runs only: a capture places the labels on every frame (frame-exact)
     this.paused = chrome === 'story'
@@ -112,6 +115,14 @@ export class StoryStage {
     if (this.chromeWant === this.last.chrome) return
     this.last.chrome = this.chromeWant
     document.documentElement.dataset.storyChrome = this.chromeWant
+    // L12: the chrome fading back in ends the full-screen intro and its loading screen controls
+    if (this.chromeWant === 'show' && this.chrome === 'story') this.endFullscreen()
+  }
+
+  /** L12 (D111): the map goes back into the shell and the loading screen (with its buttons) goes. */
+  private endFullscreen(): void {
+    delete document.documentElement.dataset.storyFull
+    loadingDone()
   }
 
   /** M10c warm-up: hide the map canvas and its markers while layers and tiles load out of sight. */
@@ -131,6 +142,7 @@ export class StoryStage {
     if (on) document.documentElement.dataset.storyWarm = 'on'
     else delete document.documentElement.dataset.storyWarm
     if (!on) this.writeChrome() // M10d: the chrome state of frame 0 lands with t = 0
+    if (!on && this.chrome === 'story') introPlaying() // L12: the loading screen fades into the intro
   }
 
   /** True when the relief backdrop the state asks for is still loading (capture waits for it). */
@@ -208,6 +220,7 @@ export class StoryStage {
     if (this.touchedSelection) setSelectedLabel(sv.selection)
     delete document.documentElement.dataset.story
     delete document.documentElement.dataset.storyChrome
+    this.endFullscreen()
     const cam = { center: sv.center, zoom: sv.zoom, bearing: sv.bearing, pitch: sv.pitch }
     if (animate && !ui.reducedMotion.peek()) this.map.easeTo({ ...cam, duration: CAMERA_RETURN_MS })
     else this.map.jumpTo(cam)
