@@ -1157,7 +1157,16 @@
           "imageAlt": "{camera} raw image ({instrument}), sol {sol}, taken {taken}",
           "truncated": "Long stay or many frames: only the first sols and pages were searched.",
           "credit": "Raw images, NASA/JPL-Caltech/MSSS ·",
-          "archive": "raw-image archive"
+          "archive": "raw-image archive",
+          "viewer": {
+            "label": "Raw image {n} of {total}",
+            "caption": "{camera} · {instrument} · sol {sol} · {taken}",
+            "predates": "Taken on the drive's sol: may predate the drive.",
+            "open": "Open on mars.nasa.gov",
+            "prev": "Previous image",
+            "next": "Next image",
+            "close": "Close image"
+          }
         }
       }
     },

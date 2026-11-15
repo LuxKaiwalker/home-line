@@ -1,13 +1,14 @@
 // L1b: the drive-end pop-up card (ui/layout MarkerCard, L2e pattern), ported from the Mission Planer's
 // StopPhotos (mission/LayersControl.tsx). Navcam frames by site/drive, Mastcam by parked sol with the
 // "may predate the drive" note; thumbnails lazy-loaded, alt text from the image metadata.
-import { useEffect, useState } from 'preact/hooks'
+import { useEffect, useRef, useState } from 'preact/hooks'
 import { useSignalValue } from '../../../state/signal'
 import { ChipMark } from '../../../ui/components'
 import { MarkerCard, type CardMap } from '../../../ui/layout'
 import { t } from '../../../ui/copy'
 import { loadStopImages, RAW_IMAGE_PAGE, unavailableReason, type Camera, type DriveEnd, type StopImages } from './nasa'
 import { CURIOSITY_CARD, curiositySelected, curiosityStatus, curiosityStop } from './store'
+import { ImageViewer } from './Viewer'
 import './curiosity.css'
 
 /** thumbnails per camera before "Show all" */
@@ -46,10 +47,14 @@ type Load = { kind: 'loading' } | { kind: 'ready'; res: StopImages } | { kind: '
 export function StopPhotos({ stop, next }: { stop: DriveEnd; next: DriveEnd | null }) {
   const [st, setSt] = useState<Load>({ kind: 'loading' })
   const [more, setMore] = useState<Partial<Record<Camera, boolean>>>({})
+  // F14: the open image (index into the stop's images, Mastcam first) and the thumbnail that opened it
+  const [view, setView] = useState<number | null>(null)
+  const opener = useRef<HTMLElement | null>(null)
 
   useEffect(() => {
     const ac = new AbortController()
     setSt({ kind: 'loading' })
+    setView(null)
     loadStopImages(stop, next, ac.signal).then(
       (res) => !ac.signal.aborted && setSt({ kind: 'ready', res }),
       (e) => !ac.signal.aborted && setSt({ kind: 'unavailable', reason: t(`route.layers.curiosity.reasons.${unavailableReason(e)}`) }),
@@ -57,6 +62,13 @@ export function StopPhotos({ stop, next }: { stop: DriveEnd; next: DriveEnd | nu
     return () => ac.abort()
   }, [stop.rmc, next?.rmc])
 
+  const ordered = st.kind === 'ready' ? (['mastcam', 'navcam'] as const).flatMap((c) => st.res.images.filter((i) => i.camera === c)) : []
+  const closeView = () => {
+    setView(null)
+    const o = opener.current
+    opener.current = null
+    o?.focus()
+  }
   const sols = st.kind === 'ready' ? st.res.sols : [stop.sol]
   const solTxt = sols.length > 1 ? t('route.layers.curiosity.card.sols', { first: sols[0], last: sols[sols.length - 1] }) : t('route.layers.curiosity.card.sol', { sol: sols[0] })
   return (
@@ -87,9 +99,18 @@ export function StopPhotos({ stop, next }: { stop: DriveEnd; next: DriveEnd | nu
                     const taken = fmtTaken(i.takenUtc)
                     return (
                       <li key={i.id}>
-                        <a href={i.url} target="_blank" rel="noopener noreferrer" title={t('route.layers.curiosity.card.imageTitle', { instrument: i.instrument, sol: i.sol, taken })}>
+                        <button
+                          type="button"
+                          class="hl-curiosity__thumb"
+                          aria-haspopup="dialog"
+                          title={t('route.layers.curiosity.card.imageTitle', { instrument: i.instrument, sol: i.sol, taken })}
+                          onClick={(e) => {
+                            opener.current = e.currentTarget as HTMLElement
+                            setView(ordered.indexOf(i))
+                          }}
+                        >
                           <img src={i.thumbUrl} loading="lazy" decoding="async" referrerpolicy="no-referrer" alt={t('route.layers.curiosity.card.imageAlt', { camera: cameraName(i.camera), instrument: i.instrument, sol: i.sol, taken })} />
-                        </a>
+                        </button>
                       </li>
                     )
                   })}
@@ -103,6 +124,9 @@ export function StopPhotos({ stop, next }: { stop: DriveEnd; next: DriveEnd | nu
             </section>
           )
         })}
+      {view !== null && ordered[view] && (
+        <ImageViewer images={ordered} index={view} onIndex={setView} onClose={closeView} stopSol={stop.sol} cameraName={cameraName} fmtTaken={fmtTaken} live={<LiveLabel />} />
+      )}
       {st.kind === 'ready' && (
         <p class="hl-curiosity__note">
           {st.res.truncated ? `${t('route.layers.curiosity.card.truncated')} ` : ''}

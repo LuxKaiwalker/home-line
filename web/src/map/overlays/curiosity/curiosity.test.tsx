@@ -274,3 +274,77 @@ describe('copy (route.layers.curiosity in ui/copy.json)', () => {
     expect(t('route.layers.curiosity.privacy')).toContain('mars.nasa.gov')
   })
 })
+
+describe('F14: thumbnails open the raw-image viewer', () => {
+  const stop: DriveEnd = { rmc: '107_2484', sol: 4200, site: 107, drive: 2484, lon: 137.4, lat: -4.78, distM: 12, totalM: 34000 }
+  const item = (id: string, inst: string, sol: number, drive: number | null = null) => ({ imageid: id, instrument: inst, sol, site: drive ? 107 : null, drive, https_url: `https://mars.nasa.gov/${id}.jpg`, image_files: { small: `https://mars.nasa.gov/${id}-s.jpg` }, date_taken: '2024-05-30T12:34:56.000Z', extended: { sample_type: 'full' } })
+  const viewer = () => byClass(document.body as unknown as FakeNode, 'hl-curiosity-viewer')
+  const act_ = (root_: FakeNode, a: string) => all(root_, (n) => n.getAttribute('data-act') === a)[0]
+
+  async function open() {
+    fetchMock.mockImplementation(async (u: string) => {
+      const sol = Number(/condition_2=(\d+)/.exec(u)![1])
+      return ok({ items: sol === 4200 ? [item('m1', 'MAST_LEFT', 4200), item('n1', 'NAV_LEFT_B', 4200, 2484)] : [], more: false })
+    })
+    act(() => render(<StopPhotos stop={stop} next={null} />, root as unknown as Element))
+    await flush()
+    const calls = fetchMock.mock.calls.length
+    const thumbs = byClass(root, 'hl-curiosity__thumb')
+    expect(thumbs).toHaveLength(2)
+    return { thumbs, calls }
+  }
+
+  it('thumbnails are buttons named by their alt text; a click opens the viewer with caption, live label and the NASA link', async () => {
+    const { thumbs, calls } = await open()
+    expect(thumbs[0].localName).toBe('button')
+    expect(thumbs[0].getAttribute('type')).toBe('button')
+    expect(byTag(thumbs[0], 'img')[0].getAttribute('alt')).toContain('MAST_LEFT')
+    expect(byTag(thumbs[0], 'img')[0].getAttribute('src')).toBe('https://mars.nasa.gov/m1-s.jpg')
+    act(() => void thumbs[0].dispatch('click'))
+    const v = viewer()
+    expect(v).toHaveLength(1)
+    const dlg = byClass(v[0], 'hl-curiosity-viewer__box')[0]
+    expect(dlg.getAttribute('role')).toBe('dialog')
+    expect(dlg.getAttribute('aria-modal')).toBe('true')
+    expect(byTag(v[0], 'img')[0].getAttribute('src')).toBe('https://mars.nasa.gov/m1.jpg')
+    expect(v[0].textContent).toContain('MAST_LEFT')
+    expect(v[0].textContent).toContain('sol 4200')
+    expect(v[0].textContent).toContain('2024-05-30 12:34:56 UTC')
+    expect(v[0].textContent).toContain(t('route.layers.curiosity.card.viewer.predates'))
+    expect(v[0].textContent).toContain(t('route.layers.curiosity.live'))
+    const link = byTag(v[0], 'a')[0]
+    expect(link.textContent).toBe(t('route.layers.curiosity.card.viewer.open'))
+    expect(link.getAttribute('href')).toBe('https://mars.nasa.gov/m1.jpg')
+    expect(link.getAttribute('target')).toBe('_blank')
+    expect(link.getAttribute('rel')).toBe('noopener noreferrer')
+    expect(fetchMock.mock.calls.length).toBe(calls) // no new API requests
+    expect((document as unknown as { activeElement: FakeNode }).activeElement).toBe(act_(v[0], 'close'))
+  })
+
+  it('prev/next walk the stop images (wrapping); Esc closes and focus returns to the thumbnail', async () => {
+    const { thumbs } = await open()
+    act(() => void thumbs[0].dispatch('click'))
+    let v = viewer()[0]
+    act(() => void act_(v, 'next').dispatch('click'))
+    v = viewer()[0]
+    expect(byTag(v, 'img')[0].getAttribute('src')).toBe('https://mars.nasa.gov/n1.jpg')
+    expect(v.textContent).toContain('NAV_LEFT_B')
+    expect(v.textContent).not.toContain(t('route.layers.curiosity.card.viewer.predates'))
+    act(() => void act_(v, 'next').dispatch('click'))
+    expect(byTag(viewer()[0], 'img')[0].getAttribute('src')).toBe('https://mars.nasa.gov/m1.jpg')
+    act(() => void act_(viewer()[0], 'prev').dispatch('click'))
+    expect(byTag(viewer()[0], 'img')[0].getAttribute('src')).toBe('https://mars.nasa.gov/n1.jpg')
+    const box = byClass(viewer()[0], 'hl-curiosity-viewer__box')[0]
+    act(() => void box.dispatch('keydown', { key: 'Escape' }))
+    expect(viewer()).toHaveLength(0)
+    expect((document as unknown as { activeElement: FakeNode }).activeElement).toBe(thumbs[0])
+  })
+
+  it('the close button closes the viewer', async () => {
+    const { thumbs } = await open()
+    act(() => void thumbs[1].dispatch('click'))
+    expect(byTag(viewer()[0], 'img')[0].getAttribute('src')).toBe('https://mars.nasa.gov/n1.jpg')
+    act(() => void act_(viewer()[0], 'close').dispatch('click'))
+    expect(viewer()).toHaveLength(0)
+  })
+})

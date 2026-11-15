@@ -18,7 +18,20 @@
 .hl-curiosity__cam { display: flex; flex-direction: column; gap: var(--space-1); }
 .hl-curiosity__cam-title { margin: 0; font-size: var(--font-size-small); line-height: var(--line-height-small); font-weight: var(--font-weight-label); color: var(--color-text); }
 .hl-curiosity__grid { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(4, 1fr); gap: var(--space-1); }
-.hl-curiosity__grid a { display: block; border-radius: var(--radius-input); overflow: hidden; background: var(--color-bg); }
-.hl-curiosity__grid a:focus-visible { outline: var(--line-focus-ring) solid var(--color-select); outline-offset: var(--line-focus-ring); }
+.hl-curiosity__grid .hl-curiosity__thumb { display: block; width: 100%; padding: 0; border: 0; cursor: zoom-in; border-radius: var(--radius-input); overflow: hidden; background: var(--color-bg); }
+.hl-curiosity__grid .hl-curiosity__thumb:focus-visible { outline: var(--line-focus-ring) solid var(--color-select); outline-offset: var(--line-focus-ring); }
 .hl-curiosity__grid img { display: block; width: 100%; aspect-ratio: 1; object-fit: cover; }
 .hl-curiosity__note a { color: var(--color-text); }
+
+/* F14: the raw-image viewer (portalled to body, above the map and the plan chrome) */
+.hl-curiosity-viewer { position: fixed; inset: 0; z-index: 60; display: flex; align-items: center; justify-content: center; padding: var(--space-4); background: color-mix(in srgb, var(--color-bg) 85%, transparent); }
+.hl-curiosity-viewer__box { display: flex; flex-direction: column; gap: var(--space-2); max-width: 100%; max-height: 100%; padding: var(--space-3); background: var(--color-card); border: 1px solid var(--color-card-border); border-radius: var(--radius-input); color: var(--color-text); }
+.hl-curiosity-viewer__head, .hl-curiosity-viewer__foot { display: flex; align-items: center; gap: var(--space-2); }
+.hl-curiosity-viewer__count { flex: 1; font-size: var(--font-size-small); line-height: var(--line-height-small); color: var(--color-text-muted); }
+.hl-curiosity-viewer__foot { justify-content: space-between; }
+.hl-curiosity-viewer__fig { margin: 0; display: flex; flex-direction: column; gap: var(--space-1); min-height: 0; }
+.hl-curiosity-viewer__fig img { display: block; max-width: 100%; max-height: 70vh; object-fit: contain; background: var(--color-bg); }
+.hl-curiosity-viewer__cap { font-size: var(--font-size-small); line-height: var(--line-height-small); color: var(--color-text-muted); }
+.hl-curiosity-viewer__btn { padding: var(--space-1) var(--space-2); font: inherit; color: var(--color-text); background: transparent; border: 1px solid var(--color-card-border); border-radius: var(--radius-input); cursor: pointer; }
+.hl-curiosity-viewer__btn:focus-visible, .hl-curiosity-viewer__open:focus-visible { outline: var(--line-focus-ring) solid var(--color-select); outline-offset: var(--line-focus-ring); }
+.hl-curiosity-viewer__open { color: var(--color-text); font-size: var(--font-size-small); }
