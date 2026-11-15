@@ -1,4 +1,4 @@
-# Simulator bundle contracts (D41) — v1.1.0
+# Simulator bundle contracts (D41) — v1.1.1
 
 **Frozen 2026-11-14 20:00 CET.** Owner C. Later changes come only as a version bump with a
 note to the Unity team (AGENTS.md rule 4). This family is versioned on its own; the web contracts in `contracts/` keep their own 1.1.x line.
@@ -7,6 +7,9 @@ the simulator plan format (section "Mission file"). Every v1 schema below keeps
 `"x-contract-version": "1.0.0"`, and the zips, their `contract_version` (`tools/make_bundle.py`,
 `GET /api/v1/engine/version` `bundle_contract_version`) and the committed fixture stay 1.0.0,
 byte-unchanged.
+**v1.1.1 (2026-11-15, D110, additive):** `mission.schema.json` `origin` also `precomputed` (the
+official plan, `web/public/sim/official/mission.json`); `"x-contract-version": "1.1.1"`, while
+`schema_version` inside a mission file stays `"1.1.0"`, so every 1.1.0 file stays valid.
 
 Sources: SPEC §11 **D40** (backend, set A 17:16) and **D41** (Unity handover, set A 17:24); the
 handover page "EVA simulation module — handover data from the planner" (parts A, B, D, E); the
@@ -35,7 +38,7 @@ schema `bundle.schema.json`), then every other entry sorted by path.
 | --- | --- | --- |
 | `plan.schema.json` | `plan.json` in a plan bundle (and as served alone) | plan id, pad (official / picker / custom), scenario (variant, suit), station order, EVA start (LMST, D31), storm replay key (D39), engine commit, config hash, contract version, created UTC, origin `precomputed` / `computed_live` + label (D40), `dummy: false` |
 | `bundle.schema.json` | `index.json` of both zips | kind `plan` / `world`, ids, version check fields, frame, bounds, **every file** with path, media type, bytes, sha256, role, frame, units, contract, grid header (`.f32`), source (path + sha256 + transform), status |
-| `mission.schema.json` | `mission.json` (on its own, not in a zip) | **v1.1.0, D103: the plan the simulator reads**: waypoints, legs, path, planned timeline, totals; origin `mission_planer` / `computed_live` (section "Mission file") |
+| `mission.schema.json` | `mission.json` (on its own, not in a zip) | **v1.1.1, D103 (D110: + `precomputed`): the plan the simulator reads**: waypoints, legs, path, planned timeline, totals; origin `mission_planer` / `computed_live` / `precomputed` (section "Mission file") |
 | `route_local.schema.json` | `route.json` | route every 1 m, pad-local; **superseded for routes by `mission.json` (D103)**, kept for v1 readers |
 | `points.schema.json` | `points.json` | pad, stations, access cells, pad-local |
 | `sun.schema.json` | `conditions/sun.json` | from WS4 `clock.json` |
@@ -159,7 +162,7 @@ of it.
 settings: rate limits, CORS, gates). The fixture is unchanged (byte-identical rebuild). The backend's
 result hash uses the same rule (`contracts/backend/README.md`).
 
-## Mission file (v1.1.0, D103)
+## Mission file (v1.1.1, D103)
 
 **D103 (team lead, 2026-11-15 11:35): `mission.json` is the simulator plan format.** It settles
 D76's open "compiled plan" format. For routes it supersedes the plan bundle's `route.json`
@@ -192,13 +195,13 @@ Deviation in the simulator = live value − the planned value at the same EVA mi
 linear in t) or at the nearest `path` row (cross-track distance). Status colours follow SPEC
 F18: margin > `margin_amber_min` green, 0 … amber, < 0 red "TURN BACK NOW".
 
-**`origin`** says who computed the numbers; neither is part of the validated scorecard, and
-`origin_label` says so on screen:
+**`origin`** says who computed the numbers, and `origin_label` says so on screen:
 
 | `origin` | Numbers from | `planner.routing_grid_res_m` | `origin_label` |
 | --- | --- | --- | --- |
 | `mission_planer` | browser estimates on the 5 m routing grid (`mission/data.ts`), not WS2's validated 3 m results | 5 | "Mission Planer: browser estimate on the 5 m grid, not part of the validated scorecard" |
 | `computed_live` | a live engine job (WP9b): legs, path, timeline and summary from the engine's route on its 3 m grid, not the 5 m browser grid | 3 | `config/backend.yaml labels.live`: "Computed live · not part of the validated scorecard" |
+| `precomputed` | the official plan as published in `web/public/data` (D110, WP9c): the engine's own route (F9) of the default scenario, its numbers copied, not recomputed; `tools/make_mission.py --official` (`make mission-official`) writes `web/public/sim/official/mission.json` (outside `web/public/data`, which stays byte-identical); the server serves it as `GET /api/v1/results/{official hash}/mission.json` | 3 | `config/backend.yaml labels.precomputed`: "Precomputed · official plan" |
 
 Unknown values are `null`; an unrouted leg makes `feasible` false and `timeline` null.
 `mission_id` = `"m-"` + the first 12 hex of the sha256 of the compact JSON (`JSON.stringify`) of
@@ -222,3 +225,4 @@ back along the same cells). Tests: `tests/test_mission_contract.py`.
 | 1.0.0 | 2026-11-14 20:00 | frozen: plan, bundle, route_local, points, sun, storm, config_snapshot; fixture `official_pad_v1` |
 | 1.0.0 | 2026-11-14 | D57 clarification: `config_hash` leaves out `backend.yaml` (no schema change) |
 | 1.1.0 | 2026-11-15 | D103, additive: `mission.schema.json` (from `origin/waypoint-routing`, N0CEO) is the simulator plan format, `origin` also `computed_live`; `route_local` superseded for routes, kept; v1 schemas, zips and fixture unchanged (1.0.0) |
+| 1.1.1 | 2026-11-15 | D110, additive: `mission.schema.json` `origin` also `precomputed` (label `labels.precomputed`), for the official plan's `web/public/sim/official/mission.json`; `schema_version` stays 1.1.0, so 1.1.0 files stay valid; nothing else changed |

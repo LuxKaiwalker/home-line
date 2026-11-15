@@ -12,7 +12,7 @@ describe('live config', () => {
   it('limits from config/backend.yaml', () => {
     expect(API_PREFIX).toBe('/api/v1')
     expect(HEALTH_TIMEOUT_MS).toBe(2000)
-    expect(JOB_TIMEOUT_MS).toBe(600_000)
+    expect(JOB_TIMEOUT_MS).toBe(1_200_000)
   })
 
   it('no single request may be held open near the 95 s cap; polling never exceeds the request timeout', () => {

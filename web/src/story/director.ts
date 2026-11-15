@@ -8,7 +8,8 @@
 // - Camera keyframes are reached at their t; between two keyframes the camera eases (ease-in-out:
 //   target lon/lat linear, height in log space, bearing along the shorter arc, pitch linear). Missing
 //   alt/bearing/pitch keep the previous keyframe's. Before the first keyframe: the first; after the
-//   last: the last. Reduced motion: cuts (the latest keyframe at or before t, no in-between).
+//   last: the last. Reduced motion: cuts (the latest keyframe at or before t, no in-between); a follow
+//   keyframe (the chase camera) cuts to the crew every `cutS` seconds instead of gliding (L10/D111).
 // - Target codes resolve through `targets` (labels.json); FOLLOW_TARGET ("CREW") is the flythrough
 //   follow camera at the storyboard clock (`follow`).
 // - field.collapse eases from the value in force over duration_s (default collapse.duration_s,
@@ -58,6 +59,8 @@ export interface DirectorOptions {
   reduced: boolean
   /** default camera height (m) when the first keyframe gives none */
   defaultAltM?: number
+  /** reduced motion: the follow camera cuts every this many storyboard seconds (camera.flythrough.reduced_cut_s) */
+  cutS?: number
 }
 
 /** Sentinel for "no camera keyframe resolved". */
@@ -69,7 +72,7 @@ export class Director {
   readonly sb: Storyboard
   readonly duration: number
   private readonly o: DirectorOptions
-  private readonly keys: { t: number; pose: PoseFn }[] = []
+  private readonly keys: { t: number; pose: PoseFn; follow: boolean }[] = []
 
   constructor(sb: Storyboard, o: DirectorOptions) {
     this.sb = sb
@@ -87,7 +90,7 @@ export class Director {
       const c = s.camera
       const filled = { alt_m: c.alt_m ?? prev.alt_m, bearing: c.bearing ?? prev.bearing, pitch: c.pitch ?? prev.pitch }
       prev = filled
-      this.keys.push({ t: s.t, pose: this.poseFn(c, filled) })
+      this.keys.push({ t: s.t, pose: this.poseFn(c, filled), follow: c.target === FOLLOW_TARGET })
     }
   }
 
@@ -176,6 +179,24 @@ export class Director {
     }
   }
 
+  /** The storyboard clock at t (the clock part of stateAt). */
+  clockAt(t: number): ClockState | null {
+    let clock: ClockState | null = null
+    let clockAt = 0
+    const run = (c: ClockState, since: number, now: number): ClockState => ({
+      ...c,
+      tMin: Math.min(this.o.tMax, Math.max(0, c.tMin + (c.playing ? c.speed * (now - since) : 0))),
+    })
+    for (const s of this.sb.steps) {
+      if (s.t > t) break
+      if (!s.clock) continue
+      const cur: ClockState = clock ? run(clock, clockAt, s.t) : { tMin: 0, playing: false, speed: 1 }
+      clock = { tMin: s.clock.t_min ?? cur.tMin, playing: s.clock.playing ?? cur.playing, speed: s.clock.speed ?? cur.speed }
+      clockAt = s.t
+    }
+    return clock ? run(clock, clockAt, t) : null
+  }
+
   private cameraAt(t: number, clock: ClockState | null): CameraPose | null {
     const K = this.keys
     if (!K.length) return null
@@ -184,6 +205,12 @@ export class Director {
     if (i < 0) return K[0].pose(clock)
     const a = K[i]
     const b = K[i + 1]
+    if (this.o.reduced && a.follow && (this.o.cutS ?? 0) > 0) {
+      // L10: stepped cuts: the chase pose of the last cut time (a fixed grid from the keyframe)
+      const cut = this.o.cutS as number
+      const tq = a.t + Math.floor((t - a.t) / cut + 1e-9) * cut
+      return a.pose(this.clockAt(tq))
+    }
     if (!b || this.o.reduced) return a.pose(clock)
     const span = b.t - a.t
     const pa = a.pose(clock)

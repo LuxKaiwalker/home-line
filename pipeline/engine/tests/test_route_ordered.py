@@ -271,6 +271,114 @@ def test_timed_dose_violation(world, tmp_path):
     _check_partial(res, tmp_path, leg)
 
 
+def _window_storm(t0, t1, tau_min):
+    """dose_fn whose storm (tau_dose = tau_min) covers EVA minutes [t0, t1] whatever t* is;
+    records every t* it is called with (D39 places t*, the storm here does not move)."""
+    calls = []
+    peak = 0.5 * 60.0 / tau_min
+
+    def fn(ts):
+        calls.append(ts)
+        t = np.array([-1000.0, t0 - 0.05, t0, t1, t1 + 0.05, 2000.0])
+        r = np.array([0.01, 0.01, peak, peak, 0.01, 0.01])
+        return DoseTiming(ts, t, r, 0.5, 0.0, "synthetic window storm (test)")
+
+    fn.calls = calls
+    return fn
+
+
+def _o2_fails_on(world, order, leg, short=7.0):
+    """MarginInputs with the O2 capacity cut so leg `leg` of `order` is `short` min late on the
+    O2 term (effort-cap rate, D45) and every earlier leg still passes."""
+    g, pad, p, tab, home, st = world
+    legs = _legs_of(world, order)
+    mi = margin.inputs(p)
+    t, lp = legs[leg]
+    lat = latest_departure_terms(mi, 0.0, 0.0, mi.o2_rate_l_min, lp["tau"], lp["o2"],
+                                 lp["t_home"], lp["o2_home"])["O2"]  # fmt: skip
+    mi2 = replace(mi, o2_capacity_l=mi.o2_capacity_l - (lat - t + short) * mi.o2_rate_l_min)
+    for t, lp in legs[:leg]:
+        lat = latest_departure_terms(mi2, 0.0, 0.0, mi2.o2_rate_l_min, lp["tau"], lp["o2"],
+                                     lp["t_home"], lp["o2_home"])  # fmt: skip
+        assert t <= min(lat.values())
+    res = _plan(world, mi=mi2, route=order)
+    assert (res.feasibility["leg"], res.feasibility["limit"]) == (leg, "O2")
+    return mi2, res
+
+
+def _leg_window(legs, i):
+    """(departure, arrival) EVA minutes of walked leg i: legs = Result.leg_paths."""
+    return legs[i]["t_start"], legs[i]["t_start"] + float(legs[i]["tau"][-1])
+
+
+def test_dose_fails_before_the_o2_leg(world, tmp_path):
+    """(d) team-lead review of #117: O2 fails on the way home (leg 3), but a storm on leg 1
+    (S1 -> S2) breaks the timed dose term on the walked legs first. The answer is leg 1, dose,
+    with shortfall = the lowest dose margin on leg 1 (dwell at S1 included); only leg 0 is
+    walked and written. t* is placed as for any infeasible route: on the walked legs 0..2."""
+    order = ["S1", "S2", "S3"]
+    full = _plan(world, route=order)  # the feasible walk: track times and T_home of the order
+    t, th = full.track[0], full.track[2]
+    d1, a1 = _leg_window(full.leg_paths, 1)
+    fn = _window_storm(d1 + 0.2, d1 + 6.0, 2.0)
+    mi2, o2_only = _o2_fails_on(world, order, 3)
+    assert o2_only.feasibility["legs_planned"] == 3  # today's answer without the storm
+    res = _plan(world, mi=mi2, route=order, dose_fn=fn)
+    # t*: the walked route (legs 0..2, up to the arrival at S3), first max of T_home
+    _d2, a2 = _leg_window(full.leg_paths, 2)
+    walked = t <= a2 + 1e-9
+    exp_ts = margin.t_star(t[walked], th[walked])
+    assert fn.calls == [exp_ts] and res.t_star_min == exp_ts
+    m = fn(exp_ts).tau_min(t) - th
+    assert (m[walked & (t <= d1)] >= 0).all()  # leg 0 and the dwell at S1 are clean
+    on = (t > _leg_window(full.leg_paths, 0)[1] - 1e-9) & (t <= a1 + 1e-9)
+    short = -float(np.min(m[on]))
+    assert short > 0.5
+    assert res.feasibility == {"feasible": False, "leg": 1, "from": "S1", "to": "S2",
+                               "limit": "dose", "shortfall_min": round(short, 2),
+                               "legs_planned": 1}  # fmt: skip
+    _check_partial(res, tmp_path, 1)
+    assert res.order == ["S1"] and res.value == pytest.approx(0.6)
+    assert res.total_min == pytest.approx(_leg_window(full.leg_paths, 0)[1])
+    assert res.leg_paths[0]["t_start"] == 0.0
+    assert np.array_equal(res.leg_paths[0]["cells"], full.leg_paths[0]["cells"])
+    assert [e["station"] for e in res.timeline if e["event"] == "arrive"] == ["S1"]
+    assert res.dose["t_star_min"] == round(exp_ts, 2)
+
+
+@pytest.mark.parametrize("o2_leg,storm_leg", [(3, 3), (1, 1), (1, 2)])
+def test_o2_before_the_dose_is_unchanged(world, tmp_path, o2_leg, storm_leg):
+    """(d) O2 fails on leg o2_leg; the storm sits on leg storm_leg >= o2_leg (outside the walked
+    legs), so the walked route has no dose violation: the O2 answer, legs and timeline are the
+    ones without the storm (today's behaviour)."""
+    order = ["S1", "S2", "S3"]
+    full = _plan(world, route=order)
+    dep, arr = _leg_window(full.leg_paths, storm_leg)
+    fn = _window_storm(dep + 0.2, arr, 1.0)
+    # the full order would break the dose term on storm_leg
+    viol = _plan(world, route=order, dose_fn=fn)
+    assert viol.feasibility["limit"] == "dose" and viol.feasibility["leg"] == storm_leg
+    mi2, o2_only = _o2_fails_on(world, order, o2_leg)
+    res = _plan(world, mi=mi2, route=order, dose_fn=fn)
+    assert res.feasibility == o2_only.feasibility
+    assert res.order == o2_only.order and res.total_min == o2_only.total_min
+    assert res.legs == o2_only.legs and res.route == o2_only.route
+    assert res.dose is not None and not res.dose["violation"]
+    _check_partial(res, tmp_path, o2_leg)
+
+
+def test_dose_before_o2_is_deterministic(world, tmp_path):
+    order = ["S1", "S2", "S3"]
+    full = _plan(world, route=order)
+    d1, _a1 = _leg_window(full.leg_paths, 1)
+    mi2, _ = _o2_fails_on(world, order, 3)
+    a = _plan(world, mi=mi2, route=order, dose_fn=_window_storm(d1 + 0.2, d1 + 6.0, 2.0))
+    b = _plan(world, mi=mi2, route=order, dose_fn=_window_storm(d1 + 0.2, d1 + 6.0, 2.0))
+    assert a.feasibility == b.feasibility and a.feasibility["limit"] == "dose"
+    assert _written(a, tmp_path, "a") == _written(b, tmp_path, "b")
+    assert a.dose == b.dose
+
+
 # ------------------------------------------------------------------ (e) bad stops
 
 
