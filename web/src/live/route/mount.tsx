@@ -1,4 +1,4 @@
-// Mount of the Edit-route panel (R5, D97 §3.1): a Plan rail section in live builds only. Started from
+// Mount of the Edit-route panel (R5, D97 §3.1): the Edit-route drawer (L3, D111) in live builds only. Started from
 // the live pad-tool hook of the console view (index.ts padTool, behind VITE_LIVE), so it exists only
 // while the Plan console is open and has the console map; with VITE_LIVE off none of this is in the
 // bundle path (isolation.test.ts). Text: edit/route/text.ts.
@@ -34,9 +34,11 @@ import { activeField, VARIANT_OF } from '../../map/field'
 import { mission } from '../../state/mission'
 import { officialPart } from '../../state/official'
 import { effect, signal } from '../../state/signal'
-import { offlineNoteText } from '../../edit/route/offline'
+import { offlineNoteText, RouteOfflineNote } from '../../edit/route/offline'
 import { createRouteEstimate, type RouteEstimateOptions } from '../../edit/route/instant/estimate'
-import { dockContent, registerRailSection, setDockContent, setRailCollapsed, shell, type Render } from '../../ui/shell/store'
+import { EDIT_ROUTE_ID, registerEditRoute, registerEditRouteNote } from '../../ui/shell/editroute'
+import { openContainer } from '../../ui/layout'
+import { dockContent, setDockContent, type registerRailSection, type Render } from '../../ui/shell/store'
 import { planUrl } from '../plan'
 import type { ApiClient } from '../client'
 import { bannerFor, type LiveState } from '../health'
@@ -61,6 +63,8 @@ export interface MountRouteOptions {
   stations?: readonly StationGeo[]
   probe?: (lon: number, lat: number) => StopProbe
   register?: typeof registerRailSection
+  /** I1b: where the offline note goes (default: the Edit-route drawer's note slot) */
+  registerNote?: typeof registerEditRouteNote
   /** WP12: the Live pad tool's spot while it is a valid pad (null: the plan in use); subscribe = changes */
   pad?: { pad(): LonLat | null; subscribe(fn: () => void): () => void } | null
   /** WP12: the crew panel: inputs it adds ({crew: changed fields}; null = a field is not a number) and why */
@@ -93,10 +97,9 @@ export interface RouteHandle {
 export const missionPlanKey = (c: Pick<EditCatalog, 'defaultScenario' | 'officialPadId'>) => (): string =>
   JSON.stringify([mission.plan.scenario.peek() ?? c.defaultScenario, mission.plan.budgetMin.peek(), mission.plan.pad.peek() ?? c.officialPadId])
 
-/** Open the Plan rail so the section is on screen (desktop: expanded rail; tablet: the rail sheet). */
+/** Open the Edit-route drawer so the panel is on screen (L3). */
 function revealRail(): void {
-  if (shell.breakpoint.peek() === 'tablet') shell.railSheet.value = true
-  else setRailCollapsed(false)
+  openContainer(EDIT_ROUTE_ID)
 }
 
 /** The plan the console shows now (mission state), if the catalog has it; else the default plan. */
@@ -295,7 +298,8 @@ export function mountRoutePanel(o: MountRouteOptions): () => void {
     // disabled with the offline note (L-05's text) as its reason; a running job is dropped.
     let unregister: (() => void) | null = null
     const section = () => {
-      const off = (o.register ?? registerRailSection)({
+      // L3 (D111): mounted in the Edit-route drawer (ui/shell/editroute.tsx), not the Plan rail
+      const off = (o.register ?? registerEditRoute)({
         id: ROUTE_SECTION_ID,
         modes: ['plan'],
         title: 'nav.rail.stationsRoute',
@@ -310,6 +314,9 @@ export function mountRoutePanel(o: MountRouteOptions): () => void {
       }
     }
     if (alive) unregister = section()
+    // L-05 / I1b: the offline note inside the drawer (only the server Compute plan is unavailable)
+    const noteText = signal<string | null>(ROUTE_TEXT.checkingLive)
+    offs.push((o.registerNote ?? registerEditRouteNote)({ render: () => h(RouteOfflineNote, { note: noteText, key: 'offline' }) }))
     offs.push(() => {
       unregister?.()
       unregister = null
@@ -318,7 +325,8 @@ export function mountRoutePanel(o: MountRouteOptions): () => void {
       o.onLiveState((s) => {
         const b = bannerFor(s)
         live.value = b.controls && b.heavyJobs
-        reason.value = b.controls ? (b.heavyJobs ? null : ROUTE_TEXT.heavyJobsOff) : offlineNoteText(s, b.text)
+        reason.value = b.controls ? (b.heavyJobs ? null : ROUTE_TEXT.heavyJobsOff) : null
+        noteText.value = offlineNoteText(s, b.text)
         if (!b.controls) c.reset()
         emit()
         // the engine identity (plan hash) is asked again once the server is back

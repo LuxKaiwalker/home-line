@@ -276,6 +276,7 @@ describe('Edit-route panel (Plan rail, live builds)', () => {
     const client = createApiClient({ base: 'http://api.test', fetch: flaky })
     let section: RailSection | null = null
     let registrations = 0
+    let noteSection: { render: () => unknown } | null = null
     let live: ((s: LiveState) => void) | null = null
     const computed: string[][] = []
     const saved: { text: string; name: string }[] = []
@@ -295,6 +296,10 @@ describe('Edit-route panel (Plan rail, live builds)', () => {
         section = s
         registrations++
         return () => (section = null)
+      },
+      registerNote: (s) => {
+        noteSection = s
+        return () => (noteSection = null)
       },
       estimate: {
         raf: (fn) => setTimeout(fn, 0),
@@ -319,11 +324,15 @@ describe('Edit-route panel (Plan rail, live builds)', () => {
     expect(live).not.toBeNull()
     const shown = () => {
       act(() => render(section ? ((section as RailSection).render() as ComponentChildren) : null, root as unknown as Element))
-      return { panel: q('hl-route').length, estimate: q('hl-route__estimate').length, compute: q('hl-route__compute')[0]?.hasAttribute('disabled') ?? null, reason: q('hl-route__reason').map(text) }
+      const v = { panel: q('hl-route').length, estimate: q('hl-route__estimate').length, compute: q('hl-route__compute')[0]?.hasAttribute('disabled') ?? null, reason: q('hl-route__reason').map(text) }
+      act(() => render(noteSection ? (noteSection.render() as ComponentChildren) : null, root as unknown as Element))
+      const note = q('hl-route-offline').map(text)
+      act(() => render(section ? ((section as RailSection).render() as ComponentChildren) : null, root as unknown as Element))
+      return { ...v, note }
     }
     // the panel is there with the API down; only the server Compute plan is off, with the offline note
     expect(section).not.toBeNull()
-    expect(shown()).toEqual({ panel: 1, estimate: 1, compute: true, reason: [`${ROUTE_TEXT.needsLive} ${ROUTE_TEXT.offlineNote}`] })
+    expect(shown()).toEqual({ panel: 1, estimate: 1, compute: true, reason: [ROUTE_TEXT.needsLive], note: [ROUTE_TEXT.offlineNote] })
     // route edits recompute in the browser, no server call
     const before = calls
     mode('ordered')
@@ -352,7 +361,7 @@ describe('Edit-route panel (Plan rail, live builds)', () => {
     up = true
     act(() => live!({ kind: 'ready', health: HEALTH_WARM } as LiveState))
     // /health recovers: Compute plan comes back without a reload; the route stayed
-    expect(shown()).toMatchObject({ panel: 1, compute: false, reason: [] })
+    expect(shown()).toMatchObject({ panel: 1, compute: false, reason: [], note: [] })
     await until(() => !text(q('hl-route__hash')[0]).includes(ROUTE_TEXT.hashPending), 'the identity asked again on recovery')
     act(() => live!({ kind: 'offline' } as LiveState))
     expect(shown()).toMatchObject({ panel: 1, compute: true })

@@ -8,8 +8,8 @@ Checks, in order (the same order as the web client, web/src/live/planio.ts):
    ``invalid_inputs`` with the error list as ``detail``;
 4. ``title`` at most ``limits.title_max_chars`` characters → 422 ``title_too_long``;
 5. the route (D97), exactly as POST /jobs checks it (server.engine.route.validate): a route code
-   with ``Error.stop`` (the index of the stop the detail names), or ``unsupported_inputs`` with
-   ``stop`` for a free point (not planned yet).
+   with ``Error.stop`` (the index of the stop the detail names), including a free point's grid
+   checks (503 server_data_missing when the server data grid is absent).
 
 200 ImportResult: ``hash`` (the D57 result hash, the one POST /jobs takes for the same inputs),
 ``inputs`` (canonical inputs plus the title and free-point labels, as the run record keeps
@@ -28,7 +28,7 @@ from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
 
 from server.api.compute.results import Identity
-from server.engine import jobs, version
+from server.engine import jobs, pads, version
 from server.engine import route as route_mod
 from server.engine.hashing import EngineIdentity, InvalidPlanInputs, canonical_inputs, result_hash
 from server.settings import settings
@@ -95,6 +95,8 @@ async def import_plan(request: Request, identity: Identity) -> JSONResponse:
         route_mod.validate(doc)
     except route_mod.RouteError as e:
         return _error(422, e.code, e.detail, stop=e.stop)
+    except pads.ServerDataMissing as e:  # a free point needs the server data grid
+        return _error(503, "server_data_missing", str(e))
     try:
         ident = EngineIdentity(*identity())
     except version.Unavailable as e:

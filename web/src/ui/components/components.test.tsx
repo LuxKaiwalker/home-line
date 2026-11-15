@@ -16,6 +16,8 @@ import {
   Card,
   CardSkeleton,
   CHIP_KINDS,
+  DisabledReason,
+  fromCheck,
   IconButton,
   LegendRow,
   ListRow,
@@ -23,6 +25,7 @@ import {
   Popover,
   ProvenanceTable,
   Readout,
+  reasonTitle,
   Segmented,
   Select,
   Slider,
@@ -364,6 +367,97 @@ describe('Banner, badge, tag', () => {
       expect(text(tag)).toBe(t(`tags.${kind}.label`))
       expect(tag.getAttribute('title')).toBe(t(`tags.${kind}.explanation`))
     }
+  })
+})
+
+describe('Estimate / Computed live badge (D117)', () => {
+  it('kind estimate: label and tooltip from copy, dashed neutral class, no live mark', () => {
+    mount(<Badge kind="estimate" />)
+    const b = one(byClass(root, 'hl-badge'))
+    expect(hasClass(b, 'hl-badge--estimate')).toBe(true)
+    expect(b.getAttribute('data-badge')).toBe('estimate')
+    expect(text(b)).toBe(t('hints.badges.estimate.label'))
+    expect(b.getAttribute('title')).toBe(t('hints.badges.estimate.explanation'))
+    expect(byClass(root, 'hl-chip__mark--live')).toHaveLength(0)
+  })
+  it('kind computed: "Computed live" in the live class with the live mark', () => {
+    mount(<Badge kind="computed" />)
+    const b = one(byClass(root, 'hl-badge'))
+    expect(hasClass(b, 'hl-badge--computed')).toBe(true)
+    expect(text(b)).toBe(t('hints.badges.computed.label'))
+    expect(b.getAttribute('title')).toBe(t('hints.badges.computed.explanation'))
+    one(byClass(root, 'hl-chip__mark--live'))
+  })
+  it('the two kinds read differently; computed uses the DESIGN §3.8 term', () => {
+    expect(t('hints.badges.estimate.label')).not.toBe(t('hints.badges.computed.label'))
+    expect(t('hints.badges.computed.label')).toBe('Computed live')
+  })
+})
+
+describe('Disabled reason (D117)', () => {
+  const why = t('hints.disabled.jobRunning')
+  it('a disabled Button with a reason: wrapper tooltip, own title and hidden text', () => {
+    mount(
+      <Button disabled reason={why}>
+        Go
+      </Button>,
+    )
+    const wrap = one(byClass(root, 'hl-why'))
+    expect(wrap.getAttribute('title')).toBe(why)
+    expect(wrap.getAttribute('data-reason')).toBe(why)
+    const btn = one(byTag(root, 'button'))
+    expect(btn.hasAttribute('disabled')).toBe(true)
+    expect(btn.getAttribute('title')).toBe(why)
+    expect(text(one(byClass(root, 'hl-why__sr')))).toBe(why)
+  })
+  it('an enabled Button shows no reason: its own title kept, no hidden text', () => {
+    mount(
+      <Button reason={why} title="tip">
+        Go
+      </Button>,
+    )
+    expect(one(byClass(root, 'hl-why')).hasAttribute('title')).toBe(false)
+    expect(byClass(root, 'hl-why__sr')).toHaveLength(0)
+    expect(one(byTag(root, 'button')).getAttribute('title')).toBe('tip')
+  })
+  it('no reason: no wrapper at all (DOM unchanged for existing callers)', () => {
+    mount(<Button disabled>Go</Button>)
+    expect(byClass(root, 'hl-why')).toHaveLength(0)
+    expect(one(byTag(root, 'button')).hasAttribute('title')).toBe(false)
+  })
+  it('IconButton takes a reason too', () => {
+    mount(<IconButton icon="undo-2" label={t('buttons.undo')} disabled reason={t('hints.disabled.undoEmpty')} />)
+    expect(one(byClass(root, 'hl-why')).getAttribute('title')).toBe(t('hints.disabled.undoEmpty'))
+    expect(one(byTag(root, 'button')).getAttribute('aria-label')).toBe(t('buttons.undo'))
+  })
+  it('DisabledReason wraps any control; no reason renders the control alone', () => {
+    mount(
+      <DisabledReason reason={t('hints.disabled.engineChooses')}>
+        <input type="checkbox" disabled />
+      </DisabledReason>,
+    )
+    expect(one(byClass(root, 'hl-why')).getAttribute('title')).toBe(t('hints.disabled.engineChooses'))
+    mount(
+      <DisabledReason reason={null}>
+        <input type="checkbox" />
+      </DisabledReason>,
+    )
+    expect(byClass(root, 'hl-why')).toHaveLength(0)
+    one(byTag(root, 'input'))
+    mount(
+      <DisabledReason reason={t('hints.disabled.engineChooses')} disabled={false}>
+        <input type="checkbox" />
+      </DisabledReason>,
+    )
+    expect(one(byClass(root, 'hl-why')).hasAttribute('data-reason')).toBe(false)
+  })
+  it('reasonTitle and fromCheck', () => {
+    expect(reasonTitle(true, why, 'tip')).toBe(why)
+    expect(reasonTitle(false, why, 'tip')).toBe('tip')
+    expect(reasonTitle(true, null, 'tip')).toBe('tip')
+    expect(fromCheck({ ok: true, reason: why })).toEqual({ disabled: false, reason: null })
+    expect(fromCheck({ ok: false, reason: why })).toEqual({ disabled: true, reason: why })
+    expect(fromCheck({ ok: false })).toEqual({ disabled: true, reason: null })
   })
 })
 
