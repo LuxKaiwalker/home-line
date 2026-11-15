@@ -41,6 +41,24 @@ describe('the tab\'s planner modules are the Edit-route estimate\'s code', () =>
     expect(code(a)).toEqual(code(b))
   })
 
+  // J1i: the reachable component and the stop snapping are I1a's code (compute.ts) and WP6's accessCell
+  // (map/grid.ts), line for line; only `export` and the data object's type name differ.
+  it('mission/reach.ts reachableFrom / nearestIn / accessCell = I1a compute.ts / WP6 map/grid.ts', () => {
+    const span = (rel: string, from: RegExp, to: RegExp) => {
+      const ls = code(rel).filter((l) => !/^\s*(\/\*\*|\*)/.test(l)).map((l) => l.replace(/^export function /, 'function ').replace(/\(d: (ReachData|BrowserRouteData),/, '(d: D,'))
+      const i = ls.findIndex((l) => from.test(l))
+      const j = ls.findIndex((l, k) => k > i && to.test(l))
+      expect(i).toBeGreaterThanOrEqual(0)
+      expect(j).toBeGreaterThan(i)
+      return ls.slice(i, j)
+    }
+    const reach = span('mission/reach.ts', /^const OFFSETS/, /^function accessCell/)
+    expect(reach.length).toBeGreaterThan(60)
+    expect(reach).toEqual(span('edit/route/browser/compute.ts', /^const OFFSETS/, /^function snapCell/))
+    const acc = span('mission/reach.ts', /^function accessCell/, /^export type StopCell/)
+    expect(acc).toEqual(span('edit/route/map/grid.ts', /^function accessCell/, /^(async )?function |^export /))
+  })
+
   it('mission/export.ts builds the same document as edit/route/browser/export.ts except origin_label', () => {
     // the shared port defines Waypoint/LonLat itself, allows pad kind 'picker' and has the estimate label
     const strip = (rel: string) =>
