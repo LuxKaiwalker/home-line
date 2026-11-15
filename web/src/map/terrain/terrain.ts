@@ -146,7 +146,6 @@ export function addTerrain(
     t.getMinTileElevationForLngLatZoom = (l, z) => Math.min(orig(l, z), (floor ?? 0) * exag)
     t.__hlFloor = true
   }
-  // V1: the manual tilt cap follows the camera height (zoom); a story sets its own camera
   // V1: in 3D (not in a story) the far relief replaces the planning-extent one (same tiles inside the extent)
   let farShown = false
   const reliefSwap = (): void => {
@@ -156,12 +155,22 @@ export function addTerrain(
     map.setLayoutProperty(RELIEF_FAR.layer, 'visibility', want ? 'visible' : 'none')
     map.setLayoutProperty(RELIEF_LAYER_ID, 'visibility', want ? 'none' : 'visible')
   }
-  const capPitch = (): void => {
+  /**
+   * V1: the manual tilt cap follows the camera height (zoom). Only moves the viewer makes (an event with
+   * originalEvent: drag-tilt, wheel zoom) are held to it; the programmatic cameras keep their own caps
+   * (flythrough camera.flythrough.max_pitch_deg, the open pose, stories), and maxPitch stays
+   * terrain_3d.max_pitch_deg (a maxPitch that followed the zoom clamped a jumpTo to the old zoom's cap).
+   */
+  const capPitch = (e?: { originalEvent?: unknown }): void => {
     if (!farOn) return
     reliefSwap()
-    const zoom = (map as Partial<MlMap>).getZoom?.()
-    if (!on || zoom === undefined) return
-    map.setMaxPitch(storyOn() ? TERRAIN.maxPitch3d : pitchCap(zoom, FAR_FIELD.pitchCap))
+    if (!on || !e?.originalEvent || storyOn()) return
+    const m = map as Partial<MlMap>
+    const zoom = m.getZoom?.()
+    const pitch = m.getPitch?.()
+    if (zoom === undefined || pitch === undefined) return
+    const cap = pitchCap(zoom, FAR_FIELD.pitchCap)
+    if (pitch > cap + 0.01) m.setPitch?.(cap)
   }
   const sky = (next: boolean): void => {
     if (!farOn) return
@@ -194,7 +203,7 @@ export function addTerrain(
         map.setTerrain({ source: DEM_SOURCE.terrain, exaggeration: exag })
         clipFloor()
         map.setMaxPitch(TERRAIN.maxPitch3d)
-        capPitch()
+        reliefSwap()
         sky(true)
         map.dragRotate.enable()
         map.touchZoomRotate.enableRotation()
@@ -240,13 +249,13 @@ export function addTerrain(
       drape()
       map.setTerrain(null)
       sky(false)
-      ;(map as Partial<MlMap>).off?.('zoom', capPitch)
+      ;(map as Partial<MlMap>).off?.('move', capPitch)
       uninstallProtocol?.()
       for (const id of [RELIEF_LAYER_ID, RELIEF_FAR.layer]) if (map.getLayer(id)) map.removeLayer(id)
       for (const id of [...Object.values(DEM_SOURCE), RELIEF_FAR.source]) if (map.getSource(id)) map.removeSource(id)
     },
   }
-  ;(map as Partial<MlMap>).on?.('zoom', capPitch)
+  ;(map as Partial<MlMap>).on?.('move', capPitch)
   return handle
 }
 
