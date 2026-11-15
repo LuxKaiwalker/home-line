@@ -17,15 +17,15 @@
 //            no server call) and "Send to simulator" exports that estimate. Offline only the server's
 //            Compute plan is unavailable (a small note next to it, L-05's text).
 import { h } from 'preact'
-import { createRouteController, type RouteController } from '../../edit/route/controller'
-import type { StationGeo, StopProbe } from '../../edit/route/model'
+import { createRouteController, type RouteController, type RouteLimit } from '../../edit/route/controller'
+import { legCoords, type StationGeo, type StopProbe } from '../../edit/route/model'
 import { RoutePanel, type ResultSlot } from '../../edit/route/panel'
 import { createRouteStore, registerRouteDraftTarget } from '../../edit/route/store'
 import { createSharedUndo, type SharedUndo, type UndoWindow } from '../../edit/route/undo'
 import type { LonLat, PlanInputs } from '../types'
 import { installWaypointMap } from '../../edit/route/map'
 import { discProbe } from '../../edit/route/map/validity'
-import { ROUTE_TEXT } from '../../edit/route/text'
+import { fill, LIMIT_SHORT, MAP_TEXT, ROUTE_TEXT } from '../../edit/route/text'
 import { identityOf } from '../../edit/live'
 import { loadEditCatalog, planAvailability, type EditCatalog, type EditPlan } from '../../edit/options'
 import { data } from '../../data/loader'
@@ -219,20 +219,41 @@ export function mountRoutePanel(o: MountRouteOptions): () => void {
         .finally(() => (asking = false))
     }
     askIdentity()
+    // after unmount the console map is gone: never restore or draw into it (R5-B)
+    const rmap = o.cmap ? consoleRouteMap(o.cmap, () => (alive ? (o.restore ?? restoreStatic)(o.cmap!).catch((e) => void (alive && console.warn('edit route: static plan not restored:', e))) : undefined), () => alive) : null
     const c = (ctl = createRouteController({
       store,
       jobs: createRouteJobs({ client: o.client, loaderFor: o.loaderFor, job: o.job }),
       stations,
       pad: padOf,
       probe: o.probe ?? fieldProbe,
-      // after unmount the console map is gone: never restore or draw into it (R5-B)
-      map: o.cmap ? consoleRouteMap(o.cmap, () => (alive ? (o.restore ?? restoreStatic)(o.cmap!).catch((e) => void (alive && console.warn('edit route: static plan not restored:', e))) : undefined), () => alive) : null,
+      map: rmap,
       canCompute: live,
       blocked,
     }))
     // I1b (D128): the instant browser estimate, recomputed on every route / plan edit (no API involved)
     const est = createRouteEstimate({ store, pad: padOf, ...o.estimate })
     offs.push(() => est.dispose())
+    // I1b: an infeasible estimate marks its first failing leg on the map as a server result does (D117),
+    // while no server job or result owns the map
+    if (rmap) {
+      let marked = false
+      offs.push(
+        effect(() => {
+          const s = est.state.value
+          if (c.compute.value.kind !== 'idle') return void (marked = false)
+          if (s.kind === 'ready' && !s.result.feasibility.feasible) {
+            const f = s.result.feasibility
+            const route = store.route.peek()
+            rmap.highlightLeg(legCoords(route, f.leg, { stations, pad: padOf() }), fill(MAP_TEXT.fails, { limit: LIMIT_SHORT[f.term as RouteLimit] ?? f.term }), f.leg, { name: f.from, label: MAP_TEXT.end, leg: f.leg })
+            marked = true
+          } else if (marked) {
+            rmap.highlightLeg(null)
+            marked = false
+          }
+        }),
+      )
+    }
     // W-9 (L7b, T9): the top bar's "Official plan" clears a shown route result or a running job
     const op = officialPart('live-route', () => c.reset())
     offs.push(

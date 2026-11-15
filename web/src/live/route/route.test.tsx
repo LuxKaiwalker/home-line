@@ -362,6 +362,40 @@ describe('Edit-route panel (Plan rail, live builds)', () => {
     spy.forEach((s) => s.mockRestore())
   })
 
+  it('I1b: an infeasible browser estimate marks its first failing leg on the map (no job); the next edit moves it', async () => {
+    const stopName = (x: object) => ('station' in x ? (x as { station: string }).station : 'W')
+    const { map } = await setup({
+      estimate: {
+        raf: (fn) => setTimeout(fn, 0),
+        core: {
+          load: async () => ({}),
+          compute: (_d, _pad, stops) => {
+            const names = ['pad', ...stops.map(stopName), 'pad']
+            const leg = names.length - 2 // the way home fails
+            return {
+              legs: names.slice(1).map((to, i) => ({ leg: i, from: names[i], to, walkMin: 10, o2UsedL: 10, marginMin: null, binding: null })),
+              totals: { walkMin: 40, evaMin: 90, o2UsedL: 100, o2LeftL: 0 },
+              tightest: null,
+              feasibility: { feasible: false, leg, from: names[leg], to: 'pad', term: 'O2', shortMin: 23.84 },
+            }
+          },
+          mission: () => ({}),
+        },
+      },
+    })
+    mode('ordered')
+    check('S4')
+    check('S1')
+    const s1 = stations.find((x) => x.id === 'S1')!
+    await until(() => ((map.data.get(FAILING_LEG_ID) as GeoJSON.FeatureCollection | undefined)?.features.length ?? 0) > 0, 'the estimate highlight')
+    const fc = map.data.get(FAILING_LEG_ID) as GeoJSON.FeatureCollection
+    expect((fc.features[0].geometry as GeoJSON.LineString).coordinates[0]).toEqual([s1.lon, s1.lat])
+    expect(fc.features[0].properties?.label).toBe('fails: O₂')
+    expect(map.box.dataset.failingLeg).toBe('2')
+    check('S2')
+    await until(() => map.box.dataset.failingLeg === '3', 'the highlight follows the edit')
+  })
+
   it('heavy jobs off: shown, Compute disabled with the reason', async () => {
     const { setLive } = await setup()
     mode('ordered')
