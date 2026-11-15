@@ -89,7 +89,7 @@ export const HELP_ROWS: readonly HelpRow[] = [
   { keys: ['←', '→'], label: 'shortcuts.scrub', ready: true }, // FLY
   { keys: ['Esc'], label: 'shortcuts.escape', ready: true },
   { keys: ['Ctrl+Z', 'Ctrl+Shift+Z'], label: 'shortcuts.undoRedo', ready: false }, // U15
-  { keys: ['[', ']'], label: 'shortcuts.history', ready: false }, // A5
+  { keys: ['[', ']'], label: 'shortcuts.history', ready: true }, // A5 (ui/cards/sidebar.tsx)
   { keys: ['P', 'Y', 'R', 'E'], label: 'shortcuts.modes', ready: true },
   { keys: ['T'], label: 'shortcuts.toggle3d', ready: true },
   { keys: ['?'], label: 'shortcuts.help', ready: true },

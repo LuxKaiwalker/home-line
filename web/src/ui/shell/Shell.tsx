@@ -294,6 +294,12 @@ export function mountShell(frame: Frame, navigate: (hash: string) => void, win: 
   measure()
   win.addEventListener('resize', measure)
   const stopKeys = installShortcuts(win, navigate)
+  // U14 (A5): the sidebar follows the selection store; cards load in their own chunk.
+  let alive = true
+  let stopSelection: (() => void) | undefined
+  void import('../cards/sidebar').then((m) => {
+    if (alive) stopSelection = m.installSelectionSidebar({ win })
+  })
   return {
     routed(route, _hash, userNav) {
       // applyRoute (store.ts) is called by main.ts before the view renders; here only title and focus
@@ -306,6 +312,8 @@ export function mountShell(frame: Frame, navigate: (hash: string) => void, win: 
       if (!a || a === document.body || frame.topbar.contains(a) || s.rail.contains(a)) focusMain()
     },
     destroy() {
+      alive = false
+      stopSelection?.()
       stopKeys()
       stopLayout()
       win.removeEventListener('resize', measure)
