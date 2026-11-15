@@ -51,20 +51,38 @@ test.describe('intro loading screen (L12)', () => {
 
   test('the intro covers the full viewport with the chrome hidden', async ({ page }) => {
     await introPlaying(page)
-    const vp = page.viewportSize()!
-    const map = (await page.locator('.console-map').boundingBox())!
-    expect([map.x, map.y, Math.round(map.width), Math.round(map.height)]).toEqual([0, 0, vp.width, vp.height])
-    const canvas = (await page.locator('.console-map canvas.maplibregl-canvas').boundingBox())!
-    expect([Math.round(canvas.width), Math.round(canvas.height)]).toEqual([vp.width, vp.height])
-    for (const sel of ['.hl-topbar', '.hl-rail', '.hl-dock', '.maplibregl-control-container']) {
-      const op = await page.locator(sel).first().evaluate((e) => getComputedStyle(e).opacity)
-      expect(Number(op), sel).toBe(0)
-    }
-    await expect(page.locator('.collapse-headline')).toBeHidden()
+    // one snapshot of the page at t = 0 (the intro moves on while a test round-trips, SW GL is slow)
+    const r = await page.evaluate(() => {
+      const box = (s: string) => {
+        const e = document.querySelector(s)
+        if (!e) return null
+        const b = e.getBoundingClientRect()
+        return [Math.round(b.x), Math.round(b.y), Math.round(b.width), Math.round(b.height)]
+      }
+      const op = (s: string) => (document.querySelector(s) ? Number(getComputedStyle(document.querySelector(s)!).opacity) : null)
+      const loading = document.getElementById('hl-loading')
+      const skip = loading?.querySelector('[data-hl-act=skip]')
+      const head = document.querySelector('.collapse-headline')
+      return {
+        vp: [innerWidth, innerHeight],
+        map: box('.console-map'),
+        canvas: box('.console-map canvas.maplibregl-canvas'),
+        opacity: ['.hl-topbar', '.hl-rail', '.hl-dock', '.maplibregl-control-container'].map(op),
+        headlineShown: !!head && !(head as HTMLElement).hidden && getComputedStyle(head).visibility !== 'hidden',
+        phase: document.documentElement.dataset.hlIntro,
+        loadingPointer: loading ? getComputedStyle(loading).pointerEvents : null,
+        skipShown: !!skip && getComputedStyle(skip).display !== 'none' && skip.getBoundingClientRect().width > 0,
+      }
+    })
+    const [w, h] = r.vp
+    expect(r.map).toEqual([0, 0, w, h])
+    expect(r.canvas?.slice(2)).toEqual([w, h])
+    expect(r.opacity).toEqual([0, 0, 0, 0])
+    expect(r.headlineShown).toBe(false)
     // the loading screen has faded into the intro: it no longer takes the pointer, its buttons stay
-    await expect(page.locator('html')).toHaveAttribute('data-hl-intro', 'playing')
-    expect(await page.locator(LOADING).evaluate((e) => getComputedStyle(e).pointerEvents)).toBe('none')
-    await expect(page.locator(`${LOADING} [data-hl-act=skip]`)).toBeVisible()
+    expect(r.phase).toBe('playing')
+    expect(r.loadingPointer).toBe('none')
+    expect(r.skipShown).toBe(true)
   })
 
   test('Skip intro on the loading screen: no intro plays', async ({ page }) => {
