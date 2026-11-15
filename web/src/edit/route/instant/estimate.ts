@@ -3,10 +3,14 @@
 // land in it, no server call, nothing from src/live (works with the API down). The user's order is
 // passed as is (waypoint rule 2: never reordered). "Send to simulator" builds mission.json from the
 // shown estimate and downloads it at once (Blob, ui/cards/simslot.tsx saveMissionText).
+// I4: the EVA start (start.tsx card; default = clock.json's instant, D31) is part of the estimate's input:
+// moving it recomputes on the same once-per-frame path with the moved start's t_dark (Mars24 port).
 import { effect, signal, type ReadSignal } from '../../../state/signal'
 import { saveMissionText } from '../../../ui/cards/simslot'
 import type { PlanRoute, RouteStop } from '../model'
 import type { RouteStore } from '../store'
+import { clampStart, clockValues, DEFAULT_START_MS, isDefaultStart, startClock } from '../browser/start'
+import type { EvaClock } from '../browser/marstime'
 import { browserCore, padFields } from './adapter'
 import { ESTIMATE_LABEL, type EstimateCore, type EstimateResult } from './types'
 
@@ -14,7 +18,7 @@ export type EstimateState =
   | { kind: 'off'; why: 'auto' | 'empty' }
   | { kind: 'loading' }
   | { kind: 'unavailable'; reason: string }
-  | { kind: 'ready'; result: EstimateResult; ms: number; stops: readonly RouteStop[]; key: string }
+  | { kind: 'ready'; result: EstimateResult; ms: number; stops: readonly RouteStop[]; key: string; startMs: number | null }
 
 export interface RouteEstimateOptions {
   store: Pick<RouteStore, 'route' | 'step' | 'catalog'>
@@ -57,6 +61,8 @@ export function createRouteEstimate(o: RouteEstimateOptions) {
   const raf = o.raf ?? defaultRaf
   const now = o.now ?? defaultNow
   const state = signal<EstimateState>({ kind: 'off', why: 'empty' })
+  /** I4: the EVA start (UTC ms); null = clock.json's instant (D31), the validated scenario */
+  const start = signal<number | null>(null)
   /** computes run so far (tests: once per frame) */
   const runs = signal(0)
   const loaded = new Map<string, Promise<unknown>>()
@@ -102,11 +108,13 @@ export function createRouteEstimate(o: RouteEstimateOptions) {
     }
     const stops = route.stops.slice()
     const pad = o.pad()
+    const startMs = start.peek()
     const t0 = now()
     try {
-      const result = core.compute(data.get(fields), pad, stops)
+      // the default start passes no override: the estimate is exactly clock.json's (byte-for-byte as before I4)
+      const result = startMs === null ? core.compute(data.get(fields), pad, stops) : core.compute(data.get(fields), pad, stops, clockValues(startClock(startMs, pad)))
       runs.value = runs.peek() + 1
-      state.value = { kind: 'ready', result, ms: now() - t0, stops, key: JSON.stringify([pad, stops]) }
+      state.value = { kind: 'ready', result, ms: now() - t0, stops, key: JSON.stringify(startMs === null ? [pad, stops] : [pad, stops, startMs]), startMs }
     } catch (e) {
       state.value = { kind: 'unavailable', reason: ESTIMATE_TEXT.unavailableCore.replace('{why}', e instanceof Error ? e.message : String(e)) }
     }
@@ -116,8 +124,20 @@ export function createRouteEstimate(o: RouteEstimateOptions) {
   const off = effect(() => {
     void o.store.route.value
     void o.store.step.value
+    void start.value
     schedule()
   })
+
+  /** I4: move the EVA start (clamped to the Mars24 port's range); null or within 1 s of the default = the default. */
+  function setStart(ms: number | null): void {
+    const v = ms === null || !Number.isFinite(ms) ? null : clampStart(ms)
+    start.value = v === null || isDefaultStart(v) ? null : v
+  }
+
+  /** The Mars clock at a start (default: the current one) at the route's pad (the sun site, D21 as clock.json). */
+  function clockAt(ms: number | null = start.peek()): EvaClock {
+    return startClock(ms ?? DEFAULT_START_MS, o.pad())
+  }
 
   /** Send to simulator: mission.json of the shown estimate, downloaded at once. False = nothing to send. */
   async function exportMission(): Promise<{ name: string; doc: Record<string, unknown> } | null> {
@@ -136,6 +156,10 @@ export function createRouteEstimate(o: RouteEstimateOptions) {
     state: state as ReadSignal<EstimateState>,
     runs: runs as ReadSignal<number>,
     label: ESTIMATE_LABEL,
+    /** I4: the EVA start, null = clock.json's (D31) */
+    start: start as ReadSignal<number | null>,
+    setStart,
+    clockAt,
     /** recompute on the next frame (pad tool, plan changes outside the store) */
     schedule,
     exportMission,

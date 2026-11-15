@@ -3,6 +3,8 @@
 // names its FIRST failing leg, the term and the minutes short. Every number is labelled with
 // ESTIMATE_LABEL. "Send to simulator" downloads mission.json built from this estimate at once (also for
 // an infeasible route: feasibility is in the file); disabled only while there is no stop.
+// I4: the EVA start card (start.tsx) sits at the top; an estimate from a moved start carries
+// CUSTOM_START_LABEL next to the estimate label.
 import { useState } from 'preact/hooks'
 import { useSignalValue } from '../../../state/signal'
 import { Button } from '../../../ui/components/Button'
@@ -11,6 +13,8 @@ import type { PlanRoute } from '../model'
 import { fill } from '../text'
 import type { EstimateState, RouteEstimate } from './estimate'
 import type { EstimateResult } from './types'
+import { CUSTOM_START_LABEL } from '../browser/start'
+import { StartCard } from './start'
 
 export const INSTANT_TEXT = {
   title: 'Instant estimate',
@@ -104,11 +108,20 @@ export function EstimateView({ est, state: s, route }: EstimateViewProps) {
   const sendWhy = noStops ? INSTANT_TEXT.sendWhy : s.kind !== 'ready' ? INSTANT_TEXT.sendWait : null
   return (
     <section class="hl-route__estimate" data-route-estimate={s.kind} aria-label={INSTANT_TEXT.title}>
+      <StartCard est={est} />
       <p class="hl-route__est-head">
         <span class="hl-route__ghost-title">{INSTANT_TEXT.title}</span>{' '}
         <span class="hl-tag hl-tag--estimate" data-estimate-label>
           {est.label}
         </span>
+        {s.kind === 'ready' && s.startMs !== null ? (
+          <>
+            {' '}
+            <span class="hl-tag hl-tag--estimate" data-estimate-start="custom">
+              {CUSTOM_START_LABEL}
+            </span>
+          </>
+        ) : null}
       </p>
       {s.kind === 'ready' ? <ResultBody r={s.result} ms={s.ms} /> : null}
       {s.kind === 'loading' ? <p class="hl-route__note">{INSTANT_TEXT.loading}</p> : null}

@@ -33,12 +33,20 @@ export interface EstimateResult {
   raw?: unknown
 }
 
+/** I4: the clock of a moved EVA start (browser/start.ts clockValues); absent = clock.json's (D31). */
+export interface EstimateStart {
+  evaStartUtc: string
+  evaStartLmst: string
+  mslSol: number
+  tDarkMin: number
+}
+
 /** What the estimate needs from the compute core (adapter.ts gives I1a's; tests give stubs). */
 export interface EstimateCore {
   /** load the browser data for a fields URL once (padFields) */
   load(fieldsUrl: string): Promise<unknown>
-  /** the whole route in the user's order, synchronous */
-  compute(data: unknown, pad: { lon: number; lat: number }, stops: readonly RouteStop[]): EstimateResult
+  /** the whole route in the user's order, synchronous; `start` = a moved EVA start (I4), else clock.json's */
+  compute(data: unknown, pad: { lon: number; lat: number }, stops: readonly RouteStop[], start?: EstimateStart): EstimateResult
   /** mission.json (schema 1.1.0, origin_label = ESTIMATE_LABEL) from a result */
   mission(result: EstimateResult, ctx: MissionCtx): Promise<Record<string, unknown>> | Record<string, unknown>
 }

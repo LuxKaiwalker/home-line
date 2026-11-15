@@ -9,7 +9,8 @@
 //   way home  last stop -> pad along WS2's POINTER field (hud/wayhome, the fastest way home), timed by
 //             T_home / O2_home of the fields (ported margin.ts buildTrack)
 //   dwell     stations.json dwell_min per station; free points config/stations.yaml dwell_min (WP2b)
-//   clock     EVA minutes from 09:00 LMST (clock.json, D31)
+//   clock     EVA minutes from 09:00 LMST (clock.json, D31); I4: an optional moved EVA start (start.ts,
+//             Mars24 port) replaces t_dark and the export's start fields, labelled CUSTOM_START_LABEL
 //   margin    the engine's four terms O2, daylight, dose (D39 storm replay), EVA duration with the D28
 //             tie order, along the track (ported margin.ts marginProfile): the tightest point
 //   feasible  the engine's ordered-route rule (pipeline/engine/traverse.py _route_order, then
@@ -26,6 +27,10 @@ import { BUDGET_CONSTANTS, missionBudget, type MissionBudget } from './budget'
 import { ANALYSIS_PROJ, DEFAULT_DWELL_MIN, MARGIN_AMBER_MIN, type BrowserPad, type BrowserRouteData } from './data'
 import { buildMission, finalizeMission, ORIGIN_LABEL, type LonLat, type MissionExportInput, type Waypoint } from './export'
 import { buildTrack, legProfile, missionMargin, type MarginPoint, type MarginProfile, type Term, type TrackSample } from './margin'
+import { CUSTOM_START_LABEL, type StartClockValues } from './start'
+
+/** I4: a moved EVA start (start.ts clockValues); absent = clock.json's start (D31). */
+export type BrowserClock = StartClockValues
 
 /** Same shape as the contract's run_record.feasibility (live/types.ts Feasibility; src/live is not imported here). */
 export type BrowserFeasibility =
@@ -92,6 +97,8 @@ export interface BrowserRouteResult {
   issues: BrowserStopIssue[]
   /** 'fields_pad_mismatch': the pad is not the fields' pad, so T_home / O2_home lead to that pad */
   warnings: string[]
+  /** I4: present only for a moved EVA start (custom start · outside the validated scenario) */
+  clock?: BrowserClock
   /** inputs of the mission.json export and the panel's charts */
   detail: {
     padCell: number | null
@@ -242,7 +249,8 @@ const round2 = (x: number) => Math.round(x * 100) / 100
  * Pure and synchronous; the leg cache in `d.legCache` is reused and updated (moving one stop re-routes
  * only its two legs).
  */
-export function computeBrowserRoute(d: BrowserRouteData, padLonLat: LonLat | { lon: number; lat: number }, stops: readonly RouteStop[]): BrowserRouteResult {
+export function computeBrowserRoute(d: BrowserRouteData, padLonLat: LonLat | { lon: number; lat: number }, stops: readonly RouteStop[], clock?: BrowserClock): BrowserRouteResult {
+  const tDark = clock ? clock.tDarkMin : d.tDarkMin
   const pad = Array.isArray(padLonLat) ? { lon: padLonLat[0], lat: padLonLat[1] } : { lon: (padLonLat as { lon: number }).lon, lat: (padLonLat as { lat: number }).lat }
   const names = stopNames({ mode: 'ordered', stops })
   const n = stops.length
@@ -296,7 +304,7 @@ export function computeBrowserRoute(d: BrowserRouteData, padLonLat: LonLat | { l
   const profiles = routerLegs.map((l) => (l ? legProfile(l, (c) => homeAtCell(d, c)) : null))
   const track = n ? buildTrack(profiles, dwellMin) : null
   const budget = missionBudget(routerLegs.map((l) => (l ? { timeMin: l.timeS / 60, o2L: l.o2L } : null)), home, dwellMin)
-  const margin = track ? missionMargin(track, { tDarkMin: d.tDarkMin, rad: d.rad, storm: d.storm }) : null
+  const margin = track ? missionMargin(track, { tDarkMin: tDark, rad: d.rad, storm: d.storm }) : null
 
   // per-leg times (dwell before a leg belongs to it, as the engine)
   const known = n > 0 && issues.length === 0 && track !== null && home.tHomeMin !== null
@@ -331,7 +339,7 @@ export function computeBrowserRoute(d: BrowserRouteData, padLonLat: LonLat | { l
         // WS2's fastest way home: T_home falls 1 min per minute, so every vertex gives the start's terms
         v = { tau: [0], o2: [0], tHome: [home.tHomeMin!], o2Home: [home.o2HomeL!], t: home.tHomeMin! }
       }
-      const terms = latestDeparture(v, d.tDarkMin)
+      const terms = latestDeparture(v, tDark)
       let bind: Term = 'O2'
       for (const k of ['O2', 'daylight', EVA] as Term[]) if (terms[k] !== undefined && terms[k]! < terms[bind]!) bind = k
       if (!(t <= terms[bind]!)) {
@@ -440,6 +448,7 @@ export function computeBrowserRoute(d: BrowserRouteData, padLonLat: LonLat | { l
     issues,
     warnings,
     detail: { padCell, cells, routerLegs, track, budget, margin, homePath, homeReachesPad, positions },
+    ...(clock ? { clock } : {}),
   }
 }
 
@@ -485,7 +494,9 @@ export function browserMissionInput(r: BrowserRouteResult, ctx: BrowserMissionCo
     scenario: { id: d.scenario, variant: VARIANTS[vk] ?? 'nominal', suit_kg: Number(suit) },
     planner: { gridResM: d.tHome.resM, elevationResM: d.elevationResM, files: d.files, appCommit: ctx.appCommit ?? null, configHash: ctx.configHash ?? null },
     constants: { ...BUDGET_CONSTANTS, marginAmberMin: MARGIN_AMBER_MIN },
-    conditions: { evaStartLmst: d.evaStartLmst, tDarkMin: d.tDarkMin, storm: d.storm, evaStartUtc: d.evaStartUtc, mslSol: d.mslSol, rad: d.rad },
+    conditions: r.clock
+      ? { evaStartLmst: r.clock.evaStartLmst, tDarkMin: r.clock.tDarkMin, storm: d.storm, evaStartUtc: r.clock.evaStartUtc, mslSol: r.clock.mslSol, rad: d.rad }
+      : { evaStartLmst: d.evaStartLmst, tDarkMin: d.tDarkMin, storm: d.storm, evaStartUtc: d.evaStartUtc, mslSol: d.mslSol, rad: d.rad },
     wps,
     legs: r.detail.routerLegs,
     homePath: r.detail.homePath,
@@ -503,7 +514,7 @@ export function browserMissionInput(r: BrowserRouteResult, ctx: BrowserMissionCo
 /** mission.json (contracts/bundle/mission.schema.json 1.1.0, origin mission_planer) without id / time. Sync. */
 export function buildBrowserMissionDraft(r: BrowserRouteResult, ctx: BrowserMissionContext): Record<string, unknown> {
   const doc = buildMission(browserMissionInput(r, ctx))
-  return { ...doc, origin: 'mission_planer', origin_label: ORIGIN_LABEL }
+  return { ...doc, origin: 'mission_planer', origin_label: r.clock ? `${ORIGIN_LABEL} · ${CUSTOM_START_LABEL}` : ORIGIN_LABEL }
 }
 
 /** mission.json, finalized: mission_id (sha256 of the plan) and created_utc filled. */

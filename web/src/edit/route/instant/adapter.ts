@@ -43,6 +43,6 @@ export function fromBrowser(r: BrowserRouteResult): EstimateResult {
 export const browserCore: EstimateCore = {
   // the official fields = the default scenario's published tree (I2: per-pad fields by URL)
   load: () => loadBrowserRouteData(),
-  compute: (data, pad, stops: readonly RouteStop[]) => fromBrowser(computeBrowserRoute(data as BrowserRouteData, pad, stops)),
+  compute: (data, pad, stops: readonly RouteStop[], start) => fromBrowser(computeBrowserRoute(data as BrowserRouteData, pad, stops, start)),
   mission: (result, ctx) => buildBrowserMission(result.raw as BrowserRouteResult, { data: ctx.data as BrowserRouteData }),
 }
