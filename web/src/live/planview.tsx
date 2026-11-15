@@ -9,7 +9,10 @@ import { routeSummary } from '../views/route'
 import { LIVE_LABEL, OFFLINE_LABEL, PRECOMPUTED_LABEL, TITLE_MAX_CHARS, UPLOAD_MAX_BYTES, type SimExportMode } from './config'
 import { LiveNum } from './num'
 import { canonicalJson, exportPlanInputs } from './planio'
-import { planUrl, type ImportState, type PlanLoad, type PlanTree } from './plan'
+import { planUrl, recordRoute, type ImportState, type PlanLoad, type PlanTree } from './plan'
+import { stopTexts } from './plans/route'
+import { planId } from './plans/store'
+import { MyPlans, SavePlan, type MyPlansProps } from './plans/view'
 import { RangeFlags } from './rangeflags'
 import { SimSlot, type MissionFetchFor, type MissionProbe } from './simslot'
 import type { RunOrigin, RunRecord } from './types'
@@ -47,8 +50,11 @@ function Page({ children }: { children: ComponentChildren }) {
   return <div class="page live-plan-page">{children}</div>
 }
 
-/** Not found, offline or broken answers: a message, never a crash. */
-export function PlanProblem({ load }: { load: Exclude<PlanLoad, { state: 'ok' }> }) {
+/**
+ * Not found, offline or broken answers: a message, never a crash. With `plans`, "My plans" follows,
+ * so saved plans stay listed and exportable while the live server is unreachable.
+ */
+export function PlanProblem({ load, plans }: { load: Exclude<PlanLoad, { state: 'ok' }>; plans?: MyPlansProps }) {
   return (
     <Page>
       <h1>Plan {load.hash}</h1>
@@ -66,6 +72,7 @@ export function PlanProblem({ load }: { load: Exclude<PlanLoad, { state: 'ok' }>
         </p>
       )}
       <PlanTag hash={load.hash} origin={null} />
+      {plans && <MyPlans {...plans} />}
     </Page>
   )
 }
@@ -146,6 +153,25 @@ export function PlanRouteSection({ tree, hash }: { tree: PlanTree; hash: string 
           {marginLabel(tight.e.margin_binding)}
           {tight.e.station ? `, ${tight.e.event} ${tight.e.station}` : ''})
         </p>
+      )}
+    </section>
+  )
+}
+
+/** How the route was chosen (D97): auto (the engine's choice) or the user's order with its stops. */
+export function PlanRouteMode({ record }: { record: RunRecord }) {
+  const r = recordRoute(record)
+  return (
+    <section class="live-route-mode" data-route-mode={r.mode}>
+      <p>
+        Route mode: <b>{r.mode}</b> {r.mode === 'ordered' ? '(your stops, computed in the order given)' : '(the engine chose the stations and their order)'}
+      </p>
+      {r.mode === 'ordered' && r.stops && r.stops.length > 0 && (
+        <ol class="live-route-stops">
+          {stopTexts(r.stops).map((t) => (
+            <li>{t}</li>
+          ))}
+        </ol>
       )}
     </section>
   )
@@ -276,10 +302,12 @@ export interface PlanPageProps {
   simFetch?: MissionFetchFor
   importState: ImportState
   onImportFile: (file: File) => void
+  /** "My plans" (D97); absent: not shown. */
+  plans?: MyPlansProps
 }
 
 /** #/plan/{hash}: the result read-only. The map (when mounted) draws through ConsoleMap. */
-export function PlanPage({ load, permalink, simEnabled, simMode, simProbe, simFetch, importState, onImportFile }: PlanPageProps) {
+export function PlanPage({ load, permalink, simEnabled, simMode, simProbe, simFetch, importState, onImportFile, plans }: PlanPageProps) {
   const { hash, record, tree, base } = load
   const title = typeof record.inputs.title === 'string' ? record.inputs.title : null
   return (
@@ -301,21 +329,25 @@ export function PlanPage({ load, permalink, simEnabled, simMode, simProbe, simFe
       )}
       <RangeFlags flags={record.range_flags} />
       <PlanHeadline tree={tree} hash={hash} />
+      <PlanRouteMode record={record} />
       <PlanRouteSection tree={tree} hash={hash} />
       <PlanActions record={record} hash={hash} permalink={permalink} />
+      {plans && <SavePlan hash={hash} id={planId(hash, record.inputs)} snap={plans.snap} onSave={plans.onSave} />}
       <SimSlot enabled={simEnabled} mode={simMode} manifest={tree.manifest} base={base} origin={record.origin} probe={simProbe} fetchFor={simFetch} />
       <ImportPanel state={importState} onFile={onImportFile} />
+      {plans && <MyPlans {...plans} />}
     </Page>
   )
 }
 
-/** #/plan: import only. */
-export function ImportPage({ state, onFile }: ImportPanelProps) {
+/** #/plan: import, and "My plans" when given. */
+export function ImportPage({ state, onFile, plans }: ImportPanelProps & { plans?: MyPlansProps }) {
   return (
     <Page>
       <h1>Open a plan</h1>
       <p>A plan is shared as a permalink (#/plan/&#123;hash&#125;) or as its plan_inputs.json file. No account is needed.</p>
       <ImportPanel state={state} onFile={onFile} />
+      {plans && <MyPlans {...plans} />}
     </Page>
   )
 }
@@ -327,6 +359,7 @@ export function ProvenancePage({ load }: { load: Extract<PlanLoad, { state: 'ok'
     ['Origin', <span class="live-origin">{r.origin}</span>],
     ['Label', <span class="live-origin-label">{labelFor(r.origin)}</span>],
     ['Status', r.status],
+    ['Route mode', <span class="live-route-mode-value">{recordRoute(r).mode}</span>],
     ['Engine tree (git HEAD:pipeline)', <code>{r.engine.tree}</code>],
     ['Engine commit', <code>{r.engine.commit}</code>],
     ['Config hash', <code>{r.engine.config_hash}</code>],

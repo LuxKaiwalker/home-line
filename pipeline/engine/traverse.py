@@ -25,6 +25,13 @@ outputs are the auto path's. An order that breaks a limit is a result, not an er
 ``Result.feasibility`` names the first failing leg (see ``_route_order``) and only the legs
 before it are walked and written. A stop that cannot be routed at all raises
 ``RouteStopError``. ``route=None`` is the auto path, unchanged.
+
+Free points (D97 WP2b): a stop ``{lon, lat, label?}`` is a synthetic station named W1, W2, ...
+in its order among the free stops (``resolve_route``): value 0 (no science scoring), the
+default station dwell, ``rc`` = its access cell in the scenario (waypoints.point_fields, the
+D48 station-field rule). It appears in legs, timeline and feasibility under its W id like a
+station; it is not a station (no card, trade-table or scorecard entry) and its label never
+enters the engine outputs.
 """
 
 from __future__ import annotations
@@ -105,28 +112,62 @@ class RouteStopError(ValueError):
         self.index, self.code, self.message = index, code, message
 
 
+def is_free_point(stop) -> bool:
+    """D97: a free route point ``{lon, lat, label?}`` (plan_inputs.route), not a station stop."""
+    return (isinstance(stop, dict) and "station" not in stop
+            and all(isinstance(stop.get(k), (int, float)) and not isinstance(stop.get(k), bool)
+                    for k in ("lon", "lat")))  # fmt: skip
+
+
 def stop_station_id(stop, index: int) -> str:
     """The station id of a route stop: ``"S4"`` or ``{"station": "S4"}`` (plan_inputs.route).
-    Free points ({lon, lat}) come with R2."""
+    Free points ({lon, lat}) are named by ``resolve_route``."""
     if isinstance(stop, str):
         return stop
     if isinstance(stop, dict) and isinstance(stop.get("station"), str):
         return stop["station"]
-    if isinstance(stop, dict) and "lon" in stop and "lat" in stop:
-        raise NotImplementedError(f"route stop {index}: free points are not supported yet")
     raise RouteStopError(index, "route_station_unknown", f"not a station stop: {stop!r}")
 
 
-def resolve_route(route, stations: list[dict], no_access: dict | None = None) -> list[dict]:
+def free_point_ids(route) -> list[str | None]:
+    """W1, W2, ... for the free stops in their order among the free stops; None for stations."""
+    out, k = [], 0
+    for stop in route:
+        k += is_free_point(stop)
+        out.append(f"W{k}" if is_free_point(stop) else None)
+    return out
+
+
+def resolve_route(route, stations: list[dict], no_access: dict | None = None,
+                  point_station=None) -> list[dict]:  # fmt: skip
     """The one place that turns route stops into station dicts, in route order.
 
     stations: the routable stations (dicts with ``id``). no_access: {id: reason} for known
     stations without an access cell in the scenario (access.routing_stations); such a stop is
     ``route_point_unreachable``, any other unknown id ``route_station_unknown``. A repeated
-    station is ``route_station_duplicate``. Raises RouteStopError for the first bad stop."""
+    station is ``route_station_duplicate``. Raises RouteStopError for the first bad stop.
+
+    Free points (``is_free_point``) are named W1.. (``free_point_ids``). point_station(wid,
+    lon, lat) -> the synthetic station dict (scenarios.free_point_station); a
+    waypoints.PointError it raises becomes RouteStopError(stop index, code, message). Without
+    point_station a free point resolves to ``{id, lon, lat}`` only (the cheap check before any
+    work: station errors and the stop positions for the spacing check)."""
     by_id = {s["id"]: s for s in stations}
     out, seen = [], set()
+    wids = free_point_ids(route)
     for i, stop in enumerate(route):
+        if wids[i] is not None:
+            lon, lat = float(stop["lon"]), float(stop["lat"])
+            if point_station is None:
+                out.append({"id": wids[i], "lon": lon, "lat": lat})
+                continue
+            from .waypoints import PointError
+
+            try:
+                out.append(point_station(wids[i], lon, lat))
+            except PointError as e:
+                raise RouteStopError(i, e.code, f"{wids[i]}: {e.message}") from e
+            continue
         sid = stop_station_id(stop, i)
         if sid in seen:
             raise RouteStopError(i, "route_station_duplicate", f"station {sid} is already a stop")
@@ -138,6 +179,24 @@ def resolve_route(route, stations: list[dict], no_access: dict | None = None) ->
             raise RouteStopError(i, "route_station_unknown", f"no station {sid}")
         out.append(by_id[sid])
     return out
+
+
+def check_spacing(stops: list[dict], pad_lonlat, min_m: float) -> None:
+    """D97: raise RouteStopError(index, "route_stop_spacing") when two stops, or a stop and the
+    pad, are closer than min_m (waypoints.stop_spacing_violations; stops = resolve_route's
+    dicts with lon/lat, stations at their science point). The index is the later stop of the
+    pair (the stop itself for a pad pair); of several violations the lowest such index."""
+    from .waypoints import stop_spacing_violations
+
+    pairs = stop_spacing_violations([(s["lon"], s["lat"]) for s in stops], pad_lonlat, min_m)
+    if not pairs:
+        return
+    i, j = min(pairs, key=lambda ij: (ij[1] if ij[1] >= 0 else ij[0], ij[0]))
+    other = "the pad" if j < 0 else f"stop {i} ({stops[i]['id']})"
+    at = j if j >= 0 else i
+    raise RouteStopError(at, "route_stop_spacing",
+                         f"stop {at} ({stops[at]['id']}) is closer than {min_m:g} m to "
+                         f"{other}")  # fmt: skip
 
 
 def _forward_leg(fld: dijkstra.Field, dst, home: dijkstra.Field) -> LegPath:
@@ -158,7 +217,8 @@ def _home_leg(home: dijkstra.Field, src) -> LegPath:
 def plan(grid: Grid, table: GradeTable, home: dijkstra.Field, pad, stations: list[dict],
          budget_min: float, checkpoint_min: float, mi: MarginInputs,
          partner_t: np.ndarray | None = None, partner_min: float | None = None,
-         dose_fn=None, fpad: dijkstra.Field | None = None, route=None) -> Result:  # fmt: skip
+         dose_fn=None, fpad: dijkstra.Field | None = None, route=None,
+         point_station=None) -> Result:  # fmt: skip
     """stations: dicts with id, rc, value, dwell_min. home: the scenario's return field.
 
     dose_fn (D39): callable t* -> margin.DoseTiming. When given, the DP plans without the dose
@@ -169,9 +229,11 @@ def plan(grid: Grid, table: GradeTable, home: dijkstra.Field, pad, stations: lis
     route (D97): station stops in visiting order (``resolve_route``); None = the auto plan
     (orienteering over ``stations``). With a route only its stations are planned, legs
     pad -> stops[0] -> ... -> pad in that order, and ``Result.feasibility`` is set.
+    point_station (D97, free points in the route): ``resolve_route``'s resolver, built per
+    scenario by scenarios.plan_route.
     """
     if route is not None:
-        stations = resolve_route(route, stations)
+        stations = resolve_route(route, stations, point_station=point_station or _no_points)
         if not stations:
             raise RouteStopError(0, "route_station_unknown", "an ordered route needs a stop")
     reach = [s for s in stations if math.isfinite(float(home.t_min[s["rc"]]))]
@@ -393,6 +455,12 @@ def plan(grid: Grid, table: GradeTable, home: dijkstra.Field, pad, stations: lis
     return Result([names[k] for k in p.order], unreachable, float(p.total_min), float(p.value),
                   route, events, legs, mi_ev.terms, t_star_min, dose, track_min,
                   n_feasible, leg_paths, back, tr, feasibility)  # fmt: skip
+
+
+def _no_points(wid, lon, lat):
+    """traverse.plan alone cannot resolve a free point (it needs the scenario's params)."""
+    raise NotImplementedError(f"free point {wid} ({lon}, {lat}) needs point_station "
+                              "(scenarios.plan_route builds it per scenario)")  # fmt: skip
 
 
 def _route_order(mi: MarginInputs, first: LegPath, mids: list[LegPath], home: LegPath,

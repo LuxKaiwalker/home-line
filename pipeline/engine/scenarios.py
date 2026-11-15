@@ -854,23 +854,51 @@ def storm_timing(cond: dict, rad_path: Path = INTERIM_DIR / "conditions" / "rad.
     return fn
 
 
+def free_point_station(grid: Grid, p: physio.Params, settings=None):
+    """D97 (WP2b): traverse.resolve_route's resolver for one scenario: (wid, lon, lat) -> the
+    synthetic station dict of a free point: ``rc`` = its access cell under p's slope rule
+    (waypoints.point_fields = padpick.station_fields, D48; the seed of its forward field),
+    ``access_dist_m`` = the walk-in distance to it (padpick.access_cells, not modelled, as
+    access.py), value 0 (no science scoring), dwell = stations.yaml dwell_min (the default
+    station dwell). Raises waypoints.PointError for an invalid point. grid: the WS1 grid
+    (point_fields applies p's no-go itself); settings: padpick.Settings (default config)."""
+    from . import padpick, waypoints
+
+    s = settings or padpick.settings_from_config()
+    dwell = float(load("stations")["dwell_min"])
+
+    def make(wid: str, lon: float, lat: float) -> dict:
+        fwd, _rev = waypoints.point_fields(grid, lon, lat, p, s)
+        rc = (int(fwd.seeds[0][0]), int(fwd.seeds[0][1]))
+        dist = next(d for d, r, c in padpick.access_cells(grid, lon, lat, s.access_radius_m)
+                    if (r, c) == rc)  # fmt: skip
+        return {"id": wid, "lon": lon, "lat": lat, "rc": rc, "value": 0.0, "dwell_min": dwell,
+                "access_dist_m": round(float(dist), 1)}  # fmt: skip
+
+    return make
+
+
 def plan_route(grid: Grid, pad, sid: str, field: dijkstra.Field, st: list[dict], cond: dict,
                dose_fn, partner_t=None, rmse=None, crew: dict | None = None, route=None,
                ) -> tuple[traverse.Result, dict]:  # fmt: skip
     """F9 route for one scenario and pad: access cells from ``field``, D28 EVA term, D39 timed
     dose term (dose_fn) or the static one. Returns (Result, no_access {id: reason}).
-    route (D97): ordered station stops (traverse.plan); a stop without an access cell in sid
-    raises traverse.RouteStopError (route_point_unreachable)."""
+    route (D97): ordered stops (traverse.plan); a stop without an access cell in sid raises
+    traverse.RouteStopError (route_point_unreachable; a free point: its waypoints code).
+    Free points are resolved per scenario (``free_point_station``: the access cell depends on
+    the scenario's slope rule)."""
     p = physio.scenario_params(sid, v1_rmse_deg=rmse, crew=crew)
     tau = None if dose_fn is not None else cond.get("tau_dose_min")
     mi = margin.inputs(p, cond.get("t_dark_min"), tau, eva=True)
     rst, no_access = access.routing_stations(st, sid)
+    points = None
     if route is not None:
         traverse.resolve_route(route, rst, no_access)  # the stop's error code before any work
+        points = free_point_station(grid, p)
     res = traverse.plan(grid.with_nogo(p.nogo_deg), physio.grade_table(p), field, pad, rst,
                         route_budget_min(), float(load("variants")["route"]["o2_checkpoint_min"]),
                         mi, partner_t, load("haul")["contour_min"], dose_fn=dose_fn,
-                        route=route)  # fmt: skip
+                        route=route, point_station=points)  # fmt: skip
     res.unreachable = res.unreachable + list(no_access)
     return res, no_access
 

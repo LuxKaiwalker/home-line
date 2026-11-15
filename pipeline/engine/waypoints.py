@@ -142,6 +142,16 @@ def point_validity(grid: Grid, lon: float, lat: float, *, scenario=None,
     return {"ok": False, "code": bad[0], "access_cell": None, "access_dist_m": None}
 
 
+def point_precheck(grid: Grid, lon: float, lat: float, *, scenario=None,
+                   settings: padpick.Settings | None = None) -> tuple[str, str] | None:  # fmt: skip
+    """Checks 1-3 of the module doc only (outside_grid, unassessed, not_walkable): (code,
+    message) or None. Reads only the cells within the access radius, no Dijkstra (the cheap
+    422 pre-check; check 4, unreachable, needs ``point_validity`` / ``point_fields``).
+    scenario / settings as ``point_validity``."""
+    s = settings or padpick.settings_from_config()
+    return _check(grid, lon, lat, _params(scenario, s).nogo_deg, s.access_radius_m)
+
+
 def point_fields(grid: Grid, lon: float, lat: float, scenario="nom_104",
                  settings: padpick.Settings | None = None, *, crew: dict | None = None,
                  tmax_min: float | None = None):  # fmt: skip

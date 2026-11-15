@@ -171,9 +171,10 @@ export function checkRoute(r: PlanRoute, ctx: RouteCheckContext): RouteCheck {
       else if (p.walkable === false) problems.push('notWalkable')
       else if (p.reachable === false) problems.push('unreachable')
       unknown = p.inGrid === null || p.assessed === null || p.walkable === null || p.reachable === null
-      const prev = i === 0 ? ctx.pad : stopAt(r.stops[i - 1], ctx.stations)
-      if (prev && distanceM(prev, at) < ROUTE_LIMITS.minStopSpacingM) problems.push('spacing')
-      if (i === r.stops.length - 1 && distanceM(at, ctx.pad) < ROUTE_LIMITS.minStopSpacingM && !problems.includes('spacing')) problems.push('spacing')
+      // WP6: every stop keeps route.min_stop_spacing_m from the pad and from every EARLIER stop
+      // (WP2a stop_spacing_violations: all pairs; the later stop of a pair is the one named)
+      const near = (b: { lon: number; lat: number } | null) => !!b && distanceM(b, at) < ROUTE_LIMITS.minStopSpacingM
+      if (near(ctx.pad) || r.stops.slice(0, i).some((x) => near(stopAt(x, ctx.stations)))) problems.push('spacing')
     }
     return { index: i, key, valid: problems.length ? false : unknown ? null : true, problems }
   })

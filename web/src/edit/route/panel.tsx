@@ -14,6 +14,7 @@ import { cx, Icon } from '../../ui/components/Icon'
 import type { ComputeState, RouteController } from './controller'
 import { isStationStop, ROUTE_LIMITS, type PlanRoute, type RouteCheck, type StationGeo, type StopCheck } from './model'
 import { failureText, fill, LIMIT_TEXT, ROUTE_PROBLEM_TEXT, ROUTE_TEXT as T, STOP_PROBLEM_TEXT } from './text'
+import { AddPointButton, GhostSummary, PointRowBody } from './map/rows'
 import './route.css'
 
 export interface RouteRow {
@@ -23,14 +24,18 @@ export interface RouteRow {
   /** index in route.stops, null when unchecked */
   index: number | null
   check: StopCheck | null
+  /** WP6: a free point (W1, W2, …) and its label; absent for a station */
+  point?: { label: string | undefined }
 }
 
-/** Checked stations first, in route order, then the unchecked ones in stations.json order. */
+/** Checked stations and free points first, in route order, then the unchecked stations in stations.json order. */
 export function routeRows(route: PlanRoute, stations: readonly StationGeo[], check: RouteCheck): RouteRow[] {
   const name = (id: string) => stations.find((s) => s.id === id)?.name ?? id
   const rows: RouteRow[] = []
+  let w = 0
   route.stops.forEach((s, i) => {
     if (isStationStop(s)) rows.push({ id: s.station, name: name(s.station), checked: true, index: i, check: check.stops[i] ?? null })
+    else rows.push({ id: `W${++w}`, name: s.label ?? '', checked: true, index: i, check: check.stops[i] ?? null, point: { label: s.label } })
   })
   for (const s of stations) if (!rows.some((r) => r.id === s.id)) rows.push({ id: s.id, name: s.name ?? s.id, checked: false, index: null, check: null })
   return rows
@@ -190,7 +195,8 @@ export function RoutePanelView(p: RoutePanelViewProps) {
             <li
               key={row.id}
               class={cx('hl-route__stop', row.checked && 'is-checked', p.dragging !== null && p.dragging === row.index && 'is-dragging')}
-              data-station={row.id}
+              data-station={row.point ? undefined : row.id}
+              data-point={row.point ? row.id : undefined}
               data-index={row.index ?? undefined}
               data-validity={st?.state}
               tabIndex={movable ? 0 : undefined}
@@ -215,18 +221,28 @@ export function RoutePanelView(p: RoutePanelViewProps) {
               <span class="hl-route__handle" aria-hidden="true" title={movable ? fill(T.dragHandle, { station: row.id }) : undefined}>
                 {movable ? '⋮⋮' : ''}
               </span>
-              <input
-                type="checkbox"
-                class="hl-route__check"
-                checked={row.checked}
-                disabled={!ordered || running}
-                aria-label={fill(T.include, { station: `${row.id} ${row.name}` })}
-                onChange={(e) => ctl.toggle(row.id, (e.currentTarget as HTMLInputElement).checked)}
-              />
+              {row.point ? (
+                <span class="hl-route__check-slot">
+                  <Icon name="user-point" />
+                </span>
+              ) : (
+                <input
+                  type="checkbox"
+                  class="hl-route__check"
+                  checked={row.checked}
+                  disabled={!ordered || running}
+                  aria-label={fill(T.include, { station: `${row.id} ${row.name}` })}
+                  onChange={(e) => ctl.toggle(row.id, (e.currentTarget as HTMLInputElement).checked)}
+                />
+              )}
               <span class="hl-route__order">{row.index !== null && ordered ? row.index + 1 : ''}</span>
-              <span class="hl-route__name">
-                <span class="hl-route__id">{row.id}</span> {row.name}
-              </span>
+              {row.point ? (
+                <PointRowBody ctl={ctl} index={row.index!} name={row.id} label={row.point.label} disabled={!ordered || running} />
+              ) : (
+                <span class="hl-route__name">
+                  <span class="hl-route__id">{row.id}</span> {row.name}
+                </span>
+              )}
               {ordered && st ? (
                 <span class={cx('hl-route__validity', `is-${st.state}`)} data-validity={st.state}>
                   {st.text}
@@ -237,11 +253,14 @@ export function RoutePanelView(p: RoutePanelViewProps) {
         })}
       </ol>
       {ordered ? <p class="hl-route__hint">{T.moveHint}</p> : null}
+      {ordered ? <AddPointButton ctl={ctl} /> : null}
       {check.route.length ? (
         <p class="hl-route__warn" role="status">
           {check.route.map((x) => fill(ROUTE_PROBLEM_TEXT[x], { n: x === 'tooManyFreePoints' ? ROUTE_LIMITS.maxFreePoints : ROUTE_LIMITS.maxStops })).join(' ')}
         </p>
       ) : null}
+
+      {ordered ? <GhostSummary ctl={ctl} /> : null}
 
       {ordered && ctl.legs.peek().length ? (
         <ol class="hl-route__legs" aria-label={T.legs}>

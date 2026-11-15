@@ -92,7 +92,7 @@ describe('clock on signals = the original PlaybackClock', () => {
     expect(() => new PlaybackClock(10, [1, 60], 7)).toThrow('default speed 7 not in 1,60')
     expect(() => new PlaybackClock(10, [1, 60], 60).setSpeed(7)).toThrow('speed 7 not in 1,60')
   })
-  it('hud/clock.ts still exports the same class (fp3d, spike and tests import it there)', () => {
+  it('hud/clock.ts still exports the same class (the HUD, the spike and tests import it there)', () => {
     expect(HudPlaybackClock).toBe(PlaybackClock)
   })
   it('a private clock keeps its own state', () => {
