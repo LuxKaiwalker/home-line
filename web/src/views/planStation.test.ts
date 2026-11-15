@@ -5,11 +5,13 @@
 //    closes it without a Discard;
 //  - one card at a time: a station card opened during a draft closes the rover card without a Discard,
 //    and the rover card comes back when the station card closes.
+// L2e: every other selection kind opens the 'selection' card (one card at a time with 'station');
+//    closing it by hand clears the selection; with a draft open the strip sits on top of it.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { roverStrip, setRoverStrip } from '../state/roverCard'
 import { resetSelection, select, selection } from '../state/selection'
 import { closeContainer, isOpen, registerContainer, resetLayout } from '../ui/layout'
-import { ROVER_CARD, STATION_CARD, wirePlanCards } from './planStation'
+import { ROVER_CARD, SELECTION_CARD, STATION_CARD, wirePlanCards } from './planStation'
 
 let off: () => void
 let shown: string | null
@@ -21,11 +23,12 @@ beforeEach(() => {
   resetSelection()
   setRoverStrip(null)
   registerContainer({ id: STATION_CARD, kind: 'card' })
+  registerContainer({ id: SELECTION_CARD, kind: 'card' })
   registerContainer({ id: ROVER_CARD, kind: 'card' })
   shown = null
   click = null
   off = wirePlanCards(
-    (id) => (shown = id),
+    (r) => (shown = r.kind === 'station' ? r.id : r.kind),
     (fn) => (click = fn),
   )
 })
@@ -49,6 +52,44 @@ describe('station card', () => {
     expect(isOpen(STATION_CARD)).toBe(true)
     select({ kind: 'pad', id: 'pad' }, 'map')
     expect(isOpen(STATION_CARD)).toBe(false)
+    expect(isOpen(SELECTION_CARD)).toBe(true) // L2e: the pad's card replaces it
+    expect(shown).toBe('pad')
+  })
+})
+
+describe('selection card (L2e)', () => {
+  it('every kind opens it; one card at a time with the station card; × / Esc clears the selection', () => {
+    for (const r of [
+      { kind: 'pad', id: 'rank2' },
+      { kind: 'landmark', code: 'GDV' },
+      { kind: 'cell', lon: 137.4, lat: -4.6 },
+      { kind: 'leg', leg: 2 },
+      { kind: 'edge', cause: 'slope', budget: 30 },
+    ] as const) {
+      select(r, 'map')
+      expect(shown).toBe(r.kind)
+      expect(isOpen(SELECTION_CARD)).toBe(true)
+      expect(isOpen(STATION_CARD)).toBe(false)
+    }
+    select({ kind: 'station', id: 'S7' }, 'map')
+    expect(isOpen(STATION_CARD)).toBe(true)
+    expect(isOpen(SELECTION_CARD)).toBe(false)
+    expect(selection.selected.peek()).toEqual({ kind: 'station', id: 'S7' }) // the handover is no close by hand
+    select({ kind: 'landmark', code: 'GDV' }, 'map')
+    closeContainer(SELECTION_CARD)
+    expect(selection.selected.peek()).toBeNull()
+    expect(isOpen(SELECTION_CARD)).toBe(false)
+  })
+
+  it('a draft open: the strip sits on the selection card; closing it brings the rover card back, no discard', () => {
+    const a = strip()
+    setRoverStrip(a)
+    select({ kind: 'pad', id: 'rank1' }, 'map')
+    expect(isOpen(SELECTION_CARD)).toBe(true)
+    expect(isOpen(ROVER_CARD)).toBe(false)
+    closeContainer(SELECTION_CARD)
+    expect(isOpen(ROVER_CARD)).toBe(true)
+    expect(a.dismiss).not.toHaveBeenCalled()
   })
 })
 

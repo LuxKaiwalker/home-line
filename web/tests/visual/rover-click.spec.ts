@@ -3,14 +3,15 @@
  * marker must not swallow a plain click. Not a screenshot test: it lives here so the visual config
  * runs it on both projects against the built app.
  *   - A click without movement, and a click with 3 px of hand jitter (MapLibre starts its marker drag
- *     at 3 px), open the official pad card (U14) and open no "What this change costs" strip (no draft).
+ *     at 3 px), open the official pad card (U14; L2e: the pop-up card on the map) and open no "What this change costs" strip (no draft).
  *   - A press that moves well beyond the click slop (4 px) still drags the rover: on release the
  *     delta strip opens (L2d, D111: in the rover card on the map, #hl-lay-rover); Escape discards it.
  * Run: cd web && npm run build && npx playwright test tests/visual/rover-click.spec.ts
  */
 import { expect, test, type Page } from 'playwright/test'
 
-const card = (page: Page) => page.locator('.hl-sidebar__body')
+/** L2e (D111): a selection opens its pop-up card on the map (.sel-card: #hl-lay-selection / #hl-lay-station), not the sidebar */
+const card = (page: Page) => page.locator('.sel-card')
 
 async function rover(page: Page): Promise<{ x: number; y: number }> {
   await page.goto('/?intro=0&view=2d#/')
@@ -34,7 +35,7 @@ for (const [name, dx, dy] of [
 ] as const) {
   test(`rover pad marker: a ${name} opens the official pad card, no edit`, async ({ page }) => {
     const at = await rover(page)
-    await expect(card(page)).not.toContainText('Official rover pad')
+    await expect(card(page).filter({ hasText: 'Official rover pad' })).toHaveCount(0) // no card yet
     await press(page, at, dx, dy)
     await expect(card(page)).toContainText('Official rover pad', { timeout: 5_000 })
     await expect(card(page)).not.toContainText('What this change costs')
@@ -51,7 +52,7 @@ test('rover pad marker: a press moving beyond the slop still drags (delta strip 
   await page.mouse.up()
   const strip = page.locator('#hl-lay-rover') // L2d: the delta strip's card
   await expect(strip).toContainText('What this change costs', { timeout: 10_000 })
-  await expect(card(page)).not.toContainText('What this change costs')
+  await expect(card(page).filter({ hasText: 'What this change costs' })).toHaveCount(0)
   await page.keyboard.press('Escape')
   await expect(strip).toHaveCount(0, { timeout: 5_000 })
   await expect(page.locator('.hl-edit-delta')).toHaveCount(0)

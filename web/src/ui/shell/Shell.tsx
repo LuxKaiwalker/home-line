@@ -82,8 +82,6 @@ export function TopBar() {
   const mode = useMode()
   useSignalValue(shell.lastHash)
   const bp = useSignalValue(shell.breakpoint)
-  const sidebarOpen = useSignalValue(shell.sidebarOpen)
-  useSignalValue(shell.hosted)
   const [menu, setMenu] = useState(false)
   useEffect(() => setMenu(false), [mode])
   const phone = bp === 'phone'
@@ -117,17 +115,7 @@ export function TopBar() {
       </div>
       <div class="hl-topbar__end">
         <SearchButton />
-        {/* L2 (D111, L0 Q5): once the station card replaces the sidebar in Plan, the Details toggle goes */}
-        {isMapMode(mode) && !hostedInPlan('station') && (
-          <IconButton
-            icon="panel-right"
-            label={t('cards.common.details')}
-            title={t('hints.shell.details')}
-            pressed={sidebarOpen}
-            aria-controls="hl-sidebar"
-            onClick={() => (shell.sidebarOpen.value = !sidebarOpen)}
-          />
-        )}
+        {/* L2e (D111): every selection opens as a pop-up card, so the Details toggle (right sidebar) goes */}
         <IconButton icon="keyboard" label={t('nav.shortcuts')} title={t('hints.shell.shortcuts')} aria-haspopup="dialog" aria-keyshortcuts="?" onClick={() => (shell.helpOpen.value = true)} />
       </div>
     </>
@@ -341,7 +329,7 @@ export function mountShell(frame: Frame, navigate: (hash: string) => void, win: 
   let alive = true
   let stopSelection: (() => void) | undefined
   void import('../cards/sidebar').then((m) => {
-    if (alive) stopSelection = m.installSelectionSidebar({ win })
+    if (alive) stopSelection = m.installSelectionSidebar({ win, host: s.overlay })
   })
   // U5 (A7): the timeline dock body, in its own chunk (replaces the dock placeholder once loaded).
   // Its playback needs a frame loop, so a window without one (headless test stubs) keeps the placeholder.

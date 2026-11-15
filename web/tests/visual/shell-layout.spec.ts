@@ -11,7 +11,7 @@
  *   - Desktop: 56 px icon rail in Plan (L2, D111: like the tablet; its toggle opens a sheet over the map)
  *     | map | 360 sidebar, 120 dock.
  *   - L2d (D111): a station selection opens its marker card on the map (#hl-lay-station, "Open station"
- *     link), the sidebar stays closed; the sidebar checks above use the official pad card instead.
+ *     link), the sidebar stays closed. L2e: every other selection too (the official pad: #hl-lay-selection).
  * Run: cd web && npm run build && npx playwright test tests/visual/shell-layout.spec.ts
  */
 import { expect, test, type Page } from 'playwright/test'
@@ -98,27 +98,20 @@ test.describe('shell layout (§4.3)', () => {
     await page.keyboard.press('Escape') // the topmost container closes first
     await expect(card).toHaveCount(0)
 
-    // any other selection still opens the sidebar: the official pad, through search as well
+    // L2e (D111): any other selection opens its pop-up card on the map too: the official pad, via search
     await page.keyboard.press('Control+k')
     await search.fill('PAD')
     const pad = page.getByRole('option').filter({ hasText: /^PAD(?![0-9])/ }).first()
     await pad.waitFor({ timeout: 10_000 })
     await pad.click()
-    await page.locator('.hl-shell[data-sidebar="open"]').waitFor({ state: 'attached', timeout: 30_000 })
-    await page.locator('.hl-sidebar .hl-card').first().waitFor({ timeout: 30_000 })
-    const side = await box(page, '.hl-sidebar')
-    const main2 = await box(page, 'main.outlet')
-    expect(Math.round(side.width)).toBe(360)
-    expect(overlaps(side, await box(page, '.hl-dock'))).toBe(false)
-    expect(overlaps(side, await box(page, '.hl-rail'))).toBe(false)
-    if (tablet) {
-      // overlay on the right of the map region: the map region itself keeps its size
-      expect(Math.round(main2.width)).toBe(vp.width - railW)
-      expect(Math.round(side.x + side.width)).toBe(vp.width)
-      expect(Math.round(side.height)).toBe(Math.round(main2.height))
-    } else {
-      expect(Math.round(main2.width)).toBe(vp.width - railW - 360)
-    }
+    const padCard = page.locator('#hl-lay-selection')
+    await padCard.locator('.hl-card').first().waitFor({ timeout: 30_000 })
+    await expect(page.locator('.hl-shell')).toHaveAttribute('data-sidebar', 'closed')
+    expect(Math.round((await box(page, 'main.outlet')).width)).toBe(vp.width - railW) // the map keeps its size
+    await expect.poll(async () => overlaps(await box(page, '#hl-lay-selection'), await box(page, '.hl-dock')), { timeout: 5_000 }).toBe(false)
+    expect(overlaps(await box(page, '#hl-lay-selection'), await box(page, '.hl-rail'))).toBe(false)
+    await page.keyboard.press('Escape')
+    await expect(padCard).toHaveCount(0)
     await clickPlayAndPause(page)
   })
 

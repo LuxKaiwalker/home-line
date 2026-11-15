@@ -1,0 +1,17 @@
+/* Selection pop-up card (L2e, D111). Tokens only. On the map the card keeps the sidebar width the
+   cards are laid out for, capped by the map and by the room beside the object (--sel-card-max-w/-h,
+   set from cardRoom so it never covers the object); long cards scroll inside. */
+.sel-card.hl-lay-card {
+  width: min(var(--layout-sidebar), calc(100% - var(--space-4)), var(--sel-card-max-w, 100vw));
+  max-height: min(calc(100% - var(--space-4)), var(--sel-card-max-h, 100vh));
+}
+.sel-card .hl-lay-card__body { min-height: 0; overflow: auto; }
+
+/* without the Plan map (Report, Evidence, Fly): a small centred pop-up over the page */
+.sel-pop { position: fixed; inset: 0; z-index: 35; pointer-events: none; }
+.sel-pop > * { pointer-events: auto; }
+.sel-card--centred.hl-lay-card {
+  position: fixed; left: 50% !important; top: 50% !important; transform: translate(-50%, -50%);
+  width: min(var(--layout-sidebar), calc(100vw - var(--space-6)));
+  max-height: min(70vh, calc(100vh - var(--space-7)));
+}

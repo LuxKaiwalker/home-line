@@ -236,13 +236,13 @@ describe('shell frame and islands', () => {
     expect(root().getAttribute('data-railmode')).toBe('docked')
   })
 
-  it('L2 (D111): while the Plan map view hosts the layout, the dock, the hosted rail sections and the Details toggle leave Plan', () => {
+  it('L2 (D111): while the Plan map view hosts the layout, the dock and the hosted rail sections leave Plan; L2e: no Details toggle anywhere', () => {
     let off = () => {}
     act(() => void (off = registerRailSection({ id: 'layers', modes: ['plan'], title: 'nav.rail.layers', icon: 'layers', render: () => <p class="probe">x</p> })))
     act(() => void (shell.railSheet.value = true))
     expect(byClass(root(), 'probe')).toHaveLength(1)
     const details = () => byTag(root(), 'button').filter((b) => b.getAttribute('aria-controls') === 'hl-sidebar')
-    expect(details()).toHaveLength(1)
+    expect(details()).toHaveLength(0) // L2e: selections open as pop-up cards, the right sidebar has no toggle
     let undo: (() => void)[] = []
     act(() => void (undo = ['timeline', 'station', 'layers'].map(hostIn)))
     expect(root().getAttribute('data-dock')).toBe('none')
@@ -250,9 +250,9 @@ describe('shell frame and islands', () => {
     expect(byClass(root(), 'probe')).toHaveLength(0)
     expect(details()).toHaveLength(0)
     expect(byClass(root(), 'hl-strip')).toHaveLength(1)
-    act(() => void applyRoute({ name: 'hud' }, '#/fly/hud')) // Fly keeps its dock and Details toggle
+    act(() => void applyRoute({ name: 'hud' }, '#/fly/hud')) // Fly keeps its dock (no Details toggle: L2e)
     expect(root().getAttribute('data-dock')).not.toBe('none')
-    expect(details()).toHaveLength(1)
+    expect(details()).toHaveLength(0)
     act(() => {
       undo.forEach((u) => u())
       off()

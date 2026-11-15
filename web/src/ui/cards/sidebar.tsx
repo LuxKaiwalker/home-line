@@ -1,24 +1,30 @@
-// Selection → sidebar (U14, §4.3): the shell's right sidebar follows the selection store. Installed
-// once by the shell (lazy chunk). Escape clears the selection, [ / ] walk the history (§4.4); both
+// Selection → card (U14, §4.3; L2e, D111): every selection opens as a pop-up card, no longer in the
+// shell's right sidebar. The Plan map draws it at the object (views/planStation.tsx); everywhere else
+// this module draws the same card as a small centred pop-up in the shell overlay (ui/cards/
+// selectionCard.tsx). Installed once by the shell (lazy chunk). Escape clears the selection, [ / ] walk the history (§4.4); both
 // arrive as the shell's cancelable `hl:shortcut` events, so the shell keeps its own Escape order
 // (help, then focus mode) when nothing is selected.
+import { render } from 'preact'
 import { useEffect, useState } from 'preact/hooks'
 import { data, type Loader } from '../../data/loader'
 import { ensureManifest } from '../../views/common'
 import { canGoBack, canGoForward, clearSelection, selection, stepHistory, type SelectionRef } from '../../state/selection'
-import { effect, useSignalValue } from '../../state/signal'
-import { ui } from '../../state/ui'
+import { useSignalValue } from '../../state/signal'
 import { t } from '../copy'
 import { CardSkeleton, IconButton } from '../components'
-import { openSidebar, setSidebarContent, shell } from '../shell/store'
+import { MarkerCard } from '../layout'
+import { shell } from '../shell/store'
 import type { ShortcutAction } from '../shell/keys'
 import { SelectionCard } from './cards'
 import { ensureFor, isReady, loadCardData, type CardData, type CellLookup } from './data'
+import { cardIdFor, cardTitle, SelectionCardBody, sourcesOf, wireSelectionCards } from './selectionCard'
 
 export interface SidebarOptions {
   loader?: Loader
   cell?: CellLookup
   win?: Pick<Window, 'addEventListener' | 'removeEventListener'>
+  /** where the centred pop-up card goes (the shell overlay); none = no pop-up */
+  host?: HTMLElement
 }
 
 /** Card data for the whole app, loaded once. */
@@ -89,28 +95,59 @@ export function handleSelectionShortcut(a: ShortcutAction): boolean {
   return false
 }
 
-/** Wire the store to the sidebar; returns dispose. */
+/** Whether the Plan map view draws the selection card itself (views/planStation.tsx). */
+const mapHosts = (): boolean => shell.hosted.peek().includes('selection')
+
+/** The centred pop-up (no Plan map): the same card, same body; 'station' / 'selection' ids. */
+function CentredCard({ L, cell }: { L: Loader; cell?: CellLookup }) {
+  const [sel, setSel] = useState<SelectionRef | null>(null)
+  const [d, setD] = useState<CardData | null>(null)
+  const hosted = useSignalValue(shell.hosted).includes('selection')
+  useEffect(() => wireSelectionCards({ setCard: setSel, enabled: () => !mapHosts() }), [])
+  useEffect(() => {
+    let live = true
+    cardData(L, cell).then(
+      (x) => live && setD(x),
+      () => undefined,
+    )
+    return () => void (live = false)
+  }, [L])
+  if (!sel || hosted) return null
+  const id = cardIdFor(sel)
+  const page = sel.kind === 'station' && !!d?.stations.some((s) => s.id === sel.id)
+  return (
+    <MarkerCard key={id} id={id} title={cardTitle(sel, d ? sourcesOf(d) : {})} at={{ x: 0, y: 0 }} class="sel-card sel-card--centred">
+      <SelectionCardBody sel={sel} L={L} cell={cell} stationPage={page} />
+    </MarkerCard>
+  )
+}
+
+/**
+ * Wire the store to the selection card; returns dispose. The right sidebar no longer opens on a
+ * selection (L2e): shell.selectionCards turns openSidebar() off while installed.
+ */
 export function installSelectionSidebar(opts: SidebarOptions = {}): () => void {
   const L = opts.loader ?? data()
   const win = opts.win ?? (typeof window !== 'undefined' ? window : undefined)
-  setSidebarContent(() => <SelectionPanel L={L} cell={opts.cell} />)
-  let last: SelectionRef | null = selection.selected.peek()
-  const stop = effect(() => {
-    const s = selection.selected.value
-    // §4.3: the sidebar opens on selection. L2 (D111): once the Plan map view shows stations in its own
-    // station card (shell.hosted 'station'), a station selection leaves the sidebar closed in Plan.
-    const hosted = s?.kind === 'station' && ui.mode.peek() === 'plan' && shell.hosted.peek().includes('station')
-    if (s && s !== last && !hosted) openSidebar()
-    last = s
-  })
+  shell.selectionCards.value = true
+  shell.sidebarOpen.value = false
+  let box: HTMLElement | null = null
+  if (opts.host) {
+    box = opts.host.appendChild(opts.host.ownerDocument.createElement('div'))
+    box.className = 'sel-pop'
+    render(<CentredCard L={L} cell={opts.cell} />, box)
+  }
   const onKey = (e: Event) => {
     const a = (e as CustomEvent<ShortcutAction>).detail
     if (a && handleSelectionShortcut(a)) e.preventDefault()
   }
   win?.addEventListener('hl:shortcut', onKey)
   return () => {
-    stop()
     win?.removeEventListener('hl:shortcut', onKey)
-    setSidebarContent(undefined)
+    if (box) {
+      render(null, box)
+      box.remove()
+    }
+    shell.selectionCards.value = false
   }
 }

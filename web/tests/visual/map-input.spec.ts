@@ -13,7 +13,8 @@
  */
 import { expect, test, type Page } from 'playwright/test'
 
-const card = (page: Page) => page.locator('.hl-sidebar__body')
+/** L2e (D111): any selection opens a pop-up card on the map (.sel-card) */
+const selCard = (page: Page) => page.locator('.sel-card')
 const roverCard = (page: Page) => page.locator('#hl-lay-rover') // L2d: the delta strip's card
 const stationCard = (page: Page) => page.locator('#hl-lay-station') // L2d: the station marker card
 const cam = (page: Page) => page.locator('[data-camera-center]').first()
@@ -81,11 +82,11 @@ test('a left drag on the empty map does nothing (no pan, no selection)', async (
   const box = await open(page)
   const at = await emptySpot(page, box)
   const before = await center(page)
-  const text = await card(page).innerText()
+  await expect(selCard(page)).toHaveCount(0)
   await drag(page, at, 60, 20, 'left')
   await page.waitForTimeout(500)
   expect(await center(page)).toBe(before)
-  expect(await card(page).innerText()).toBe(text)
+  await expect(selCard(page)).toHaveCount(0) // L2e: no selection, so no card (station or any other)
   await expect(stationCard(page)).toHaveCount(0) // L2d: nor a station card on the map
 })
 

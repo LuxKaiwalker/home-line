@@ -1,123 +1,114 @@
-// Plan map cards (package L2d, D111; L0 rows 12, 14, 20; Q1 and Q5 defaults). Mounted over the console
-// map through the L2-shell slot 'card' (views/planSlots.tsx):
-//   marker card "station"  the selection card of a station (the same SelectionPanel the sidebar showed),
-//                          anchored to the station; a map click, the station list and search open it.
-//                          A map click selects only (no #/station/:id); the full page is "Open station".
-//                          Hosting 'station' keeps the sidebar and its Details toggle out of Plan.
-//   marker card "rover"    the rover drag's delta strip (Keep / Discard), anchored to the rover, while a
-//                          released draft is open (state/roverCard.ts). Closing it (Esc, ×) = Discard, as
-//                          Escape did in the sidebar. With the station card open, the strip sits on top
-//                          of it instead (one card at a time), as it sat above the selection card before.
+// Plan map cards (package L2d, generalised by L2e; D111, L0 rows 12, 14, 20; Q1 and Q5 defaults).
+// Mounted over the console map through the L2-shell slot 'card' (views/planSlots.tsx):
+//   marker card "station"    a station's selection card (L2d), with "Open station" (its full page);
+//   marker card "selection"  L2e: every other selection (pad, parking option, scored site, landmark,
+//                            clicked cell or coordinates, leg, edge) as the same pop-up card anchored at
+//                            the selected object, placed beside it so it never covers it
+//                            (ui/cards/selectionCard.tsx: cardRoom). A map click on a station selects
+//                            only (no #/station/:id). Hosting 'station' and 'selection' keeps the right
+//                            sidebar and its Details toggle out of Plan.
+//   marker card "rover"      the rover drag's delta strip (Keep / Discard), anchored to the rover, while a
+//                            released draft is open (state/roverCard.ts). Closing it (Esc, ×) = Discard,
+//                            as Escape did in the sidebar. With a selection card open, the strip sits on
+//                            top of it instead (one card at a time), as it sat above the selection card.
 // Numbers, trust chips and card content are unchanged: only the container moved.
-import { render, type ComponentChildren } from 'preact'
-import { useEffect, useState } from 'preact/hooks'
+import { render } from 'preact'
+import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks'
 import { data } from '../data/loader'
-import type { Station } from '../data/types'
 import type { ConsoleMap } from '../map/consoleMap'
-import { href } from '../router'
 import { hostRoverCard, roverStrip } from '../state/roverCard'
-import { clearSelection, selection } from '../state/selection'
-import { batch, effect, useSignalValue } from '../state/signal'
-import { CardSkeleton } from '../ui/components'
+import { type SelectionRef } from '../state/selection'
+import { batch, useSignalValue } from '../state/signal'
+import { anchorLngLat, applyRoom, cardIdFor, cardRoom, cardTitle, SELECTION_CARD, SELECTION_CARDS, SelectionCardBody, sourcesOf, STATION_CARD, wireSelectionCards, type CardSources } from '../ui/cards/selectionCard'
 import { t } from '../ui/copy'
-import { closeContainer, layout, MarkerCard, openContainer, registerContainer } from '../ui/layout'
+import { closeContainer, MarkerCard, openContainer, registerContainer } from '../ui/layout'
 import { hostIn } from '../ui/shell/store'
 import { registerPlanMount } from './planSlots'
 import './planStation.css'
 
-export const STATION_CARD = 'station'
+export { SELECTION_CARD, STATION_CARD }
 export const ROVER_CARD = 'rover'
 
-type Panel = (p: { L: ReturnType<typeof data> }) => ComponentChildren
-
-/** The selection panel (lazy cards chunk, as in the sidebar) and the link to the full station page. */
-function StationCardBody({ id }: { id: string }) {
-  const [Sel, setSel] = useState<Panel | null>(null)
-  useEffect(() => {
-    let live = true
-    void import('../ui/cards/sidebar').then((m) => live && setSel(() => m.SelectionPanel as Panel))
-    return () => void (live = false)
-  }, [])
-  return (
-    <>
-      {Sel ? <Sel L={data()} /> : <CardSkeleton />}
-      <p class="plan-card__open">
-        <a class="hl-btn hl-btn--secondary" href={href({ name: 'station', id })} title={t('cards.station.openTip')}>
-          {t('cards.station.open')}
-        </a>
-      </p>
-    </>
-  )
-}
-
 /**
- * The cards follow the selection and the rover strip (layout store ids 'station', 'rover'). `setCard`
- * gets the station whose card to draw; `bindClick` receives the map-click handler. Returns off.
+ * The cards follow the selection and the rover strip (layout store ids 'station', 'selection', 'rover').
+ * `setCard` gets the object whose card to draw; `bindClick` receives the station map-click handler.
  */
-export function wirePlanCards(setCard: (id: string) => void, bindClick: (fn: (id: string) => void) => void): () => void {
-  // one change: the card it replaces closes in the same batch, so the watcher below never sees "both
-  // closed" in between (that would read as a close by hand: a Discard)
-  const open = (id: string) => batch(() => openContainer(id))
-  const show = (id: string) => {
-    setCard(id)
-    open(STATION_CARD)
-  }
-  // a map click on a station (also the one already selected: it reopens its card)
-  bindClick(show)
-  // closing a card by hand (×, Esc), not by the other card opening
-  const read = (o: Readonly<Record<string, boolean>>) => ({ s: !!o[STATION_CARD], r: !!o[ROVER_CARD] })
-  let was = { s: false, r: false }
-  const offs = [
-    // a station selection (map, list, search, history) opens its card; any other selection closes it
-    effect(() => {
-      const s = selection.selected.value
-      if (s?.kind === 'station') show(s.id)
-      else closeContainer(STATION_CARD, { restoreFocus: false })
-    }),
-    // the strip appears on release and goes on Keep / Discard / a new drag
-    effect(() => {
-      const on = !!roverStrip.value
-      if (on && !layout.open.peek()[STATION_CARD]) open(ROVER_CARD)
-      else if (!on) closeContainer(ROVER_CARD, { restoreFocus: false })
-    }),
-    effect(() => {
-      const now = read(layout.open.value)
-      if (was.s && !now.s && !now.r) {
-        // the station selection goes with its card (Esc cleared it in the sidebar); a draft still open
-        // gets its rover card back
-        if (selection.selected.peek()?.kind === 'station') clearSelection()
-        if (roverStrip.peek()) open(ROVER_CARD)
-      }
-      if (was.r && !now.r && !now.s) roverStrip.peek()?.dismiss()
-      was = read(layout.open.peek()) // what this run opened itself (it does not re-run for its own writes)
-    }),
-  ]
-  return () => offs.forEach((f) => f())
+export function wirePlanCards(setCard: (r: SelectionRef) => void, bindClick: (fn: (id: string) => void) => void): () => void {
+  const off = wireSelectionCards({ setCard: (r) => r && setCard(r), rover: { strip: roverStrip, card: ROVER_CARD } })
+  // a map click on a station selects it (console.tsx); clicking the one already selected reopens its card
+  bindClick((id) => {
+    setCard({ kind: 'station', id })
+    batch(() => openContainer(STATION_CARD))
+  })
+  return off
 }
 
-function PlanCards({ cmap, bindClick }: { cmap: ConsoleMap; bindClick: (fn: (id: string) => void) => void }) {
-  const [stations, setStations] = useState<Station[] | null>(null)
-  const [card, setCard] = useState<string | null>(null)
+/** CardData (lazy cards chunk) → what the card needs to name and place an object. */
+async function loadSources(): Promise<CardSources> {
+  const m = await import('../ui/cards/sidebar')
+  return sourcesOf(await m.cardData(data()))
+}
+
+function PlanCards({ cmap, slot, bindClick }: { cmap: ConsoleMap; slot: HTMLElement; bindClick: (fn: (id: string) => void) => void }) {
+  const [src, setSrc] = useState<CardSources | null>(null)
+  const [card, setCard] = useState<SelectionRef | null>(null)
   const strip = useSignalValue(roverStrip)
+  // where the map was last clicked: the anchor of a selection without a point of its own
+  const click = useRef<[number, number] | null>(null)
 
   useEffect(() => {
     let live = true
-    data()
-      .stations()
-      .then((s) => live && setStations(s))
-      .catch(() => undefined)
-    return () => void (live = false)
+    loadSources().then(
+      (s) => live && setSrc(s),
+      () => undefined,
+    )
+    const onClick = (e: { lngLat: { lng: number; lat: number } }) => void (click.current = [e.lngLat.lng, e.lngLat.lat])
+    cmap.map.on('click', onClick)
+    return () => {
+      live = false
+      cmap.map.off('click', onClick)
+    }
   }, [])
 
   useEffect(() => wirePlanCards(setCard, bindClick), [])
 
-  const st = card ? stations?.find((s) => s.id === card) : undefined
+  const center = (): [number, number] | null => {
+    try {
+      const c = cmap.map.getCenter()
+      return [c.lng, c.lat]
+    } catch {
+      return null
+    }
+  }
+  const ll = card ? anchorLngLat(card, src ?? {}, click.current ?? center()) : null
+
+  // the room beside the object (never covering it), kept up to date while the map moves
+  useLayoutEffect(() => {
+    if (!ll) return applyRoom(slot, null)
+    const fit = () => {
+      try {
+        applyRoom(slot, cardRoom(cmap.map.project(ll), { w: slot.clientWidth, h: slot.clientHeight }))
+      } catch {
+        applyRoom(slot, null)
+      }
+    }
+    fit()
+    cmap.map.on('move', fit)
+    cmap.map.on('resize', fit)
+    return () => {
+      cmap.map.off('move', fit)
+      cmap.map.off('resize', fit)
+    }
+  }, [ll?.[0], ll?.[1]])
+
+  const id = card ? cardIdFor(card) : null
+  const page = card?.kind === 'station' && !!src?.stations?.some((s) => s.id === card.id)
   return (
     <>
-      {st && (
-        <MarkerCard id={STATION_CARD} title={`${st.id} ${st.name}`} at={{ lngLat: [st.lon, st.lat], map: cmap.map }} class="plan-card plan-card--station">
+      {card && ll && id && (
+        <MarkerCard key={id} id={id} title={cardTitle(card, src ?? {})} at={{ lngLat: ll, map: cmap.map }} class={`plan-card sel-card plan-card--${id}`}>
           {strip?.render()}
-          <StationCardBody id={st.id} />
+          <SelectionCardBody sel={card} L={data()} stationPage={page} />
         </MarkerCard>
       )}
       {strip && (
@@ -130,15 +121,14 @@ function PlanCards({ cmap, bindClick }: { cmap: ConsoleMap; bindClick: (fn: (id:
 }
 
 registerPlanMount('station', (ctx) => {
-  registerContainer({ id: STATION_CARD, kind: 'card' })
-  registerContainer({ id: ROVER_CARD, kind: 'card' })
-  const offs = [hostIn('station'), hostRoverCard()]
-  render(<PlanCards cmap={ctx.cmap} bindClick={(fn) => ctx.onStationClick(fn)} />, ctx.el.card)
+  for (const id of [...SELECTION_CARDS, ROVER_CARD]) registerContainer({ id, kind: 'card' })
+  const offs = [hostIn('station'), hostIn('selection'), hostRoverCard()]
+  render(<PlanCards cmap={ctx.cmap} slot={ctx.el.card} bindClick={(fn) => ctx.onStationClick(fn)} />, ctx.el.card)
   return () => {
     ctx.onStationClick(null)
     render(null, ctx.el.card) // effects off first: closing the cards below is no Discard
-    closeContainer(STATION_CARD, { restoreFocus: false })
-    closeContainer(ROVER_CARD, { restoreFocus: false })
+    for (const id of [...SELECTION_CARDS, ROVER_CARD]) closeContainer(id, { restoreFocus: false })
+    applyRoom(ctx.el.card, null)
     offs.forEach((f) => f())
   }
 })

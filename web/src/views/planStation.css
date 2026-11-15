@@ -1,6 +1,6 @@
-/* Plan map cards (L2d, D111). Tokens only. The station card keeps the sidebar's width (the selection
-   cards are laid out for it, card-fit), capped by the map; long cards scroll inside the card. */
-.plan-card.hl-lay-card { max-height: calc(100% - var(--space-4)); }
-.plan-card .hl-lay-card__body { min-height: 0; overflow: auto; }
-.plan-card--station.hl-lay-card { width: min(var(--layout-sidebar), calc(100% - var(--space-4))); }
+/* Plan map cards (L2d, D111). Tokens only. The selection cards (station, selection) are sized in
+   ui/cards/selectionCard.css (L2e: the sidebar width, capped by the map and by the room beside the
+   object); the rover card scrolls inside when long. */
+.plan-card--rover.hl-lay-card { max-height: calc(100% - var(--space-4)); }
+.plan-card--rover .hl-lay-card__body { min-height: 0; overflow: auto; }
 .plan-card__open { margin: var(--space-2) 0 0; }

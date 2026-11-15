@@ -18,7 +18,8 @@ import { setManifest } from '../../prov/store'
 import { registerSelectionAction, resetSelection, select, selection, type SelectionRef } from '../../state/selection'
 import { selectFromMap } from '../../state/selectionAdapter'
 import { t } from '../copy'
-import { shell, sidebarContent } from '../shell/store'
+import { resetLayout } from '../layout'
+import { hostIn, openSidebar, shell, sidebarContent } from '../shell/store'
 import { all, byClass, byTag, hasClass, installDom, type FakeNode } from '../testing/dom'
 import { SelectionCard } from './cards'
 import { ensureFor, loadCardData, type CardData, type CellLookup } from './data'
@@ -275,14 +276,17 @@ describe.skipIf(!HAVE)('selection cards (real data)', () => {
     expect(link.getAttribute('href')).toBe('#/station/S1')
   })
 
-  it('installSelectionSidebar: fills the shell sidebar, opens it on selection, handles Escape and [ ] events', () => {
+  it('installSelectionSidebar (L2e): the sidebar never opens on a selection, openSidebar is off; Escape and [ ] events', () => {
     const listeners = new Map<string, (e: Event) => void>()
     const win = { addEventListener: (k: string, f: (e: Event) => void) => listeners.set(k, f), removeEventListener: (k: string) => listeners.delete(k) }
     shell.sidebarOpen.value = false
     const stop = installSelectionSidebar({ loader: L, cell, win: win as unknown as Window })
-    expect(sidebarContent.peek()).toBeTypeOf('function')
+    expect(sidebarContent.peek()).toBeUndefined() // the card shows the selection, not the sidebar
     select({ kind: 'station', id: 'S4' }, 'list')
-    expect(shell.sidebarOpen.peek()).toBe(true)
+    select({ kind: 'pad', id: 'rank1' }, 'search')
+    expect(shell.sidebarOpen.peek()).toBe(false)
+    openSidebar() // the search palette's call: a no-op while the cards are on
+    expect(shell.sidebarOpen.peek()).toBe(false)
     const ev = (detail: unknown) => {
       let prevented = false
       listeners.get('hl:shortcut')!({ detail, preventDefault: () => (prevented = true) } as unknown as Event)
@@ -290,14 +294,41 @@ describe.skipIf(!HAVE)('selection cards (real data)', () => {
     }
     select({ kind: 'station', id: 'S1' }, 'list')
     expect(ev({ action: 'history', step: -1 })).toBe(true)
-    expect(selection.selected.peek()).toEqual({ kind: 'station', id: 'S4' })
+    expect(selection.selected.peek()).toEqual({ kind: 'pad', id: 'rank1' })
     shell.helpOpen.value = true
     expect(ev({ action: 'escape' })).toBe(false) // the shell closes help first
     shell.helpOpen.value = false
     expect(ev({ action: 'escape' })).toBe(true)
     expect(selection.selected.peek()).toBeNull()
     stop()
-    expect(sidebarContent.peek()).toBeUndefined()
+    expect(shell.selectionCards.peek()).toBe(false)
     expect(listeners.has('hl:shortcut')).toBe(false)
+  })
+
+  it('installSelectionSidebar (L2e): without the Plan map, a selection opens the centred pop-up card; × clears it; the map hosting it hides it', async () => {
+    const win = { addEventListener: () => {}, removeEventListener: () => {} }
+    resetLayout()
+    let stop = () => {}
+    act(() => void (stop = installSelectionSidebar({ loader: L, cell, win: win as unknown as Window, host: root as unknown as HTMLElement })))
+    try {
+      const pop = () => byClass(root, 'sel-card--centred')
+      expect(pop()).toHaveLength(0)
+      act(() => select({ kind: 'landmark', code: 'GDV' }, 'search'))
+      await act(async () => void (await cardData(L, cell)))
+      expect(pop()).toHaveLength(1)
+      expect(pop()[0].getAttribute('id')).toBe('hl-lay-selection')
+      expect(pop()[0].getAttribute('role')).toBe('dialog')
+      act(() => select({ kind: 'station', id: 'S4' }, 'search'))
+      expect(pop()[0].getAttribute('id')).toBe('hl-lay-station') // one card at a time
+      act(() => void byTag(pop()[0], 'button').find((b) => b.getAttribute('aria-label') === t('buttons.close'))!.dispatch('click'))
+      expect(pop()).toHaveLength(0)
+      expect(selection.selected.peek()).toBeNull() // closed by hand: the selection goes too
+      const off = hostIn('selection') // the Plan map draws it at the object instead
+      act(() => select({ kind: 'pad', id: 'rank1' }, 'map'))
+      expect(pop()).toHaveLength(0)
+      off()
+    } finally {
+      act(() => stop())
+    }
   })
 })
