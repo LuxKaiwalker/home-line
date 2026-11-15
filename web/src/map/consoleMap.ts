@@ -1,6 +1,7 @@
 // Planning-console map (F17 default view, F5 slider, F6 scenario layers). Plain TS + MapLibre.
 // Offline by construction: the style has no glyphs, sprite or remote source; every source is a
-// local data file or a canvas-made image. Labels are HTML markers.
+// local data file or a canvas-made image. Labels are HTML markers; the U13 labels from labels.json
+// are DOM pills placed by a CPU collision layout (labels/layer.ts, no glyphs needed).
 import { LngLatBounds, Map as MlMap, Marker, NavigationControl, setWorkerUrl, type GeoJSONSource } from 'maplibre-gl'
 import type { ExpressionSpecification, FilterSpecification, StyleSpecification } from '@maplibre/maplibre-gl-style-spec'
 import 'maplibre-gl/dist/maplibre-gl.css'
@@ -20,6 +21,7 @@ import { effect, ui } from '../state'
 import { collapseFade, collapseHeadline, collapseQuery, padGridMetres, playCollapse, setCollapse } from './field/collapse'
 import { CollapseHeadlineOverlay, CollapseToggle } from './field/collapseUi'
 import { MapFurniture, MARKER_LAYERS, ROUTE_LAYERS } from './furniture'
+import { LabelLayer, loadLabels } from './labels/layer'
 import { activeField, BINDING_LABEL, driveMargin, FIELD_TRUST, fieldModeQuery, fieldRequested, loadFieldData, loadFieldLayer, setActiveField, VARIANT_OF, webgl2Available, zeroEdgeLabels, type FieldData, type MarginState } from './field'
 
 /** The GPU field layer handle (field/layer.ts, loaded lazily). */
@@ -110,6 +112,11 @@ export class ConsoleMap {
   private collapseHidesEdges = false
   // WS16 task 5: thread home, route draw-on, markers, compass, cursor readout (U4)
   private furniture: MapFurniture | null = null
+  // WS16 task 6: U13 labels from labels.json; they replace the old HTML label of each object they cover
+  private labels: LabelLayer | null = null
+  private lastStations: { stations: Station[]; scenarioId: string } | null = null
+  private lastPad: Parameters<ConsoleMap['setPad']>[0] | null = null
+  private lastPadOptions: Parameters<ConsoleMap['setPadOptions']> | null = null
 
   constructor(container: HTMLElement, onStation: (id: string) => void) {
     this.onStation = onStation
@@ -191,6 +198,22 @@ export class ConsoleMap {
     this.furniture = new MapFurniture(m)
     this.furniture.setRouteVisible(this.visible.route)
     this.applyFilters()
+    this.applyVisibility()
+    void this.initLabels()
+  }
+
+  /** U13 labels (labels.json); without the file the old HTML labels stay as they are. */
+  private async initLabels(): Promise<void> {
+    const ls = await loadLabels().catch((e) => {
+      console.warn('labels.json unavailable; keeping the HTML labels:', e)
+      return null
+    })
+    if (!ls?.length || this.labels) return
+    this.labels = new LabelLayer(this.map)
+    this.labels.setLabels(ls)
+    if (this.lastPad) this.setPad(this.lastPad)
+    if (this.lastPadOptions) this.setPadOptions(...this.lastPadOptions)
+    if (this.lastStations) await this.setStations(this.lastStations.stations, this.lastStations.scenarioId)
     this.applyVisibility()
   }
 
@@ -394,8 +417,10 @@ export class ConsoleMap {
   /** Station science points (markers), access cells and walk-in lines for one scenario. */
   async setStations(stations: Station[], scenarioId: string): Promise<void> {
     this.stationsScenario = scenarioId
+    this.lastStations = { stations, scenarioId }
     this.stationMarkers.forEach((m) => m.remove())
-    this.stationMarkers = stations.map((s) => {
+    const labels = this.labels
+    this.stationMarkers = stations.flatMap((s) => {
       const a = accessFor(s, scenarioId)
       const el = document.createElement('button')
       el.type = 'button'
@@ -408,12 +433,17 @@ export class ConsoleMap {
             ? `no access cell within ${a.radius_m ?? '?'} m${a.reason ? ` (${a.reason})` : ''}`
             : 'access cell: no data'
       el.title = `${s.name} (science point; ${acc}): open the station card`
+      // U13: the label layer draws this station's pill; the ring stays a map layer (furniture)
+      if (labels?.covers(s.id)) {
+        labels.bind(s.id, { title: el.title, onActivate: () => this.onStation(s.id) })
+        return []
+      }
       el.addEventListener('click', (ev) => {
         ev.stopPropagation()
         this.onStation(s.id)
       })
       // the ring is a map layer (furniture); this button is its label, to the right of the ring
-      return new Marker({ element: el, anchor: 'left', offset: [12, 0] }).setLngLat([s.lon, s.lat]).addTo(this.map)
+      return [new Marker({ element: el, anchor: 'left', offset: [12, 0] }).setLngLat([s.lon, s.lat]).addTo(this.map)]
     })
     await this.ready
     this.furniture?.setStations(stations)
@@ -451,17 +481,25 @@ export class ConsoleMap {
   }
 
   setPad(p: { lon: number; lat: number; label: string; title: string }): void {
+    this.lastPad = p
     this.padMarker?.remove()
     const el = document.createElement('div')
     el.className = 'pad-marker'
     el.textContent = p.label
     el.title = p.title
+    if (this.labels?.covers('PAD')) {
+      // U13: the PAD pill carries the text; the marker stays as the pad's point graphic
+      el.classList.add('hl-label-covered')
+      el.textContent = ''
+      this.labels.bind('PAD', { title: p.title })
+    }
     this.padMarker = new Marker({ element: el }).setLngLat([p.lon, p.lat]).addTo(this.map)
     this.applyVisibility()
   }
 
   /** D21 parking options (scenarios/pads/index.json, official pad excluded): small markers, the selected one highlighted; click selects. */
   setPadOptions(opts: { id: string; lon: number; lat: number; label: string; title: string; selected: boolean }[], onPick: (id: string) => void): void {
+    this.lastPadOptions = [opts, onPick]
     this.padOptionMarkers.forEach((m) => m.remove())
     this.padOptionMarkers = opts.map((o) => {
       const el = document.createElement('button')
@@ -469,6 +507,13 @@ export class ConsoleMap {
       el.className = `pad-option${o.selected ? ' on' : ''}`
       el.textContent = o.label
       el.title = o.title
+      const code = this.labels?.codeForRef(o.id)
+      if (code) {
+        // U13: the P2-P5 pill carries the text (and selects too); the button stays as the point graphic
+        el.classList.add('hl-label-covered')
+        el.textContent = ''
+        this.labels!.bind(code, { title: o.title, onActivate: () => onPick(o.id) })
+      }
       el.addEventListener('click', (ev) => {
         ev.stopPropagation()
         onPick(o.id)
@@ -535,6 +580,7 @@ export class ConsoleMap {
     for (const mk of this.stationMarkers) mk.getElement().hidden = !this.visible.stations
     if (this.padMarker) this.padMarker.getElement().hidden = !this.visible.stations
     for (const mk of this.padOptionMarkers) mk.getElement().hidden = !this.visible.stations
+    this.labels?.setGroupVisible(this.visible.stations)
     for (const mk of this.sitingMarkers) mk.getElement().hidden = !this.visible.siting
     for (const mk of this.edgeMarkers) mk.getElement().hidden = !this.visible.edges || this.collapseHidesEdges
     // GPU field: replaces the polygon bands (and the hatch image when it has the cell states).
@@ -566,6 +612,7 @@ export class ConsoleMap {
   }
 
   destroy(): void {
+    this.labels?.destroy()
     this.furniture?.destroy()
     this.stopCollapse?.()
     this.headline?.destroy()
