@@ -127,6 +127,7 @@ Ranges and defaults: `config/backend.yaml ranges` (defaults referenced from `cre
 
 - A changed crew changes every edge cost, so station fields are recomputed (≤ 2 searches per station), cached by hash.
 - Values outside the anchored range get "outside the anchored range (ICES-2026-127, IST-2)". The three variants always run.
+- The partner-line casualty mass comes from config (`haul.suited_casualty_kg`: `crew.yaml` body mass + suit mass), not from the crew's body mass override (D87).
 - **Acceptance:** heavier suit never increases reach; defaults reproduce the precomputed scenario; out-of-range inputs rejected with the allowed range.
 
 ### F27 — Accounts and plan library
