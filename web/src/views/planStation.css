@@ -4,3 +4,6 @@
 .plan-card .hl-lay-card__body { min-height: 0; overflow: auto; }
 .plan-card--station.hl-lay-card { width: min(var(--layout-sidebar), calc(100% - var(--space-4))); }
 .plan-card__open { margin: var(--space-2) 0 0; }
+/* J1d: "Open station" and "Add to route" side by side */
+.plan-card__open { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+.plan-card__add { display: inline-flex; align-items: center; gap: var(--space-1); }

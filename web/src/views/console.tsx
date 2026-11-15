@@ -32,13 +32,14 @@ import { choosePlanScenario, mission, resolvePlanScenario } from '../state/missi
 import { useSignalValue } from '../state/signal'
 import type { View } from './types'
 import { makeSections, mountPlanSlots, PlanSummary, S, SectionsCtx } from './planSlots'
+import './planBottom' // L2b: the plan-bottom drawer (plan table + timeline tabs)
 import './planLayers' // L2c (D111): layers popover, legend chip, map-edge tools (registers its Plan mount)
 import { HeadlineStrip } from './planStrip' // L2a: the headline strip (registers its Plan mount)
 import './planStation' // L2d: station + rover marker cards
 
 const LAYER_LABELS: Record<LayerGroup, string> = {
   basemap: 'Basemap',
-  bands: 'Homeline band',
+  bands: 'Home line band',
   unknown: 'Unknown terrain (hatched)',
   edges: 'Edge causes',
   stations: 'Stations and pad',
@@ -81,13 +82,14 @@ export const view: View = async (el) => {
   // X3 (e2e H5-2): the live aside gets the side panel's fixed width, so its text never resizes the map.
   const liveAside = () => Object.assign(panelEl.parentElement!.appendChild(document.createElement('aside')), { className: 'console-panel console-live' })
   // L3 (D111): the Edit-route drawer and its map-edge opener mount inside the map (before the pad tool,
-  // so the crew panel goes into the drawer), only with route editing on (D116 ROUTE_EDIT_ENABLED);
+  // so the crew panel goes into the drawer), only with route editing on (D116 ROUTE_EDIT_ENABLED) and the
+  // drawer flag set (J1f VITE_EDIT_ROUTE_DRAWER=1; default hidden: route planning is in the Mission Planer);
   // "My plans" comes from src/live/plans through the same guard.
   if (import.meta.env.VITE_LIVE === '1') void Promise.all([import('../live'), import('../ui/shell/editroute'), import('../live/plans/store'), import('../live/plans/view')]).then(([m, er, ps, pv]) => {
     if (!alive) return
     // shell frame only (?legacy=1 keeps its old layout: no D111 containers); L2-shell's live slot when present
     const liveSlot = el.closest('.hl-shell') ? (mapEl.querySelector<HTMLElement>('[data-plan-slot=live]') ?? mapEl) : null
-    const offEdit = liveSlot ? er.mountEditRoute(liveSlot, { store: ps.createPlansStore(), View: pv.MyPlans }, { enabled: m.ROUTE_EDIT_ENABLED, simMode: m.SIM_EXPORT_MODE }) : () => {}
+    const offEdit = liveSlot ? er.mountEditRoute(liveSlot, { store: ps.createPlansStore(), View: pv.MyPlans }, { enabled: m.PLAN_ROUTE_EDIT, simMode: m.SIM_EXPORT_MODE }) : () => {}
     const offPad = m.padTool(liveAside(), m.consoleMapPort(cmap))
     disposeLive = () => {
       offPad()
@@ -706,7 +708,7 @@ function Legend(p: {
         {v.bands && (
           <>
             <li>
-              <Swatch kind="fill" color={THEME.variant.conservative} /> {p.budget}-min homeline, conservative (inner; no-go{' '}
+              <Swatch kind="fill" color={THEME.variant.conservative} /> {p.budget}-min home line, conservative (inner; no-go{' '}
               <CfgNum v={CITED.nogoConservativeDeg.value} units="deg" source={CITED.nogoConservativeDeg.source} />, D23)
             </li>
             <li>

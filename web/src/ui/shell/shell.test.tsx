@@ -58,9 +58,9 @@ describe('legacy frame = the layout from before the shell', () => {
     const root = f.root as unknown as FakeNode
     const header = one(byTag(root, 'header'))
     expect(header.getAttribute('class')).toBe('topbar')
-    expect(text(one(byClass(header, 'brand')))).toBe('HOMELINE')
+    expect(text(one(byClass(header, 'brand')))).toBe('MARVIS')
     const links = byTag(one(byClass(header, 'topnav')), 'a')
-    expect(links.map((a) => a.getAttribute('href'))).toEqual(['#/', '#/trade', '#/conditions', '#/cuff', '#/hud', '#/scorecard', '#/about'])
+    expect(links.map((a) => a.getAttribute('href'))).toEqual(['#/', '#/mission', '#/trade', '#/conditions', '#/cuff', '#/hud', '#/scorecard', '#/about'])
     expect(links.map(text)).toEqual(NAV_ITEMS.map((n) => n.label))
     expect(byClass(root, 'dummy-banner')).toHaveLength(1)
     expect(one(byTag(root, 'main')).getAttribute('class')).toBe('outlet')
@@ -149,6 +149,14 @@ describe('shell frame and islands', () => {
     expect(views.map((a) => a.getAttribute('href'))).toEqual(['#/evidence/scorecard', '#/evidence/about'])
   })
 
+  it('the Mission Planer (PLAN) has no EVA-time dock; the Plan view keeps it', () => {
+    act(() => void applyRoute({ name: 'mission' }, '#/mission'))
+    expect(ui.mode.value).toBe('plan')
+    expect(root().getAttribute('data-dock')).toBe('none')
+    act(() => void applyRoute({ name: 'console' }, '#/'))
+    expect(root().getAttribute('data-dock')).not.toBe('none')
+  })
+
   it('every route maps into its mode (§4.2)', () => {
     const cases = [
       [{ name: 'console' }, 'plan'],
@@ -196,7 +204,7 @@ describe('shell frame and islands', () => {
     expect(root().getAttribute('data-bp')).toBe('tablet')
     expect(ui.panels.leftRail.value).toBe(TOKENS.layout.leftRail) // desktop preference: open
     expect(root().getAttribute('data-rail')).toBe('collapsed')
-    expect(byClass(root(), 'hl-rail__view').map((a) => a.getAttribute('aria-label'))).toEqual([t('modes.plan.label')])
+    expect(byClass(root(), 'hl-rail__view').map((a) => a.getAttribute('aria-label'))).toEqual([t('nav.views.mission'), t('nav.views.console')])
     expect(byClass(root(), 'hl-rail__title')).toHaveLength(0)
     expect(byClass(root(), 'probe')).toHaveLength(0)
     expect(one(byClass(root(), 'hl-rail__body')).hasAttribute('hidden')).toBe(false)

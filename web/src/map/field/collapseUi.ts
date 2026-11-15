@@ -20,7 +20,7 @@ export const HEADLINE_TRUST = {
   sourceAttr: 'data-trust-source',
 } as const
 
-export const TOGGLE_LABEL = { toFlat: 'Flat vs real: show the flat circle', toReal: 'Flat vs real: collapse to the real homeline' } as const
+export const TOGGLE_LABEL = { toFlat: 'Flat vs real: show the flat circle', toReal: 'Flat vs real: collapse to the real home line' } as const
 
 /** The "Flat vs real" toggle (DESIGN U3 trigger in Plan). */
 export class CollapseToggle implements IControl {

@@ -7,6 +7,7 @@
 //                    step key for conditions (notes/M12.md). The storyboard is web/public/story/storm.json.
 import type { IControl, Map as MlMap } from 'maplibre-gl'
 import { effect, mission } from '../../state'
+import { confirmInputChange } from '../../state/activity'
 import { fmtEva } from '../../ui/timeline/model'
 import { t } from '../../ui/copy'
 import { iconSvg } from '../../ui/icons/icons'
@@ -45,11 +46,16 @@ export class StormControl implements IControl {
     const btn = document.createElement('button')
     btn.type = 'button'
     btn.className = 'hl-storm-btn'
-    btn.title = t('storm.title')
+    // L7c: the storm is a setting the replay honours, not a player (state/activity.ts): the switch never
+    // starts or stops playback; while a plan computes it is an input change and asks first
+    const setting = t('activity.stormSetting')
+    btn.title = `${t('storm.title')} · ${setting}`
+    btn.dataset.activitySetting = 'storm'
     // L2c (D111): icon + label; the Plan map-edge tools show the icon only (label = name, title = tooltip)
     btn.innerHTML = `${iconSvg('radiation', { className: 'hl-ctrl-icon' })}<span class="hl-ctrl-text"></span>`
     const text = btn.querySelector<HTMLSpanElement>('.hl-ctrl-text')!
     btn.addEventListener('click', () => {
+      if (!confirmInputChange()) return
       mission.conditions.storm.value = !mission.conditions.storm.peek()
     })
     box.append(btn)
@@ -73,7 +79,7 @@ export class StormControl implements IControl {
               h?.stop()
               return
             }
-            btn.title = stormTooltip(h?.model ?? null)
+            btn.title = `${stormTooltip(h?.model ?? null)} · ${setting}`
             if (!h) {
               btn.disabled = true
               mission.conditions.storm.value = false

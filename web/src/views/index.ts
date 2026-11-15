@@ -7,6 +7,7 @@ type Loader = () => Promise<View>
 
 export const VIEWS: Record<Route['name'], Loader> = {
   console: async () => (await import('./console')).view,
+  mission: async () => (await import('./mission')).view,
   station: async () => (await import('./station')).view,
   trade: async () => (await import('./trade')).view,
   conditions: async () => (await import('./conditions')).view,

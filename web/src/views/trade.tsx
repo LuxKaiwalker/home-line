@@ -192,7 +192,7 @@ function TradeView() {
         }}
       </Show>
       <p class="caption">
-        Science value: Σ station value within the conservative homeline. Partner-line area: area inside the <CfgNum v={CITED.haulContourMin.value} units="min" source={CITED.haulContourMin.source} /> cart-haul line (D20); design
+        Science value: Σ station value within the conservative home line. Partner-line area: area inside the <CfgNum v={CITED.haulContourMin.value} units="min" source={CITED.haulContourMin.source} /> cart-haul line (D20); design
         question, every haul parameter is an assumed band.
       </p>
     </Page>

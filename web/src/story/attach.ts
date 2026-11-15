@@ -9,6 +9,7 @@ import type { ConsoleMap } from '../map/consoleMap'
 import { loadLabels } from '../map/labels/layer'
 import { loadFlightPath } from '../map/flythrough/route'
 import { missionClock, ui } from '../state'
+import { end as endPlayer, start as startPlayer } from '../state/activity'
 import { Director, type DirectorState } from './director'
 import { storyParams, storyRequest, type StoryRequest } from './query'
 import { StoryStage, type ChromePolicy } from './stage'
@@ -21,7 +22,7 @@ import { data } from '../data/loader'
 import { DATA_MODE, dataUrl } from '../env'
 import { CHASE, ELEVATION_FACTOR, FIRST_FRAME_MAX_MS, WARMUP_MAX_MS } from './config'
 import { after, descentTiles, mapIdle, prefetch, storyPoses, until, type TileSet } from './warm'
-import { introSkipRequested, loadingDone, onIntroSkip, setLoadProgress, STAGE } from './loading'
+import { introOver, introSkipRequested, loadingDone, onIntroSkip, setLoadProgress, STAGE } from './loading'
 
 const INPUTS = ['keydown', 'pointerdown', 'wheel', 'touchstart'] as const
 
@@ -283,6 +284,7 @@ export function attachStory(cmap: ConsoleMap, req: StoryRequest = storyRequest(s
   // L12: the viewer skipped from the loading screen before the story got here
   if (!req || (req.kind === 'intro' && introSkipRequested())) {
     loadingDone()
+    if (req) introOver() // D132: a bare address lands on the Mission Planer once the intro is over
     return () => undefined
   }
   if (req.kind === 'intro') ui.introSeen.value = true // in memory: once per page session (no browser storage)
@@ -310,6 +312,15 @@ export function attachStory(cmap: ConsoleMap, req: StoryRequest = storyRequest(s
       window.__capture = runCapture(stage, d, sb)
       return
     }
+    // L7c: the intro (and the kiosk loop) is a player of the activity store (state/activity.ts): another
+    // player, an edit or a mode switch stops it, the app restored at once (before that player starts)
+    const st = stage
+    const stopStory = (): void => {
+      signal.stopped = true
+      st.restore(false)
+    }
+    st.onRestored = () => endPlayer('intro', stopStory)
+    if (!startPlayer('intro', stopStory).ok) stopStory()
     // input during the warm-up skips the story like input during it: the app is restored in the
     // input's own microtasks, before its click lands (the click acts on the restored app, D9)
     for (const ev of INPUTS) window.addEventListener(ev, skip, { capture: true, passive: true })
@@ -338,6 +349,7 @@ export function attachStory(cmap: ConsoleMap, req: StoryRequest = storyRequest(s
     .finally(() => {
       unSkip()
       if (req.kind !== 'capture') loadingDone() // L12: never leave the loading screen up
+      if (req.kind === 'intro') introOver() // D132: ended, skipped or failed
     })
   return () => {
     signal.stopped = true
