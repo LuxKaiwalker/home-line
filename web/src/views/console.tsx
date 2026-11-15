@@ -21,6 +21,7 @@ import { href } from '../router'
 import { THEME } from '../theme'
 import { AssumedTag, DataProblem, DummyNote } from '../components/labels'
 import { CfgNum, Num } from '../components/Num'
+import { select } from '../state/selection'
 import { DragNote } from '../components/DragNote'
 import { PadBlockLabel, PadInUseText } from '../components/PadInUse'
 import { ensureManifest } from './common'
@@ -51,6 +52,7 @@ export const view: View = async (el) => {
   const panelEl = el.querySelector<HTMLElement>('.console-panel')!
   await ensureManifest()
   const cmap = new ConsoleMap(mapEl, (id) => {
+    select({ kind: 'station', id }, 'map') // U14: same card as the list and search
     location.hash = href({ name: 'station', id })
   })
   render(<ConsolePanel cmap={cmap} />, panelEl)
@@ -489,7 +491,7 @@ function ConsolePanel({ cmap }: { cmap: ConsoleMap }) {
                 return (
                   <tr>
                     <td>
-                      <a href={href({ name: 'station', id: s.id })}>
+                      <a href={href({ name: 'station', id: s.id })} onClick={() => select({ kind: 'station', id: s.id }, 'list')}>
                         <b>{s.id}</b> {s.name}
                       </a>
                       {s.reachability_label ? <span class="muted"> · {s.reachability_label}</span> : null}
