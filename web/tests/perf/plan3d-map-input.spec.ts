@@ -127,7 +127,8 @@ test('L13: planning interactions in 3D (?view=3d, open pose): right-drag pan, cu
   await test.step('a layer toggle shows and hides its layer', async () => {
     // L2: the Plan rail starts collapsed (icons); its toggle opens the full rail with the layer panel
     const toggle = page.locator('.hl-rail__toggle')
-    if ((await toggle.count()) && (await toggle.getAttribute('aria-expanded')) === 'false') await toggle.click()
+    const opened = (await toggle.count()) > 0 && (await toggle.getAttribute('aria-expanded')) === 'false'
+    if (opened) await toggle.click()
     const row = page.locator('.hl-ovl__layer').first()
     await row.waitFor({ timeout: 20_000 })
     const id = (await row.getAttribute('data-overlay'))!
@@ -140,6 +141,7 @@ test('L13: planning interactions in 3D (?view=3d, open pose): right-drag pan, cu
     await sw.click()
     await expect(sw).toHaveAttribute('aria-checked', 'false')
     await expect(mapEl(page)).not.toHaveAttribute('data-overlays-on', on, { timeout: 10_000 })
+    if (opened) await toggle.click() // the rail sheet covers part of the map again
   })
 
   // 3D all along (checked before the pill click: opening a station card may route and remount the map)
