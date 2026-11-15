@@ -164,3 +164,22 @@ describe('ExportSection', () => {
     expect(text(root)).toContain('This link could not be read')
   })
 })
+
+describe('install', () => {
+  it("fills U1's 'export' region and unregisters", async () => {
+    const { resetRoutePanelSections, useRoutePanelSection } = await import('../sections')
+    const { install } = await import('./index')
+    let seen: unknown
+    const Probe = () => {
+      seen = useRoutePanelSection('export')
+      return null
+    }
+    const off = install()
+    act(() => render(<Probe />, root as unknown as Element))
+    expect(seen).toBe(ExportSection)
+    off()
+    act(() => render(<Probe />, root as unknown as Element))
+    expect(seen).toBeUndefined()
+    resetRoutePanelSections()
+  })
+})
