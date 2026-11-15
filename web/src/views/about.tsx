@@ -2,6 +2,7 @@
 import { DATA_MODE } from '../env'
 import { Page, preactView } from './page'
 import { RealModelledSimulated } from './scorecard'
+import { t } from '../ui/copy'
 
 const SOURCES: [string, string, string][] = [
   ['MSL Gale Merged DEM 1 m v3', 'MRO, MEX (ESA), MGS', 'USGS Astrogeology'],
@@ -55,6 +56,15 @@ function About() {
       </table>
       <h2>Real, modelled, simulated</h2>
       <RealModelledSimulated />
+      {/* L2 (D111): the layout remembers which panels and view were left open (browser storage, ui/layout/store.ts).
+          Static builds say so here; live builds say it in the live privacy note (src/live/privacy.tsx), inserted
+          before "Licences" instead (that note and its "Privacy" heading never show with the flag off). */}
+      {import.meta.env.VITE_LIVE !== '1' && (
+        <>
+          <h2>{t('layout.storageTitle')}</h2>
+          <p class="about-privacy">{t('layout.privacy')}</p>
+        </>
+      )}
       <h2>Licences</h2>
       <p>Code: Apache-2.0. Per-source data licences and credits: to be completed by the team before submission.</p>
       <h2>Super Intelligence (SI) use statement</h2>
