@@ -115,7 +115,8 @@ def test_frame_is_the_official_pad(official):
 
 def test_created_utc_is_the_official_build_time(official):
     manifest = _json(DATA / "manifest.json")
-    times = sorted(v["utc"] for v in manifest.values() if isinstance(v, dict) and v.get("utc"))
+    times = sorted(v["utc"] for v in manifest.values() if isinstance(v, dict) and v.get("utc")
+                   and not v["file"].startswith("fields/pads/"))  # I2 picker pads: not official
     assert official["created_utc"] == mm.build_time() == times[-1]
 
 

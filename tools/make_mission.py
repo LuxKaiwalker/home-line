@@ -57,9 +57,15 @@ def _manifest_entries(data: Path) -> list[dict]:
     return [v for v in m.values() if isinstance(v, dict)]
 
 
+PICKER_PAD_FIELDS = "fields/pads/"  # I2 browser fields of the picker pads: not the official plan
+
+
 def build_time(data: Path = DATA) -> str:
-    """The official tree's build time: the latest ``utc`` of its provenance manifest."""
-    times = sorted(v["utc"] for v in _manifest_entries(data) if v.get("utc"))
+    """The official tree's build time: the latest ``utc`` of its provenance manifest, over the
+    official plan's rows (the picker-pad field rows under ``fields/pads/``, added later by
+    tools/make_pad_fields.py, are not part of it)."""
+    times = sorted(v["utc"] for v in _manifest_entries(data)
+                   if v.get("utc") and not str(v.get("file", "")).startswith(PICKER_PAD_FIELDS))
     if not times:
         raise ValueError(f"{data / 'manifest.json'} carries no utc times")
     return times[-1]
