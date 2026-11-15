@@ -17,7 +17,7 @@ export function fromCheck(check: Check): { disabled: boolean; reason: string | n
 
 /** The native `title` for a control: the reason while disabled, else the normal title (if any). */
 export function reasonTitle(disabled: boolean | undefined, reason: string | null | undefined, title?: string): string | undefined {
-  return disabled && reasdisabled ? reason : title
+  return disabled && reason ? reason : title
 }
 
 export interface DisabledReasonProps {
