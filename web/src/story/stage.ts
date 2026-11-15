@@ -133,16 +133,18 @@ export class StoryStage {
    */
   private startFullscreen(): void {
     this.markSlot()
-    window.addEventListener('resize', this.onResize)
+    if (typeof window !== 'undefined' && window.addEventListener) window.addEventListener('resize', this.onResize)
     document.documentElement.dataset.storyFull = 'on'
   }
 
   /** The map's rect in its shell slot (measured with the full-screen rule off; no paint in between). */
   private markSlot(): void {
     const html = document.documentElement
+    const el = this.map.getContainer() as Partial<HTMLElement>
+    if (typeof el.getBoundingClientRect !== 'function' || !html.style) return // no layout (unit tests)
     const full = html.dataset.storyFull
     if (full) delete html.dataset.storyFull
-    const r = this.map.getContainer().getBoundingClientRect()
+    const r = el.getBoundingClientRect()
     if (full) html.dataset.storyFull = full
     html.style.setProperty('--hl-slot-top', `${r.top}px`)
     html.style.setProperty('--hl-slot-left', `${r.left}px`)
@@ -152,9 +154,10 @@ export class StoryStage {
 
   /** L12 (D111): the map goes back into the shell and the loading screen (with its buttons) goes. */
   private endFullscreen(): void {
-    window.removeEventListener('resize', this.onResize)
-    delete document.documentElement.dataset.storyFull
-    for (const k of ['top', 'left', 'width', 'height']) document.documentElement.style.removeProperty(`--hl-slot-${k}`)
+    if (typeof window !== 'undefined' && window.removeEventListener) window.removeEventListener('resize', this.onResize)
+    const html = document.documentElement
+    delete html.dataset.storyFull
+    for (const k of ['top', 'left', 'width', 'height']) html.style?.removeProperty(`--hl-slot-${k}`)
     loadingDone()
   }
 
