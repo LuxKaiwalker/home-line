@@ -168,6 +168,22 @@ for (const drawer of DRAWERS)
     await rover.waitFor({ timeout: 60_000 })
     await startPlayer(page, 'storm')
     await expectRunning(page, 'storm')
+    if (drawer === 'timeline') {
+      // started from the Timeline tab; the expanded drawer refits the map above it, which puts the rover
+      // pad under the storm card at 1440x900, so the viewer collapses the drawer (that is no edit and
+      // stops nothing) to reach the rover
+      await press(page, page.locator(GRIP))
+      await expect(page.locator(GRIP)).toHaveAttribute('aria-expanded', 'false')
+      await expectRunning(page, 'storm')
+      await expect(rover).toBeVisible()
+    }
+    // nothing covers the rover: the press lands on it
+    const onTop = () =>
+      rover.evaluate((r) => {
+        const c = r.getBoundingClientRect()
+        return r.contains(document.elementFromPoint(c.x + c.width / 2, c.y + c.height / 2))
+      })
+    await expect.poll(onTop, { timeout: 10_000 }).toBe(true)
     const b = (await rover.boundingBox())!
     const at = { x: b.x + b.width / 2, y: b.y + b.height / 2 }
     await page.mouse.move(at.x, at.y)
