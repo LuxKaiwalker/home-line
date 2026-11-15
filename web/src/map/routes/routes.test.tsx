@@ -19,7 +19,23 @@ import copyR4 from './copy.R4.json'
 import { captureKeys, labelAt, mineView, officialLines } from './features'
 import { install, mineRouteLayer, officialRouteLayer, RouteLegend } from './index'
 import { MINE_LAYERS, MINE_SOURCE, OFFICIAL_LAYER, OFFICIAL_SOURCE, type ResultsSource } from './layers'
-import { MOCK_ROUTE_RESULTS, type RouteResults } from './results'
+import { MOCK_ROUTE_RESULTS as R1_MOCK, type RouteResults } from '../../state/routeResults'
+
+/** R4 fixture: pad → s1 (station S1) → s2 (point W1) → pad, the last leg infeasible. */
+const MOCK_ROUTE_RESULTS: RouteResults = {
+  seq: 1,
+  padId: 'official',
+  status: 'ready',
+  legs: [
+    { index: 0, fromStopId: 'pad', toStopId: 's1', minutes: 12, o2L: 20, distanceM: 600, feasible: true, path: [[137.4018, -4.7775], [137.4022, -4.7770], [137.4030, -4.7765]], mode: 'fast', refined: false },
+    { index: 1, fromStopId: 's1', toStopId: 's2', minutes: 9, o2L: 15, distanceM: 450, feasible: true, path: [[137.4030, -4.7765], [137.4036, -4.7760]], mode: 'fast', refined: false },
+    { index: 2, fromStopId: 's2', toStopId: 'pad', minutes: null, o2L: null, distanceM: null, feasible: false, reason: 'budget', path: [[137.4036, -4.7760], [137.4026, -4.7769], [137.4018, -4.7775]], mode: 'fast', refined: false },
+  ],
+  totalMinutes: null,
+  marginMin: -4,
+  firstInfeasibleLeg: 2,
+  fastRoute: true,
+}
 
 // ---- fakes ---------------------------------------------------------------------------------------
 
@@ -180,6 +196,21 @@ describe('features', () => {
     const stops = twoStops()
     const v = mineView({ stops, padId: 'rank2', pad: [137.3933, -4.7765], results: MOCK_ROUTE_RESULTS, keys: captureKeys(MOCK_ROUTE_RESULTS, stops, 'rank2'), stationAt: () => [137.403, -4.7765] })
     expect(v.fc.features.map((f) => f.properties.state)).toEqual(['ghost', 'ghost', 'ghost'])
+  })
+
+  it('R1 mock (state/routeResults): an infeasible leg without a path is a straight line in the infeasible state', () => {
+    const stops: PlanStop[] = [makeStop({ kind: 'point', lon: 137.396, lat: -4.772, id: 'w1' }), makeStop({ kind: 'station', station: 'S3', id: 's3' })]
+    const v = mineView({ stops, padId: 'official', pad: [137.385, -4.78], results: R1_MOCK, keys: captureKeys(R1_MOCK, stops, 'official') })
+    expect(v.fc.features.map((f) => [f.properties.state, f.properties.refined])).toEqual([
+      ['ok', false],
+      ['ok', true],
+      ['infeasible', false],
+    ])
+    expect(v.fc.features[2].geometry.coordinates).toEqual([[137.408, -4.765], [137.385, -4.78]])
+    expect(v.stops.map((s) => [s.n, s.label])).toEqual([
+      [1, 'W1'],
+      [2, 'S3'],
+    ])
   })
 
   it('no stops: nothing drawn', () => {

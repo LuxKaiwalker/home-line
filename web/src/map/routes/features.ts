@@ -12,7 +12,7 @@
 // Nothing is recomputed here: paths, feasibility and the first infeasible leg come from the results.
 import type { PlanStop } from '../../state/planning'
 import { stopLabels } from '../../state/planning'
-import type { LegResult, RouteResults } from './results'
+import type { LegResult, RouteResults } from '../../state/routeResults'
 
 export type LonLat = [number, number]
 export type LegState = 'ok' | 'infeasible' | 'ghost'

@@ -19,7 +19,7 @@ import { TOKENS } from '../../ui/tokens'
 import type { MapExtensionContext, RouteLayerHandle, RouteLayerSpec } from '../extensions'
 import copyR4 from './copy.R4.json'
 import { captureKeys, EMPTY_FC, labelAt, mineView, officialLines, type LonLat, type StopMark } from './features'
-import { getRouteResults, subscribeRouteResults, type LegResult, type RouteResults } from './results'
+import { getRouteResults, subscribeRouteResults, type LegResult, type RouteResults } from '../../state/routeResults'
 
 export const tr = copyFrom(copyR4)
 
