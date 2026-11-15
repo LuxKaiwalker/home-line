@@ -20,7 +20,7 @@ import { Drawer, domId } from '../layout'
 import type { Loader } from '../../data/loader'
 import { RouteEstimates } from './Estimates'
 import { PadPicker } from './PadPicker'
-import { ROUTE_PANEL_ID, routePanelCollapsed, routePanelOpen, setRoutePanelCollapsed } from './panelState'
+import { ROUTE_PANEL_ID, routeCoreUnavailable, routePanelCollapsed, routePanelOpen, setRoutePanelCollapsed } from './panelState'
 import { PadReach } from './Reach'
 import { ROUTE_PANEL_SECTIONS, useRoutePanelSection, type RoutePanelSectionName } from './sections'
 import './routePanel.css'
@@ -47,6 +47,7 @@ export function RoutePanel({ store = planning, loader }: RoutePanelProps) {
   const collapsed = useSignalValue(routePanelCollapsed)
   const open = useSignalValue(routePanelOpen)
   const hasRoute = usePlanning(selectHasRoute, store)
+  const unavailable = useSignalValue(routeCoreUnavailable)
   const estId = domId(ROUTE_PANEL_ID, 'est')
   return (
     <Drawer
@@ -66,6 +67,11 @@ export function RoutePanel({ store = planning, loader }: RoutePanelProps) {
       }
     >
       <div id={BODY_ID} class="hl-rp__body" hidden={collapsed} data-route-panel>
+        {unavailable && (
+          <p class="hl-rp__empty" role="status" data-route-unavailable>
+            {t('route.panel.unavailable')}
+          </p>
+        )}
         <PadPicker store={store} />
         <section class="hl-rp__card" aria-labelledby={estId} data-estimates-card>
           <h3 id={estId} class="hl-rp__h">

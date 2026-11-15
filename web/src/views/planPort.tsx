@@ -21,7 +21,7 @@ import { installPlanningActivity } from '../state/planningActivity'
 import { encodeRouteParam, OFFICIAL_PAD_ID, planning, ROUTE_PARAM, type PlanningDoc, type PlanningStore } from '../state/planning'
 import { effect } from '../state/signal'
 import { Banner } from '../ui/components'
-import { installRoutePanel, openRoutePanel, registerRoutePanelSection, routePanelOpen } from '../ui/route-panel'
+import { installRoutePanel, openRoutePanel, registerRoutePanelSection, routePanelOpen, setRouteCoreUnavailable } from '../ui/route-panel'
 import { browserLinkIO, clearPlanLinkNotice, planLinkNotice } from '../ui/route-panel/export/planLink'
 import { WaypointList } from '../ui/route-panel/list'
 import { StartTimeSettings, StormSettings, type SettingsProps } from '../ui/route-panel/settings/RouteSettings'
@@ -74,7 +74,10 @@ export function installPlanPort(): void {
       m.install()
       effect(() => m.setEditing(routePanelOpen.value))
     })
-    .catch((e) => console.warn('map editing unavailable', e))
+    .catch((e) => {
+      console.warn('map editing unavailable', e)
+      setRouteCoreUnavailable(true) // PORT I6: the Route panel says so; the Plan view stays as it is
+    })
   void loadR3Add().catch(() => {})
   void data()
     .stations()
@@ -137,7 +140,12 @@ export function mountPlanPort(store: PlanningStore = planning): () => void {
     .then(({ startPlanningRunner }) => {
       if (alive) stopRunner = startPlanningRunner(store, padService()).stop
     })
-    .catch((e) => console.warn('planning runner unavailable', e))
+    .catch((e) => {
+      // PORT I6: a failed route-core chunk never breaks Plan (official plan, context bar, layers stay);
+      // the Route panel shows "Route planning unavailable"
+      console.warn('planning runner unavailable', e)
+      if (alive) setRouteCoreUnavailable(true)
+    })
   return () => {
     alive = false
     clearTimeout(prefetch)

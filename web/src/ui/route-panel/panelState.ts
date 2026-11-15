@@ -40,3 +40,13 @@ export function isRoutePanelOpen(): boolean {
 export function setRoutePanelCollapsed(on: boolean): void {
   collapsed.value = on
 }
+
+const coreUnavailable = signal(false)
+/**
+ * PORT I6: true once a route-core chunk (runner, map editing) failed to load. The Plan view keeps the
+ * official plan, the context bar and the layers; the Route panel says "Route planning unavailable".
+ */
+export const routeCoreUnavailable: ReadSignal<boolean> = coreUnavailable
+export function setRouteCoreUnavailable(on: boolean): void {
+  coreUnavailable.value = on
+}

@@ -950,6 +950,7 @@
       "collapse": "Collapse the route panel",
       "expand": "Expand the route panel",
       "empty": "Click the map or a station to add a stop",
+      "unavailable": "Route planning unavailable",
       "sections": { "list": "Stops", "settings": "EVA settings", "export": "Export and share" },
       "pads": {
         "label": "Start pad",
