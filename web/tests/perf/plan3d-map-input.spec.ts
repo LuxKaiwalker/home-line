@@ -7,9 +7,11 @@
  *   - in 3D (one page, 1440x900 only: CI time budget): a left click on the S7 pill opens its card; a left drag on the rover moves it with the
  *     drag readout; a right drag pans; the cursor readout follows the pointer; a layer toggle shows
  *     and hides its layer
- * Not a screenshot test. The file name ends in map-input.spec.ts so playwright.config.ts runs it with
- * the click-sensitive specs (one worker, after the screenshots; issue #131).
- * Run: cd web && npm run build && npx playwright test tests/visual/plan3d-map-input.spec.ts
+ * Not a screenshot test. It lives in tests/perf/ so it runs in the a11y-perf job (20 min budget), not in
+ * the visual job (15 min, already near its limit; 3D in software GL costs 20-50 s per page load). The
+ * file name ends in map-input.spec.ts, so the a11y-perf config (which reuses the visual projects) runs it
+ * in the click-sensitive projects: one worker, one viewport after the other (issue #131).
+ * Run: cd web && npm run build -- --manifest && npx playwright test -c tests/a11y/playwright.config.ts tests/perf/plan3d-map-input.spec.ts
  */
 import { expect, test, type Page } from 'playwright/test'
 
@@ -91,9 +93,9 @@ test.describe('L13: the view Plan mode opens with', () => {
   })
 })
 
-// One page for four of them, the rover drag on its own (each page load in 3D software GL costs 20-50 s on CI, and the visual job has a
-// 15 min budget), at the desktop viewport; the same interactions in 2D run at both viewports in
-// map-input.spec.ts / rover-click.spec.ts.
+// One page for four of them, the rover drag on its own (each page load in 3D software GL costs 20-50 s
+// on CI), at the desktop viewport; the same interactions in 2D run at both viewports in
+// tests/visual/map-input.spec.ts / rover-click.spec.ts.
 test('L13: planning interactions in 3D (?view=3d, open pose): right-drag pan, cursor readout, layer toggle, pill click', async ({ page }) => {
   test.skip(page.viewportSize()!.width < 1280, '3D interactions run once, at 1440x900 (CI time budget); 1024x768 runs them in 2D')
   test.setTimeout(240_000)
