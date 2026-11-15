@@ -30,6 +30,10 @@ import { FAILING_LEG_ID, ROUTE_END_ID, type RouteConsoleMap } from './map'
 import { mountRoutePanel, ROUTE_SECTION_ID, type RouteHandle } from './mount'
 import { readFeasibility } from './types'
 import { FakeWindow, keydown } from '../../edit/route/testing'
+import { installPlanEdit, missionApply } from '../../edit/bind'
+import { createPlanEditStore } from '../../edit/store'
+import { ESTIMATE_TEXT } from '../../edit/route/instant/estimate'
+import { mission } from '../../state/mission'
 
 const PUB = resolve(__dirname, '../../../public/data')
 const json = (p: string) => JSON.parse(readFileSync(resolve(PUB, p), 'utf8'))
@@ -560,6 +564,78 @@ describe('WP12: one compute action, stable rows, reasons', () => {
     expect(lockedHere.length).toBeGreaterThanOrEqual(3)
     for (const n of lockedHere) expect(reasonOf(n).note).toBe(ROUTE_TEXT.whyLocked)
     await until(() => q('hl-route__result').length > 0, 'the result')
+  })
+})
+
+describe('I2b: the drawer pad picker (official + P2–P4) drives the browser estimate', () => {
+  const PADS = json('scenarios/pads/index.json') as { pads: { id: string; lon: number; lat: number }[] }
+  const padAt = (id: string) => PADS.pads.find((p) => p.id === id)!
+  afterEach(() => {
+    mission.plan.pad.value = null
+  })
+
+  it('four pads; a pick goes through the plan-edit store (undo works), the estimate loads that pad\'s fields and recomputes; a custom spot gives the reason', async () => {
+    const h1 = createPlanEditStore({ catalog, onApply: missionApply })
+    const offH1 = installPlanEdit(h1, { actions: false })
+    const loads: string[] = []
+    const pads: { lon: number; lat: number }[] = []
+    const padSubs = new Set<() => void>()
+    let spot: { lon: number; lat: number } | null = null
+    let cleared = 0
+    try {
+      await setup({
+        pad: { pad: () => spot, subscribe: (fn) => (padSubs.add(fn), () => void padSubs.delete(fn)), clear: () => void (cleared++, (spot = null)) },
+        estimate: {
+          raf: (fn) => setTimeout(fn, 0),
+          core: {
+            load: async (f) => (loads.push(f), { f }),
+            compute: (_d, pad) => {
+              pads.push(pad)
+              return { legs: [], totals: { walkMin: 1, evaMin: 1, o2UsedL: 1, o2LeftL: 1 }, tightest: null, feasibility: { feasible: true } }
+            },
+            mission: () => ({}),
+          },
+        },
+      })
+      const picker = () => all(root, (n) => n.getAttribute('data-pad') !== null)
+      expect(picker().map(text)).toEqual(['Official pad', 'P2', 'P3', 'P4'])
+      expect(picker().map((n) => n.getAttribute('aria-checked'))).toEqual(['true', 'false', 'false', 'false'])
+      mode('ordered')
+      check('S4')
+      await until(() => q('hl-route__estimate')[0]?.getAttribute('data-state') === 'ready' || pads.length > 0, 'the official estimate')
+      expect(loads).toEqual(['fields/index.json'])
+      // pick P2: mission.plan via the H1 store (one undo step); the estimate switches to P2's own fields
+      click(picker()[1])
+      expect(mission.plan.pad.peek()).toBe('rank2')
+      expect(h1.committed.peek().plan.pad).toBe('rank2')
+      expect(h1.canUndo.peek()).toBe(true)
+      await until(() => pads.some((p) => p.lon === padAt('rank2').lon && p.lat === padAt('rank2').lat), 'the P2 estimate')
+      expect(loads).toEqual(['fields/index.json', 'fields/index.json#pads/rank2'])
+      expect(picker().map((n) => n.getAttribute('aria-checked'))).toEqual(['false', 'true', 'false', 'false'])
+      expect(text(q('hl-route__inputs')[0])).toContain('rank2')
+      // undo (the H1 step): back on the official pad, its fields already loaded (warm)
+      const n = pads.length
+      expect(h1.undo()).toBe(true)
+      expect(mission.plan.pad.peek()).toBeNull()
+      await until(() => pads.length > n && pads.at(-1)!.lon === padAt('rank1').lon, 'the official estimate again')
+      expect(loads).toHaveLength(2)
+      // a custom spot (pad tool): no pad checked, the estimate says why
+      act(() => {
+        spot = { lon: 137.39, lat: -4.79 }
+        for (const f of padSubs) f()
+      })
+      await until(() => all(root, (x) => x.getAttribute('data-estimate-unavailable') !== null).length > 0, 'the custom-pad reason')
+      expect(text(all(root, (x) => x.getAttribute('data-estimate-unavailable') !== null)[0])).toBe(ESTIMATE_TEXT.unavailablePad)
+      expect(ESTIMATE_TEXT.unavailablePad).toContain('the browser estimate needs one of the four pads')
+      expect(picker().map((x) => x.getAttribute('aria-checked'))).toEqual(['false', 'false', 'false', 'false'])
+      // picking a pad drops the spot first
+      click(picker()[3])
+      expect(cleared).toBe(1)
+      expect(mission.plan.pad.peek()).toBe('rank4')
+      await until(() => loads.includes('fields/index.json#pads/rank4'), 'the P4 fields')
+    } finally {
+      offH1()
+    }
   })
 })
 

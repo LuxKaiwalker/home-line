@@ -1,12 +1,12 @@
 # HOMELINE pipeline entry points. Stub targets print a message until the owning workstream
 # adds its CLI (ownership: AGENTS.md "Folder ownership"; this file is owned by C).
-.PHONY: all terrain engine horizons conditions conditions-fetch nav fields fp3d web web-plan bundle bundle-fixture bundle-check mission-official serve stack-up stack-down serverdata parity parity-synthetic server-test dummy test lint validate kats h0 clean
+.PHONY: all terrain engine horizons conditions conditions-fetch nav fields pad-fields fp3d web web-plan bundle bundle-fixture bundle-check mission-official serve stack-up stack-down serverdata parity parity-synthetic server-test dummy test lint validate kats h0 clean
 
 PY := uv run --no-sync python
 
 # Pipeline order (SPEC §4): WS1 terrain -> WS2 engine -> WS3 horizons -> WS4 conditions
 # -> WS9 nav -> copy to web/public/data (C).
-all: terrain engine horizons conditions nav fields fp3d web
+all: terrain engine horizons conditions nav fields pad-fields fp3d web
 
 terrain:     ## WS1: fetch raw (cached) then build data/interim/terrain/
 	$(PY) -m pipeline.terrain.fetch dem
@@ -31,6 +31,8 @@ nav:         ## WS9: F21 Monte Carlo + fix-interval map, F22 skyline fixes -> da
 	$(PY) -m pipeline.navigation.run real $(NAV_ARGS)
 fields:      ## WS7: HUD field PNGs + worst-case fields + way-home pointers (own 3 m grid) -> data/interim/export/fields/ (WS1 grid/slope, WS2 rasters; merges WS9 fields_index_nav.json)
 	$(PY) -m pipeline.export.fields_png
+pad-fields:  ## I2: browser fields (t_home, o2_home, pointer) for the D21 picker pads rank2-4 -> fields/pads/ + ADDED rows in fields/index.json and manifest (export + web/public/data; never changes an existing row). Heavy: 3 Dijkstras
+	$(PY) tools/make_pad_fields.py
 fp3d:        ## WS8: 3D near chunks, ortho textures, far mesh, index -> data/interim/export/fp3d/ (needs WS1 terrain, WS2 route, WS3 horizons)
 	$(PY) -m pipeline.export.terrain_chunks $(FP3D_ARGS)
 web:         ## C: copy/transform data/interim -> web/public/data, merge manifest, validate, H0 check

@@ -106,20 +106,25 @@ function loadHeights() {
 
 const grids = new Map<string, Promise<RouteGridData>>()
 
-/** The route grid of a scenario (e.g. nom_104): T_home of fields/index.json + far heights. Cached. */
-export function loadRouteGrid(scenario: string): Promise<RouteGridData> {
-  let p = grids.get(scenario)
+/**
+ * The route grid of a scenario (e.g. nom_104): T_home of fields/index.json + far heights. Cached per
+ * (pad, scenario). I2b: `pad` null = the official pad (`{scenario}/t_home`); a picker pad id (rank2..rank4)
+ * = its own T_home (`pads/{pad}/{scenario}/t_home`, I2), so walkable = reachable from THAT pad.
+ */
+export function loadRouteGrid(scenario: string, pad: string | null = null): Promise<RouteGridData> {
+  const cacheKey = JSON.stringify([pad, scenario])
+  let p = grids.get(cacheKey)
   if (!p) {
     p = (async () => {
       const fi = (await data().fieldsIndex()) as unknown as HudFieldsIndex
-      const key = `${scenario}/t_home`
+      const key = pad === null ? `${scenario}/t_home` : `pads/${pad}/${scenario}/t_home`
       if (!fi.fields[key]) throw new Error(`fields/index.json has no ${key}`)
       const [tHome, h] = await Promise.all([loadField(fi, key, dataUrl), loadHeights()])
       const elev = sampleElevation(tHome, h.heights, h.toXY)
       return { scenario, tHome, grid: routeGridOf(tHome, elev), model: gradeModel(scenarioParams(scenario)) }
     })()
-    p.catch(() => grids.delete(scenario))
-    grids.set(scenario, p)
+    p.catch(() => grids.delete(cacheKey))
+    grids.set(cacheKey, p)
   }
   return p
 }
