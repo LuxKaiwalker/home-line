@@ -4,6 +4,7 @@
 import { render } from 'preact'
 import { useEffect, useRef, useState } from 'preact/hooks'
 import { canonicalHref, type Route } from '../../router'
+import { listenLiveStatus } from '../../state/live'
 import { effect, useSignalValue } from '../../state/signal'
 import { MODES, ui, type Mode } from '../../state/ui'
 import { cx, Icon, IconButton } from '../components'
@@ -11,6 +12,7 @@ import { t } from '../copy'
 import { SearchButton } from '../search/button'
 import type { Frame } from './frame'
 import { HELP_ROWS, installShortcuts } from './keys'
+import { OfficialPlanButton } from './OfficialPlan'
 import {
   breakpointFor,
   closeSidebar,
@@ -102,7 +104,9 @@ export function TopBar() {
           <ModeTabs mode={mode} />
         )}
       </nav>
-      <div class="hl-topbar__plan" id="hl-topbar-plan" />
+      <div class="hl-topbar__plan" id="hl-topbar-plan">
+        {mode === 'plan' && <OfficialPlanButton />}
+      </div>
       <div class="hl-topbar__end">
         <SearchButton />
         {isMapMode(mode) && (
@@ -308,6 +312,8 @@ export function mountShell(frame: Frame, navigate: (hash: string) => void, win: 
   measure()
   win.addEventListener('resize', measure)
   const stopKeys = installShortcuts(win, navigate)
+  // the live layer reports its status through this window event (state/live.ts seam, L7b)
+  const stopLive = listenLiveStatus(win)
   // U14 (A5): the sidebar follows the selection store; cards load in their own chunk.
   let alive = true
   let stopSelection: (() => void) | undefined
@@ -337,6 +343,7 @@ export function mountShell(frame: Frame, navigate: (hash: string) => void, win: 
       stopSelection?.()
       stopDock?.()
       stopKeys()
+      stopLive()
       stopLayout()
       win.removeEventListener('resize', measure)
       for (const el of [s.skip, s.top, s.rail, s.sidebar, s.dock, s.overlay]) render(null, el)
