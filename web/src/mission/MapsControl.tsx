@@ -1,17 +1,16 @@
 // "Maps" switcher (bottom left of the Mission Planer map, PDF "Maps" button): Satellite (HiRISE
-// basemap), Topography (hillshade + contours) and Material composition (rock units inferred from
-// elevation). Rasters are rendered once per type on first use, on the routing grid.
+// basemap), Topography (hillshade + contours) and Material composition (regional rock class from
+// the Unity scene's rocks, like the Unity EVA map's mineral layer). Rasters are rendered once per
+// type on first use, on the routing grid.
 import { useEffect, useRef, useState } from 'preact/hooks'
 import type { FieldGrid } from '../hud/fields'
 import type { MapType, MissionMap } from './missionMap'
 import type { LonLat } from './plan'
-import { renderRelief, unitBands, UNITS_FILE, type Relief, type Unit } from './relief'
+import { buildUnitField, renderRelief, ROCKS_FILE, UNIT_SIGMA_M, type Relief, type Unit } from './relief'
 import { t } from '../ui/copy'
 
 /** Resolution of the terrain heights behind the relief, for the topography legend. */
 const HEIGHTS_RES_M = 8
-/** Last sol in the team's Curiosity sample database, for the material legend. */
-const LAST_SAMPLE_SOL = 3712
 /** Tooltip of the disabled Satellite tile (read here: the tile loop's `t` is a map type). */
 const NO_BASEMAP = t('mission.maps.noBasemap')
 
@@ -58,12 +57,12 @@ export function MapsControl({ mmap, src }: { mmap: MissionMap; src: ReliefSource
         await new Promise((res) => setTimeout(res, 20)) // let "Rendering…" paint
         try {
           const { grid, elev, resM } = src
-          let lo = Infinity
-          let hi = -Infinity
-          for (const v of elev) if (Number.isFinite(v)) (lo = Math.min(lo, v)), (hi = Math.max(hi, v))
-          const u = type === 'material' ? unitBands(lo, hi) : null
+          const u =
+            type === 'material'
+              ? buildUnitField(ROCKS_FILE.rocks, ROCKS_FILE.classes, grid, grid.width * resM, grid.height * resM)
+              : null
           r = renderRelief(elev, grid.width, grid.height, resM, type, u)
-          if (u) setUnits(u)
+          if (u) setUnits(u.units)
           setRelief((x) => ({ ...x, [type]: r }))
         } catch (e) {
           setError(e instanceof Error ? e.message : String(e))
@@ -132,14 +131,14 @@ export function MapsControl({ mmap, src }: { mmap: MissionMap; src: ReliefSource
 }
 
 function MaterialLegend({ r, units }: { r: Relief; units: Unit[] }) {
-  const shown = units.filter((u) => (r.unitCells.get(u.id) ?? 0) > 0).sort((a, b) => a.lo - b.lo)
+  const shown = units.filter((u) => (r.unitCells.get(u.id) ?? 0) > 0)
   return (
     <div class="mp-maps-legend">
       <b>{t('mission.maps.materialTitle')}</b>
       <ul>
         {shown.length ? (
           shown.map((u) => (
-            <li key={u.id} title={t('mission.maps.unitTitle', { name: u.name, low: Math.round(u.lo), high: Math.round(u.hi) })}>
+            <li key={u.id} title={u.name}>
               <span class="mp-swatch" style={{ background: `rgb(${u.rgb.join(',')})` }} />
               {u.label}
             </li>
@@ -147,13 +146,9 @@ function MaterialLegend({ r, units }: { r: Relief; units: Unit[] }) {
         ) : (
           <li>{t('mission.maps.noUnit')}</li>
         )}
-        <li title={t('mission.maps.greyTitle', { sol: LAST_SAMPLE_SOL })}>
-          <span class="mp-swatch" style={{ background: 'rgb(70,70,70)' }} />
-          {t('mission.maps.grey')}
-        </li>
       </ul>
-      <span class="mp-maps-note" title={UNITS_FILE.rule}>
-        {t('mission.maps.materialNote', { margin_m: UNITS_FILE.band_margin_m })}
+      <span class="mp-maps-note" title={ROCKS_FILE.source}>
+        {t('mission.maps.materialNote', { count: ROCKS_FILE.rocks.length.toLocaleString('en'), sigma_m: UNIT_SIGMA_M })}
       </span>
     </div>
   )

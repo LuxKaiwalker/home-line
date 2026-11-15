@@ -1,0 +1,130 @@
+"""Export the Unity scene's classified rocks for the Mission Planer "Material" map.
+
+The team's Unity EVA map (repo Nasa-Space-App, Assets/Mars/Scripts/HUD/MarsElevationMap.cs) draws its
+mineral layer from every RockSample in the scene. This script reads those rocks from the committed
+scene file and writes web/src/mission/unityRocks.json (world position -> lon/lat via the scene's
+MarsGeoReference, class id), so the web map can splat the same rocks with the same kernel.
+
+Usage (from the home-line repo root):
+    git -C ../Nasa-Space-App show origin/main:Assets/Scenes/MarsLandscape.unity > /tmp/scene.unity
+    python3 web/scripts/unity_rocks.py /tmp/scene.unity <unity-commit> > web/src/mission/unityRocks.json
+"""
+
+from __future__ import annotations
+
+import json
+import re
+import sys
+
+DOC = re.compile(r"^--- !u!(\d+) &(-?\d+)", re.M)
+VEC = r"\{x: ([-\d.e+]+), y: ([-\d.e+]+), z: ([-\d.e+]+)(?:, w: ([-\d.e+]+))?\}"
+
+
+def docs(text: str):
+    heads = list(DOC.finditer(text))
+    for i, m in enumerate(heads):
+        end = heads[i + 1].start() if i + 1 < len(heads) else len(text)
+        yield int(m.group(1)), m.group(2), text[m.end() : end]
+
+
+def field(body: str, name: str) -> str | None:
+    m = re.search(rf"^\s+{name}: (.*)$", body, re.M)
+    return m.group(1).strip() if m else None
+
+
+def vec(body: str, name: str) -> tuple[float, ...]:
+    m = re.search(rf"^\s+{name}: {VEC}", body, re.M)
+    if not m:
+        raise ValueError(f"no {name}")
+    return tuple(float(g) for g in m.groups() if g is not None)
+
+
+def file_id(s: str | None) -> str:
+    m = re.search(r"fileID: (-?\d+)", s or "")
+    return m.group(1) if m else "0"
+
+
+def qrot(q, v):
+    x, y, z, w = q
+    vx, vy, vz = v
+    # v' = v + 2w(q x v) + 2 q x (q x v)
+    cx, cy, cz = y * vz - z * vy, z * vx - x * vz, x * vy - y * vx
+    cx2, cy2, cz2 = y * cz - z * cy, z * cx - x * cz, x * cy - y * cx
+    return (vx + 2 * (w * cx + cx2), vy + 2 * (w * cy + cy2), vz + 2 * (w * cz + cz2))
+
+
+def main() -> None:
+    scene_path, commit = sys.argv[1], sys.argv[2]
+    text = open(scene_path, encoding="utf-8").read()
+    transforms: dict[str, dict] = {}
+    go_transform: dict[str, str] = {}
+    go_active: dict[str, bool] = {}
+    rocks: list[tuple[str, str, str]] = []
+    geo: dict[str, float] | None = None
+    for typ, fid, body in docs(text):
+        if typ == 1:  # GameObject
+            go_active[fid] = field(body, "m_IsActive") != "0"
+        elif typ == 4:  # Transform
+            if file_id(field(body, "m_PrefabInstance")) != "0":
+                raise SystemExit("prefab-instance transforms are not supported")
+            go = file_id(field(body, "m_GameObject"))
+            transforms[fid] = {
+                "go": go,
+                "p": vec(body, "m_LocalPosition"),
+                "q": vec(body, "m_LocalRotation"),
+                "s": vec(body, "m_LocalScale"),
+                "parent": file_id(field(body, "m_Father")),
+            }
+            go_transform[go] = fid
+        elif typ == 114:
+            if "NasaSpaceApp.Science.RockSample" in body and field(body, "m_Enabled") != "0":
+                rocks.append((file_id(field(body, "m_GameObject")), field(body, "classId") or "", field(body, "fieldId") or ""))
+            elif "NasaSpaceApp.MarsGeoReference\n" in body:
+                geo = {k: float(field(body, k)) for k in ("swLat", "swLon", "metersPerDegree", "eastScale")}
+                px, py = re.search(r"playSwWorld: \{x: ([-\d.e+]+), y: ([-\d.e+]+)\}", body).groups()
+                geo["playX"], geo["playZ"] = float(px), float(py)
+    if geo is None:
+        raise SystemExit("no MarsGeoReference in the scene")
+
+    def world(tid: str):
+        p = (0.0, 0.0, 0.0)
+        active = True
+        while tid != "0":
+            t = transforms[tid]
+            active = active and go_active.get(t["go"], True)
+            p = tuple(a * b for a, b in zip(p, t["s"]))
+            p = qrot(t["q"], p)
+            p = tuple(a + b for a, b in zip(p, t["p"]))
+            tid = t["parent"]
+        return p, active
+
+    classes: list[str] = []
+    out = []
+    skipped = 0
+    for go, cls, _ in rocks:
+        (x, _, z), active = world(go_transform[go])
+        if not active or not cls:  # FindObjectsInactive.Exclude; unclassified rocks are not splatted
+            skipped += 1
+            continue
+        if cls not in classes:
+            classes.append(cls)
+        lat = geo["swLat"] + (z - geo["playZ"]) / geo["metersPerDegree"]
+        lon = geo["swLon"] + (x - geo["playX"]) / (geo["eastScale"] * geo["metersPerDegree"])
+        out.append([round(lon, 7), round(lat, 7), classes.index(cls)])
+    out.sort()
+    json.dump(
+        {
+            "source": f"RockSample components of Assets/Scenes/MarsLandscape.unity, team Unity repo Nasa-Space-App commit {commit}; "
+            "world XZ to lon/lat with the scene's MarsGeoReference (ToMapCoordinates). Generated by web/scripts/unity_rocks.py.",
+            "skipped_inactive_or_unclassified": skipped,
+            "classes": classes,
+            "rocks": out,
+        },
+        sys.stdout,
+        separators=(",", ":"),
+    )
+    print(file=sys.stderr, end=f"{len(out)} rocks, {len(classes)} classes, {skipped} skipped\n")
+
+
+if __name__ == "__main__":
+    main()

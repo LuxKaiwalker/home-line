@@ -1047,12 +1047,9 @@
       "rendering": "Rendering {type}…",
       "encodeError": "could not encode the relief image",
       "topoLegend": "Contours every {step} m (bold every {bold} m) · {low} to {high} m (MOLA areoid), {res_m} m terrain heights",
-      "materialTitle": "Rock unit, inferred from elevation",
-      "unitTitle": "{name}: Curiosity samples from {low} to {high} m",
-      "noUnit": "No unit band reaches this terrain.",
-      "grey": "Grey: no sample at that height",
-      "greyTitle": "Heights above or below every Curiosity sample in the database (it ends at sol {sol}, before the boxwork region)",
-      "materialNote": "Mount Sharp's layers are nearly flat, so each unit is drawn at the heights where Curiosity sampled it (± {margin_m} m, fading beyond). Not a mineral survey. Data: Curiosity APXS (PDS), via the team's Unity rock database."
+      "materialTitle": "Mineral units",
+      "noUnit": "No rocks on this terrain.",
+      "materialNote": "Same layer as the Unity EVA map: the dominant class of the {count} field rocks nearby (Gaussian, {sigma_m} m). Not a mineral survey."
     },
     "layers": {
       "head": "Layers",
