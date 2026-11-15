@@ -1,9 +1,12 @@
-# Simulator bundle contracts (D41) — v1.0.0
+# Simulator bundle contracts (D41) — v1.1.0
 
 **Frozen 2026-11-14 20:00 CET.** Owner C. Later changes come only as a version bump with a
-note to the Unity team (AGENTS.md rule 4). This family is versioned on its own
-(`"x-contract-version": "1.0.0"` in every schema here); the web contracts in `contracts/` keep
-their own 1.1.x line.
+note to the Unity team (AGENTS.md rule 4). This family is versioned on its own; the web contracts in `contracts/` keep their own 1.1.x line.
+**v1.1.0 (2026-11-15, D103, additive):** `mission.schema.json` (`"x-contract-version": "1.1.0"`) is
+the simulator plan format (section "Mission file"). Every v1 schema below keeps
+`"x-contract-version": "1.0.0"`, and the zips, their `contract_version` (`tools/make_bundle.py`,
+`GET /api/v1/engine/version` `bundle_contract_version`) and the committed fixture stay 1.0.0,
+byte-unchanged.
 
 Sources: SPEC §11 **D40** (backend, set A 17:16) and **D41** (Unity handover, set A 17:24); the
 handover page "EVA simulation module — handover data from the planner" (parts A, B, D, E); the
@@ -32,7 +35,8 @@ schema `bundle.schema.json`), then every other entry sorted by path.
 | --- | --- | --- |
 | `plan.schema.json` | `plan.json` in a plan bundle (and as served alone) | plan id, pad (official / picker / custom), scenario (variant, suit), station order, EVA start (LMST, D31), storm replay key (D39), engine commit, config hash, contract version, created UTC, origin `precomputed` / `computed_live` + label (D40), `dummy: false` |
 | `bundle.schema.json` | `index.json` of both zips | kind `plan` / `world`, ids, version check fields, frame, bounds, **every file** with path, media type, bytes, sha256, role, frame, units, contract, grid header (`.f32`), source (path + sha256 + transform), status |
-| `route_local.schema.json` | `route.json` | route every 1 m, pad-local |
+| `mission.schema.json` | `mission.json` (on its own, not in a zip) | **v1.1.0, D103: the plan the simulator reads**: waypoints, legs, path, planned timeline, totals; origin `mission_planer` / `computed_live` (section "Mission file") |
+| `route_local.schema.json` | `route.json` | route every 1 m, pad-local; **superseded for routes by `mission.json` (D103)**, kept for v1 readers |
 | `points.schema.json` | `points.json` | pad, stations, access cells, pad-local |
 | `sun.schema.json` | `conditions/sun.json` | from WS4 `clock.json` |
 | `storm.schema.json` | `conditions/storm.json` | 2024 storm on the EVA clock (D39) |
@@ -154,3 +158,67 @@ of it.
 `config_hash` and `config_snapshot.json` cover `config/*.yaml` **except `backend.yaml`** (server-only
 settings: rate limits, CORS, gates). The fixture is unchanged (byte-identical rebuild). The backend's
 result hash uses the same rule (`contracts/backend/README.md`).
+
+## Mission file (v1.1.0, D103)
+
+**D103 (team lead, 2026-11-15 11:35): `mission.json` is the simulator plan format.** It settles
+D76's open "compiled plan" format. For routes it supersedes the plan bundle's `route.json`
+(`route_local.schema.json`), which stays in the bundle and in this folder for v1 readers and is
+not removed. Unchanged: the bundle's terrain and field files (the world pack and the plan bundle's
+`fields/`, which `mission.json` points to through `world`), the coordinate frame above, the v1
+schemas and the committed fixture. The engine API input stays `plan_inputs.route` (backend
+contracts v1.2.0). Schema from `origin/waypoint-routing` (N0CEO, the Mission Planer, through
+36bc6cc).
+
+`mission.schema.json` validates **`mission.json`**, one mission sent to the simulator on its own
+(download → "Load mission", POST to a local listener, or WebGL `SendMessage`). It does not replace
+the plan bundle: the bundle carries the terrain and the fields (`t_home`, `o2_home`,
+`home_bearing`, `pointer`) for any position; the mission file carries **what the user planned**
+and **what should happen when**, so the simulator compares the live walk with it and never
+recomputes planner numbers (handover rule 1).
+
+| Block | Content |
+| --- | --- |
+| `frame` | the pad-local frame above (projection, `pad_xy_m`, pad lon / lat / elev); Unity = (x, z, y) |
+| `scenario`, `world` | scenario of the fields; which plan bundle / world pack to load for off-route lookups |
+| `constants`, `conditions` | budget constants (crew.yaml via `budget.ts`), F18 amber threshold, time to dark, storm switch, t* |
+| `waypoints[]` | visit order, lon/lat + x/y/z, note, tags, stop minutes, planned arrive / leave, T_home, O₂_home |
+| `legs[]` | `out` legs pad → #1 → … → #n and one `home` leg along WS2's pointer path; length, time, O₂, row range |
+| `path` | rows `[leg, s_m, x_m, y_m, z_m, t_eva_min, o2_used_l, t_home_min, o2_home_l]` per routing-grid vertex, not resampled |
+| `timeline` | planned state over EVA time (`margin.ts` points): O₂ used, T_home, O₂_home, margin, binding term; `lowest` |
+| `summary` | the panel's totals and `feasible` |
+
+Deviation in the simulator = live value − the planned value at the same EVA minute (`timeline`,
+linear in t) or at the nearest `path` row (cross-track distance). Status colours follow SPEC
+F18: margin > `margin_amber_min` green, 0 … amber, < 0 red "TURN BACK NOW".
+
+**`origin`** says who computed the numbers; neither is part of the validated scorecard, and
+`origin_label` says so on screen:
+
+| `origin` | Numbers from | `planner.routing_grid_res_m` | `origin_label` |
+| --- | --- | --- | --- |
+| `mission_planer` | browser estimates on the 5 m routing grid (`mission/data.ts`), not WS2's validated 3 m results | 5 | "Mission Planer: browser estimate on the 5 m grid, not part of the validated scorecard" |
+| `computed_live` | a live engine job (WP9b): legs, path, timeline and summary from the engine's route on its 3 m grid, not the 5 m browser grid | 3 | `config/backend.yaml labels.live`: "Computed live · not part of the validated scorecard" |
+
+Unknown values are `null`; an unrouted leg makes `feasible` false and `timeline` null.
+`mission_id` = `"m-"` + the first 12 hex of the sha256 of the compact JSON (`JSON.stringify`) of
+the document with `mission_id` and `created_utc` set to `""`. Objects are open (a reader ignores
+keys it does not know, so later minors stay additive); the fixed blocks (`frame.axes`,
+`path.columns` / `units`, `timeline.columns` / `phases`) and the row arrays (9 columns) are exact.
+
+Added 2026-11-15 (optional, additive): `conditions.eva_start_utc` and `msl_sol` (clock.json) so the
+simulator's sky starts at the planned instant, and `conditions.dose` (the D39 storm series on the
+EVA clock, only with the storm switch on) so the simulator's live margin has the dose term too.
+
+Example: `examples/mission.mission_planer.json`, written by the branch's `buildMission` +
+`finalizeMission` (`web/src/mission/export.ts`) from the input of its known-answer test
+(`export.test.ts`: test pad, one 10 m leg due east on the 5 m grid, a 5-min stop, the way home
+back along the same cells). Tests: `tests/test_mission_contract.py`.
+
+## Change log
+
+| Version | Date | Change |
+| --- | --- | --- |
+| 1.0.0 | 2026-11-14 20:00 | frozen: plan, bundle, route_local, points, sun, storm, config_snapshot; fixture `official_pad_v1` |
+| 1.0.0 | 2026-11-14 | D57 clarification: `config_hash` leaves out `backend.yaml` (no schema change) |
+| 1.1.0 | 2026-11-15 | D103, additive: `mission.schema.json` (from `origin/waypoint-routing`, N0CEO) is the simulator plan format, `origin` also `computed_live`; `route_local` superseded for routes, kept; v1 schemas, zips and fixture unchanged (1.0.0) |
