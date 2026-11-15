@@ -714,7 +714,28 @@
       "undoEmpty": "Nothing to undo",
       "redoEmpty": "Nothing to redo",
       "jobRunning": "A plan is being computed; wait for it or cancel it first",
-      "needsLive": "Needs the live planner, which is not available right now"
+      "needsLive": "Needs the live planner, which is not available right now",
+      "historyBack": "No earlier selection to go back to",
+      "historyForward": "No later selection to go forward to",
+      "collapsePlaying": "Wait until the collapse animation has finished",
+      "keepNothing": "Move the rover first: there is no change to keep",
+      "keepDragging": "Release the rover first, then keep or discard the move",
+      "discardNothing": "Move the rover first: there is no change to discard"
+    },
+    "shell": {
+      "search": "Search stations, places and commands · Ctrl+K or /",
+      "details": "Show or hide the details of the current selection",
+      "shortcuts": "Keyboard and mouse shortcuts · ?"
+    },
+    "map": {
+      "mouse": "Left click selects · right-drag moves the map · Ctrl + right-drag rotates and tilts · wheel zooms"
+    },
+    "layers": {
+      "cap": "Up to {max} thematic overlays at once; turning on one more turns off the oldest"
+    },
+    "timeline": {
+      "scrub": "Click or drag to move through the EVA · ← / → one minute, Shift for ten",
+      "play": "Play or pause the mission clock · Space"
     },
     "job": {
       "stage": "{stage} · {elapsed} elapsed",
