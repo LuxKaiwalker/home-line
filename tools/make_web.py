@@ -190,6 +190,7 @@ RULES: list[Rule] = [
     # WS7 fields, WS8 3D: export/ mirrors the web tree (pipeline/export/*)
     Rule("WS7", "export", "fields/index.json"),
     Rule("WS7", "export", "fields/*/*.png"),
+    Rule("WS7", "export", "fields/pads/*/*/*.png"),  # I2 picker pads (tools/make_pad_fields.py)
     Rule("WS8", "export", "fp3d/index.json"),
     Rule("WS8", "export", "fp3d/near/*.f32.gz"),
     Rule("WS8", "export", "fp3d/near_tex/*.jpg"),

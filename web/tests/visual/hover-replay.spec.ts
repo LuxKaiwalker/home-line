@@ -20,7 +20,7 @@ const mapEl = (page: Page) => page.locator('[data-thread-from]').first()
 
 /** The planning map, loaded, with the rover handle in place; returns the map box. */
 async function openPlan(page: Page): Promise<Box> {
-  await page.goto('/?intro=0#/')
+  await page.goto('/?intro=0&view=2d#/') // L13: written for the 2D map (3D is the Plan default; 3D pointer moves in software GL are too slow, #131)
   await page.locator('.hl-edit-rover').waitFor({ timeout: 60_000 })
   await page.locator('.hl-tl__play').waitFor({ timeout: 30_000 })
   return (await page.locator('.maplibregl-canvas').boundingBox())!
@@ -94,7 +94,7 @@ test('Plan: a hover is a passive tooltip only (estimate); the route to the point
 })
 
 test('Fly: hover over the HUD map leaves the replay running; a click stops it', async ({ page }) => {
-  await page.goto('/?intro=0#/fly/hud')
+  await page.goto('/?intro=0&view=2d#/fly/hud')
   const play = page.locator('.hl-hud-play')
   await play.waitFor({ timeout: 60_000 })
   const canvas = page.locator('.hl-hud-stage canvas').first()

@@ -51,6 +51,17 @@
   text-decoration: underline dashed var(--muted);
   text-underline-offset: 3px;
 }
+.live-estimate {
+  /* WP12 (L6 W-1): the card's numbers are an estimate, not the computed plan */
+  margin-left: 0.4em;
+  padding: 0 0.4em;
+  border: 1px dashed var(--muted);
+  border-radius: 999px;
+  color: var(--muted);
+  font-size: 0.75rem;
+  font-weight: normal;
+  vertical-align: middle;
+}
 .num-withheld {
   color: var(--muted);
   font-style: italic;

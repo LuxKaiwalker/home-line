@@ -17,14 +17,16 @@ export const ROUTE_TEXT = {
   moveHint: 'Drag to reorder, or Alt+Up / Alt+Down',
   dragHandle: 'Move {station}',
   include: 'Include {station}',
-  undo: 'Undo route change',
-  redo: 'Redo route change',
+  // WP12 (W-5): the buttons run the one undo of the Plan view (route edits and rover / plan edits)
+  undo: 'Undo (Ctrl+Z)',
+  redo: 'Redo (Ctrl+Shift+Z)',
   compute: 'Compute plan',
   computing: 'Computing your route…',
   cancel: 'Cancel',
   hash: 'Plan hash',
   hashPending: 'known once live planning answers',
-  needsLive: 'Computing a route needs live planning.',
+  // I1b (D128): only the server's Compute plan needs live planning; the instant estimate never does
+  needsLive: 'Compute plan on the server needs live planning; the instant estimate above works without it.',
   checkingLive: 'Checking whether live planning is reachable…',
   heavyJobsOff: 'Live planning is not taking new plans now.',
   legs: 'Legs',
@@ -50,6 +52,25 @@ export const ROUTE_TEXT = {
   pad: 'Rover pad',
   dockNote: 'Route result on the map: the EVA timeline of the official plan is not shown.',
   dockOpen: 'Open this plan',
+  // WP12 (L6 W-1): one compute action; what goes into it
+  inputsPadOfficial: 'Rover pad: official',
+  inputsPad: 'Rover pad: {pad}',
+  inputsPadCustom: 'Rover pad: your spot from Live pad, {lon}°E {lat}°N',
+  inputsCrewDefault: 'Crew: default',
+  inputsCrewChanged: 'Crew: your changes from the crew panel',
+  // WP12 (L6 W-4): why a control is disabled (every disabled control names its reason)
+  whyLocked: 'Locked while your route is computed. Cancel to change it.',
+  whyStops: 'Fix the stops marked in the list first.',
+  whyDragging: 'Drop the station first.',
+  // WP12 (L-05, D114): in place of the section while the live planner is unreachable (no controls)
+  // I1b (D128): only the server action is unavailable now (the panel and its estimate stay)
+  offlineNote: 'Server “Compute plan” is unavailable · the live planner is offline right now',
+  // WP12 (L6 W-1): the Live pad card hands the compute to this panel
+  cardCompute: 'Compute in Edit route',
+  cardRunning: 'Computing in Edit route…',
+  cardNote: 'The full plan is computed in Edit route: this spot, your crew changes and the route, as one job.',
+  cardNoRoute: 'Edit route is not ready yet.',
+  whyPointsAuto: 'Your points take part only in “My order”: press it to edit them.',
 } as const
 
 export const LIMIT_TEXT: Record<RouteLimit, string> = {
@@ -57,6 +78,33 @@ export const LIMIT_TEXT: Record<RouteLimit, string> = {
   daylight: 'Daylight',
   'EVA duration': 'EVA length (D28)',
   dose: 'Radiation dose',
+}
+
+/**
+ * WP12 (D117, team lead's science review): the infeasible answer as one sentence per limit. The O₂
+ * shortfall is a DEPARTURE-TIME shortfall. Leg numbers are 1-based for people; minutes are whole.
+ */
+export const INFEASIBLE_TEXT: Record<RouteLimit, { head: string; short: string; unknown: string }> = {
+  O2: { head: 'O₂ limit on leg {n} ({from} → {to})', short: 'you would need to set off {min} min earlier (conservative O₂ rule, D45)', unknown: 'you would need to set off earlier (conservative O₂ rule, D45; minutes not reported)' },
+  daylight: { head: 'Daylight limit on leg {n} ({from} → {to})', short: 'the walk would end after dark: set off {min} min earlier', unknown: 'the walk would end after dark (minutes not reported)' },
+  'EVA duration': { head: 'EVA length limit on leg {n} ({from} → {to})', short: 'the route exceeds the EVA length: {min} min too long', unknown: 'the route exceeds the EVA length (minutes not reported)' },
+  dose: { head: 'Radiation dose limit on leg {n} ({from} → {to})', short: 'the route exceeds the dose allowance on this leg ({min} min short)', unknown: 'the route exceeds the dose allowance on this leg (minutes not reported)' },
+}
+/** Any other limit the run record names (never guessed). */
+export const INFEASIBLE_OTHER = { head: 'Limit {limit} on leg {n} ({from} → {to})', short: 'short by {min} min', unknown: 'minutes not reported' }
+
+/** Short names on the map label "fails: O₂". */
+export const LIMIT_SHORT: Record<RouteLimit, string> = { O2: 'O₂', daylight: 'daylight', 'EVA duration': 'EVA length', dose: 'dose' }
+export const MAP_TEXT = {
+  fails: 'fails: {limit}',
+  end: 'route stops here · no way home planned',
+} as const
+
+/** "O₂ limit on leg 3 (S7 → S6)" + "you would need to set off 25 min earlier (…)"; shortfall null = not reported. */
+export function infeasibleText(f: { leg: number; from: string; to: string; limit: string; shortfallMin: number | null }, name: (s: string) => string = (s) => s): { head: string; short: string } {
+  const t = INFEASIBLE_TEXT[f.limit as RouteLimit] ?? INFEASIBLE_OTHER
+  const vars = { n: f.leg + 1, from: name(f.from), to: name(f.to), limit: f.limit }
+  return { head: fill(t.head, vars), short: f.shortfallMin === null ? t.unknown : fill(t.short, { min: Math.round(f.shortfallMin) }) }
 }
 
 export const STOP_PROBLEM_TEXT: Record<StopProblem, string> = {

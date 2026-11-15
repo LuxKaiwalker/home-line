@@ -5915,6 +5915,198 @@
     "utc": "2026-11-14T16:19:11Z",
     "value": "df6c16487271913420aa5a662296639d217053b06e8d25fbf36825c156af734b"
   },
+  "fields.pads/rank2/nom_104/o2_home.known_pct": {
+    "commit": "294043655b6b89c787fb98d4cd122319f7098651-dirty",
+    "file": "fields/pads/rank2/nom_104/o2_home.png",
+    "script": "tools/make_pad_fields.py",
+    "units": "%",
+    "utc": "2026-11-15T13:26:11Z",
+    "value": 66.8
+  },
+  "fields.pads/rank2/nom_104/o2_home.max": {
+    "commit": "294043655b6b89c787fb98d4cd122319f7098651-dirty",
+    "file": "fields/pads/rank2/nom_104/o2_home.png",
+    "script": "tools/make_pad_fields.py",
+    "units": "L",
+    "utc": "2026-11-15T13:26:11Z",
+    "value": 265.39
+  },
+  "fields.pads/rank2/nom_104/o2_home.sha256": {
+    "commit": "294043655b6b89c787fb98d4cd122319f7098651-dirty",
+    "file": "fields/pads/rank2/nom_104/o2_home.png",
+    "script": "tools/make_pad_fields.py",
+    "units": "sha256",
+    "utc": "2026-11-15T13:26:11Z",
+    "value": "f5def9d8bfe19fad1dc6066c7deb2f84ae346ad98c4fa0810b374b322d157ffe"
+  },
+  "fields.pads/rank2/nom_104/pointer.known_pct": {
+    "commit": "294043655b6b89c787fb98d4cd122319f7098651-dirty",
+    "file": "fields/pads/rank2/nom_104/pointer.png",
+    "script": "tools/make_pad_fields.py",
+    "units": "%",
+    "utc": "2026-11-15T13:26:11Z",
+    "value": 66.77
+  },
+  "fields.pads/rank2/nom_104/pointer.sha256": {
+    "commit": "294043655b6b89c787fb98d4cd122319f7098651-dirty",
+    "file": "fields/pads/rank2/nom_104/pointer.png",
+    "script": "tools/make_pad_fields.py",
+    "units": "sha256",
+    "utc": "2026-11-15T13:26:11Z",
+    "value": "987d0fdbda5c51df2455c4a7e23dbd1d19da39645032dddda998bdd70fe73e65"
+  },
+  "fields.pads/rank2/nom_104/t_home.known_pct": {
+    "commit": "294043655b6b89c787fb98d4cd122319f7098651-dirty",
+    "file": "fields/pads/rank2/nom_104/t_home.png",
+    "script": "tools/make_pad_fields.py",
+    "units": "%",
+    "utc": "2026-11-15T13:26:11Z",
+    "value": 66.8
+  },
+  "fields.pads/rank2/nom_104/t_home.max": {
+    "commit": "294043655b6b89c787fb98d4cd122319f7098651-dirty",
+    "file": "fields/pads/rank2/nom_104/t_home.png",
+    "script": "tools/make_pad_fields.py",
+    "units": "min",
+    "utc": "2026-11-15T13:26:11Z",
+    "value": 204.0
+  },
+  "fields.pads/rank2/nom_104/t_home.sha256": {
+    "commit": "294043655b6b89c787fb98d4cd122319f7098651-dirty",
+    "file": "fields/pads/rank2/nom_104/t_home.png",
+    "script": "tools/make_pad_fields.py",
+    "units": "sha256",
+    "utc": "2026-11-15T13:26:11Z",
+    "value": "826137d21bc8faea73549b3cbf61330a431d273b4f34c3557ba95c6b9c1a0543"
+  },
+  "fields.pads/rank3/nom_104/o2_home.known_pct": {
+    "commit": "294043655b6b89c787fb98d4cd122319f7098651-dirty",
+    "file": "fields/pads/rank3/nom_104/o2_home.png",
+    "script": "tools/make_pad_fields.py",
+    "units": "%",
+    "utc": "2026-11-15T13:26:11Z",
+    "value": 66.8
+  },
+  "fields.pads/rank3/nom_104/o2_home.max": {
+    "commit": "294043655b6b89c787fb98d4cd122319f7098651-dirty",
+    "file": "fields/pads/rank3/nom_104/o2_home.png",
+    "script": "tools/make_pad_fields.py",
+    "units": "L",
+    "utc": "2026-11-15T13:26:11Z",
+    "value": 265.48
+  },
+  "fields.pads/rank3/nom_104/o2_home.sha256": {
+    "commit": "294043655b6b89c787fb98d4cd122319f7098651-dirty",
+    "file": "fields/pads/rank3/nom_104/o2_home.png",
+    "script": "tools/make_pad_fields.py",
+    "units": "sha256",
+    "utc": "2026-11-15T13:26:11Z",
+    "value": "328185641e8047db09630e60a19e3ec52d710910bcaa83661a63cf63bd1a236c"
+  },
+  "fields.pads/rank3/nom_104/pointer.known_pct": {
+    "commit": "294043655b6b89c787fb98d4cd122319f7098651-dirty",
+    "file": "fields/pads/rank3/nom_104/pointer.png",
+    "script": "tools/make_pad_fields.py",
+    "units": "%",
+    "utc": "2026-11-15T13:26:11Z",
+    "value": 66.77
+  },
+  "fields.pads/rank3/nom_104/pointer.sha256": {
+    "commit": "294043655b6b89c787fb98d4cd122319f7098651-dirty",
+    "file": "fields/pads/rank3/nom_104/pointer.png",
+    "script": "tools/make_pad_fields.py",
+    "units": "sha256",
+    "utc": "2026-11-15T13:26:11Z",
+    "value": "863a8942244059b4f9e8e8599b0b86b54d4f1c51d7e0a68a3640028cef306372"
+  },
+  "fields.pads/rank3/nom_104/t_home.known_pct": {
+    "commit": "294043655b6b89c787fb98d4cd122319f7098651-dirty",
+    "file": "fields/pads/rank3/nom_104/t_home.png",
+    "script": "tools/make_pad_fields.py",
+    "units": "%",
+    "utc": "2026-11-15T13:26:11Z",
+    "value": 66.8
+  },
+  "fields.pads/rank3/nom_104/t_home.max": {
+    "commit": "294043655b6b89c787fb98d4cd122319f7098651-dirty",
+    "file": "fields/pads/rank3/nom_104/t_home.png",
+    "script": "tools/make_pad_fields.py",
+    "units": "min",
+    "utc": "2026-11-15T13:26:11Z",
+    "value": 204.1
+  },
+  "fields.pads/rank3/nom_104/t_home.sha256": {
+    "commit": "294043655b6b89c787fb98d4cd122319f7098651-dirty",
+    "file": "fields/pads/rank3/nom_104/t_home.png",
+    "script": "tools/make_pad_fields.py",
+    "units": "sha256",
+    "utc": "2026-11-15T13:26:11Z",
+    "value": "f8cdd00c88734384bb6e2698d9b58250aaa2cc58aedbeb034d7d026322a7f439"
+  },
+  "fields.pads/rank4/nom_104/o2_home.known_pct": {
+    "commit": "294043655b6b89c787fb98d4cd122319f7098651-dirty",
+    "file": "fields/pads/rank4/nom_104/o2_home.png",
+    "script": "tools/make_pad_fields.py",
+    "units": "%",
+    "utc": "2026-11-15T13:26:11Z",
+    "value": 66.8
+  },
+  "fields.pads/rank4/nom_104/o2_home.max": {
+    "commit": "294043655b6b89c787fb98d4cd122319f7098651-dirty",
+    "file": "fields/pads/rank4/nom_104/o2_home.png",
+    "script": "tools/make_pad_fields.py",
+    "units": "L",
+    "utc": "2026-11-15T13:26:11Z",
+    "value": 277.95
+  },
+  "fields.pads/rank4/nom_104/o2_home.sha256": {
+    "commit": "294043655b6b89c787fb98d4cd122319f7098651-dirty",
+    "file": "fields/pads/rank4/nom_104/o2_home.png",
+    "script": "tools/make_pad_fields.py",
+    "units": "sha256",
+    "utc": "2026-11-15T13:26:11Z",
+    "value": "9d39dd9f959e3e7eca114be0b4d8019f41902d2698e7edf3bab99b80a9576a79"
+  },
+  "fields.pads/rank4/nom_104/pointer.known_pct": {
+    "commit": "294043655b6b89c787fb98d4cd122319f7098651-dirty",
+    "file": "fields/pads/rank4/nom_104/pointer.png",
+    "script": "tools/make_pad_fields.py",
+    "units": "%",
+    "utc": "2026-11-15T13:26:11Z",
+    "value": 66.77
+  },
+  "fields.pads/rank4/nom_104/pointer.sha256": {
+    "commit": "294043655b6b89c787fb98d4cd122319f7098651-dirty",
+    "file": "fields/pads/rank4/nom_104/pointer.png",
+    "script": "tools/make_pad_fields.py",
+    "units": "sha256",
+    "utc": "2026-11-15T13:26:11Z",
+    "value": "e4c70aaf465a14e99eec97eabcbcba0705d521c5fe565e45eb5d092873af3336"
+  },
+  "fields.pads/rank4/nom_104/t_home.known_pct": {
+    "commit": "294043655b6b89c787fb98d4cd122319f7098651-dirty",
+    "file": "fields/pads/rank4/nom_104/t_home.png",
+    "script": "tools/make_pad_fields.py",
+    "units": "%",
+    "utc": "2026-11-15T13:26:11Z",
+    "value": 66.8
+  },
+  "fields.pads/rank4/nom_104/t_home.max": {
+    "commit": "294043655b6b89c787fb98d4cd122319f7098651-dirty",
+    "file": "fields/pads/rank4/nom_104/t_home.png",
+    "script": "tools/make_pad_fields.py",
+    "units": "min",
+    "utc": "2026-11-15T13:26:11Z",
+    "value": 213.6
+  },
+  "fields.pads/rank4/nom_104/t_home.sha256": {
+    "commit": "294043655b6b89c787fb98d4cd122319f7098651-dirty",
+    "file": "fields/pads/rank4/nom_104/t_home.png",
+    "script": "tools/make_pad_fields.py",
+    "units": "sha256",
+    "utc": "2026-11-15T13:26:11Z",
+    "value": "b788613015ea76212b7e72c37bfd0937bb767cece7421343fb9c3b85816e6d64"
+  },
   "fields.slope.known_pct": {
     "commit": "8a1e2494bb2f1d340f4b45b087c3e7b132623110",
     "file": "fields/shared/slope.png",
