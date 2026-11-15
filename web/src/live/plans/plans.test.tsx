@@ -3,6 +3,8 @@
 // storage, and then says so on screen; export -> import keeps the route (ordered stations and free
 // points with labels); a bad route is refused with readable errors; a permalink whose run record
 // carries a route shows its route mode.
+import { existsSync, readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 import { Fragment, type VNode } from 'preact'
 import { describe, expect, it } from 'vitest'
 import { createApiClient } from '../client'
@@ -208,7 +210,7 @@ describe('"My plans" view', () => {
     const tree = <MyPlans {...props} />
     const html = toHtml(tree)
     expect(html).toContain(`href="#/plan/${H1}"`)
-    expect(textOf(tree)).toContain('Route ordered: S4 → Crater rim (77.512345, 18.401234) → S1 → point (77.500000, 18.390000)')
+    expect(textOf(tree)).toContain('Route ordered: S4 → W1 Crater rim (77.512345, 18.401234) → S1 → W2 (77.500000, 18.390000)')
     const ex = byClass(tree, 'live-plan-export')[0]
     expect(ex.download).toBe('plan_inputs.json')
     const exported = decodeURIComponent(String(ex.href).replace(/^data:application\/json;charset=utf-8,/, ''))
@@ -266,8 +268,9 @@ describe('JSON export and import carry the route (draft plan_inputs v1.2.0)', ()
     expect(exportPlanInputs(back.inputs).text).toBe(ex.text)
   })
 
-  it('auto routes, with or without stops, and files without a route stay valid (missing = auto)', () => {
+  it('auto routes (no stops or an empty list) and files without a route stay valid (missing = auto)', () => {
     expect(checkPlanInputsText(JSON.stringify(withRoute({ mode: 'auto' }))).ok).toBe(true)
+    expect(checkPlanInputsText(JSON.stringify(withRoute({ mode: 'auto', stops: [] }))).ok).toBe(true)
     expect(checkPlanInputsText(JSON.stringify(PLAN_INPUTS_OFFICIAL)).ok).toBe(true)
     expect(routeOf(PLAN_INPUTS_OFFICIAL as PlanInputs)).toEqual({ mode: 'auto' })
     expect(routeText({ mode: 'auto' })).toMatch(/^auto/)
@@ -282,6 +285,7 @@ describe('JSON export and import carry the route (draft plan_inputs v1.2.0)', ()
     expect(refused('ordered')).toMatch(/route \(draft v1\.2\.0\): \$\.route: must be an object/)
     expect(refused({ mode: 'shuffled', stops: [] })).toMatch(/\$\.route\.mode: must be "auto" or "ordered", not "shuffled"/)
     expect(refused({ mode: 'ordered' })).toMatch(/an ordered route needs at least one stop/)
+    expect(refused({ mode: 'auto', stops: [{ station: 'S4' }] })).toMatch(/an auto route has no stops/)
     expect(refused({ mode: 'ordered', stops: [{ station: 'X9' }] })).toMatch(/\$\.route\.stops\[0\]\.station: "X9" is not a station id/)
     expect(refused({ mode: 'ordered', stops: [{ station: 'S4' }, { lon: 400, lat: 18 }] })).toMatch(/\$\.route\.stops\[1\]\.lon: must be a number from -180 to 360/)
     expect(refused({ mode: 'ordered', stops: [{ lon: 77, lat: '18' }] })).toMatch(/stops\[0\]\.lat/)
@@ -316,7 +320,7 @@ describe('#/plan/{hash} permalink of a plan with a route', () => {
     const page = <PlanPage load={ok} permalink="p" simEnabled={false} importState={{ kind: 'idle' }} onImportFile={() => {}} />
     const text = textOf(page)
     expect(text).toContain('Route mode: ordered (your stops, computed in the order given)')
-    expect(text).toContain('S4 Crater rim (77.512345, 18.401234) S1 point (77.500000, 18.390000)')
+    expect(text).toContain('S4 W1 Crater rim (77.512345, 18.401234) S1 W2 (77.500000, 18.390000)')
     expect(toHtml(page)).toContain('data-route-mode="ordered"')
     expect(textOf(<ProvenancePage load={ok} />)).toMatch(/Route mode ordered/)
     // its export carries the route back out
@@ -352,5 +356,29 @@ describe('#/plan/{hash} permalink of a plan with a route', () => {
     expect(store.get(ok.hash)?.route).toEqual(ROUTE)
     expect(savedPlanInputs(store.get(ok.hash)!).route).toEqual(ROUTE)
     expect(textOf(<PlanPage load={ok} permalink="p" simEnabled={false} importState={{ kind: 'idle' }} onImportFile={() => {}} plans={props} />)).toContain('Saved in this browser')
+  })
+})
+
+// R0's v1.2.0 examples (PR #105, contracts/backend/examples/*route*.json): checked once they are on
+// this branch, so the draft shape here cannot drift from the merged contract unnoticed.
+describe('R0 contract examples (v1.2.0), when present', () => {
+  const EX = resolve(__dirname, '../../../../contracts/backend/examples')
+  const ex = (n: string) => resolve(EX, n)
+  const json = (n: string) => JSON.parse(readFileSync(ex(n), 'utf8'))
+  const present = (ns: string[]) => ns.filter((n) => existsSync(ex(n)))
+  /** The examples on this branch, or one skipped placeholder (an empty each is an error). */
+  const cases = (ns: string[]) => (present(ns).length ? present(ns) : ['(R0 examples not on this branch)'])
+  const PI = ['plan_inputs.route_free.json', 'plan_inputs.route_ordered.json']
+  const RR = ['run_record.route_free.json', 'run_record.route_infeasible.json']
+  it.skipIf(present(PI).length === 0).each(cases(PI))('%s imports, keeps its route through export', (n) => {
+    const doc = json(n)
+    const back = checkPlanInputsText(exportPlanInputs(doc).text)
+    expect(back.ok ? [] : back.errors).toEqual([])
+    expect(back.ok && back.inputs.route).toEqual(doc.route)
+  })
+  it.skipIf(present(RR).length === 0).each(cases(RR))('%s passes the run record check and shows its route mode', (n) => {
+    const rec = json(n) as RunRecord & { route_mode?: string }
+    expect(checkRunRecord(rec)).toEqual([])
+    expect(recordRoute(rec).mode).toBe(rec.route_mode ?? 'auto')
   })
 })

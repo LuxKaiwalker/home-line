@@ -1,11 +1,13 @@
-// The route a plan carries (D97, waypoint block §4.2): DRAFT shape of plan_inputs v1.2.0, which R0
-// has not merged yet. plan_inputs.schema.json v1.0.x does not know `route` (additionalProperties:
-// false), so planio.ts and plan.ts check `route` here and the rest of the document against the
-// schema. When R0 lands, align these types with the contract and with R5's web/src/live/route/types.ts
-// (not on origin/design when this was written), and keep one definition.
+// The route a plan carries (D97): plan_inputs v1.2.0 `route`, as in R0's contract (PR #105, branch
+// ws11-route-r0: plan_inputs.schema.json properties.route, run_record route_mode). R0 is not merged
+// into design yet and the schema here (v1.0.x) refuses `route` as an unknown field, so planio.ts and
+// plan.ts check `route` here and the rest of the document against the schema; after R0 merges the
+// schema checks it too and this stays as the readable message. R5 defines its own types in
+// web/src/live/route/types.ts (not on origin/design when this was written): keep one definition then.
 //
 //   route: { mode: "auto" | "ordered", stops: [ {station: "S4"} | {lon, lat, label?} ] }
-//   missing route = auto (old files stay valid)
+//   missing route = auto (old files stay valid); auto: stops absent or empty; ordered: >= 1 stop
+//   free points are W1, W2, ... in their order among the stops (run_record.feasibility from/to)
 //
 // Structure and names only, like the schema: stop counts, spacing and validity on the terrain are
 // the server's (config/backend.yaml route.* limits, R0/R3).
@@ -47,6 +49,7 @@ export function checkRoute(v: unknown, path = 'route'): string[] {
   if (v.stops !== undefined && !Array.isArray(v.stops)) out.push(`${path}.stops: must be a list`)
   const stops = Array.isArray(v.stops) ? v.stops : []
   if (v.mode === 'ordered' && stops.length === 0) out.push(`${path}.stops: an ordered route needs at least one stop`)
+  if (v.mode === 'auto' && stops.length > 0) out.push(`${path}.stops: an auto route has no stops (the engine chooses them); use mode "ordered"`)
   stops.forEach((s, i) => out.push(...checkStop(s, `${path}.stops[${i}]`)))
   return out
 }
@@ -74,15 +77,18 @@ export function routeOf(inputs: Record<string, unknown> | null | undefined): Rou
   return isObj(r) && ROUTE_MODES.includes(r.mode as RouteMode) ? (r as unknown as RouteSpec) : { mode: 'auto' }
 }
 
-/** One stop as text: "S4", or "Crater rim (77.512000, 18.401000)" for a free point. */
-export function stopText(s: RouteStop): string {
-  if ('station' in s) return s.station
-  const at = `${s.lon.toFixed(6)}, ${s.lat.toFixed(6)}`
-  return s.label ? `${s.label} (${at})` : `point (${at})`
+/** Text of each stop: "S4", or "W1 Crater rim (77.512000, 18.401000)" for a free point (W1, W2, … as the contract names them). */
+export function stopTexts(stops: readonly RouteStop[]): string[] {
+  let w = 0
+  return stops.map((s) => {
+    if ('station' in s) return s.station
+    const at = `${s.lon.toFixed(6)}, ${s.lat.toFixed(6)}`
+    return `W${++w}${s.label ? ` ${s.label}` : ''} (${at})`
+  })
 }
 
-/** Short text of a route for lists: "auto (the engine chooses)" or "ordered: S4 → S1 → point (…)". */
+/** Short text of a route for lists: "auto (the engine chooses …)" or "ordered: S4 → W1 Crater rim (…) → S1". */
 export function routeText(r: RouteSpec): string {
   if (r.mode === 'auto') return 'auto (the engine chooses stations and order)'
-  return `ordered: ${(r.stops ?? []).map(stopText).join(' → ')}`
+  return `ordered: ${stopTexts(r.stops ?? []).join(' → ')}`
 }

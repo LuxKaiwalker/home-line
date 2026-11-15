@@ -10,7 +10,7 @@ import { LIVE_LABEL, OFFLINE_LABEL, PRECOMPUTED_LABEL, TITLE_MAX_CHARS, UPLOAD_M
 import { LiveNum } from './num'
 import { canonicalJson, exportPlanInputs } from './planio'
 import { planUrl, recordRoute, type ImportState, type PlanLoad, type PlanTree } from './plan'
-import { stopText } from './plans/route'
+import { stopTexts } from './plans/route'
 import { MyPlans, SavePlan, type MyPlansProps } from './plans/view'
 import { RangeFlags } from './rangeflags'
 import { SimSlot } from './simslot'
@@ -163,8 +163,8 @@ export function PlanRouteMode({ record }: { record: RunRecord }) {
       </p>
       {r.mode === 'ordered' && r.stops && r.stops.length > 0 && (
         <ol class="live-route-stops">
-          {r.stops.map((st) => (
-            <li>{stopText(st)}</li>
+          {stopTexts(r.stops).map((t) => (
+            <li>{t}</li>
           ))}
         </ol>
       )}
