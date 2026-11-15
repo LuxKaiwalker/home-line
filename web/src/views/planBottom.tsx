@@ -11,6 +11,8 @@
 // No number logic here: the sections render the console's own values; the timeline is unchanged.
 import { render } from 'preact'
 import { useSignalValue } from '../state/signal'
+import { controlSignal } from '../state/activity'
+import { toggleReplay } from '../state/activityClock'
 import { missionClock } from '../state/mission'
 import { IconButton, TrustChip } from '../ui/components'
 import { t } from '../ui/copy'
@@ -35,21 +37,33 @@ export const TABLE_SECTIONS: readonly SectionName[] = ['headline', 'padpicker', 
 /** What tools/values_snapshot.ts presses to show a plan-table control: expand, then pick the tab. */
 const TABLE_REVEAL = [`[aria-controls="hl-lay-${PLAN_BOTTOM}"][aria-expanded="false"]`, `#hl-lay-${PLAN_BOTTOM}-tab-${TAB_TABLE}[aria-selected="false"]`]
 
-/** Collapsed timeline line: play / pause, scrub, EVA time (the full chart is the expanded tab). */
+/**
+ * Collapsed timeline line: play / pause, scrub, EVA time (the full chart is the expanded tab).
+ * L7c: Play is the replay player of the activity store, as in the full timeline (Timeline.tsx): it goes
+ * through toggleReplay (a running flythrough or intro stops first), is pressed only while the replay
+ * runs (not while the flythrough or the intro drives the clock) and is disabled with the store's reason.
+ * data-state mirrors .hl-tl[data-state] (the clock playing or paused, whichever player drives it).
+ */
 export function SlimScrubber() {
   const tNow = useSignalValue(missionClock.s.t)
   const playing = useSignalValue(missionClock.s.playing)
   const tMax = useSignalValue(missionClock.s.tMax)
+  const replay = useSignalValue(controlSignal('replay'))
   // the dock ticker (ui/timeline/install.tsx) starts on its own whenever the mission clock plays
   return (
-    <span class="plan-scrub">
+    <span class="plan-scrub" data-state={playing ? 'playing' : 'paused'}>
       <IconButton
         class="hl-tl__play"
-        icon={playing ? 'pause' : 'play'}
-        label={t(playing ? 'buttons.pause' : 'buttons.play')}
-        pressed={playing}
+        icon={replay.running ? 'pause' : 'play'}
+        label={t(replay.running ? 'buttons.pause' : 'buttons.play')}
+        pressed={replay.running}
+        disabled={!replay.enabled}
+        title={replay.enabled ? t('hints.timeline.play') : replay.title}
+        data-activity-reason={replay.reason ?? undefined}
         aria-keyshortcuts="Space"
-        onClick={() => missionClock.toggle()}
+        onClick={() => {
+          if (replay.enabled) toggleReplay()
+        }}
         onKeyDown={(e: KeyboardEvent) => {
           // the native button click toggles; keep the shell's Space shortcut from toggling it again
           if (e.key === ' ' || e.key === 'Enter') e.stopPropagation()
