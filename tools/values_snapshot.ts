@@ -16,10 +16,9 @@
  * View states (from web/src/router.ts): #/ (console) for every variant × suit × walkback budget and
  * every D21 parking option × budget; #/station/<id> for every station linked from the app; #/trade;
  * #/conditions (+ every dose-allowance slider step); #/cuff; #/hud (panel expanded, EVA clock
- * scrubbed to 0/25/50/75/100 %); #/nav (every Monte-Carlo set); #/scorecard; #/about.
- * Not covered: #/hud3d (Three.js; its panel is the same HUD code, and its 2D fallback depends on the
- * measured frame rate, so it is not deterministic headless), the console budget slider (its only
- * number is the isochrone step, already shown), HUD drag/storm modes, #/spike, live (WS13) numbers.
+ * scrubbed to 0/25/50/75/100 %); #/scorecard; #/about. (#/nav and #/hud3d are removed, D98/D99.)
+ * Not covered: the console budget slider (its only number is the isochrone step, already shown),
+ * HUD drag/storm modes, #/spike, live (WS13) numbers.
  *
  * Run (Node ≥ 24 runs the .ts directly; build first: `cd web && npm run build`):
  *   cd web && npm run values:snapshot -- --check             # compare with tests/fixtures/values_baseline.json
@@ -392,20 +391,6 @@ async function hudView(c: Ctx): Promise<void> {
   await page.close()
 }
 
-async function navView(c: Ctx): Promise<void> {
-  const page = await open(c, '#/nav')
-  await settle(page, '#/nav (initial)')
-  const sets = page.locator('.outlet [role="radio"]')
-  const n = await sets.count()
-  if (n === 0) await record(c, page, '#/nav')
-  for (let i = 0; i < n; i++) {
-    const b = sets.nth(i)
-    if (await b.isDisabled()) continue
-    await clickAndRecord(c, page, b, `#/nav set=${(await b.textContent())!.trim()}`)
-  }
-  await page.close()
-}
-
 async function snapshot(base: string, only: RegExp | null): Promise<Snapshot> {
   const browser = await launch()
   try {
@@ -416,7 +401,6 @@ async function snapshot(base: string, only: RegExp | null): Promise<Snapshot> {
     for (const h of ['#/trade', '#/cuff', '#/scorecard', '#/about']) await simpleView(c, h)
     await conditionsView(c)
     await hudView(c)
-    await navView(c)
     if (c.stationLinks.size === 0) throw new Error('no #/station/<id> link found in any view')
     for (const h of [...c.stationLinks].sort()) await simpleView(c, h)
     return c.snap

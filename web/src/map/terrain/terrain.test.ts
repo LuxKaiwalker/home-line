@@ -9,7 +9,6 @@
 /// <reference types="node" />
 import { existsSync, readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
-import { inflateSync } from 'node:zlib'
 import { MercatorCoordinate } from 'maplibre-gl'
 import { parse } from 'yaml'
 import { beforeEach, describe, expect, it } from 'vitest'
@@ -18,71 +17,27 @@ import { REPO } from '../../hud/testutil'
 import { ui } from '../../state'
 import { LABELS, LEADER_LIFT_PX } from '../labels/config'
 import { leaderLift } from '../labels/model'
-import { COPY, factorText, t, TERRAIN, TERRAIN_PENDING } from './config'
+import { factorText, t, TERRAIN, TERRAIN_PENDING } from './config'
 import { FpsWatch, type FpsState } from './fps'
 import { clampExaggeration, exaggeration, reliefAzimuth, reliefMinute, setExaggeration, setView, toggleView } from './state'
 import { tileClipMatrix } from './terrain'
+import { readPng } from './testutil'
 import { demSource, parseTerrainTiles, pixelCentre, terrariumHeight, tilePixel } from './tiles'
 
 const PUBLISHED = resolve(REPO, 'web/public/data/terrain')
 const FIXTURE = resolve(REPO, 'web/src/map/terrain/fixtures/terrain')
 const TERRAIN_DIR = existsSync(resolve(PUBLISHED, 'tiles.json')) ? PUBLISHED : FIXTURE
-const tiles = parseTerrainTiles(JSON.parse(readFileSync(resolve(TERRAIN_DIR, 'tiles.json'), 'utf8')))
+const tilesRaw = JSON.parse(readFileSync(resolve(TERRAIN_DIR, 'tiles.json'), 'utf8')) as { vertical_offset_m?: number }
+const tiles = parseTerrainTiles(tilesRaw)
+/** P2c: metres added after scaling (h = elevation × factor + offset) so the site sits near 0 m in MapLibre; absent = 0 (pre-P2c fixtures). */
+const OFFSET_M = tilesRaw.vertical_offset_m ?? 0
+const design = parse(readFileSync(resolve(REPO, 'config/design.yaml'), 'utf8')) as { terrain_tiles: { vertical_offset_m: number } }
 const site = parse(readFileSync(resolve(REPO, 'config/site.yaml'), 'utf8')) as { pad_default: { lon: number; lat: number }; crs: { mars_radius_m: number } }
 
 /** P2's known value: the 1 m DEM bilinear at the centre of the z16 pixel holding pad_default (m, true). */
 const PAD_DEM_M = -3627.7293
 /** MapLibre's Earth radius (maplibre-gl earthRadius; docs/web-architecture.md D4 caveats). */
 const ML_EARTH_RADIUS_M = 6371008.8
-
-/** Minimal PNG reader (8-bit RGB or RGBA, non-interlaced): the tile's Terrarium bytes. */
-function readPng(path: string): { px: Uint8Array; w: number; bpp: number } {
-  const buf = readFileSync(path)
-  let off = 8
-  let w = 0
-  let h = 0
-  let bpp = 0
-  const idat: Buffer[] = []
-  while (off < buf.length) {
-    const len = buf.readUInt32BE(off)
-    const type = buf.toString('ascii', off + 4, off + 8)
-    const d = buf.subarray(off + 8, off + 8 + len)
-    if (type === 'IHDR') {
-      w = d.readUInt32BE(0)
-      h = d.readUInt32BE(4)
-      if (d[8] !== 8 || d[12] !== 0 || (d[9] !== 2 && d[9] !== 6)) throw new Error(`${path}: not 8-bit RGB(A)`)
-      bpp = d[9] === 6 ? 4 : 3
-    } else if (type === 'IDAT') idat.push(d)
-    else if (type === 'IEND') break
-    off += 12 + len
-  }
-  const raw = inflateSync(Buffer.concat(idat))
-  const st = w * bpp
-  const out = new Uint8Array(h * st)
-  for (let y = 0; y < h; y++) {
-    const ft = raw[y * (st + 1)]
-    const s = y * (st + 1) + 1
-    const o = y * st
-    for (let x = 0; x < st; x++) {
-      const a = x >= bpp ? out[o + x - bpp] : 0
-      const b = y > 0 ? out[o - st + x] : 0
-      const c = x >= bpp && y > 0 ? out[o - st + x - bpp] : 0
-      let v = raw[s + x]
-      if (ft === 1) v += a
-      else if (ft === 2) v += b
-      else if (ft === 3) v += (a + b) >> 1
-      else if (ft === 4) {
-        const p = a + b - c
-        const pa = Math.abs(p - a)
-        const pb = Math.abs(p - b)
-        const pc = Math.abs(p - c)
-        v += pa <= pb && pa <= pc ? a : pb <= pc ? b : c
-      }
-      out[o + x] = v & 255
-    }
-  }
-  return { px: out, w, bpp }
-}
 
 function tileHeights(z: number, x: number, y: number): (i: number, j: number) => number {
   const { px, w, bpp } = readPng(resolve(TERRAIN_DIR, String(z), String(x), `${y}.png`))
@@ -93,17 +48,18 @@ function tileHeights(z: number, x: number, y: number): (i: number, j: number) =>
 }
 
 describe('U1 tiles: the factor is baked in, exaggeration 1 = true shape', () => {
-  it('decoding the tile pixel at the pad equals the 1 m DEM × 1.878 (P2 known value, ± 0.1 m × factor)', () => {
+  it('decoding the tile pixel at the pad equals the 1 m DEM × 1.878 + vertical_offset_m (P2/P2c known value, ± 0.1 m × factor)', () => {
     const { lon, lat } = site.pad_default
     const z = tiles.focus!.maxzoom
     const p = tilePixel(lon, lat, z)
     const h = tileHeights(z, p.x, p.y)(p.i, p.j)
     expect(tiles.factor).toBe(TERRAIN.elevationFactor)
-    expect(Math.abs(h - PAD_DEM_M * tiles.factor)).toBeLessThanOrEqual(0.1 * tiles.factor)
+    if (TERRAIN_DIR === PUBLISHED) expect(OFFSET_M).toBe(design.terrain_tiles.vertical_offset_m)
+    expect(Math.abs(h - (PAD_DEM_M * tiles.factor + OFFSET_M))).toBeLessThanOrEqual(0.1 * tiles.factor)
     // and the published pad.json elevation of the same point (rounded to 0.1 m)
     const pad = JSON.parse(readFileSync(resolve(REPO, 'web/public/data/pad.json'), 'utf8')) as { alternatives: { id: string; elev_m: number }[] }
     const elev = pad.alternatives.find((a) => a.id === 'pad_default')!.elev_m
-    expect(Math.abs(h / tiles.factor - elev)).toBeLessThanOrEqual(0.15)
+    expect(Math.abs((h - OFFSET_M) / tiles.factor - elev)).toBeLessThanOrEqual(0.15)
   })
 
   it('the factor is Earth / Mars radius (DESIGN U1 item 2) and only in the tiles', () => {
@@ -302,19 +258,18 @@ describe('config/design.yaml and copy.json cross-check (when present on this bra
       exaggeration: { min: number; max: number; default: number; step: number }
       camera: { presets: { isometric: { pitch: number }; low: { pitch: number } } }
       performance: { fps_3d_min: number }
+      terrain_3d: { max_pitch_deg: number }
     }
     expect(TERRAIN.elevationFactor).toBe(d.scale.elevation_factor)
     expect({ ...TERRAIN.exaggeration, step: TERRAIN_PENDING.exaggerationStep }).toEqual(d.exaggeration)
     expect(TERRAIN.pitch3d).toBe(d.camera.presets.isometric.pitch)
-    expect(TERRAIN.maxPitch3d).toBe(d.camera.presets.low.pitch)
+    expect(TERRAIN.maxPitch3d).toBe(d.terrain_3d.max_pitch_deg)
+    expect(d.camera.presets.low.pitch).toBeLessThanOrEqual(TERRAIN.maxPitch3d)
     expect(TERRAIN.fps3dMin).toBe(d.performance.fps_3d_min)
   })
-  const copy = resolve(REPO, 'web/src/ui/copy.json')
-  it.skipIf(!existsSync(copy))('COPY equals web/src/ui/copy.json', () => {
-    const c = JSON.parse(readFileSync(copy, 'utf8')) as Record<string, unknown>
-    for (const [k, v] of Object.entries(COPY)) {
-      const got = k.split('.').reduce<unknown>((o, p) => (o as Record<string, unknown> | undefined)?.[p], c)
-      expect(got, k).toBe(v)
-    }
+  it('the terrain text comes from the copy deck (ui/copy), no copied strings (T1)', () => {
+    const c = JSON.parse(readFileSync(resolve(REPO, 'web/src/ui/copy.json'), 'utf8')) as { buttons: Record<string, string>; tooltips: Record<string, string> }
+    expect(t('buttons.view3d')).toBe(c.buttons.view3d)
+    expect(t('tooltips.view3d')).toBe(c.tooltips.view3d)
   })
 })

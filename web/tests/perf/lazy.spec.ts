@@ -46,8 +46,9 @@ interface Chunk {
 
 /** Lazy-only modules (source paths in the Vite manifest), with the routes allowed to load them. */
 const LAZY: { what: string; re: RegExp; required?: string; allowedOn: string[] }[] = [
-  { what: '3D scene (fp3d)', re: /^src\/fp3d\//, required: 'src/fp3d/index.ts', allowedOn: ['hud3d'] },
-  { what: 'Three.js', re: /node_modules\/three\//, allowedOn: ['hud3d'] },
+  // D99: the first-person 3D view (src/fp3d, the only Three.js user) is removed; neither may come back on any route.
+  { what: '3D scene (fp3d)', re: /^src\/fp3d\//, allowedOn: [] },
+  { what: 'Three.js', re: /node_modules\/three\//, allowedOn: [] },
   { what: 'field shader spike', re: /^src\/map\/spike\//, required: 'src/map/spike/view.ts', allowedOn: ['spike'] },
   { what: 'field shader (U2)', re: /^src\/map\/field\/|\.(glsl|vert|frag)$/, allowedOn: ['spike', 'plan'] },
   { what: 'styleguide', re: /^src\/ui\/styleguide\//, required: 'src/ui/styleguide/view.tsx', allowedOn: ['styleguide'] },
@@ -110,7 +111,6 @@ test.describe('perf: lazy loading and fonts (production build)', () => {
     { name: 'conditions', hash: '#/conditions' },
     { name: 'cuff', hash: '#/cuff' },
     { name: 'hud', hash: '#/hud' },
-    { name: 'nav', hash: '#/nav' },
     { name: 'scorecard', hash: '#/scorecard' },
     { name: 'about', hash: '#/about' },
     { name: 'styleguide', hash: '#/styleguide' },
@@ -120,9 +120,9 @@ test.describe('perf: lazy loading and fonts (production build)', () => {
       const m = loadManifest()
       const forbidden = new Map<string, string>()
       for (const [key, c] of Object.entries(m)) for (const l of LAZY) if (l.re.test(key) && !l.allowedOn.includes(r.name)) forbidden.set(c.file, `${l.what} (${key})`)
-      // Chunks with the Three.js marker (Three.js has no own manifest key when bundled into fp3d's chunk).
+      // Chunks with the Three.js marker (D99: no route may load Three.js).
       for (const f of readdirSync(DIST + 'assets')) {
-        if (f.endsWith('.js') && !['hud3d'].includes(r.name) && MARKERS[0].re.test(readFileSync(DIST + 'assets/' + f, 'utf8'))) forbidden.set(`assets/${f}`, 'Three.js (marker)')
+        if (f.endsWith('.js') && MARKERS[0].re.test(readFileSync(DIST + 'assets/' + f, 'utf8'))) forbidden.set(`assets/${f}`, 'Three.js (marker)')
       }
       const requested: string[] = []
       let fontBytes = 0

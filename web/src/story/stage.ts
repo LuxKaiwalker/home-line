@@ -52,7 +52,10 @@ export class StoryStage {
   private relief: Promise<boolean> | null = null
   private touchedSelection = false
   private touchedCollapse = false
-  private last: { caption?: string | null; view?: '2d' | '3d'; layers: Record<string, boolean>; clockT?: number; playing?: boolean; mode?: string; k?: number } = { layers: {} }
+  private last: { caption?: string | null; view?: '2d' | '3d'; layers: Record<string, boolean>; clockT?: number; playing?: boolean; mode?: string; k?: number; opacity?: string; chrome?: string } = { layers: {} }
+  /** M10c: a live story pauses the label placement (4 Hz) and the furniture loops until restore() */
+  private readonly paused: boolean
+  private cover: HTMLDivElement | null = null
 
   constructor(cmap: ConsoleMap, chrome: ChromePolicy) {
     this.cmap = cmap
@@ -81,11 +84,36 @@ export class StoryStage {
     this.map.getContainer().append(this.caption)
     document.documentElement.dataset.story = 'on'
     this.setChrome(chrome === 'shown' ? 'reveal' : chrome === 'hidden' ? 'hide' : undefined)
+    // live runs only: a capture places the labels on every frame (frame-exact)
+    this.paused = chrome === 'story'
+    if (this.paused) cmap.setStoryPaused(true)
   }
 
   private setChrome(v: 'hide' | 'reveal' | undefined): void {
     const hide = this.chrome === 'hidden' ? v !== 'reveal' : this.chrome === 'story' ? v === 'hide' : false
-    document.documentElement.dataset.storyChrome = hide ? 'hide' : 'show'
+    const val = hide ? 'hide' : 'show'
+    // only on change: an attribute write on <html> restyles the whole page
+    if (val === this.last.chrome) return
+    this.last.chrome = val
+    document.documentElement.dataset.storyChrome = val
+  }
+
+  /** M10c warm-up: hide the map canvas and its markers while layers and tiles load out of sight. */
+  setCanvasHidden(on: boolean): void {
+    // a cover, not visibility: hidden: a hidden WebGL canvas defers its frames and the first visible
+    // frame then stalls (measured 17 s in software GL, notes/M10c.md)
+    if (on && !this.cover) {
+      this.cover = document.createElement('div')
+      this.cover.className = 'hl-story-cover'
+      this.map.getContainer().append(this.cover)
+    }
+    if (!on) {
+      this.cover?.remove()
+      this.cover = null
+    }
+    // html[data-story-warm]: the story has not started its clock yet (tests, measurements)
+    if (on) document.documentElement.dataset.storyWarm = 'on'
+    else delete document.documentElement.dataset.storyWarm
   }
 
   /** True when the relief backdrop the state asks for is still loading (capture waits for it). */
@@ -94,16 +122,7 @@ export class StoryStage {
   }
 
   apply(s: DirectorState): void {
-    // layers (only changes, so the console's own toggles are not fought every frame)
-    for (const [id, on] of Object.entries(s.layers)) {
-      if (this.last.layers[id] === on) continue
-      this.last.layers[id] = on
-      if (id === 'terrain') setView(on ? '3d' : '2d')
-      else if (id === 'relief_low') {
-        if (on) this.relief ??= addReliefLow(this.map).catch(() => false)
-        void this.relief?.then(() => setReliefLowVisible(this.map, on))
-      } else for (const g of GROUPS[id] ?? []) this.cmap.setVisible(g, on)
-    }
+    this.applyLayers(s.layers)
     // field
     if (s.field.mode && s.field.mode !== this.last.mode) ui.fieldMode.value = this.last.mode = s.field.mode
     const c = s.field.collapse
@@ -134,16 +153,32 @@ export class StoryStage {
       this.caption.textContent = s.caption ? t(s.caption as CopyKey, { walkback_min: mission.plan.budgetMin.peek() }) : ''
       this.caption.hidden = !s.caption
     }
-    this.caption.style.opacity = String(Math.min(1, (s.captionAge * 1000) / PANEL_MS[1]))
+    const opacity = String(Math.min(1, (s.captionAge * 1000) / PANEL_MS[1]))
+    if (opacity !== this.last.opacity) this.caption.style.opacity = this.last.opacity = opacity
     this.setChrome(s.ui)
     // camera last: after a 2D/3D switch the pitch limit has moved
     if (s.camera) jumpToPose(this.map, s.camera, { factor: ELEVATION_FACTOR, exaggeration: exaggeration(), radiusM: CONFIG.marsRadiusM })
+  }
+
+  /** Storyboard layers on/off (only changes, so the console's own toggles are not fought every frame). */
+  applyLayers(layers: Record<string, boolean>): void {
+    for (const [id, on] of Object.entries(layers)) {
+      if (this.last.layers[id] === on) continue
+      this.last.layers[id] = on
+      if (id === 'terrain') setView(on ? '3d' : '2d')
+      else if (id === 'relief_low') {
+        if (on) this.relief ??= addReliefLow(this.map).catch(() => false)
+        void this.relief?.then(() => setReliefLowVisible(this.map, on))
+      } else for (const g of GROUPS[id] ?? []) this.cmap.setVisible(g, on)
+    }
   }
 
   /** Put the app back as it was; `animate` eases the camera home (never under reduced motion). */
   restore(animate: boolean): void {
     const sv = this.saved
     this.caption.remove()
+    this.setCanvasHidden(false)
+    if (this.paused) this.cmap.setStoryPaused(false)
     if (this.last.layers.terrain !== undefined) setView(sv.view)
     if (this.relief) removeReliefLow(this.map)
     for (const [g, on] of Object.entries(sv.groups) as [LayerGroup, boolean][]) if (this.cmap.layerVisible(g) !== on) this.cmap.setVisible(g, on)

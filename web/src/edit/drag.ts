@@ -24,6 +24,20 @@ export const PAD_VALIDITY = {
   discM: cfg<number>(designRaw, 'pad_validity.disc_inside_grid_m'),
 } as const
 
+/**
+ * Click vs drag on the rover marker (H2b): a press whose pointer moves no farther than this many CSS
+ * px from where it went down is a click (it selects the pad, as every other marker does); only
+ * movement beyond it starts the drag. No drag threshold exists in config/design.yaml or tokens, so
+ * this is the platform default (~4 px; assumed, see notes/H2b.md). MapLibre starts its own marker
+ * drag at 3 px (map clickTolerance), below this.
+ */
+export const CLICK_SLOP_PX = 4
+
+/** True when the pointer has moved beyond the click slop from the press point (screen px). */
+export function isDragMove(from: { x: number; y: number }, to: { x: number; y: number }, slop = CLICK_SLOP_PX): boolean {
+  return Math.hypot(to.x - from.x, to.y - from.y) > slop
+}
+
 /** The field grid the disc must stay inside (fields/index.json bounds) and its metric. */
 export interface DragGrid {
   bounds: readonly [number, number, number, number]

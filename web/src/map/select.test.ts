@@ -58,8 +58,8 @@ class El {
   removeEventListener(t: string, fn: (e: Event) => void): void {
     this.l.get(t)?.delete(fn)
   }
-  dispatch(t: string, target: El): void {
-    for (const fn of [...(this.l.get(t) ?? [])]) fn({ type: t, target } as unknown as Event)
+  dispatch(t: string, target: El, extra: Record<string, unknown> = {}): void {
+    for (const fn of [...(this.l.get(t) ?? [])]) fn({ type: t, target, ...extra } as unknown as Event)
   }
 }
 
@@ -115,6 +115,20 @@ afterEach(() => {
   ms?.destroy()
   ms = null
   vi.unstubAllGlobals()
+})
+
+describe('I1: a left drag is no click', () => {
+  it('a left press that moves beyond the click slop and ends on the S7 pill selects nothing; a still one selects', () => {
+    const m = fakeMap()
+    ms = new MapSelection(m as unknown as SelectMap, sources)
+    const p = pill('S7', 'route_station')
+    m.container.dispatch('pointerdown', p, { button: 0, clientX: 100, clientY: 100 })
+    m.container.dispatch('click', p, { clientX: 140, clientY: 100 })
+    expect(selection.selected.value).toBeNull()
+    m.container.dispatch('pointerdown', p, { button: 0, clientX: 100, clientY: 100 })
+    m.container.dispatch('click', p, { clientX: 102, clientY: 101 })
+    expect(selection.selected.value).toEqual({ kind: 'station', id: 'S7' })
+  })
 })
 
 describe('click on the map, a pill, a marker and the list give the same ref (U14)', () => {

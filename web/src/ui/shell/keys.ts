@@ -4,7 +4,7 @@
 // FLY) and announces every action as a `hl:shortcut` CustomEvent on window, so later packages (search
 // U17, camera U16, selection history A5, undo U15) handle theirs without editing the shell:
 //   window.addEventListener('hl:shortcut', (e) => { if (e.detail.action === 'search') { …; e.preventDefault() } })
-import { canonicalHref, type Route } from '../../router'
+import type { Route } from '../../router'
 import type { ClockDriver } from '../../state/clock'
 import { ui, type Mode } from '../../state/ui'
 import type { CopyKey } from '../copy'
@@ -93,6 +93,12 @@ export const HELP_ROWS: readonly HelpRow[] = [
   { keys: ['P', 'Y', 'R', 'E'], label: 'shortcuts.modes', ready: true },
   { keys: ['T'], label: 'shortcuts.toggle3d', ready: true },
   { keys: ['?'], label: 'shortcuts.help', ready: true },
+  // I1 mouse model (map/input): left button interacts, right button moves the map
+  { keys: ['Left click'], label: 'shortcuts.mouseSelect', ready: true },
+  { keys: ['Right drag'], label: 'shortcuts.mousePan', ready: true },
+  { keys: ['Ctrl / Shift + right drag', 'Middle drag'], label: 'shortcuts.mouseRotate', ready: true },
+  { keys: ['Wheel'], label: 'shortcuts.mouseZoom', ready: true },
+  { keys: ['Touch'], label: 'shortcuts.touch', ready: true },
 ]
 
 /** Views that handle a key themselves: the shell leaves it to them (the HUD's Space toggles the same clock). */
@@ -132,7 +138,6 @@ export function runShortcut(a: ShortcutAction, env: ShortcutEnv): boolean {
     case 'toggle3d': {
       const next = ui.view.peek() === '3d' ? '2d' : '3d'
       ui.view.value = next
-      if (route.name === 'hud' || route.name === 'hud3d') env.navigate(canonicalHref({ name: next === '3d' ? 'hud3d' : 'hud' }))
       return true
     }
     case 'playPause':
