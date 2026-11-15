@@ -54,11 +54,14 @@ async function pickerData(padId: PadId, padEnv: (id: PadId) => Promise<PadEnv>, 
   const env = await padEnv(padId)
   if (!env.info.hasRoutingFields || !env.info.files.fields) throw new ExportError('pad')
   const f = env.routingFields
-  const [{ routeGridOf }, { LegRouter }] = await Promise.all([import('../../../edit/route/map/grid'), import('../../../edit/route/map/router')])
-  const base = await baseData(f.scenario)
+  const [{ makeBrowserRouteData }, base] = await Promise.all([import('../../../edit/route/browser/data'), baseData(f.scenario)])
   const same = f.tHome.width === base.tHome.width && f.tHome.height === base.tHome.height && f.tHome.w === base.tHome.w && f.tHome.n === base.tHome.n
   if (!same) throw new ExportError('pad', 'the pad fields are on another grid')
-  const grid = routeGridOf(f.tHome, base.grid.elev)
+  // the routing grid of this pad = edit/route/map/grid.ts routeGridOf(T_home, heights): walkable = T_home known,
+  // heights of the official tree (same cells). Restated here: edit/route/map/ is imported only by its owners (map.test.tsx).
+  const grid: BrowserRouteData['grid'] = { width: f.tHome.width, height: f.tHome.height, resM: f.tHome.resM, elev: base.grid.elev, passable: Uint8Array.from(f.tHome.data.known) }
+  // a fresh router + leg cache on this grid (makeBrowserRouteData builds them); everything else from the official tree
+  const fresh = makeBrowserRouteData({ scenario: base.scenario, tHome: f.tHome, o2Home: f.o2Home, pointer: f.pointer, grid, model: base.model, stations: [], padFile: null, rad: base.rad, clock: null, storm: base.storm })
   const keys = env.info.files.fields
   return {
     ...base,
@@ -66,9 +69,9 @@ async function pickerData(padId: PadId, padEnv: (id: PadId) => Promise<PadEnv>, 
     o2Home: f.o2Home,
     pointer: f.pointer,
     grid,
-    router: new LegRouter(grid, base.model),
-    components: new Map(),
-    legCache: new Map(),
+    router: fresh.router,
+    components: fresh.components,
+    legCache: fresh.legCache,
     fieldsPad: { lon: f.pad.lon, lat: f.pad.lat, id: env.info.sourceId, elevM: f.pad.elevM, kind: 'picker', source: `scenarios/pads/${env.info.sourceId}/summary.json pad (D21 rover parking option)` },
     files: { ...base.files, tHome: `fields/${keys.tHome}.png`, o2Home: f.o2Home ? `fields/${keys.o2Home}.png` : null, pointer: f.pointer ? `fields/${keys.pointer}.png` : null },
   }
