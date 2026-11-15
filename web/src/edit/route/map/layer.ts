@@ -1,14 +1,22 @@
 // WP6 (D97): free waypoints and the ghost route on the console map. Marker and drag patterns ported
 // from origin/waypoint-routing web/src/mission/missionMap.ts (N0CEO, Mission Planer: numbered
-// draggable markers, click to add, dashed line), adapted to the design map, its tokens and I1's
-// mouse model (left button interacts; a right / middle press on a marker belongs to the map).
+// draggable markers, click to add, dashed line), adapted to the design map and its tokens.
+//
+// Pointer model (independent of the map's own mapping, I1 or L9): a waypoint moves only with a LEFT
+// press that starts ON its marker element (MapLibre's marker drag); a right / middle press on a
+// marker belongs to the map; a press that starts off a marker always reaches MapLibre (pan, rotate,
+// select) and never moves a waypoint. Both the marker drop and the armed click use the rover's click
+// slop (H2b, edit/drag.ts CLICK_SLOP_PX = 4 px): less movement is a click, more is a drag.
 //
 //   markers  one MapLibre Marker per free point, .hl-route-marker[data-point="W{n}"], draggable;
-//            the drag changes nothing until the drop (D85), then one undo step (editor.drop)
-//   add      while "Add waypoint" is armed, the next map click appends W{n}; Escape disarms
+//            the drag changes nothing until the drop (D85), then one undo step (editor.drop); a
+//            drop within the slop is a click (the point stays, no undo step)
+//   add      while "Add waypoint" is armed, the next map CLICK appends W{n} (a press that moves
+//            beyond the slop is a pan and leaves it armed); Escape disarms
 //   ghost    one dashed line layer (muted: an estimate), hidden once a computed result is drawn
 import type { FeatureCollection } from 'geojson'
 import { effect } from '../../../state/signal'
+import { isDragMove } from '../../drag'
 import { TOKENS } from '../../../ui/tokens'
 import { fill } from '../text'
 import type { WaypointEditor } from './editor'
@@ -42,6 +50,7 @@ export interface WaypointMlMap {
   getContainer(): HTMLElement
   getCanvas(): HTMLElement
   unproject(p: [number, number]): { lng: number; lat: number }
+  project(ll: [number, number]): { x: number; y: number }
 }
 export interface WaypointConsoleMap {
   readonly map: WaypointMlMap
@@ -117,6 +126,8 @@ export function attachWaypointMap(ed: WaypointEditor, cm: WaypointConsoleMap, o:
     m.setLngLat(at) // MapLibre needs the position before addTo
     m.setDraggable(true)
     let index = -1
+    /** where the marker was when the left press went down (the slop is measured from there) */
+    let pressAt: { lng: number; lat: number } | null = null
     m.on('dragstart', () => {
       el.classList.add('is-dragging')
       ed.dragStart(el.dataset.point ?? name)
@@ -125,9 +136,12 @@ export function attachWaypointMap(ed: WaypointEditor, cm: WaypointConsoleMap, o:
       swallowClick = true
       el.classList.remove('is-dragging')
       const p = m.getLngLat()
+      const from = pressAt
+      pressAt = null
       const cur = freePoints(ctl.store.route.peek()).find((f) => f.name === el.dataset.point)
       index = cur ? cur.index : -1
-      if (index < 0) ed.dragCancel()
+      const moved = !from || isDragMove(cm.map.project([from.lng, from.lat]), cm.map.project([p.lng, p.lat]))
+      if (index < 0 || !moved) ed.dragCancel() // within the slop: a click, the point stays where it was
       else ed.drop(index, p.lng, p.lat)
       place()
     })
@@ -138,7 +152,11 @@ export function attachWaypointMap(ed: WaypointEditor, cm: WaypointConsoleMap, o:
     let release: (() => void) | null = null
     const onPress = (e: Event): void => {
       const p = e as PointerEvent
-      if (p.pointerType === 'touch' || p.button === 0 || release) return
+      if (p.pointerType === 'touch' || p.button === 0) {
+        pressAt = m.getLngLat()
+        return
+      }
+      if (release) return
       m.setDraggable(false)
       const back = (): void => {
         win?.removeEventListener('pointerup', back)
@@ -212,14 +230,19 @@ export function attachWaypointMap(ed: WaypointEditor, cm: WaypointConsoleMap, o:
     if (!ed.adding.peek()) return
     if (e.target !== canvas) return // controls, markers, popups keep their clicks
     const me = e as MouseEvent
+    // a press that moved beyond the slop was a pan (L9 left-drag), not the armed click: stay armed
+    if (press && isDragMove(press, { x: me.clientX, y: me.clientY })) return
     const r = canvas.getBoundingClientRect()
     const ll = cm.map.unproject([me.clientX - r.left, me.clientY - r.top])
     e.stopPropagation()
     e.preventDefault()
     ed.add(ll.lng, ll.lat)
   }
-  const onPress = (): void => {
+  let press: { x: number; y: number } | null = null
+  const onPress = (e: Event): void => {
     swallowClick = false // a new press: whatever follows is a real click
+    const pe = e as PointerEvent
+    press = typeof pe.clientX === 'number' ? { x: pe.clientX, y: pe.clientY } : null
   }
   container.addEventListener('click', onDomClick, true)
   container.addEventListener('pointerdown', onPress, true)

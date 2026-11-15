@@ -98,6 +98,7 @@ function fakeMap() {
     getCanvas: () => canvas as unknown as HTMLElement,
     // 1 px = 1e-6 deg from (137, -4): the test clicks at lon/lat directly
     unproject: ([x, y]: [number, number]) => ({ lng: 137 + x * 1e-6, lat: -4 - y * 1e-6 }),
+    project: ([lng, lat]: [number, number]) => ({ x: (lng - 137) * 1e6, y: (-4 - lat) * 1e6 }),
     getSource: (id: string) => sources.get(id),
     addSource: (id: string, spec: { data: unknown }) => {
       const s = { data: spec.data, setData(d: unknown) { s.data = d } } // prettier-ignore
@@ -108,9 +109,13 @@ function fakeMap() {
     getContainer: () => container as unknown as HTMLElement,
   }
   const cm: WaypointConsoleMap = { map, whenReady: () => Promise.resolve() }
+  /** px of a lon/lat on the fake canvas */
+  const px = (lon: number, lat: number) => ({ clientX: Math.round((lon - 137) * 1e6), clientY: Math.round((-4 - lat) * 1e6) })
+  /** a press on the empty canvas (off every marker) at lon/lat; true when someone stopped it */
+  const press = (lon: number, lat: number) => container.fire('pointerdown', { target: canvas, button: 0, pointerType: 'mouse', ...px(lon, lat) })
   /** a DOM click on the canvas at lon/lat; true when the point took it (MapLibre would not see it) */
   const click = (lon: number, lat: number) => container.fire('click', { target: canvas, clientX: Math.round((lon - 137) * 1e6), clientY: Math.round((-4 - lat) * 1e6), preventDefault() {} })
-  return { cm, sources, layers, container, canvas, click }
+  return { cm, sources, layers, container, canvas, click, press }
 }
 
 function setup() {
@@ -204,6 +209,78 @@ describe('map binding: markers, armed click, ghost layer', () => {
     win.fire('pointerup')
     expect(m.draggable).toBe(true)
     disposeEditor(ctl)
+  })
+})
+
+describe('pointer model (L9 / I1 independent): only a press ON a marker moves a waypoint; 4 px slop', () => {
+  async function two() {
+    const { store, ctl } = setup()
+    ctl.setMode('ordered')
+    const loadGrid = vi.fn(async () => {
+      throw new Error('no grid in this test')
+    })
+    const ed = editorOf(ctl, { defer: (f) => f(), loadGrid })
+    const fm = fakeMap()
+    const made: FakeMarker[] = []
+    attachWaypointMap(ed, fm.cm, { makeMarker: (el) => (made.push(new FakeMarker(el as unknown as FakeEl)), made.at(-1)!), doc: { createElement: () => new FakeEl() as unknown as HTMLElement } as never, win: new FakeEl() as never })
+    for (const [lon, lat] of [[137.404, -4.776], [137.406, -4.778]]) {
+      ed.startAdd()
+      fm.press(lon, lat)
+      fm.click(lon, lat)
+    }
+    await flush()
+    return { store, ctl, ed, fm, made, loadGrid }
+  }
+
+  it('a press off every marker + move (a pan) moves no waypoint, starts no drag, and an armed press that moves > 4 px adds nothing', async () => {
+    const { store, ed, fm, made } = await two()
+    const before = store.route.value
+    const steps = store.past.value.length
+    // left press on the empty map, move, release: MapLibre pans; no marker hears it
+    expect(fm.press(137.41, -4.77)).toBe(false) // not stopped: it reaches MapLibre
+    fm.container.fire('pointermove', { target: fm.canvas, ...{ clientX: 10400, clientY: 7700 } })
+    expect(fm.click(137.4105, -4.7705)).toBe(false) // the browser's click after a pan is MapLibre's
+    expect(store.route.value).toBe(before)
+    expect(store.past.value).toHaveLength(steps)
+    expect(ed.dragging.value).toBeNull()
+    expect(made.map((m) => m.ll)).toEqual([[137.404, -4.776], [137.406, -4.778]])
+    // armed: a press that moves beyond the slop is a pan, not the armed click; it stays armed
+    ed.startAdd()
+    fm.press(137.41, -4.77)
+    expect(fm.click(137.41 + 5e-6, -4.77)).toBe(false) // 5 px
+    expect(store.route.value.stops).toHaveLength(2)
+    expect(ed.adding.value).toBe(true)
+    fm.press(137.41, -4.77)
+    expect(fm.click(137.41 + 3e-6, -4.77)).toBe(true) // 3 px: a click
+    expect(stopNames(store.route.value)).toEqual(['W1', 'W2', 'W3'])
+  })
+
+  it('a press ON a marker + move + up moves only that waypoint, routed on the drop (D85); within 4 px it is a click', async () => {
+    const { store, ed, made, loadGrid } = await two()
+    const [m1, m2] = made
+    // within the slop: no move, no undo step
+    const steps = store.past.value.length
+    m2.el.fire('pointerdown', { button: 0, pointerType: 'mouse' })
+    m2.handlers.get('dragstart')!()
+    m2.ll = [137.406 + 3e-6, -4.778]
+    m2.handlers.get('dragend')!()
+    expect(store.past.value).toHaveLength(steps)
+    expect(m2.ll).toEqual([137.406, -4.778])
+    // a real drag of W2
+    const calls = loadGrid.mock.calls.length
+    m2.el.fire('pointerdown', { button: 0, pointerType: 'mouse' })
+    m2.handlers.get('dragstart')!()
+    m2.ll = [137.4065, -4.7785]
+    await flush()
+    expect(loadGrid.mock.calls.length).toBe(calls) // nothing routed while dragging
+    expect(store.past.value).toHaveLength(steps)
+    m2.handlers.get('dragend')!()
+    await flush()
+    expect(store.past.value).toHaveLength(steps + 1)
+    expect(loadGrid.mock.calls.length).toBeGreaterThan(calls) // the ghost reroutes on the drop
+    expect(store.route.value.stops).toEqual([{ lon: 137.404, lat: -4.776 }, { lon: 137.4065, lat: -4.7785 }])
+    expect(m1.ll).toEqual([137.404, -4.776])
+    void ed
   })
 })
 
