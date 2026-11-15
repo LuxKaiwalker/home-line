@@ -190,7 +190,7 @@ describe('placement: collision, zoom ranges, selected layer (CPU check over proj
     expect(msh.anchor).toBe('center')
   })
 
-  it('leader lines: above the config pitch every label floats above its point (stub until tilt, M8)', () => {
+  it('leader lines: above the config pitch every label floats above its point (tilt unlocked in 3D, M8)', () => {
     expect(leaderLift(0)).toBe(0)
     expect(leaderLift(LABELS.leaderLineMinPitchDeg)).toBe(0)
     expect(leaderLift(LABELS.leaderLineMinPitchDeg + 1)).toBe(LEADER_LIFT_PX)
