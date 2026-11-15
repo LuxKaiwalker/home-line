@@ -196,6 +196,7 @@ RULES: list[Rule] = [
     Rule("WS8", "export", "fp3d/far.f32.gz"),
     Rule("WS8", "export", "fp3d/far_tex.jpg"),  # WS8 STATUS: 8 m ortho over the far mesh
     Rule("WS16", "export", "labels.json"),  # U13 labels (pipeline/export/labels.py, DESIGN §6.2)
+    *(Rule("WS16", "export", f) for f in ("overlays/index.json", "overlays/contours.geojson", "overlays/*.png", "overlays/*/*/*/*.png", "highlights/*.geojson")),  # noqa: E501 U7 overlays + highlights (pipeline/export/contours.py, overlays.py, highlights.py)
     # WS9 navigation, real run only (pipeline/navigation/real.py REAL_OUT; never nav_synthetic/)
     Rule("WS9", "navigation", "nav/montecarlo_*.json"),
     Rule("WS9", "navigation", "nav/fixes.json"),
