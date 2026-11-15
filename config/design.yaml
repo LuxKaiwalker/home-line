@@ -21,12 +21,17 @@ terrain_tiles:
   vertical_offset_m: 7028              # added by P2c 2026-11-15 (assumed: true): m added after scaling (h = elevation x factor + offset, terrain/ and terrain_low/) = -round(official pad -3742.4 m x 1.878), so the site sits near 0 m: MapLibre 6.18 selects zero tiles at pitch >~62 deg with the ground at ~-7000 m (black map, notes/flybug-*.png)
 exaggeration: {min: 1.0, max: 3.0, default: 1.0, step: 0.1}   # step added by D6b 2026-11-15 (assumed: true): slider step; the factor label shows one decimal (M8)
 terrain_3d:                          # added by D6b 2026-11-15 (DESIGN U1 items 4 and 6; keys asked for in notes/M8.md)
-  fallback_window_s: 3               # DESIGN U1 item 6 "below 30 fps for 3 s": the rate must stay under performance.fps_3d_min this long before the flat fallback
+  fallback_window_s: 3               # DESIGN U1 item 6 "below 30 fps for 3 s" (threshold now 20, D38): the rate must stay under performance.fps_3d_min this long before the flat fallback
   fps_window_s: 0.5                  # assumed: true (M8): the frame rate is the frame count over this trailing window
   idle_gap_s: 1.0                    # assumed: true (M8): a frame gap longer than this is an idle map (MapLibre renders on demand), never a slow frame
   light_update_sim_min: 1            # DESIGN U1 item 4: relief light follows the clock at most once per simulated minute
   max_pitch_deg: 60                  # added by T1 2026-11-15 (assumed: true): manual 3D tilt cap (map maxPitch). MapLibre 6.18 selects zero tiles for every source above ~60 deg at zoom 16-17 with the terrain at about -7020 map m (-3740 m x 1.878): only the black background draws (notes/T1.md, flybug-*.png)
   assumed: [fps_window_s, idle_gap_s, max_pitch_deg]
+plan_view:                           # added by L13 2026-11-15 (team lead 12:54, D111): the view Plan mode opens with
+  default: 3d                        # team lead 12:54: 3D is the default view in Plan mode (the intro ends in it); T toggles, the viewer's choice is remembered; ?view=2d|3d overrides
+  pitch_deg: 45                      # assumed: true (L13): the tilt Plan mode opens with in 3D (= camera.presets.isometric.pitch; <= terrain_3d.max_pitch_deg, MapLibre 6.18 draws no tiles above ~60 deg)
+  bearing_deg: 0                     # assumed: true (L13): north up, as the 2D map, so the route reads the same in both views; RR judges a turned view
+  assumed: [pitch_deg, bearing_deg]
 field_layer:
   sampling: nearest_then_manual_bilinear   # encoded values must not be filtered
   update_hz_playing: 30
@@ -98,7 +103,7 @@ performance:
   overlays_mb: 15
   gpu_textures_mb: 64
   fps_2d_min: 60
-  fps_3d_min: 30
+  fps_3d_min: 20                     # team lead 12:54 / D38 (L13 2026-11-15): automatic 2D fallback below 20 fps (was 30, DESIGN U1 item 6 "below 30 fps for 3 s"); the window stays terrain_3d.fallback_window_s
   hover_ms_max: 16
   select_ms_max: 100
 quality:
@@ -110,7 +115,7 @@ quality:
 storm:                               # added by M10b 2026-11-15 (DESIGN U9; notes/M12.md)
   ring_cell_m: 20                    # assumed: true (M12): dose-ring lattice cell, ground metres (stride 4 of the 5 m field); RR judges the staircase at z15-17
   assumed: [ring_cell_m]
-intro: {once_per_browser: true, skip_on_any_input: true, off_with_reduced_motion: true, approx_s: 20, warmup_max_ms: 2500, warmup_extra_ms: 1000}   # warmup_* added by M10d 2026-11-15 (assumed: true): M10c caps on the live intro / kiosk wait before t = 0 (layer warm-up, then frame 0's tiles)
+intro: {once_per_browser: true, skip_on_any_input: true, off_with_reduced_motion: true, approx_s: 20, warmup_max_ms: 2500, warmup_extra_ms: 1000, still_loading_s: 15}   # warmup_* added by M10d 2026-11-15 (assumed: true): M10c caps on the live intro / kiosk wait before t = 0 (layer warm-up, then frame 0's tiles); still_loading_s added by L12 2026-11-15 (assumed: true): the loading screen's 'Still loading…' note appears after this many seconds
 capture: {size: [1920, 1080], fps: 60}
 render_review:
   sizes: [[1440, 900], [1024, 768]]

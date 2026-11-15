@@ -17,6 +17,7 @@
 //             than its latest departure (O2 used bounded by the effort-cap rate x t, as the DP);
 //             the FIRST failing leg is the answer, never reordered (contract run_record.feasibility).
 import { CONFIG } from '../../../config'
+import { CUSTOM_START_LABEL } from './start'
 import { distanceM, isStationStop, stopNames, type RouteStop } from '../model'
 import { accessCell, cellOf, lonLatOfCell } from '../map/grid'
 import { legPairs, routeLegs } from '../map/legs'
@@ -503,7 +504,8 @@ export function browserMissionInput(r: BrowserRouteResult, ctx: BrowserMissionCo
 /** mission.json (contracts/bundle/mission.schema.json 1.1.0, origin mission_planer) without id / time. Sync. */
 export function buildBrowserMissionDraft(r: BrowserRouteResult, ctx: BrowserMissionContext): Record<string, unknown> {
   const doc = buildMission(browserMissionInput(r, ctx))
-  return { ...doc, origin: 'mission_planer', origin_label: ORIGIN_LABEL }
+  // I3: a moved EVA start says so wherever the estimate goes
+  return { ...doc, origin: 'mission_planer', origin_label: ctx.data.customStart ? `${ORIGIN_LABEL} · ${CUSTOM_START_LABEL}` : ORIGIN_LABEL }
 }
 
 /** mission.json, finalized: mission_id (sha256 of the plan) and created_utc filled. */

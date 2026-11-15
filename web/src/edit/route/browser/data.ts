@@ -98,6 +98,8 @@ export interface BrowserRouteData {
   evaStartLmst: string | null
   evaStartUtc: string | null
   mslSol: number | null
+  /** I3: the EVA start was moved off clock.json's instant (browser/start.ts withEvaStart); absent = clock.json */
+  customStart?: boolean
   /** D39 storm replay on (the engine's default: the dose term is in route.{sid}.margin_terms) */
   storm: boolean
   files: Record<string, string | null>
