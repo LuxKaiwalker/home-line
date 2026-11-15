@@ -47,6 +47,25 @@ export interface LabelBinding {
 let selectedCode: string | null = null
 const layers = new Set<LabelLayer>()
 
+/**
+ * M10c: while a story camera move runs (intro, kiosk), the placement is throttled to at most
+ * PLACEMENT_PAUSED_HZ (the markers themselves still follow their points every frame; only anchors,
+ * collisions and the overlay labels lag by up to one interval), and runs once more when it ends.
+ */
+export const PLACEMENT_PAUSED_HZ = 4
+let placementPaused = false
+
+/** Throttle (true) or resume (false) the label placement on every label layer (story camera moves). */
+export function setLabelPlacementPaused(on: boolean): void {
+  if (placementPaused === on) return
+  placementPaused = on
+  if (!on) for (const l of layers) l.relayout()
+}
+
+export function labelPlacementPaused(): boolean {
+  return placementPaused
+}
+
 /** Selection hook for A5's selection store: the selected label is drawn above all, ignoring collisions and zoom ranges. */
 export function setSelectedLabel(code: string | null): void {
   selectedCode = code
@@ -70,6 +89,10 @@ export class LabelLayer {
   private groupVisible = true
   private readonly onMove = () => this.relayout()
   private raf = 0
+  private timer = 0
+  private lastLayout = -Infinity
+  /** placements run so far (tests, measurements) */
+  layouts = 0
   private refs = new Map<string, string>()
   private readonly map: MlMap
   private readonly added: MutationObserver | null
@@ -153,9 +176,22 @@ export class LabelLayer {
     this.relayout()
   }
 
-  /** Re-run the placement (on move, resize, selection, data); batched to one per frame. */
+  /**
+   * Re-run the placement (on move, resize, selection, data); batched to one per frame, and to at most
+   * PLACEMENT_PAUSED_HZ while a story camera move runs (setLabelPlacementPaused).
+   */
   relayout(): void {
-    if (this.raf) return
+    if (this.raf || this.timer) return
+    if (placementPaused) {
+      const wait = this.lastLayout + 1000 / PLACEMENT_PAUSED_HZ - performance.now()
+      if (wait > 0) {
+        this.timer = window.setTimeout(() => {
+          this.timer = 0
+          this.relayout()
+        }, wait)
+        return
+      }
+    }
     this.raf = requestAnimationFrame(() => {
       this.raf = 0
       this.layoutNow()
@@ -163,6 +199,8 @@ export class LabelLayer {
   }
 
   private layoutNow(): void {
+    this.layouts++
+    this.lastLayout = performance.now()
     const m = this.map
     const items = [...this.entries.values()]
       .filter((e) => this.groupVisible || !e.f.properties.marker)
@@ -221,6 +259,7 @@ export class LabelLayer {
 
   destroy(): void {
     cancelAnimationFrame(this.raf)
+    clearTimeout(this.timer)
     this.map.off('move', this.onMove)
     this.map.off('resize', this.onMove)
     this.map.off('terrain', this.onMove)
