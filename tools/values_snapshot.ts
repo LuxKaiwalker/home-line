@@ -254,8 +254,56 @@ async function open(c: Ctx, hash: string): Promise<Page> {
 
 const digits = (s: string) => (s.match(/\d+(\.\d+)?/) ?? [s.trim()])[0]
 
-async function clickAndRecord(c: Ctx, page: Page, btn: ReturnType<Page['locator']>, state: string): Promise<void> {
-  if ((await btn.getAttribute('aria-checked')) !== 'true') await btn.click()
+type Loc = ReturnType<Page['locator']>
+
+/** Run one named step; a failure is re-thrown as `step "<name>": <cause>` so a CI log says which control and view broke. */
+async function step<T>(name: string, fn: () => Promise<T>): Promise<T> {
+  try {
+    return await fn()
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e)
+    if (msg.startsWith('step "')) throw e
+    throw new Error(`step "${name}": ${msg}`, { cause: e })
+  }
+}
+
+/** Poll `cond` every POLL_MS (no requestAnimationFrame, so a busy software-GL page cannot stall it) up to SETTLE_TIMEOUT_MS. */
+async function waitUntil(page: Page, cond: () => Promise<boolean>, what: string): Promise<void> {
+  const t0 = Date.now()
+  while (!(await cond())) {
+    if (Date.now() - t0 > SETTLE_TIMEOUT_MS) throw new Error(`timed out after ${SETTLE_TIMEOUT_MS / 1000} s waiting for ${what}`)
+    await page.waitForTimeout(POLL_MS)
+  }
+}
+
+/**
+ * Select a control deterministically. Fixes a CI flake: the walkback radio was clicked right after a
+ * suit-mass click, while the console was still loading and re-rendering the new scenario, and
+ * Playwright's "visible, enabled and stable" check ran out of its 30 s default on a slow runner.
+ * Precondition: the view has settled (`settle`) since the last change. Every caller guarantees this:
+ * each `select` and `record` ends with a settle. Then:
+ *   1. the control is attached, visible and enabled (bounded waits, not retries);
+ *   2. one real click (full actionability checks; timeout = SETTLE_TIMEOUT_MS like every other wait);
+ *   3. wait for the DOM change the click causes (`isOn()` true), then settle again (unless the
+ *      caller records next, which settles anyway).
+ * Any failure names the step. Nothing is retried; nothing compared is relaxed.
+ */
+async function select(page: Page, ctl: Loc, name: string, isOn: () => Promise<boolean>, act: 'click' | 'check' = 'click', settleAfter = true): Promise<void> {
+  await step(name, async () => {
+    await ctl.waitFor({ state: 'visible', timeout: SETTLE_TIMEOUT_MS })
+    if (await isOn()) return
+    await waitUntil(page, () => ctl.isEnabled(), 'the control to be enabled')
+    if (act === 'check') await ctl.check({ timeout: SETTLE_TIMEOUT_MS })
+    else await ctl.click({ timeout: SETTLE_TIMEOUT_MS })
+    await waitUntil(page, isOn, 'the click to take effect')
+    if (settleAfter) await settle(page, `${name} (after)`)
+  })
+}
+
+const ariaChecked = (b: Loc) => async () => (await b.getAttribute('aria-checked')) === 'true'
+
+async function clickAndRecord(c: Ctx, page: Page, btn: Loc, state: string): Promise<void> {
+  await select(page, btn, `${state}: select ${JSON.stringify(((await btn.textContent()) ?? '').trim())}`, ariaChecked(btn), 'click', false)
   await record(c, page, state)
 }
 
@@ -270,14 +318,14 @@ async function consoleView(c: Ctx): Promise<void> {
   for (let i = 0; i < nv; i++) {
     const vb = radios('Variant').nth(i)
     if (await vb.isDisabled()) continue
-    if ((await vb.getAttribute('aria-checked')) !== 'true') await vb.click()
     const variant = (await vb.textContent())!.trim()
+    await select(page, vb, `#/ variant=${variant}`, ariaChecked(vb))
     const ns = await radios('Suit mass').count()
     for (let j = 0; j < ns; j++) {
       const sb = radios('Suit mass').nth(j)
       if (await sb.isDisabled()) continue
-      if ((await sb.getAttribute('aria-checked')) !== 'true') await sb.click()
       const suit = digits((await sb.textContent())!)
+      await select(page, sb, `#/ variant=${variant} suit=${suit}kg`, ariaChecked(sb))
       for (let k = 0; k < nb; k++) {
         const bb = budgets.nth(k)
         await clickAndRecord(c, page, bb, `#/ variant=${variant} suit=${suit}kg budget=${digits((await bb.textContent())!)}min`)
@@ -290,7 +338,7 @@ async function consoleView(c: Ctx): Promise<void> {
   for (let i = 0; i < np; i++) {
     const r = pads.nth(i)
     const label = (await r.getAttribute('aria-label')) ?? `option ${i + 1}`
-    if (!(await r.isChecked())) await r.check()
+    await select(page, r, `#/ pad=${label}`, () => r.isChecked(), 'check')
     for (let k = 0; k < nb; k++) {
       const bb = budgets.nth(k)
       await clickAndRecord(c, page, bb, `#/ pad=${label} budget=${digits((await bb.textContent())!)}min`)
@@ -327,7 +375,9 @@ async function conditionsView(c: Ctx): Promise<void> {
 async function hudView(c: Ctx): Promise<void> {
   const page = await open(c, '#/hud')
   await page.waitForSelector('.hl-hud-row[data-manifest-key], .hl-hud-row[data-source-files]', { timeout: SETTLE_TIMEOUT_MS })
-  if (await page.locator('.hl-hud-exp').isHidden()) await page.locator('.hl-hud-toggle').click()
+  await settle(page, '#/hud (initial)')
+  const exp = page.locator('.hl-hud-exp')
+  if (await exp.isHidden()) await select(page, page.locator('.hl-hud-toggle'), '#/hud: expand the panel', () => exp.isVisible())
   const scrub = page.locator('input.hl-hud-scrub')
   const max = Number(await scrub.getAttribute('max'))
   for (const f of [0, 0.25, 0.5, 0.75, 1]) {

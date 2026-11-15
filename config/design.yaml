@@ -70,6 +70,8 @@ performance:
   fps_3d_min: 30
   hover_ms_max: 16
   select_ms_max: 100
+quality:
+  cvd_min_delta_e00: 10            # assumed: true (Q1, moved here by D4b): min CIEDE2000 between safe/caution/limit/select under normal, protan, deutan, tritan simulation (Machado 2009); ~1 = JND for large patches side by side, 10 = "clearly different" for small marks seen apart (web/tests/a11y/colour.test.ts)
 3d:
   shadows_off_below_fps: 30
   crew_count: 2
