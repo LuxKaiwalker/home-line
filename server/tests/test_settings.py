@@ -31,7 +31,7 @@ def test_repo_config_loads():
     c = st.load()
     assert c.api.prefix == "/api/v1" and c.api.health_timeout_s == 2
     assert c.compute.workers == 2 and c.compute.queue_max_waiting == 20
-    assert c.compute.job_timeout_s == 600 and c.cache.max_gb == 20
+    assert c.compute.job_timeout_s == 1200 and c.cache.max_gb == 20  # WP4 re-measurement (D97)
     assert c.compute.hash.algo == "sha256" and c.compute.hash.hex_chars == 16
     assert c.limits.guest_heavy_jobs.count == 6 and c.limits.guest_heavy_jobs.window_min == 10
     assert c.limits.user_heavy_jobs.count == 30 and c.limits.telemetry_posts_per_s == 2

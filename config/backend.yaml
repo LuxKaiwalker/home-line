@@ -20,7 +20,7 @@ api:
 compute:
   workers: 2                       # section 4.1: process pool, CPU-bound Numba search
   queue_max_waiting: 20            # section 4.1
-  job_timeout_s: 600               # assumed: E8 measured 332 s for a custom pad (3 variants, D81); ~1.8x headroom
+  job_timeout_s: 1200              # assumed: D97 WP4 (PR #128): 4-free-point worst ~800 s cold+loaded, x1.5
   hash:                            # F23
     algo: sha256
     hex_chars: 16

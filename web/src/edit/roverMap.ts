@@ -9,7 +9,9 @@
 //   map       on release the console shows that pad's precomputed homeline (mission.plan written
 //             without an undo step) and the previous homeline fades out over it (reduced motion: no
 //             fade); Escape / Discard puts the committed plan back, Enter / Keep commits (H1 undo step)
-//   sidebar   the delta strip sits above the selection card while a released draft is open
+//   strip     while a released draft is open, the delta strip shows in the rover card when a map view
+//             hosts it (state/roverCard.ts; Plan: views/planStation.tsx, L2d), else above the selection
+//             card in the sidebar
 //   keyboard  the rover marker is focusable; with the rover selected, arrow keys cycle the pads
 //   click     a press that moves no farther than CLICK_SLOP_PX is a click, not a drag (H2b): it
 //             selects the pad through the A5 map adapter, exactly as M9's map wiring and the pad's
@@ -27,6 +29,7 @@ import { dataUrl } from '../env'
 import { FieldGrid, loadField } from '../hud/fields'
 import { fieldAt, loadFieldData, type FieldData } from '../map/field'
 import { mission } from '../state/mission'
+import { roverCardHosted, setRoverStrip } from '../state/roverCard'
 import { selection } from '../state/selection'
 import { selectFromMap } from '../state/selectionAdapter'
 import { effect } from '../state/signal'
@@ -319,21 +322,39 @@ export function installRoverDrag(map: MlMap): RoverHandle {
     if (s?.phase === 'dragging') return
     const at = restAt(rover)
     marker.setLngLat([at.lon, at.lat])
+    if (card) publishCard()
   }
 
-  // ---- sidebar: the delta strip above whatever the sidebar shows (A5 selection card) -----------
+  // ---- the delta strip: in the hosted rover card (L2d), else above whatever the sidebar shows ----
   let base: Render | undefined
   let mine: Render | null = null
+  let card: Render | null = null
+  function publishCard(): void {
+    if (!card || !rover || !store) return
+    const at = restAt(rover)
+    const rd = rover
+    const st = store
+    setRoverStrip({ render: card, lngLat: [at.lon, at.lat], dismiss: () => void (st.draft.peek()?.phase === 'released' && rd.discard()) })
+  }
   function mountStrip(on: boolean): void {
-    if (on && !mine && store && rover && pads) {
-      base = sidebarContent.peek()
+    if (on && !mine && !card && store && rover && pads) {
       const st = store
       const rd = rover
       const pd = pads
+      const strip: Render = () => h(DeltaStrip, { store: st, rover: rd, pads: pd, key: 'hl-edit-delta' })
+      if (roverCardHosted()) {
+        card = strip
+        publishCard()
+        return
+      }
+      base = sidebarContent.peek()
       const b = base
-      mine = () => [h(DeltaStrip, { store: st, rover: rd, pads: pd, key: 'hl-edit-delta' }), b ? h('div', { key: 'base' }, b()) : null]
+      mine = () => [strip(), b ? h('div', { key: 'base' }, b()) : null]
       setSidebarContent(mine)
       openSidebar()
+    } else if (!on && card) {
+      card = null
+      setRoverStrip(null)
     } else if (!on && mine) {
       if (sidebarContent.peek() === mine) setSidebarContent(base)
       mine = null

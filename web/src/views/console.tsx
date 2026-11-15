@@ -33,6 +33,7 @@ import { useSignalValue } from '../state/signal'
 import type { View } from './types'
 import { makeSections, mountPlanSlots, PlanSummary, S, SectionsCtx } from './planSlots'
 import { HeadlineStrip } from './planStrip' // L2a: the headline strip (registers its Plan mount)
+import './planStation' // L2d: station + rover marker cards
 
 const LAYER_LABELS: Record<LayerGroup, string> = {
   basemap: 'Basemap',
@@ -78,7 +79,20 @@ export const view: View = async (el) => {
   let disposeLive: (() => void) | undefined
   // X3 (e2e H5-2): the live aside gets the side panel's fixed width, so its text never resizes the map.
   const liveAside = () => Object.assign(panelEl.parentElement!.appendChild(document.createElement('aside')), { className: 'console-panel console-live' })
-  if (import.meta.env.VITE_LIVE === '1') void import('../live').then((m) => { if (alive) disposeLive = m.padTool(liveAside(), m.consoleMapPort(cmap)) })
+  // L3 (D111): the Edit-route drawer and its map-edge opener mount inside the map (before the pad tool,
+  // so the crew panel goes into the drawer), only with route editing on (D116 ROUTE_EDIT_ENABLED);
+  // "My plans" comes from src/live/plans through the same guard.
+  if (import.meta.env.VITE_LIVE === '1') void Promise.all([import('../live'), import('../ui/shell/editroute'), import('../live/plans/store'), import('../live/plans/view')]).then(([m, er, ps, pv]) => {
+    if (!alive) return
+    // shell frame only (?legacy=1 keeps its old layout: no D111 containers); L2-shell's live slot when present
+    const liveSlot = el.closest('.hl-shell') ? (mapEl.querySelector<HTMLElement>('[data-plan-slot=live]') ?? mapEl) : null
+    const offEdit = liveSlot ? er.mountEditRoute(liveSlot, { store: ps.createPlansStore(), View: pv.MyPlans }, { enabled: m.ROUTE_EDIT_ENABLED, simMode: m.SIM_EXPORT_MODE }) : () => {}
+    const offPad = m.padTool(liveAside(), m.consoleMapPort(cmap))
+    disposeLive = () => {
+      offPad()
+      offEdit()
+    }
+  })
   return () => {
     alive = false
     disposeLive?.()
