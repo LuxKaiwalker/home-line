@@ -13,16 +13,22 @@ import { setPadService, type PadInfo } from '../../pads'
 import { createPlanningStore, type PlanningStore } from '../../state/planning'
 import { ui } from '../../state/ui'
 import { all, installDom, one, type FakeNode } from '../testing/dom'
-import { bindLayoutStorage, reportInset, resetLayout } from '../layout'
-import { padLayer } from '../../map/pads/padLayer'
+import { bindLayoutStorage, isOpen, reportInset, resetLayout } from '../layout'
+import { PAD_CARD_ID, padLayer } from '../../map/pads/padLayer'
 import { PAD_FOCUS_ZOOM, padCamera } from '../../map/pads/focus'
 import { PadPicker } from './PadPicker'
 
 const opened = vi.hoisted(() => [] as { id: string; opener: unknown }[])
-vi.mock('../../map/pads/padLayer', async (orig) => ({
-  ...(await orig<typeof import('../../map/pads/padLayer')>()),
-  openPadCard: (id: string, opener: unknown) => void opened.push({ id, opener }),
-}))
+vi.mock('../../map/pads/padLayer', async (orig) => {
+  const real = await orig<typeof import('../../map/pads/padLayer')>()
+  return {
+    ...real,
+    openPadCard: (id: string, opener: HTMLElement | null) => {
+      opened.push({ id, opener })
+      real.openPadCard(id, opener) // the real layout-store open: the card's open state is checked below
+    },
+  }
+})
 
 let root: FakeNode
 let restorePads: () => void
@@ -79,6 +85,21 @@ describe('PadPicker: click flies to the pad and opens its card', () => {
     expect(store.canUndo.peek()).toBe(undoable)
     expect(map.flyTo).toHaveBeenCalledTimes(2)
     expect(opened.map((o) => o.id)).toEqual(['rank2', 'rank2'])
+  })
+
+  it('the card stays open after the fly and through the pad switch (user 23:06)', () => {
+    mount()
+    click(pad('rank3'))
+    expect(isOpen(PAD_CARD_ID)).toBe(true)
+    expect(padLayer.card.peek()).toBe('rank3')
+    // the fly's camera moves and the planning change that follows the switch do not close it
+    act(() => void store.setPad('rank3'))
+    expect(isOpen(PAD_CARD_ID)).toBe(true)
+    // another pad from the picker: the same card follows it
+    click(pad('rank4'))
+    expect(isOpen(PAD_CARD_ID)).toBe(true)
+    expect(padLayer.card.peek()).toBe('rank4')
+    expect(store.state.peek().padId).toBe('rank4')
   })
 
   it('arrow keys switch the pad without flying or opening the card', () => {
