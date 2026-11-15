@@ -116,10 +116,11 @@ export class StoryStage {
     if (this.cover) return
     // only on change: an attribute write on <html> restyles the whole page
     if (this.chromeWant === this.last.chrome) return
+    const was = this.last.chrome
     this.last.chrome = this.chromeWant
     document.documentElement.dataset.storyChrome = this.chromeWant
-    // L12: the chrome fading back in ends the full-screen intro and its loading screen controls
-    if (this.chromeWant === 'show' && this.chrome === 'story') this.endFullscreen()
+    // L12: the chrome fading back in (ui: reveal after hide) ends the full-screen intro and its controls
+    if (was === 'hide' && this.chromeWant === 'show' && this.chrome === 'story') this.endFullscreen()
   }
 
   /** L12 (D111): the map goes back into the shell and the loading screen (with its buttons) goes. */

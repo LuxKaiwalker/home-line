@@ -44,9 +44,11 @@ let doneCalled = false
 const skipListeners = new Set<() => void>()
 let teardown: (() => void) | null = null
 let started: (() => void) | null = null
-const startedP: Promise<void> = new Promise((r) => (started = r))
+let startedP: Promise<void> = new Promise((r) => (started = r))
 
-const root = (): HTMLElement | null => (typeof document === 'undefined' ? null : document.getElementById(ROOT_ID))
+const root = (): HTMLElement | null => (typeof document === 'undefined' || typeof document.getElementById !== 'function' ? null : document.getElementById(ROOT_ID))
+/** <html>'s dataset (undefined outside a browser, e.g. the stage tests' minimal document) */
+const htmlData = (): DOMStringMap | undefined => (typeof document === 'undefined' ? undefined : document.documentElement?.dataset)
 
 /** The loading screen (or the intro it fades into) is on screen. */
 export function loadingActive(): boolean {
@@ -73,7 +75,7 @@ export function onIntroSkip(f: () => void): () => void {
  * the moment the loads the intro does not need may begin (L12 c: live layer, edit code).
  */
 export function whenIntroStarted(): Promise<void> {
-  if (!loadingActive() || document.documentElement.dataset.hlIntro === 'playing') return Promise.resolve()
+  if (!loadingActive() || htmlData()?.hlIntro === 'playing') return Promise.resolve()
   return startedP
 }
 
@@ -98,7 +100,8 @@ export function introPlaying(): void {
   setLoadProgress(1)
   const el = root()
   if (el) el.querySelector('[role=progressbar]')?.setAttribute('aria-busy', 'false')
-  document.documentElement.dataset.hlIntro = 'playing'
+  const d = htmlData()
+  if (d) d.hlIntro = 'playing'
   started?.()
 }
 
@@ -109,7 +112,8 @@ export function loadingDone(): void {
   teardown?.()
   teardown = null
   root()?.remove()
-  if (typeof document !== 'undefined') delete document.documentElement.dataset.hlIntro
+  const d = htmlData()
+  if (d) delete d.hlIntro
   started?.()
 }
 
@@ -210,4 +214,5 @@ export function _resetLoadingForTests(): void {
   doneCalled = false
   skipListeners.clear()
   teardown = null
+  startedP = new Promise((r) => (started = r))
 }
