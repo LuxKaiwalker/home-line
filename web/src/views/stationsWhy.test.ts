@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { indexWords, SCORING, selectionFor } from './stationsWhy'
+import { indexWords, SCORING, selectionFor, siteSummary } from './stationsWhy'
 
 describe('why each station was chosen (stations.yaml F7 / D26 / D44)', () => {
   it('F7 weights are 0.4 / 0.4 / 0.2, sum to 1 and are labelled assumed (D32)', () => {
@@ -43,5 +43,23 @@ describe('why each station was chosen (stations.yaml F7 / D26 / D44)', () => {
     expect(indexWords('SINDEX2')).toBe('sulfate')
     expect(indexWords('max')).toBe('clay or sulfate, whichever is stronger')
     expect(indexWords(null)).toBeNull()
+  })
+
+  it('site summaries: plan names kept, extras get a short area name from their own description', () => {
+    expect(siteSummary('S1', 'Boxwork ridge-hollow transect')).toEqual({
+      title: 'Boxwork ridge-hollow transect',
+      index: 'D2300',
+      note: 'Ridge cement vs hollow floor: test groundwater cementation.',
+    })
+    expect(siteSummary('S6', 'dense ridge network + high SINDEX2 sulfate signal (south-west, nearer)')).toEqual({
+      title: 'Sulfate ridges, south-west, nearer',
+      index: 'SINDEX2',
+      note: 'Dense boxwork ridges with a strong sulfate signal.',
+    })
+    const s8 = siteSummary('S8', 'dense ridge network + high D2300 clay signal')
+    expect(s8.title).toBe('Clay ridges')
+    expect(s8.index).toBe('D2300')
+    // a description the pattern does not match falls back to the score's own index, no invented mineral
+    expect(siteSummary('S7', 'some other spot (east)')).toEqual({ title: 'Some other spot, east', index: 'max', note: null })
   })
 })

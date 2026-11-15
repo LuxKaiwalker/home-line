@@ -3,9 +3,10 @@
 import { useEffect, useState } from 'preact/hooks'
 import { data } from '../../data/loader'
 import { href, type Route } from '../../router'
+import { siteSummary } from '../../views/stationsWhy'
 import { cx } from '../components'
 
-type Row = { id: string; name: string }
+type Row = { id: string; name: string; full: string }
 let cache: Promise<Row[]> | undefined
 
 export function StationLinks({ route }: { route: Route }) {
@@ -14,7 +15,7 @@ export function StationLinks({ route }: { route: Route }) {
     let alive = true
     cache ??= data()
       .stations()
-      .then((st) => st.map((s) => ({ id: s.id, name: s.name })))
+      .then((st) => st.map((s) => ({ id: s.id, name: siteSummary(s.id, s.name).title, full: s.name })))
     cache.then(
       (r) => alive && setRows(r),
       () => {
@@ -32,7 +33,7 @@ export function StationLinks({ route }: { route: Route }) {
         const on = route.name === 'station' && route.id === s.id
         return (
           <li key={s.id}>
-            <a class={cx('hl-rail__subview', on && 'is-active')} href={href({ name: 'station', id: s.id })} aria-current={on ? 'page' : undefined} title={`${s.id} ${s.name}`}>
+            <a class={cx('hl-rail__subview', on && 'is-active')} href={href({ name: 'station', id: s.id })} aria-current={on ? 'page' : undefined} title={`${s.id} ${s.full}`}>
               <b>{s.id}</b>
               <span>{s.name}</span>
             </a>

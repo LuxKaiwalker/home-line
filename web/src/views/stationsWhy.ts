@@ -83,3 +83,35 @@ export function indexWords(index: string | null): string | null {
   if (index === 'max') return `${indexWords(SCORING.crismIndices.clay)} or ${indexWords(SCORING.crismIndices.sulfate)}, whichever is stronger`
   return INDEX_WORDS[index] ?? index
 }
+
+export interface SiteSummary {
+  /** short display name: the plan's name, or an area name built from the score's own description */
+  title: string
+  /** CRISM index that drives this site, as a code ('D2300', 'SINDEX2') or 'max' when not recoverable */
+  index: string | null
+  /** one short line of what is there */
+  note: string | null
+}
+
+const cap = (t: string) => t.charAt(0).toUpperCase() + t.slice(1)
+
+/**
+ * Concise card text for one site. Named stations keep their plan name and SPEC objective. Scored extras are
+ * named "<Mineral> ridges, <area>" from their stations.json description (e.g. "dense ridge network + high
+ * SINDEX2 sulfate signal (south-west, nearer)"); nothing is added that the description does not say.
+ */
+export function siteSummary(id: string, name: string): SiteSummary {
+  const sel = selectionFor(id)
+  if (sel.kind !== 'extra') return { title: name, index: sel.crismIndex, note: sel.objective }
+  const m = /high\s+(\w+)\b.*?signal/i.exec(name)
+  const code = m ? m[1] : null
+  const words = code ? indexWords(code) : null
+  const area = /\(([^)]+)\)\s*$/.exec(name)?.[1] ?? null
+  const ridges = /ridge/i.test(name)
+  const base = words ? `${cap(words)}${ridges ? ' ridges' : ' signal'}` : cap(name.replace(/\s*\(.*\)$/, ''))
+  return {
+    title: area ? `${base}, ${area}` : base,
+    index: code ?? sel.crismIndex,
+    note: words ? `${ridges ? 'Dense boxwork ridges' : 'High score'} with a strong ${words} signal.` : null,
+  }
+}

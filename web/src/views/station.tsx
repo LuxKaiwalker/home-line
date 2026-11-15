@@ -14,7 +14,7 @@ import { DragNote } from '../components/DragNote'
 import { Page, preactView, Show, useLoad } from './page'
 import { FAR_NOT_VALIDATED, scopeText } from './validation'
 import './stations.css'
-import { indexWords, OBJECTIVE_SOURCE, SCORING, selectionFor, STATIONS_SOURCE } from './stationsWhy'
+import { indexWords, OBJECTIVE_SOURCE, SCORING, selectionFor, siteSummary, STATIONS_SOURCE } from './stationsWhy'
 
 import { STORM_TIMING_NOTE, compassTick, homeFor, isHiddenLandmark, landmarkNote, marginLabel, type Landmark } from './decisions'
 export { MARGIN_LABEL, marginLabel } from './decisions'
@@ -69,7 +69,7 @@ async function loadStation(id: string): Promise<StationData> {
 
 function StationCard({ id }: { id: string }) {
   const l = useLoad(() => loadStation(id), [id])
-  const title = l.state === 'ok' ? `${l.data.station.id} · ${l.data.station.name}` : `Station ${id}`
+  const title = l.state === 'ok' ? `${l.data.station.id} · ${siteSummary(l.data.station.id, l.data.station.name).title}` : `Station ${id}`
   return (
     <Page title={title} wide>
       <DummyNote />
