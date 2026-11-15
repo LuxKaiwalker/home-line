@@ -11,7 +11,7 @@
   },
 
   "nav": {
-    "wordmark": "HOMELINE",
+    "wordmark": "MARVIS",
     "modesMenu": "Modes",
     "share": "Share",
     "liveIndicator": "Live",
@@ -203,7 +203,7 @@
       "area": "Area"
     },
     "homelineEdge": {
-      "title": "Homeline edge",
+      "title": "Home line edge",
       "cause": "Cause",
       "physiology": "Physiology: oxygen, daylight, dose or EVA duration runs out",
       "slope": "Slope: the ground beyond is too steep to walk",
@@ -299,7 +299,7 @@
   },
 
   "glossary": {
-    "homeline": "Homeline",
+    "homeline": "Home line",
     "homelineHint": "Where the crew can go and still walk back to the rover within the {budget_min}-minute walkback budget",
     "margin": "Margin",
     "marginHint": "Minutes left before a limit binds",
@@ -402,8 +402,8 @@
     "dataQuality": { "name": "Data quality", "what": "Assessed, blocked and unknown cells" },
     "siting": { "name": "Siting heatmap", "what": "Where a rover pad scores best for science within reach" },
     "partner": { "name": "Partner line", "what": "How far one crewmember could haul the other back on the cart" },
-    "parking": { "name": "Rover parking options", "what": "Alternative rover pads and their homelines" },
-    "edgeCauses": { "name": "Homeline edge causes", "what": "What sets each part of the edge: physiology, slope or data" },
+    "parking": { "name": "Rover parking options", "what": "Alternative rover pads and their home lines" },
+    "edgeCauses": { "name": "Home line edge causes", "what": "What sets each part of the edge: physiology, slope or data" },
     "flatCircle": { "name": "Flat circle", "what": "NASA's walkback on flat ground at walking pace, in every direction (dashed)" }
   },
 
@@ -524,7 +524,7 @@
       "dwell": "A changed dwell needs live planning",
       "parkingSuit": "Parking options are precomputed for the default suit only",
       "padSuit": "Rover pads other than the official one are computed for the default suit only",
-      "budget": "No precomputed homeline for a {budget_min}-minute walkback budget at this rover pad"
+      "budget": "No precomputed home line for a {budget_min}-minute walkback budget at this rover pad"
     }
   },
 
@@ -550,14 +550,14 @@
     "empty": {
       "noSelection": "Nothing selected. Click a station, ridge, mineral patch or any spot on the map.",
       "noRoute": "No planned route for this scenario: no station is reachable on foot",
-      "noLayers": "No overlays on. Turn one on to see why the homeline has its shape.",
+      "noLayers": "No overlays on. Turn one on to see why the home line has its shape.",
       "noBookmarks": "No saved views yet",
       "noStorm": "No storm in this plan"
     },
     "loading": {
       "generic": "Loading {what}…",
       "map": "Loading the map…",
-      "fields": "Loading the homeline fields…",
+      "fields": "Loading the home line fields…",
       "terrain3d": "Loading 3D terrain…",
       "preview": "Loading the instant preview…",
       "checkingPad": "Checking the pad…"
@@ -585,7 +585,7 @@
   },
 
   "onboarding": {
-    "budget": "Move the walkback budget and watch the homeline change.",
+    "budget": "Move the walkback budget and watch the home line change.",
     "station": "Click a station to see its card: time home, margin and what limits it.",
     "planYourOwn": "Plan your own: drag the rover and the plan is computed live.",
     "dismiss": "Got it, don't show again"
@@ -600,10 +600,10 @@
 
   "collapse": {
     "flat": "Flat walk: {walkback_min} minutes at walking pace, in every direction",
-    "real": "Real homeline: the same walk over the real terrain",
+    "real": "Real home line: the same walk over the real terrain",
     "headline": "Reachable within the walkback budget",
     "toggleToFlat": "Flat vs real: show the flat circle",
-    "toggleToReal": "Flat vs real: collapse to the real homeline",
+    "toggleToReal": "Flat vs real: collapse to the real home line",
     "flatWorld": "Flat world: the {budget_min}-min walk circle on flat ground",
     "reachableInData": "reachable on foot within {budget_min} min (part of the circle inside the terrain data)",
     "reachableAssessed": "reachable on foot within {budget_min} min of the assessed flat circle",
@@ -677,7 +677,7 @@
       "turnBack": "Turn-back"
     },
     "permalinkHint": "Scan to open this plan",
-    "printFooter": "HOMELINE · Space Apps project · simulated EVA over real terrain and data"
+    "printFooter": "MARVIS · Space Apps project · simulated EVA over real terrain and data"
   },
 
   "evidence": {
@@ -758,7 +758,7 @@
   },
 
   "a11y": {
-    "mapSummary": "Map: the homeline covers {reachable} of the {budget_min}-minute flat circle around the rover pad",
+    "mapSummary": "Map: the home line covers {reachable} of the {budget_min}-minute flat circle around the rover pad",
     "mapSummaryStations": "{reachable_count} of {station_count} science targets are reachable on foot"
   }
 }

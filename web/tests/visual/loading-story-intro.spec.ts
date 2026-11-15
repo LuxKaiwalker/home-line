@@ -27,7 +27,7 @@ test.describe('intro loading screen (L12)', () => {
     await page.goto('/#/')
     const el = page.locator(LOADING)
     await expect(el).toBeVisible()
-    await expect(el.locator('.hl-loading__mark')).toHaveText('HOMELINE')
+    await expect(el.locator('.hl-loading__mark')).toHaveText('MARVIS')
     await expect(el.getByRole('progressbar')).toBeVisible()
     await expect(el.getByRole('link', { name: 'Skip intro' })).toBeVisible()
     // it covers the viewport on the first paint (render-blocking stylesheet, no script)
