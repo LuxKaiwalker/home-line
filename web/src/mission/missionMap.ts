@@ -13,7 +13,7 @@ import type { BasemapSource } from '../map/basemap'
 import { blankStyle } from '../map/consoleMap'
 import { MarsScaleControl } from '../map/scale'
 import { TerrainController } from '../map/terrain'
-import { ui } from '../state'
+import { effect, ui } from '../state'
 import { THEME } from '../theme'
 import type { BoundaryOption, LonLat } from './plan'
 import { SLOPE_OPACITY } from './slope'
@@ -47,6 +47,7 @@ export class MissionMap {
   private slopeOpacity = SLOPE_OPACITY
   private stopClick: ((i: number) => void) | null = null
   private terrain: TerrainController | null = null
+  private stopCompass: () => void
   private destroyed = false
   private readonly h: MissionMapHandlers
 
@@ -66,7 +67,12 @@ export class MissionMap {
       doubleClickZoom: false, // a double click would add two waypoints and zoom
     })
     this.map.touchZoomRotate.disableRotation()
-    this.map.addControl(new NavigationControl({ showCompass: false }), 'top-left')
+    // Compass (user 2026-11-15): turns with the view, tilts with the camera, a click turns back to north.
+    // Shown in 3D only: in 2D the map cannot rotate, so it would always point up.
+    this.map.addControl(new NavigationControl({ showCompass: true, visualizePitch: true }), 'top-left')
+    this.stopCompass = effect(() => {
+      container.classList.toggle('mp-3d', ui.view.value === '3d')
+    })
     this.map.addControl(new MarsScaleControl(CONFIG.marsRadiusM), 'bottom-left')
     this.map.getCanvas().style.cursor = 'crosshair'
     this.ready = new Promise((res) => this.map.once('load', () => res()))
@@ -333,6 +339,7 @@ export class MissionMap {
 
   destroy(): void {
     this.destroyed = true
+    this.stopCompass()
     this.terrain?.destroy()
     this.markers.forEach((mk) => mk.remove())
     this.stationMarkers.forEach((mk) => mk.remove())
