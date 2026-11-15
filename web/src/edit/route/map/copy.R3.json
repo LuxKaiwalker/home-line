@@ -1,0 +1,25 @@
+{
+  "notice": {
+    "tooManyStops": "At most {n} stops in a route.",
+    "tooManyFreePoints": "At most {n} points of your own.",
+    "spacing": "Too close to another stop or the pad: keep {m} m apart.",
+    "outside": "Outside the mapped area: no route can be planned there.",
+    "unreachable": "No known walk home from there: choose a walkable spot.",
+    "unknownStation": "Station {station} is not on this map.",
+    "stationInRoute": "{station} is already in your route.",
+    "stationAdded": "{station} added to your route.",
+    "pointAdded": "{name} added to your route.",
+    "pointMoved": "{name} moved.",
+    "removed": "{name} removed from your route."
+  },
+  "handle": {
+    "title": "{name}: drag to move, Delete to remove",
+    "remove": "Remove {name}"
+  },
+  "card": {
+    "add": "Add to route",
+    "addTip": "Add this station to your route (estimate)",
+    "inRoute": "In your route"
+  },
+  "ghost": "Ghost route · estimate"
+}
