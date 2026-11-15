@@ -122,8 +122,7 @@ describe('privacy note text', () => {
 
   it('says each fact once, in plain words', () => {
     for (const re of [
-      /no accounts or logins/i,
-      /no cookies/i,
+      /no accounts, logins or cookies/i,
       /plan inputs/i,
       /by (a )?hash/i,
       /run record/i,
