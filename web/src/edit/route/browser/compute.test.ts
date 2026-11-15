@@ -18,7 +18,6 @@ import type { RouteStop } from '../model'
 import { accessCell, cellOf, lonLatOfCell, routeGridOf, sampleElevation } from '../map/grid'
 import { codecOf, decodeHeights, farOrigin, gunzipIfNeeded, HeightGrid, lonLatToXY, parseEqc, parseIndex } from '../map/heights'
 import { gradeModel, scenarioParams } from '../map/physio'
-import { LegRouter } from '../map/router'
 import { buildBrowserMission, buildBrowserMissionDraft, computeBrowserRoute } from './compute'
 import { makeBrowserRouteData, type BrowserRouteData } from './data'
 import { ORIGIN_LABEL } from './export'
@@ -52,7 +51,7 @@ async function loadFromFiles(sid: string): Promise<BrowserRouteData> {
     o2Home,
     pointer,
     grid,
-    router: new LegRouter(grid, gradeModel(scenarioParams(sid))),
+    model: gradeModel(scenarioParams(sid)),
     stations: J<Station[]>('stations.json'),
     padFile: J<PadFile>('pad.json'),
     rad: J<Rad>('conditions/rad.json'),
