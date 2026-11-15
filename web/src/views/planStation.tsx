@@ -50,6 +50,48 @@ function StationCardBody({ id }: { id: string }) {
   )
 }
 
+/**
+ * The cards follow the selection and the rover strip (layout store ids 'station', 'rover'). `setCard`
+ * gets the station whose card to draw; `bindClick` receives the map-click handler. Returns off.
+ */
+export function wirePlanCards(setCard: (id: string) => void, bindClick: (fn: (id: string) => void) => void): () => void {
+  const show = (id: string) => {
+    setCard(id)
+    openContainer(STATION_CARD)
+  }
+  // a map click on a station (also the one already selected: it reopens its card)
+  bindClick(show)
+  // closing a card by hand (×, Esc), not by the other card opening
+  let was = { s: false, r: false }
+  const offs = [
+    // a station selection (map, list, search, history) opens its card; any other selection closes it
+    effect(() => {
+      const s = selection.selected.value
+      if (s?.kind === 'station') show(s.id)
+      else closeContainer(STATION_CARD, { restoreFocus: false })
+    }),
+    // the strip appears on release and goes on Keep / Discard / a new drag
+    effect(() => {
+      const on = !!roverStrip.value
+      if (on && !layout.open.peek()[STATION_CARD]) openContainer(ROVER_CARD)
+      else if (!on) closeContainer(ROVER_CARD, { restoreFocus: false })
+    }),
+    effect(() => {
+      const o = layout.open.value
+      const now = { s: !!o[STATION_CARD], r: !!o[ROVER_CARD] }
+      if (was.s && !now.s && !now.r) {
+        // the station selection goes with its card (Esc cleared it in the sidebar); a draft still open
+        // gets its rover card back
+        if (selection.selected.peek()?.kind === 'station') clearSelection()
+        if (roverStrip.peek()) openContainer(ROVER_CARD)
+      }
+      if (was.r && !now.r && !now.s) roverStrip.peek()?.dismiss()
+      was = now
+    }),
+  ]
+  return () => offs.forEach((f) => f())
+}
+
 function PlanCards({ cmap, bindClick }: { cmap: ConsoleMap; bindClick: (fn: (id: string) => void) => void }) {
   const [stations, setStations] = useState<Station[] | null>(null)
   const [card, setCard] = useState<string | null>(null)
@@ -64,45 +106,7 @@ function PlanCards({ cmap, bindClick }: { cmap: ConsoleMap; bindClick: (fn: (id:
     return () => void (live = false)
   }, [])
 
-  useEffect(() => {
-    const show = (id: string) => {
-      setCard(id)
-      openContainer(STATION_CARD)
-    }
-    // a map click on a station (also the one already selected: it reopens its card)
-    bindClick(show)
-    const offs = [
-      // a station selection (map, list, search, history) opens its card; any other selection closes it
-      effect(() => {
-        const s = selection.selected.value
-        if (s?.kind === 'station') show(s.id)
-        else closeContainer(STATION_CARD, { restoreFocus: false })
-      }),
-      // the strip appears on release and goes on Keep / Discard / a new drag
-      effect(() => {
-        const on = !!roverStrip.value
-        if (on && !layout.open.peek()[STATION_CARD]) openContainer(ROVER_CARD)
-        else if (!on) closeContainer(ROVER_CARD, { restoreFocus: false })
-      }),
-    ]
-    // closing a card by hand (×, Esc), not by the other card opening
-    let was = { s: false, r: false }
-    offs.push(
-      effect(() => {
-        const o = layout.open.value
-        const now = { s: !!o[STATION_CARD], r: !!o[ROVER_CARD] }
-        if (was.s && !now.s && !now.r) {
-          // the station selection goes with its card (Esc cleared it in the sidebar); a draft still open
-          // gets its rover card back
-          if (selection.selected.peek()?.kind === 'station') clearSelection()
-          if (roverStrip.peek()) openContainer(ROVER_CARD)
-        }
-        if (was.r && !now.r && !now.s) roverStrip.peek()?.dismiss()
-        was = now
-      }),
-    )
-    return () => offs.forEach((f) => f())
-  }, [])
+  useEffect(() => wirePlanCards(setCard, bindClick), [])
 
   const st = card ? stations?.find((s) => s.id === card) : undefined
   return (
