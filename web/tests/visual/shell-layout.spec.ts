@@ -8,7 +8,8 @@
  *     while the descent intro (M10) hides the chrome, and pauses again while the clock runs.
  *   - Tablet (768–1279): the map region keeps the full width beside a 56 px icon rail and everything
  *     above the 96 px dock; the selection card overlays the map and never covers the dock or the rail.
- *   - Desktop: 320 rail | map | 360 sidebar, 120 dock, as before.
+ *   - Desktop: 56 px icon rail in Plan (L2, D111: like the tablet; its toggle opens a sheet over the map)
+ *     | map | 360 sidebar, 120 dock.
  * Run: cd web && npm run build && npx playwright test tests/visual/shell-layout.spec.ts
  */
 import { expect, test, type Page } from 'playwright/test'
@@ -65,7 +66,7 @@ test.describe('shell layout (§4.3)', () => {
     const rail = await box(page, '.hl-rail')
     const dock = await box(page, '.hl-dock')
     const dockH = tablet ? 96 : 120
-    const railW = tablet ? 56 : 320
+    const railW = 56 // L2 (D111): the icon column in Plan at every size
     expect(Math.round(rail.width)).toBe(railW)
     expect(Math.round(dock.height)).toBe(dockH)
     expect(Math.round(main.x)).toBe(railW)
@@ -97,8 +98,7 @@ test.describe('shell layout (§4.3)', () => {
     await clickPlayAndPause(page)
   })
 
-  test('tablet: the rail toggle opens the full rail over the map and a rail link closes it', async ({ page }) => {
-    test.skip(page.viewportSize()!.width >= 1280, 'tablet only')
+  test('the rail toggle opens the full rail over the map (tablet; desktop Plan too, L2) and closes it again', async ({ page }) => {
     await page.goto('/?intro=0#/')
     await page.locator('.hl-tl__play').waitFor({ timeout: 30_000 })
     const toggle = page.locator('.hl-rail__toggle')
@@ -107,7 +107,7 @@ test.describe('shell layout (§4.3)', () => {
     await expect(page.locator('.hl-shell')).toHaveAttribute('data-rail', 'open')
     expect(Math.round((await box(page, '.hl-rail')).width)).toBe(320)
     expect(Math.round((await box(page, 'main.outlet')).x)).toBe(56) // overlay: the map does not move
-    await page.locator('.hl-rail__view', { hasText: 'Trade table' }).click()
+    await toggle.click()
     await expect(page.locator('.hl-shell')).toHaveAttribute('data-rail', 'collapsed')
   })
 })

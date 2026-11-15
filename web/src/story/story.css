@@ -90,9 +90,10 @@ html[data-story-full] :is(.hl-topbar, .hl-rail, .hl-sidebar, .hl-dock, .hl-shell
   position: relative;
   z-index: 11;
 }
-/* the map's own controls stay where they are in the map's shell slot (its rect, set by stage.ts), clear of the
+/* the map's own controls and the plan containers (L2-shell .plan-layout) stay where they are in the map's shell slot (its rect, set by stage.ts), clear of the
    lifted chrome, so the first click reaches them too; the plan panel inside the slot stays under the map */
-html[data-story-full] .console-map .maplibregl-control-container {
+html[data-story-full] .console-map .maplibregl-control-container,
+html[data-story-full] .console-map > .plan-layout {
   position: absolute;
   top: var(--hl-slot-top, 0px);
   left: var(--hl-slot-left, 0px);
@@ -100,6 +101,7 @@ html[data-story-full] .console-map .maplibregl-control-container {
   height: var(--hl-slot-height, 100%);
   pointer-events: none;
 }
+html[data-story-full] .console-map > .plan-layout { right: auto; bottom: auto; }
 html[data-story-full] .console-map .maplibregl-control-container .maplibregl-ctrl { pointer-events: auto; }
 html[data-story-full] .collapse-headline { visibility: hidden; }
 /* dummy data is never shown unmarked: the banner stays on top of the full-screen story */

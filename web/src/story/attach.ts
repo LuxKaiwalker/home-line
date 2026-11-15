@@ -19,7 +19,7 @@ import { demSource, parseTerrainTiles } from '../map/terrain/tiles'
 import { exaggeration } from '../map/terrain/state'
 import { data } from '../data/loader'
 import { DATA_MODE, dataUrl } from '../env'
-import { ELEVATION_FACTOR, FIRST_FRAME_MAX_MS, WARMUP_MAX_MS } from './config'
+import { CHASE, ELEVATION_FACTOR, FIRST_FRAME_MAX_MS, WARMUP_MAX_MS } from './config'
 import { after, descentTiles, mapIdle, prefetch, storyPoses, until, type TileSet } from './warm'
 import { introSkipRequested, loadingDone, onIntroSkip, setLoadProgress, STAGE } from './loading'
 
@@ -37,6 +37,7 @@ async function makeDirector(sb: Storyboard, reduced: boolean): Promise<Director>
     follow: fp ? (t) => fp.poseAt(t) : undefined,
     tMax: missionClock.tMax,
     reduced,
+    cutS: CHASE.reducedCutS,
   })
 }
 
@@ -163,6 +164,32 @@ export interface CaptureApi {
   /** jump to frame n (deterministic: a frame is a pure function of its index) */
   seek(n: number): Promise<{ frame: number; t: number; done: boolean }>
   state(): DirectorState
+  /** L10: what the current frame draws: route / crew layer visibility and the crew marker on screen (tests, dry runs) */
+  probe(): CaptureProbe
+}
+
+export interface CaptureProbe {
+  /** layout visibility of the route legs (done / coming), the stations and the crew marker layers */
+  layers: Record<string, string | null>
+  /** the crew marker as rendered on this frame, in CSS px of the map canvas; null when not drawn */
+  crewPx: [number, number] | null
+  /** the map canvas size, CSS px */
+  size: [number, number]
+}
+
+/** L10: the route, station and crew layers of the current frame and where the crew marker is drawn. */
+export function probeMap(map: ConsoleMap['map']): CaptureProbe {
+  const layers: Record<string, string | null> = {}
+  for (const id of ['route-done', 'route-coming', 'station-rings', 'crew-dot', 'thread-line']) layers[id] = map.getLayer(id) ? ((map.getLayoutProperty(id, 'visibility') as string | undefined) ?? 'visible') : null
+  const c = map.getCanvas()
+  const size: [number, number] = [c.clientWidth, c.clientHeight]
+  const hit = map.getLayer('crew-dot') ? map.queryRenderedFeatures({ layers: ['crew-dot'] }) : []
+  const g = hit[0]?.geometry
+  const crewPx = g && g.type === 'Point' ? (() => {
+    const p = map.project(g.coordinates as [number, number])
+    return [p.x, p.y] as [number, number]
+  })() : null
+  return { layers, crewPx, size }
 }
 
 declare global {
@@ -206,7 +233,9 @@ export async function settle(stage: Pick<StoryStage, 'map' | 'pending'>): Promis
       // frame, which keeps the map's style and sources flagged dirty for good, so loaded() never held
       // and every frame ran into the cap twice (~40 s a frame in SwiftShader, notes/Kcap.md). One
       // render after apply() has updated the sources for the new camera; then the style (sources,
-      // GeoJSON updates, images) and every in-view tile being loaded means the frame is drawn.
+      // GeoJSON updates, images) and every in-view tile being loaded means the frame is drawn. L10 found
+      // the same for paint transitions and the zoom cross-fade, which run on the clock capture freezes
+      // (8.5 min for frame 0 in software GL, notes/L10.md).
       if (renders > 0 && settled(map)) break
     }
   } finally {
@@ -243,6 +272,7 @@ function runCapture(stage: StoryStage, d: Director, sb: Storyboard): CaptureApi 
     step: () => go(frame + 1),
     seek: (n) => go(n),
     state: () => d.stateAtFrame(frame),
+    probe: () => probeMap(stage.map),
   }
   return api
 }
