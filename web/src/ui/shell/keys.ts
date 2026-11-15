@@ -142,7 +142,9 @@ export function runShortcut(a: ShortcutAction, env: ShortcutEnv): boolean {
     }
     case 'playPause':
       if (!fly) return false
-      void (env.clock ?? lazyClock)().then((c) => c.toggle())
+      // L7c: through the activity store (stops the flythrough / intro first; refused while a plan computes)
+      if (env.clock) void env.clock().then((c) => c.toggle())
+      else void import('../../state/activityClock').then((m) => m.toggleReplay())
       return true
     case 'scrub':
       if (!fly) return false
