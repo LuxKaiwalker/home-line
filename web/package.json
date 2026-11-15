@@ -13,7 +13,9 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "lint:tokens": "node scripts/lint-tokens.mjs",
-    "values:snapshot": "node ../tools/values_snapshot.ts"
+    "values:snapshot": "node ../tools/values_snapshot.ts",
+    "test:visual": "playwright test",
+    "bundle:budget": "node ../tools/bundle_budget.ts"
   },
   "devDependencies": {
     "@types/geojson": "^7946.0.16",
