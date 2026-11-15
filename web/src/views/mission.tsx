@@ -87,8 +87,8 @@ function MissionPanel({ mmap, handlers, mapsEl, layersEl, initial }: { mmap: Mis
   // Science stations (stations.json): undefined while loading, null when they cannot be loaded.
   const [stations, setStations] = useState<Station[] | null | undefined>(undefined)
   const [copied, setCopied] = useState(false)
-  /** D39 storm switch: replay the 20 May 2024 RAD storm on this EVA's clock (dose term in the margin and the export) */
-  const [storm, setStorm] = useState(false)
+  /** D39 storm replay (dose term in the margin and the export): its switch is off the UI (user, 2026-11-15), so always off */
+  const storm = false
   /** EVA start instant (UTC ms); default = WS4's simulated EVA (D31); not stored (D97) */
   const [startMs, setStartMs] = useState(DEFAULT_START_MS)
   /** MARVIS hand-over: 'api' = served by the game (POST /marvis/api/mission), 'viewer' = in the game's planner window (it catches the download) */
@@ -322,11 +322,6 @@ function MissionPanel({ mmap, handlers, mapsEl, layersEl, initial }: { mmap: Mis
     return finalizeMission(doc)
   }
 
-  const exportMission = async () => {
-    const fin = await missionDoc()
-    if (fin) downloadJson(fin, `mission_${fin.mission_id}.json`)
-  }
-
   /**
    * Send to MARVIS: served by the game, POST the mission to its API; in the game's planner window (also
    * on the live site), download it, which the window hands to the game. Either way MARVIS hides the
@@ -452,18 +447,11 @@ function MissionPanel({ mmap, handlers, mapsEl, layersEl, initial }: { mmap: Mis
             {sendMsg.text}
           </p>
         )}
-        <button type="button" class="mp-download" disabled={!wps.length} onClick={() => void exportMission()} title="mission.json for the EVA simulator (contracts/bundle/mission.schema.json)">
-          Download mission.json
-        </button>
         {margin && (
           <span class="muted">
-            {' '}lowest margin {margin.lowest.marginMin.toFixed(1)} min ({margin.lowest.binding})
+            Lowest margin {margin.lowest.marginMin.toFixed(1)} min ({margin.lowest.binding})
           </span>
         )}
-        <label class="mp-storm" title={d.rad ? 'D39: the storm series is shifted so its tripwire fires at the route\'s largest T_home; the dose term joins the margin' : 'rad.json (WS4) is not loaded: no storm series to replay'}>
-          <input type="checkbox" checked={storm && !!d.rad} disabled={!d.rad} onChange={(e) => setStorm((e.target as HTMLInputElement).checked)} />{' '}
-          Replay the 20 May 2024 storm during this EVA
-        </label>
       </section>
 
       <p class="caption mp-howto">
