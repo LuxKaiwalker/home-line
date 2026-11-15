@@ -69,3 +69,10 @@
   height: var(--space-3);
   padding: 0;
 }
+
+/* Keyboard focus (U12 a11y-perf): token ring on label pills and on the covered legacy pad buttons. */
+.hl-label__pill:focus-visible,
+.hl-label-covered:focus-visible {
+  outline: var(--line-focus-ring) solid var(--color-select);
+  outline-offset: var(--line-focus-ring);
+}
