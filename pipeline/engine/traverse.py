@@ -22,8 +22,9 @@ timeline rows and, as ``to_access_dist_m``, to the leg that arrives there.
 Ordered route (D97, ``plan(..., route=[...])``): the stations are visited in exactly the given
 order (nothing is reordered; the orienteering search is skipped). Legs, margins, dwell and
 outputs are the auto path's. An order that breaks a limit is a result, not an error:
-``Result.feasibility`` names the first failing leg (see ``_route_order``) and only the legs
-before it are walked and written. A stop that cannot be routed at all raises
+``Result.feasibility`` names the first failing leg (see ``_route_order``; the timed dose term
+is checked on the walked legs, and its failure wins when it lies on an earlier leg) and only
+the legs before it are walked and written. A stop that cannot be routed at all raises
 ``RouteStopError``. ``route=None`` is the auto path, unchanged.
 
 Free points (D97 WP2b): a stop ``{lon, lat, label?}`` is a synthetic station named W1, W2, ...
@@ -422,10 +423,11 @@ def plan(grid: Grid, table: GradeTable, home: dijkstra.Field, pad, stations: lis
         t_star_min = margin_mod.t_star(tr[0], tr[2])
         mi_ev = replace(mi, dose_timing=dose_fn(t_star_min))
     tr, items, legs, events = walk(mi_ev, emit=True)
-    if (feasibility is not None and feasibility["feasible"] and dose_fn is not None
-            and mi_ev.dose_timing is not None):  # fmt: skip
+    if feasibility is not None and dose_fn is not None and mi_ev.dose_timing is not None:
+        # D97: the timed dose term on the walked route (all legs if feasible, else the legs
+        # before the failing one); a dose failure on an earlier leg is the answer
         cut = _route_dose_check(mi_ev.dose_timing, tr, seq, ["pad"] + names)
-        if cut is not None:  # D97: the timed dose term fails on leg cut["leg"]
+        if cut is not None and (feasibility["feasible"] or cut["leg"] < feasibility["leg"]):
             feasibility = cut
             del seq[cut["leg"]:]
             p = orienteering.Plan(_value(values, p.order[:cut["leg"]]), p.order[:cut["leg"]],
@@ -478,6 +480,12 @@ def _route_order(mi: MarginInputs, first: LegPath, mids: list[LegPath], home: Le
       leaves that station, i.e. at the next leg's departure) and arrival at the pad <=
       budget_min (on the way home). With the D28 term on (budget = crew.eva_h x 60) the margin
       check of the same leg always fails first, so this only answers when that term is off.
+    * Timed dose (plan(), after this check): the walked route is checked by
+      ``_route_dose_check`` with t* placed by dose_fn on that walk. Feasible order: the walk
+      is the whole order. Infeasible order (leg k fails here): the walk is legs 0..k-1, t*
+      is placed on them; a dose failure on leg j < k replaces this answer (leg j, limit
+      "dose", legs_planned j; legs 0..j-1 walked and written, t* kept). The walk ends on
+      arrival before leg k, so the dose check cannot name leg k or later and this answer stays.
 
     The first leg that fails is the answer: limit = the argmin of its latest-departure terms,
     shortfall_min = t - that latest departure (how many minutes earlier the crew would have to
@@ -538,7 +546,8 @@ def _route_dose_check(dt, tr, seq, ids: list[str]) -> dict | None:
     path). The first track point with tau_dose(t) - T_home < 0 fails the leg it lies on (a
     point in the dwell before a leg belongs to that leg: the departure is too late);
     shortfall_min = the lowest dose margin on that leg (dwell included), as a positive number.
-    None if the dose margin stays >= 0."""
+    None if the dose margin stays >= 0. Run on feasible orders and on the walked legs of an
+    infeasible one (plan() keeps the earlier of the two failing legs; see ``_route_order``)."""
     t, th = tr[0], tr[2]
     m = np.asarray(dt.tau_min(t), float) - th
     bad = np.flatnonzero(m < 0)

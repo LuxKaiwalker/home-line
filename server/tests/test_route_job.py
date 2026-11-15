@@ -1,4 +1,5 @@
-"""plan_inputs ``route`` in the plan job (D97 waypoint block, package R3).
+"""plan_inputs ``route`` in the plan job (D97 waypoint block, package R3 = WP3; free points: WP4,
+server/tests/test_route_free_points.py).
 
 Known answers (written before the code):
 - every route 422 code answers with ``Error.stop`` = the index of the stop the detail names
@@ -6,14 +7,13 @@ Known answers (written before the code):
   ("stop 2 (S9): unknown station ...");
 - the limits are config/backend.yaml's (route.max_stops, route.max_free_points,
   route.min_stop_spacing_m, limits.title_max_chars): a patched config moves the answer;
-- a free point passes the route checks but is refused as unsupported_inputs with its stop index
-  (not planned before R4); POST /plans/import answers exactly as POST /jobs; POST /pads/screen
-  refuses an ordered route (unsupported_inputs naming route);
+- POST /plans/import answers exactly as POST /jobs; POST /pads/screen refuses an ordered route
+  (unsupported_inputs naming route);
 - a missing route and ``mode: auto`` are today's job: the same build_plan call (no ``route``
   argument), the same hash, and the official pad attaches to the precomputed tree without a run;
 - the same stations in another order hash differently;
 - an ordered route passes its station ids, in order, to build_plan in the preview and the full
-  call;
+  call (with route_min_spacing_m from config, WP2b);
 - the run record carries route_mode (on every record) and the default scenario's feasibility,
   with the v1.1 ``infeasible`` mirror when false, and validates against run_record.schema.json;
   an infeasible answer is a job ``done``, not an error;
@@ -168,12 +168,6 @@ def test_route_with_stations_set_or_custom_conflicts():
     assert refused(doc(st("S4"), stations=custom)).code == "route_mode_conflict"
 
 
-def test_a_free_point_is_unsupported_with_its_index():
-    e = refused(doc(st("S8") + [{"lon": 137.39, "lat": -4.79, "label": "rock"}]))
-    assert (e.code, e.stop) == ("unsupported_inputs", 1)
-    assert e.detail.startswith("stop 1 (W1 'rock'):")
-
-
 # --------------------------------------------------------------------- limits from config ----
 def test_limits_follow_a_patched_config(monkeypatch):
     three = doc(st("S4", "S1", "S2"))
@@ -185,7 +179,8 @@ def test_limits_follow_a_patched_config(monkeypatch):
     e = refused(six_seven, cfg_with(min_stop_spacing_m=700.0))
     assert (e.code, e.stop) == ("route_stop_spacing", 1)
     label = doc(st("S8") + [{"lon": 137.39, "lat": -4.79, "label": "x" * 11}])
-    assert refused(label).code == "unsupported_inputs"  # 11 chars are within the real cap
+    monkeypatch.setattr(route_mod, "point_problem", lambda *a: None)  # no grid here
+    route_mod.validate(label, None, grid=object())  # 11 chars are within the real cap
     assert refused(label, cfg_with(title_max_chars=10)).code == "route_label_too_long"
     two_free = doc([{"lon": 137.39, "lat": -4.79}, {"lon": 137.395, "lat": -4.79}])
     assert refused(two_free, cfg_with(max_free_points=1)).code == "route_too_many_free_points"
@@ -207,8 +202,8 @@ def api_data(tmp_path, monkeypatch):
 CASES = [
     (st("S4", "S1", "S9"), {}, "route_station_unknown", 2, "stop 2 (S9): unknown station"),
     (st("S1", "S2", "S1"), {}, "route_station_duplicate", 2, "stop 2 (S1):"),
-    (st("S8", "S1") + [{"lon": 137.39, "lat": -4.79}], {}, "unsupported_inputs", 2,
-     "stop 2 (W1):"),
+    (st("S8", "S1") + [{"lon": 137.39, "lat": -4.79, "label": "x" * 121}], {},
+     "route_label_too_long", 2, "stop 2 (W1 'xxx"),
     (st("S4"), {"stations": {"mode": "order", "ids": ["S4"]}}, "route_mode_conflict", None,
      "stations.mode 'order'"),
 ]
@@ -291,6 +286,36 @@ def test_auto_route_on_the_official_pad_attaches_to_the_precomputed_tree(server_
         assert c.app.state.jobs.jobs_started == 0
 
 
+# ------------------------------------------------------------------ the scenario set (W1) ----
+DEFAULT_SUIT = ["opt_104", "nom_104", "con_104"]
+
+
+def test_an_ordered_route_runs_the_default_suits_three_variants():
+    """W1 finding (D81, D97): only the AUTO plan on the official pad with the default crew is the
+    official 9-variant plan (precomputed); any ordered route is a custom plan: three variants."""
+    from server.tests import parity_harness as H
+
+    off = official_inputs()
+    assert len(H.scenario_ids()) == 9
+    assert plan_job.scenario_set(off) == H.scenario_ids()
+    assert plan_job.scenario_set({**off, "route": {"mode": "auto"}}) == H.scenario_ids()
+    assert plan_job.scenario_set({**off, "route": {"mode": "auto", "stops": []}}) == \
+        H.scenario_ids()
+    # the official pad, the default crew, an ordered route: three
+    ordered_off = {**off, "route": {"mode": "ordered", "stops": st("S4", "S1", "S2")}}
+    assert plan_job.is_official_pad(ordered_off)
+    assert plan_job.scenario_set(ordered_off) == DEFAULT_SUIT
+    # a custom pad with an ordered route, or without one: three
+    assert plan_job.scenario_set(doc(st("S4", "S1", "S2"))) == DEFAULT_SUIT
+    assert plan_job.scenario_set(doc(None)) == DEFAULT_SUIT
+    # a custom crew on the official pad (auto): three, as before
+    heavy = {**off, "crew": {**off.get("crew", {}), "body_mass_kg": 95}}
+    assert plan_job.scenario_set(heavy) == DEFAULT_SUIT
+    # the official hash is unchanged and still the auto plan's
+    assert result_hash({**off, "route": {"mode": "auto"}}, IDENT) == official_hash(IDENT)
+    assert result_hash(ordered_off, IDENT) != official_hash(IDENT)
+
+
 # ---------------------------------------------------------------------- the build_plan call ----
 class Recorder:
     def __init__(self, summary=None):
@@ -330,18 +355,10 @@ def test_ordered_route_passes_station_ids_in_order(monkeypatch, world, tmp_path,
     assert plan_job.unsupported(inputs) == []
     call = _build(monkeypatch, world, tmp_path, inputs, preview)
     assert call.pop("route") == ["S2", "S1"]
+    assert call.pop("route_min_spacing_m") == settings().route.min_stop_spacing_m
     assert call == plain  # everything else is today's call
     rev = {**base, "route": {"mode": "ordered", "stops": st("S1", "S2")}}
     assert _build(monkeypatch, world, tmp_path, rev, preview)["route"] == ["S1", "S2"]
-
-
-def test_a_free_point_is_still_unsupported_in_the_job(world, tmp_path):
-    inputs = {**custom_inputs(world / "terrain"),
-              "route": {"mode": "ordered", "stops": [{"lon": 137.39, "lat": -4.79}]}}
-    assert plan_job.unsupported(inputs) == ["route"]
-    with pytest.raises(plan_job.UnsupportedInputs, match="route"):
-        plan_job.build(inputs, terrain_dir=world / "terrain", out_dir=tmp_path / "o",
-                       manifest_dir=tmp_path / "m", conditions=False, rad_json=tmp_path / "r")
 
 
 def test_a_stop_the_engine_cannot_route_is_named(monkeypatch, world, tmp_path):
