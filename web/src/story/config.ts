@@ -45,3 +45,13 @@ export const CAMERA_MS: readonly [number, number] = TOKENS.motion.cameraMs as un
 
 /** tokens motion.panelMs: caption and chrome fades (DESIGN §3.4 panel change 180–240 ms) */
 export const PANEL_MS: readonly [number, number] = TOKENS.motion.panelMs as unknown as [number, number]
+
+/**
+ * M10c: the longest the live intro / kiosk waits before t = 0 (layers drawn once out of sight, tiles of
+ * the first frame loaded), split into the warm-up and the first frame's tiles. assumed (M10c): please
+ * add intro.warmup_max_ms to config/design.yaml (D). The storyboard's own timing is unchanged.
+ */
+export const WARMUP_MAX_MS = 2500
+export const FIRST_FRAME_MAX_MS = 1000
+/** M10c: camera path sampling step (s) for the tile prefetch along the storyboard */
+export const PREFETCH_STEP_S = 0.25

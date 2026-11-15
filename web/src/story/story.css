@@ -22,6 +22,15 @@
 }
 .hl-story-caption[hidden] { display: none; }
 
+/* M10c warm-up before t = 0: the map draws every story layer once out of sight (story/warm.ts) */
+.hl-story-cover {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  background: var(--color-bg);
+  pointer-events: none;
+}
+
 /* UI chrome hidden by a storyboard (ui: "hide") or in capture mode; reveal fades it back in.
    Live (intro, kiosk) the hidden chrome keeps taking the pointer: any input skips the story (attach.ts,
    a window capture listener), so the first click both skips it and reaches its target (top bar, rail,

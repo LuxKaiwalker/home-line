@@ -21,7 +21,7 @@ import { effect, ui } from '../state'
 import { collapseFade, collapseHeadline, collapseQuery, padGridMetres, playCollapse, setCollapse } from './field/collapse'
 import { CollapseHeadlineOverlay, CollapseToggle } from './field/collapseUi'
 import { MapFurniture, MARKER_LAYERS, ROUTE_LAYERS } from './furniture'
-import { LabelLayer, loadLabels, setSelectedLabel } from './labels/layer'
+import { LabelLayer, loadLabels, setLabelPlacementPaused, setSelectedLabel } from './labels/layer'
 import type { MapLabel } from './labels/model'
 import { TerrainController } from './terrain'
 import type { RoverHandle } from '../edit/roverMap'
@@ -252,6 +252,12 @@ export class ConsoleMap {
     const legacy = !!this.map.getContainer().closest('.hl-frame-legacy')
     const story = storyRequest(storyParams(location.search, location.hash), { reduced: ui.reducedMotion.peek(), introSeen: ui.introSeen.peek(), legacy })
     if (story) void import('../story/attach').then((m) => !this.destroyed && (this.stopStory = m.attachStory(this, story)))
+  }
+
+  /** M10c: a live story camera move pauses the per-move label placement (4 Hz) and the furniture loops. */
+  setStoryPaused(on: boolean): void {
+    setLabelPlacementPaused(on)
+    this.furniture?.setPaused(on)
   }
 
   /** Whether a layer group is on (story mode saves and restores it). */
