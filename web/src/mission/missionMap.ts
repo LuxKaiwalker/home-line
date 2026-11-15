@@ -1,7 +1,7 @@
 // Mission Planer map (plain TS + MapLibre, offline like the Plan page): HiRISE basemap, the chosen
 // reachable-area boundary, planned legs (solid), the way home from the last waypoint (dashed),
 // the pad, and numbered draggable waypoints. Click adds a waypoint.
-import { LngLatBounds, Map as MlMap, Marker, NavigationControl, setWorkerUrl, type GeoJSONSource, type MapMouseEvent } from 'maplibre-gl'
+import { LngLatBounds, Map as MlMap, Marker, NavigationControl, Popup, setWorkerUrl, type GeoJSONSource, type MapMouseEvent } from 'maplibre-gl'
 import type { FilterSpecification } from '@maplibre/maplibre-gl-style-spec'
 import 'maplibre-gl/dist/maplibre-gl.css'
 import workerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?url'
@@ -29,6 +29,8 @@ export class MissionMap {
   readonly map: MlMap
   private readonly ready: Promise<void>
   private markers: Marker[] = []
+  private stationMarkers: Marker[] = []
+  private popup?: Popup
   private padMarker?: Marker
   private hasBasemap = false
   private basemapIds: string[] = []
@@ -168,6 +170,45 @@ export class MissionMap {
     this.padMarker = new Marker({ element: el }).setLngLat([p.lon, p.lat]).addTo(this.map)
   }
 
+  /** Science stations: a click opens a popup with "Add as waypoint" and a link to the station card. */
+  setStations(list: { id: string; name: string; lon: number; lat: number; detailHref: string; inPlan: boolean }[], onAdd: (id: string) => void): void {
+    this.stationMarkers.forEach((mk) => mk.remove())
+    this.popup?.remove()
+    this.stationMarkers = list.map((s) => {
+      const el = document.createElement('button')
+      el.type = 'button'
+      el.className = `station-marker mp-station${s.inPlan ? ' in-plan' : ''}`
+      el.textContent = s.id
+      el.title = `${s.id} · ${s.name}: click for options`
+      const box = document.createElement('div')
+      box.className = 'mp-st-pop'
+      const title = document.createElement('b')
+      title.textContent = `${s.id} · ${s.name}`
+      const add = document.createElement('button')
+      add.type = 'button'
+      add.textContent = s.inPlan ? 'Already in the plan' : '+ Add as waypoint'
+      add.disabled = s.inPlan
+      add.addEventListener('click', () => {
+        this.popup?.remove()
+        onAdd(s.id)
+      })
+      const link = document.createElement('a')
+      link.href = s.detailHref
+      link.textContent = 'Details →'
+      const row = document.createElement('div')
+      row.append(add, link)
+      box.append(title, row)
+      // Clicks in the popup must not add a waypoint on the map below.
+      for (const ev of ['mousedown', 'mouseup', 'click', 'dblclick', 'pointerdown', 'pointerup', 'touchstart', 'touchend']) box.addEventListener(ev, (e) => e.stopPropagation())
+      el.addEventListener('click', (e) => {
+        e.stopPropagation()
+        this.popup?.remove()
+        this.popup = new Popup({ offset: 18, closeButton: true, maxWidth: '260px' }).setLngLat([s.lon, s.lat]).setDOMContent(box).addTo(this.map)
+      })
+      return new Marker({ element: el }).setLngLat([s.lon, s.lat]).addTo(this.map)
+    })
+  }
+
   /** Waypoint markers, numbered from 1, draggable; a drag end moves that waypoint. */
   setWaypoints(points: { lon: number; lat: number; bad: boolean; info?: string }[]): void {
     this.markers.forEach((mk) => mk.remove())
@@ -207,6 +248,8 @@ export class MissionMap {
 
   destroy(): void {
     this.markers.forEach((mk) => mk.remove())
+    this.stationMarkers.forEach((mk) => mk.remove())
+    this.popup?.remove()
     this.padMarker?.remove()
     if (this.reliefUrl) URL.revokeObjectURL(this.reliefUrl)
     this.map.remove()

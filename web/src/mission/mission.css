@@ -64,3 +64,12 @@
 .mp-tags button.on { background: var(--accent); border-color: var(--accent); color: #1a120e; }
 .mp-wp-noted { box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.6), 0 0 0 4px var(--accent, #e8925a); }
 .mp-share { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; margin-top: 0.4rem; font-size: 0.78rem; }
+/* Science stations on the planner map */
+.mp-station { width: 28px; height: 28px; font-size: 10px; opacity: 0.92; }
+.mp-station.in-plan { box-shadow: 0 0 0 3px var(--accent, #e8925a); }
+.mp-st-pop { display: grid; gap: 6px; font: 12px system-ui, sans-serif; color: #1a120e; }
+.mp-st-pop div { display: flex; align-items: center; gap: 10px; }
+.mp-st-pop button { background: #1a120e; color: #fff; border: 0; border-radius: 6px; padding: 3px 8px; cursor: pointer; font: inherit; }
+.mp-st-pop button:disabled { opacity: 0.5; cursor: default; }
+.mp-st-pop a { color: #8a3b12; font-weight: 600; }
+.mp-st-link { margin-left: 0.5rem; font-size: 0.78rem; }

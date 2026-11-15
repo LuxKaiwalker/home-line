@@ -21,6 +21,9 @@ import { MapsControl } from '../mission/MapsControl'
 import { boundaryOptions, defaultBoundary, legPairs, moveWaypoint, removeWaypoint, replaceWaypoint, routeLegs, toggleTag, WAYPOINT_TAGS, type LonLat, type Waypoint } from '../mission/plan'
 import { LegRouter, type Leg } from '../mission/router'
 import { decodePlan, encodePlan } from '../mission/share'
+import { stationWaypoint } from '../mission/stations'
+import { data } from '../data/loader'
+import type { Station } from '../data/types'
 import { href, type Route } from '../router'
 import { buildTrack, legProfile, missionMargin } from '../mission/margin'
 import { buildMission, downloadJson, finalizeMission } from '../mission/export'
@@ -84,6 +87,8 @@ function MissionPanel({ mmap, handlers, mapsEl, initial }: { mmap: MissionMap; h
   const nextId = useRef(1)
   const cache = useRef(new Map<string, Leg | null>())
   const restored = useRef(false)
+  // Science stations (stations.json): undefined while loading, null when they cannot be loaded.
+  const [stations, setStations] = useState<Station[] | null | undefined>(undefined)
   const [copied, setCopied] = useState(false)
 
   // Load once.
@@ -143,25 +148,60 @@ function MissionPanel({ mmap, handlers, mapsEl, initial }: { mmap: MissionMap; h
     return c
   }
 
-  // Restore once the data is in: the link's plan, else this browser's last plan.
   useEffect(() => {
-    if (!d || restored.current) return
+    let alive = true
+    data()
+      .stations()
+      .then(
+        (s) => alive && setStations(s),
+        () => alive && setStations(null),
+      )
+    return () => {
+      alive = false
+    }
+  }, [])
+
+  /** Append a science station (its access cell, its dwell time) unless it is in the plan already. */
+  const withStation = (list: Waypoint[], id: string): { list: Waypoint[]; msg: string } => {
+    const s = stations?.find((x) => x.id === id)
+    if (!s) return { list, msg: `No science station "${id}" in stations.json: nothing added.` }
+    if (list.some((w) => w.station === id)) return { list, msg: `${id} is already in the plan.` }
+    const w = stationWaypoint(s, d!.scenario.id)
+    const c = w ? cellAt(w.lon, w.lat) : 'blocked'
+    if (!w || typeof c !== 'number') return { list, msg: `${id} has no walkable access cell in ${d!.scenario.id}: not added.` }
+    return { list: [...list, { ...w, id: nextId.current++, cell: c }], msg: `Added ${id} as waypoint #${list.length + 1}, with a ${w.stopMin}-min stop.` }
+  }
+  const addStation = (id: string) => {
+    const r = withStation(wps, id)
+    setNotice(r.msg)
+    if (r.list !== wps) setWps(r.list)
+  }
+
+  // Restore once the data and stations are in: the link's plan, else this browser's last plan;
+  // then the station from ?add= (from the Science stations page).
+  useEffect(() => {
+    if (!d || stations === undefined || restored.current) return
     restored.current = true
     const src = initial.plan ?? loadSaved() ?? ''
     const plan = decodePlan(src)
-    if (plan === null) {
-      setNotice(initial.plan ? 'The plan in this link is damaged or from another version: starting empty.' : null)
-      return
-    }
-    const out: Waypoint[] = []
-    for (const w of plan) {
+    if (plan === null && initial.plan) setNotice('The plan in this link is damaged or from another version: starting empty.')
+    let out: Waypoint[] = []
+    for (const w of plan ?? []) {
       const c = cellAt(w.lon, w.lat)
       if (typeof c === 'number') out.push({ ...w, id: nextId.current++, cell: c })
     }
-    const lost = plan.length - out.length
+    const lost = (plan ?? []).length - out.length
     if (lost) setNotice(`${lost} waypoint${lost === 1 ? '' : 's'} of the saved plan ${lost === 1 ? 'has' : 'have'} no walk home in ${d.scenario.id} and ${lost === 1 ? 'was' : 'were'} left out.`)
+    if (initial.add) {
+      const r = withStation(out, initial.add)
+      out = r.list
+      setNotice(r.msg)
+    }
     setWps(out)
-  }, [d])
+    // Drop ?add= from the address at once, so a reload does not add it again.
+    const ps = encodePlan(out)
+    history.replaceState(history.state, '', href(ps ? { name: 'mission', plan: ps } : { name: 'mission' }))
+  }, [d, stations])
 
   // Keep the address and this browser's copy in step with the plan (replaceState: no re-render).
   const planStr = useMemo(() => encodePlan(wps), [wps])
@@ -274,6 +314,19 @@ function MissionPanel({ mmap, handlers, mapsEl, initial }: { mmap: MissionMap; h
   }, [d, wps, legs, home])
 
   useEffect(() => void mmap.showBoundary(options.find((o) => o.id === boundary)), [boundary, options])
+
+  // Science stations on the map (popup: add as waypoint, details). The ref keeps the click current.
+  const addRef = useRef(addStation)
+  addRef.current = addStation
+  const inPlan = wps.map((w) => w.station ?? '').join(',')
+  useEffect(() => {
+    if (!d || !stations) return
+    const used = new Set(inPlan.split(','))
+    mmap.setStations(
+      stations.map((s) => ({ id: s.id, name: s.name, lon: s.lon, lat: s.lat, detailHref: href({ name: 'station', id: s.id }), inPlan: used.has(s.id) })),
+      (id) => addRef.current(id),
+    )
+  }, [d, stations, inPlan])
 
   if (error) return <div class="panel-body"><DataProblem error={error} what="Mission Planer data" /></div>
   if (!d) return <div class="panel-body"><p class="muted">Loading {step}…</p></div>
@@ -401,6 +454,11 @@ function WaypointList({ wps, legs, setWps }: { wps: Waypoint[]; legs: (Leg | nul
                 <span class="mp-num">{i + 1}</span>
                 <span class="mp-leg">
                   {i === 0 ? 'Pad' : `#${i}`} → #{i + 1}
+                  {w.station && (
+                    <a class="mp-st-link" href={href({ name: 'station', id: w.station })} title="Open the station card">
+                      {w.station} details →
+                    </a>
+                  )}
                 </span>
                 <span class="mp-actions">
                   <button type="button" title="Move up" aria-label={`Move waypoint ${i + 1} up`} disabled={i === 0} onClick={() => setWps((x) => moveWaypoint(x, i, -1))}>
