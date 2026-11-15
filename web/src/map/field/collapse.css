@@ -60,6 +60,10 @@
   font-weight: var(--font-weight-label);
   white-space: nowrap;
 }
+.maplibregl-ctrl-group .collapse-toggle-btn:focus-visible {
+  outline: var(--line-focus-ring) solid var(--color-select);
+  outline-offset: var(--line-focus-ring);
+}
 .collapse-toggle-btn[aria-pressed='true'] {
   outline: var(--line-focus-ring) solid var(--color-select);
   outline-offset: calc(-1 * var(--line-focus-ring));
