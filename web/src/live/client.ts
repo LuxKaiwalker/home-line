@@ -12,13 +12,16 @@ export class ApiError extends Error {
   readonly code: string
   readonly detail: unknown
   readonly retryAfterS: number | null
-  constructor(status: number, code: string, message: string, detail: unknown = null, retryAfterS: number | null = null) {
+  /** Error.stop (contract v1.2.0, D97): index into inputs.route.stops of the stop a route 422 names; null = none. */
+  readonly stop: number | null
+  constructor(status: number, code: string, message: string, detail: unknown = null, retryAfterS: number | null = null, stop: number | null = null) {
     super(message)
     this.name = 'ApiError'
     this.status = status
     this.code = code
     this.detail = detail
     this.retryAfterS = retryAfterS
+    this.stop = stop
   }
   /** Worth another try later: no answer, or a 5xx / 429. */
   get transient(): boolean {
@@ -68,6 +71,12 @@ export interface ApiClient {
 /** A failure that says the server may be down: no answer (not an abort) or a 5xx. */
 export function isServerFailure(e: unknown): e is ApiError {
   return e instanceof ApiError && ((e.status === 0 && (e.code === 'network' || e.code === 'timeout')) || e.status >= 500)
+}
+
+/** Error.stop when it is a stop index (a non-negative integer); anything else is null. */
+function errorBodyStop(body: ApiErrorBody | null): number | null {
+  const s = body?.stop
+  return typeof s === 'number' && Number.isInteger(s) && s >= 0 ? s : null
 }
 
 function retryAfter(res: Response, body: ApiErrorBody | null): number | null {
@@ -133,7 +142,7 @@ export function createApiClient(opts: ApiClientOptions = {}): ApiClient {
       }
       if (!res.ok) {
         const eb = json && typeof json === 'object' && typeof (json as ApiErrorBody).error === 'string' ? (json as ApiErrorBody) : null
-        throw new ApiError(res.status, eb?.error ?? `http_${res.status}`, `${method} ${path}: HTTP ${res.status}${eb ? ` ${eb.error}` : ''}`, eb?.detail ?? null, retryAfter(res, eb))
+        throw new ApiError(res.status, eb?.error ?? `http_${res.status}`, `${method} ${path}: HTTP ${res.status}${eb ? ` ${eb.error}` : ''}`, eb?.detail ?? null, retryAfter(res, eb), errorBodyStop(eb))
       }
       return json as T
     } finally {

@@ -8,7 +8,7 @@
  *     (`focus-ring`; range inputs: on the thumb)
  *   - no keyboard trap: Tab leaves every element and wraps back to the start (`keyboard-trap`)
  *   - landmarks, names, labels, alt text, heading order and text contrast: ./audit.ts
- * Not covered here: #/hud3d and #/spike (WebGL; R7), frame rate (RR lane, DESIGN §9 "Performance").
+ * Not covered here: #/spike (WebGL; R7; #/nav and #/hud3d are removed, D98/D99), frame rate (RR lane, DESIGN §9 "Performance").
  *
  * Baseline (legacy views): tests/a11y/baseline.json maps `<screen>@<viewport>` to the violations that
  * existed when Q1 landed ({"rule|target": count}). A test fails only on violations that are NEW (key
@@ -34,7 +34,6 @@ export const SCREENS: { name: string; hash: string }[] = [
   { name: 'conditions', hash: '#/conditions' },
   { name: 'cuff', hash: '#/cuff' },
   { name: 'hud', hash: '#/hud' },
-  { name: 'nav', hash: '#/nav' },
   { name: 'scorecard', hash: '#/scorecard' },
   { name: 'about', hash: '#/about' },
   { name: 'styleguide', hash: '#/styleguide' },

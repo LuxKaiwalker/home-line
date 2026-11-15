@@ -105,11 +105,63 @@ def _config(name: str) -> dict:
     return yaml.safe_load((REPO / "config" / f"{name}.yaml").read_text(encoding="utf-8"))
 
 
+def js_number(x) -> str:
+    """JavaScript Number.prototype.toString (what JSON.stringify writes) for a finite number:
+    the shortest round-trip digits (Python repr gives the same digits), placed by ECMA-262
+    Number::toString (plain notation for 1e-7 < |x| < 1e21, else d.ddde+n)."""
+    if isinstance(x, bool) or not math.isfinite(float(x)):
+        raise ValueError(f"not a finite JSON number: {x!r}")
+    if x == 0:
+        return "0"
+    from decimal import Decimal
+
+    sign = "-" if x < 0 else ""
+    t = Decimal(repr(abs(x)) if isinstance(x, float) else str(abs(int(x)))).normalize()
+    digits = "".join(map(str, t.as_tuple().digits))
+    k = len(digits)
+    n = k + t.as_tuple().exponent
+    if k <= n <= 21:
+        out = digits + "0" * (n - k)
+    elif 0 < n <= 21:
+        out = digits[:n] + "." + digits[n:]
+    elif -6 < n <= 0:
+        out = "0." + "0" * (-n) + digits
+    else:
+        e = n - 1
+        mant = digits if k == 1 else digits[0] + "." + digits[1:]
+        out = f"{mant}e{'+' if e > 0 else '-'}{abs(e)}"
+    return sign + out
+
+
+def js_stringify(obj) -> str:
+    """JSON.stringify(obj) (no indent): key order kept, ',' and ':' without spaces, non-ASCII
+    kept, numbers by js_number."""
+    if obj is None:
+        return "null"
+    if obj is True:
+        return "true"
+    if obj is False:
+        return "false"
+    if isinstance(obj, (int, float)):
+        return js_number(obj)
+    if isinstance(obj, str):
+        return json.dumps(obj, ensure_ascii=False)
+    if isinstance(obj, (list, tuple)):
+        return "[" + ",".join(js_stringify(v) for v in obj) + "]"
+    if isinstance(obj, dict):
+        return "{" + ",".join(json.dumps(str(k), ensure_ascii=False) + ":" + js_stringify(v)
+                              for k, v in obj.items()) + "}"
+    raise TypeError(f"not JSON: {type(obj).__name__}")
+
+
 def mission_id(doc: dict) -> str:
-    """export.ts finalizeMission: 'm-' + 12 hex of sha256(JSON.stringify(doc, id and time ''))."""
+    """README / export.ts finalizeMission: 'm-' + the first 12 hex of the sha256 of
+    JSON.stringify(doc with mission_id and created_utc = ''), computed as a browser does
+    (js_stringify). For every document this module writes, the text equals
+    tests/test_mission_contract.py's json.dumps(..., separators=(",", ":"), ensure_ascii=False)
+    (integral numbers are ints, no number needs an exponent)."""
     blank = dict(doc, mission_id="", created_utc="")
-    text = json.dumps(blank, separators=(",", ":"), ensure_ascii=False)
-    return "m-" + hashlib.sha256(text.encode("utf-8")).hexdigest()[:12]
+    return "m-" + hashlib.sha256(js_stringify(blank).encode("utf-8")).hexdigest()[:12]
 
 
 @cache
@@ -357,6 +409,23 @@ def build_mission(tree: Path, *, inputs: dict, scenario: str, origin: str, origi
         elif p.get("t_min") is not None:
             walk_min += float(p["t_min"])
 
+    # legs the engine did not plan (an infeasible ordered route stops before its failing leg):
+    # present with routed false and null numbers, as the Mission Planer writes an unrouted leg
+    n_out = sum(1 for lg in legs_out if lg["kind"] == "out")
+    for i in range(n_out, n):
+        prev = "pad" if i == 0 else stops[i - 1]["key"]
+        t0 = 0.0 if i == 0 else (leave.get(prev) or {}).get("t_min") if i == n_out else None
+        legs_out.append({"leg": len(legs_out) + 1, "kind": "out", "from": wp_name(prev),
+                         "to": f"wp{i + 1}", "routed": False, "length_m": None,
+                         "time_min": None, "o2_l": None, "t_start_min": _r(t0, 3),
+                         "t_end_min": None, "first_row": None, "n_rows": 0})
+    if n and home_leg is None:
+        legs_out.append({"leg": len(legs_out) + 1, "kind": "home", "from": f"wp{n}",
+                         "to": "pad", "routed": False, "length_m": None, "time_min": None,
+                         "o2_l": None, "t_start_min": None, "t_end_min": None,
+                         "first_row": None, "n_rows": 0})
+    legs_known = all(lg["routed"] for lg in legs_out)
+
     # waypoints
     wps_out: list[dict] = []
     stop_total = 0.0
@@ -369,7 +438,7 @@ def build_mission(tree: Path, *, inputs: dict, scenario: str, origin: str, origi
             stop_min = t_lv - t_arr
         else:
             stop_min = float(dwell.get(s["station"], 0.0)) if s["station"] else 0.0
-        stop_total += stop_min if t_arr is not None else 0.0
+        stop_total += stop_min  # planned time at every stop (budget.ts stopMin)
         xy = wp_xy[i]
         # the fields where the crew stands: the access cell the leg ends at, else the stop
         at = leg_end_xy.get(s["key"]) or xy
@@ -431,8 +500,8 @@ def build_mission(tree: Path, *, inputs: dict, scenario: str, origin: str, origi
             break
         tl_rows.append([_r(vals[0], 3), ph, wp, _r(vals[1], 3), _r(vals[2], 2), _r(vals[3], 3),
                         _r(vals[4], 3), _r(vals[5], 2), e["margin_binding"]])
-    tl = None
-    if ok and tl_rows:
+    tl = None  # README: an unrouted leg makes the timeline null
+    if ok and tl_rows and legs_known:
         low = min(tl_rows, key=lambda r: r[7])
         tl = {"columns": TIMELINE_COLUMNS, "phases": PHASES,
               "terms": [t for t in TERMS if t in (terms or {r[8] for r in tl_rows})],
@@ -484,7 +553,7 @@ def build_mission(tree: Path, *, inputs: dict, scenario: str, origin: str, origi
     else:
         feasible = True
     last = stops[-1]["key"] if stops else None
-    o2_used = used(leave.get(last)) if last is not None else None
+    o2_used = used(leave.get(last)) if last is not None and legs_known else None
     t_home = None if home_leg is None else home_leg.get("t_min")
     o2_home = None if home_leg is None else home_leg.get("o2_L")
     ret = next((e for e in events if e["event"] == "return"), None)
@@ -492,7 +561,10 @@ def build_mission(tree: Path, *, inputs: dict, scenario: str, origin: str, origi
     o2_cap = margin_mod.o2_capacity_l()
     o2_need = _add(o2_home, reserve)
     o2_margin = None if o2_used is None or o2_need is None else o2_cap - o2_used - o2_need
-    summary = {"feasible": feasible, "walk_min": _r(walk_min, 3), "stop_min": _r(stop_total, 3),
+    if not legs_known:  # budget.ts legsKnown false: every downstream number is null
+        feasible = False
+    summary = {"feasible": feasible, "walk_min": _r(walk_min if legs_known else None, 3),
+               "stop_min": _r(stop_total, 3),
                "t_home_min": _r(t_home, 3), "eva_min": _r(eva_min, 3),
                "time_margin_min": _r(None if eva_min is None
                                      else margin_mod.eva_budget_min() - eva_min, 3),
@@ -502,7 +574,7 @@ def build_mission(tree: Path, *, inputs: dict, scenario: str, origin: str, origi
                "route_mode": mode}
     if mode == route_mod.ORDERED:
         summary["feasibility"] = feasibility
-        summary["legs_planned"] = sum(1 for lg in legs_out if lg["kind"] == "out")
+        summary["legs_planned"] = sum(lg["kind"] == "out" and lg["routed"] for lg in legs_out)
 
     # --- planner, world, identity
     pl = dict(planner)

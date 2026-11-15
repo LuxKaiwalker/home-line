@@ -57,6 +57,7 @@ export class MapFurniture {
   private dashAt = 0
   private thread: ThreadPath | null = null
   private pulseWas = false
+  private paused = false
   private readonly stops: (() => void)[] = []
 
   constructor(map: MlMap) {
@@ -219,8 +220,22 @@ export class MapFurniture {
     this.schedule()
   }
 
+  /**
+   * M10c pause hook: a live story (intro, kiosk) pauses the dash flow / pulse loop and the thread
+   * updates (their layers are hidden or still while the camera flies); resume picks them up again.
+   */
+  setPaused(on: boolean): void {
+    if (this.paused === on) return
+    this.paused = on
+    if (on) {
+      clearTimeout(this.timer)
+      this.timer = 0
+    } else this.schedule()
+    this.loop()
+  }
+
   private schedule(): void {
-    if (this.timer) return
+    if (this.timer || this.paused) return
     const wait = Math.max(0, this.lastCompute + THREAD_INTERVAL_MS - performance.now())
     this.timer = window.setTimeout(() => {
       this.timer = 0
@@ -257,7 +272,7 @@ export class MapFurniture {
   // ---- animation: dash flow (thread) and the next-station pulse; none under reduced motion ------
   private loop(): void {
     const reduced = ui.reducedMotion.peek()
-    const want = !reduced && (this.thread !== null || this.hasNext())
+    const want = !reduced && !this.paused && (this.thread !== null || this.hasNext())
     if (!want) {
       if (this.raf) cancelAnimationFrame(this.raf)
       this.raf = 0
@@ -268,7 +283,7 @@ export class MapFurniture {
     if (this.raf) return
     const frame = (now: number): void => {
       this.raf = 0
-      if (ui.reducedMotion.peek()) return this.loop()
+      if (ui.reducedMotion.peek() || this.paused) return this.loop()
       if (this.thread && now - this.dashAt >= THREAD_INTERVAL_MS) {
         this.dashAt = now
         this.dashStep = (this.dashStep + 1) % 1e6

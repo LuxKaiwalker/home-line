@@ -1,5 +1,5 @@
 // Data shapes the HUD reads (contracts v1.1.0, SPEC §6, §6.1). Local and minimal on purpose: the
-// HUD is a self-contained module (WS7) that WS8 also mounts in 3D.
+// HUD is a self-contained module (WS7).
 
 export type LonLat = [number, number]
 

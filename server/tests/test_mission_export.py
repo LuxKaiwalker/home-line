@@ -185,6 +185,36 @@ def test_deterministic(ordered):
     assert a["waypoints"][0]["x_m"] == doc["waypoints"][0]["x_m"]
 
 
+def test_mission_id_is_the_browsers(ordered, auto):
+    """README id rule as tests/test_mission_contract.py's helper computes it, and as
+    JSON.stringify writes the text (js_stringify): equal for every exported document."""
+    for run in (ordered, auto):
+        doc = _doc(run)
+        blank = dict(doc, mission_id="", created_utc="")
+        assert mission.js_stringify(blank) == json.dumps(blank, separators=(",", ":"),
+                                                          ensure_ascii=False)
+        assert doc["mission_id"] == _id(doc) == mission.mission_id(doc)
+    # the committed example's id was computed in the browser (export.ts finalizeMission)
+    planer = json.loads((mission.REPO / "contracts/bundle/examples/mission.mission_planer.json")
+                        .read_text(encoding="utf-8"))
+    assert mission.mission_id(planer) == "m-f8efb70b3e02"
+
+
+@pytest.mark.parametrize(("x", "js"), [
+    (0, "0"), (0.0, "0"), (10.0, "10"), (-3, "-3"), (0.1, "0.1"), (482.3113, "482.3113"),
+    (5e-05, "0.00005"), (1.2e-06, "0.0000012"), (1e-07, "1e-7"), (1.5e-07, "1.5e-7"),
+    (1e21, "1e+21"), (1e20, "100000000000000000000"), (123456789.125, "123456789.125"),
+    (-284518.5481, "-284518.5481"), (2.5e+25, "2.5e+25")])
+def test_js_number_formatting(x, js):
+    assert mission.js_number(x) == js
+
+
+def test_js_stringify_known_answer():
+    doc = {"b": [1.0, 0.5, None, True], "a": "Mission · 1 waypoint", "c": {"x": 5e-05}}
+    assert mission.js_stringify(doc) == (
+        '{"b":[1,0.5,null,true],"a":"Mission · 1 waypoint","c":{"x":0.00005}}')
+
+
 def test_run_record_lists_it(ordered, tmp_path):
     from server.engine import results
 
@@ -215,10 +245,22 @@ def test_infeasible_route_keeps_only_planned_legs(ordered, tmp_path):
     doc = json.loads(out.read_text())
     assert mission.schema_errors(doc) == []
     assert doc["summary"]["feasible"] is False and doc["summary"]["legs_planned"] == 1
-    assert [lg["kind"] for lg in doc["legs"]] == ["out"]
+    # every planned stop is a waypoint; the legs after the failure are there, unrouted
     assert [w["station"] for w in doc["waypoints"]] == ["S2", "S1"]  # the user's plan
     assert doc["waypoints"][1]["arrive_t_min"] is None
-    assert doc["summary"]["t_home_min"] is None and doc["summary"]["eva_min"] is None
+    legs = doc["legs"]
+    assert [(lg["leg"], lg["kind"], lg["from"], lg["to"], lg["routed"]) for lg in legs] == [
+        (1, "out", "pad", "wp1", True), (2, "out", "wp1", "wp2", False),
+        (3, "home", "wp2", "pad", False)]
+    for lg in legs[1:]:
+        assert (lg["length_m"], lg["time_min"], lg["o2_l"], lg["t_end_min"], lg["first_row"],
+                lg["n_rows"]) == (None, None, None, None, None, 0)
+    assert legs[1]["t_start_min"] == doc["waypoints"][0]["leave_t_min"]  # leaves wp1 then
+    assert {r[0] for r in doc["path"]["rows"]} == {1}  # only the planned leg is walked
+    assert doc["timeline"] is None  # README: an unrouted leg makes the timeline null
+    sm = doc["summary"]
+    assert sm["t_home_min"] is None and sm["eva_min"] is None and sm["walk_min"] is None
+    assert sm["o2_used_l"] is None and sm["stop_min"] == 60  # both planned 30-min stops
 
 
 def test_feasibility_falls_back_to_the_run_record(ordered, tmp_path):

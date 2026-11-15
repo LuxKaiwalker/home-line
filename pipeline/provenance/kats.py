@@ -60,10 +60,10 @@ FILE_MAP: dict[str, tuple[str, list[str]]] = {
     "tests/test_vo.py": ("X8 visual odometry", ["X8"]),
     "tests/test_fp3d_export.py": ("3D", ["F20"]),
 }
-# Web test directories (vitest) -> area, features.
+# Web test directories (vitest) -> area, features. web/src/fp3d/ (the first-person 3D scene) was
+# removed by D99; its vitest rows leave kats.json at the next `make kats` + `make web`.
 WEB_DIR_MAP: dict[str, tuple[str, list[str]]] = {
     "web/src/hud/": ("HUD logic", ["F18"]),
-    "web/src/fp3d/": ("3D", ["F20"]),
     "web/src/nav/": ("F21 navigation", ["F21"]),
 }
 # Tests in a mixed file that belong to another area (file, test-name regex, area, features).

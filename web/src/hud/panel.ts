@@ -1,5 +1,5 @@
 // Helmet-style HUD panel (F18): a DOM overlay in two levels (D14: minimal by default, expanded one
-// click away). Reused by WS8's 3D view: createHudPanel(el, cfg).update(readout, pos, extras).
+// click away): createHudPanel(el, cfg).update(readout, pos, extras).
 import type { HudConfig } from './config'
 import type { PanelRow, RowSource } from './provenance'
 import type { Readout } from './readout'
@@ -221,7 +221,9 @@ export function createHudPanel(host: HTMLElement, cfg: HudConfig): HudPanel {
         binding.sub.textContent = 'not in timeline'
       } else {
         binding.v.textContent = bindingLabel(r.binding)
-        binding.sub.textContent = 'planned, timeline row in force'
+        // X2 (D89): the binding term of the exact margin at this minute; after the return the value
+        // held at arrival; without margin inputs the timeline row in force (A-WS7-3)
+        binding.sub.textContent = r.marginSource === 'exact' ? 'binding limit now' : r.marginSource === 'held' ? 'held at return' : 'planned, timeline row in force'
       }
       turn.v.textContent = r.turnBackInMin === null ? DASH : r.turnBackInMin < 0 ? 'NOW' : `${Math.floor(r.turnBackInMin)} min`
       turn.row.dataset.band = r.band

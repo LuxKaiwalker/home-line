@@ -1,6 +1,7 @@
 // UI store (DESIGN §5.2): mode, panel sizes, layers on, exaggeration, 2D/3D, reduced motion,
 // intro seen, plus the field mode and collapse value the storyboards set (§6.4 u_mode, u_k).
 // Defaults: tokens.json layout for panel sizes; everything without a source stays undefined.
+import type { Route } from '../router'
 import { TOKENS } from '../ui/tokens'
 import { signal } from './signal'
 
@@ -8,19 +9,21 @@ export type Mode = 'plan' | 'fly' | 'report' | 'evidence'
 export const MODES: readonly Mode[] = ['plan', 'fly', 'report', 'evidence']
 export type FieldMode = 'bands' | 'margin'
 
-/** DESIGN §4.2: the mode an existing route belongs to (route names of router.ts). */
-export const ROUTE_MODE: Record<string, Mode> = {
+/**
+ * DESIGN §4.2: the mode an existing route belongs to (route names of router.ts). `satisfies` keeps the
+ * keys equal to the router's route names: the removed views (D98 /nav, D99 /hud3d) have no key; their
+ * old paths redirect (router.ts REMOVED_PATHS) before a mode is looked up.
+ */
+export const ROUTE_MODE: Readonly<Record<string, Mode>> = {
   console: 'plan',
   station: 'plan',
   trade: 'plan',
   conditions: 'fly',
   hud: 'fly',
-  hud3d: 'fly',
-  nav: 'evidence',
   cuff: 'report',
   scorecard: 'evidence',
   about: 'evidence',
-}
+} satisfies Record<Exclude<Route['name'], 'notfound'>, Mode>
 
 const REDUCED = '(prefers-reduced-motion: reduce)'
 const mq = typeof matchMedia === 'function' ? matchMedia(REDUCED) : null

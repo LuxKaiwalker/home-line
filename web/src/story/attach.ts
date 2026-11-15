@@ -13,6 +13,13 @@ import { storyParams, storyRequest, type StoryRequest } from './query'
 import { StoryStage, type ChromePolicy } from './stage'
 import { FOLLOW_TARGET, loadStoryboard, type Storyboard } from './storyboard'
 import { setVirtualTime, virtualTimeInstalled } from './vtime'
+import { basemapSources } from '../map/basemap'
+import { demSource, parseTerrainTiles } from '../map/terrain/tiles'
+import { exaggeration } from '../map/terrain/state'
+import { data } from '../data/loader'
+import { DATA_MODE, dataUrl } from '../env'
+import { ELEVATION_FACTOR, FIRST_FRAME_MAX_MS, WARMUP_MAX_MS } from './config'
+import { after, descentTiles, mapIdle, prefetch, storyPoses, until, type TileSet } from './warm'
 
 const INPUTS = ['keydown', 'pointerdown', 'wheel', 'touchstart'] as const
 
@@ -72,6 +79,61 @@ function playLive(stage: StoryStage, d: Director, o: { loop: boolean; signal: { 
     }
     raf = requestAnimationFrame(frame)
   })
+}
+
+/** Tile sets the descent draws: the relief_low and terrain DEMs and the HiRISE basemap (each optional). */
+async function descentTileSets(): Promise<TileSet[]> {
+  const json = async (p: string): Promise<unknown> => {
+    const r = await fetch(dataUrl(p, DATA_MODE))
+    const ct = r.headers.get('content-type') ?? ''
+    return r.ok && (!ct || ct.includes('json')) ? r.json() : null
+  }
+  const dem = async (p: string): Promise<TileSet[]> => {
+    const raw = await json(p).catch(() => null)
+    if (!raw) return []
+    const s = demSource(parseTerrainTiles(raw), (x) => x)
+    return [{ tiles: s.tiles ?? [], minzoom: s.minzoom ?? 0, maxzoom: s.maxzoom ?? 22, bounds: s.bounds as TileSet['bounds'], tileSize: s.tileSize ?? 256 }]
+  }
+  const base = async (): Promise<TileSet[]> => {
+    const tj = await data()
+      .optional(() => data().tilejson())
+      .catch(() => null)
+    return tj ? basemapSources(tj, (x) => x).map((b) => ({ tiles: b.tiles, minzoom: b.minzoom, maxzoom: b.maxzoom, bounds: b.bounds, tileSize: b.tileSize })) : []
+  }
+  return (await Promise.all([dem('terrain_low/tiles.json'), dem('terrain/tiles.json'), base()])).flat()
+}
+
+/**
+ * M10c warm-up before a live story's t = 0 (warm.ts): every layer the storyboard shows is drawn once
+ * under a cover (programs link, the field uploads its textures), the tiles along the camera
+ * path go into the HTTP cache, then frame 0 is applied and its tiles awaited. Bounded by
+ * WARMUP_MAX_MS + FIRST_FRAME_MAX_MS; input during it skips the story as usual.
+ */
+async function warmUp(stage: StoryStage, d: Director, signal: { stopped: boolean }): Promise<void> {
+  const map = stage.map
+  const s0 = d.stateAt(0)
+  const all: Record<string, boolean> = {}
+  for (const st of d.sb.steps) for (const [id, on] of Object.entries(st.layers ?? {})) if (on) all[id] = true
+  stage.setCanvasHidden(true)
+  stage.apply({ ...s0, layers: { ...s0.layers, ...all }, camera: null })
+  const c = map.getContainer()
+  const url = (p: string): string => dataUrl(p, DATA_MODE)
+  void descentTileSets()
+    .then((sets) => prefetch(descentTiles(storyPoses(d), sets, { width: c.clientWidth, height: c.clientHeight }, { factor: ELEVATION_FACTOR, exaggeration: exaggeration() }, url)))
+    .catch(() => 0)
+  const terrainSettled = (): boolean => !['loading', 'off'].includes(c.getAttribute('data-terrain') ?? 'off') || !all.terrain
+  const fieldSettled = (): boolean => c.getAttribute('data-bands-render') === 'gpu' || !all.homeline
+  const end = performance.now() + WARMUP_MAX_MS
+  const left = (): number => Math.max(0, end - performance.now())
+  await until(map, () => signal.stopped || (terrainSettled() && fieldSettled()), left())
+  await Promise.race([stage.pending, after(left())])
+  if (!signal.stopped) await mapIdle(map, left())
+  if (signal.stopped) return
+  stage.apply(s0)
+  const end0 = performance.now() + FIRST_FRAME_MAX_MS
+  await Promise.race([stage.pending, after(FIRST_FRAME_MAX_MS)])
+  await mapIdle(map, Math.max(0, end0 - performance.now()))
+  stage.setCanvasHidden(false)
 }
 
 export interface CaptureApi {
@@ -166,6 +228,24 @@ export function attachStory(cmap: ConsoleMap, req: StoryRequest = storyRequest(s
     if (req.kind === 'capture') {
       if (!virtualTimeInstalled()) console.warn('capture without virtual time: frames follow the wall clock')
       window.__capture = runCapture(stage, d, sb)
+      return
+    }
+    // input during the warm-up skips the story like input during it: the app is restored in the
+    // input's own microtasks, before its click lands (the click acts on the restored app, D9)
+    let skipped = (): void => undefined
+    const onSkip = new Promise<void>((r) => (skipped = r))
+    const skip = (): void => {
+      signal.stopped = true
+      skipped()
+    }
+    for (const ev of INPUTS) window.addEventListener(ev, skip, { capture: true, passive: true })
+    await Promise.race([warmUp(stage, d, signal), onSkip]).finally(() => {
+      for (const ev of INPUTS) window.removeEventListener(ev, skip, true)
+    })
+    if (signal.stopped) {
+      stage.restore(false)
+      stage = null
+      if (req.kind === 'demo') dropStoryParams()
       return
     }
     const why = await playLive(stage, d, { loop: req.kind === 'demo', signal })

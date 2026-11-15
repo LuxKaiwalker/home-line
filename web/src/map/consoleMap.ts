@@ -21,7 +21,7 @@ import { effect, ui } from '../state'
 import { collapseFade, collapseHeadline, collapseQuery, padGridMetres, playCollapse, setCollapse } from './field/collapse'
 import { CollapseHeadlineOverlay, CollapseToggle } from './field/collapseUi'
 import { MapFurniture, MARKER_LAYERS, ROUTE_LAYERS } from './furniture'
-import { LabelLayer, loadLabels, setSelectedLabel } from './labels/layer'
+import { LabelLayer, loadLabels, setLabelPlacementPaused, setSelectedLabel } from './labels/layer'
 import type { MapLabel } from './labels/model'
 import { TerrainController } from './terrain'
 import type { RoverHandle } from '../edit/roverMap'
@@ -29,7 +29,9 @@ import { FlythroughControl } from './flythrough/control'
 import { installStorm } from './storm'
 import { storyParams, storyRequest } from '../story/query'
 import { CameraController, type ControllerMap } from './camera'
+import { installOverlays } from './overlays'
 import { MapSelection, SELECT_ROUTE_HIT, type SelectMap, type SelectSources } from './select'
+import { installMapInput, type InputMap, type MapInput } from './input'
 import { activeField, BINDING_LABEL, driveMargin, FIELD_TRUST, fieldModeQuery, fieldRequested, loadFieldData, loadFieldLayer, setActiveField, VARIANT_OF, webgl2Available, zeroEdgeLabels, type FieldData, type MarginState } from './field'
 
 /** The GPU field layer handle (field/layer.ts, loaded lazily). */
@@ -146,7 +148,10 @@ export class ConsoleMap {
     route: this.lastRoute,
     edges: this.edges,
   })
+  // WS16 task 11 (M11): U7 overlays + layer manager (all off by default)
+  private stopOverlays: (() => void) | null = null
   private destroyed = false
+  private readonly input: MapInput
 
   constructor(container: HTMLElement, onStation: (id: string) => void) {
     this.onStation = onStation
@@ -163,14 +168,18 @@ export class ConsoleMap {
       // 2D until ui.view is '3d': TerrainController (terrain/index.ts) lifts maxPitch and rotation then
       maxPitch: 0,
       dragRotate: false,
+      boxZoom: false, // I1: left button interacts (select, drag the rover); a left drag on the map does nothing
       renderWorldCopies: false,
       canvasContextAttributes: { preserveDrawingBuffer: true }, // screen capture (Sun 12:00-16:00) reads the canvas
     })
     this.map.touchZoomRotate.disableRotation()
+    // I1: right drag pans, Ctrl/Shift + right drag or middle drag rotates / tilts, no context menu (map/input)
+    this.input = installMapInput(this.map as unknown as InputMap, { reduced: () => ui.reducedMotion.peek() })
     this.map.addControl(new NavigationControl({ showCompass: false }), 'top-left')
     this.map.addControl(new MarsScaleControl(CONFIG.marsRadiusM), 'bottom-left')
     this.ready = new Promise((res) => this.map.once('load', () => res()))
-    this.ready.then(() => this.initLayers())
+    // X3 (fallback drill finding 1): the view may be gone before 'load'; never touch a removed map
+    this.ready.then(() => !this.destroyed && this.initLayers())
     if (container.closest('.hl-shell'))
       void this.ready.then(() => import('../edit/roverMap')).then((m) => {
         if (this.destroyed) return
@@ -244,9 +253,16 @@ export class ConsoleMap {
     this.selectMap.addLayers()
     this.groupLayers.route.push(SELECT_ROUTE_HIT)
     this.camera = new CameraController(m as unknown as ControllerMap, this.selectSources)
+    this.stopOverlays = installOverlays(m as never, { marker: (el) => new Marker({ element: el }) }, !!m.getContainer().closest('.hl-shell'))
     const legacy = !!this.map.getContainer().closest('.hl-frame-legacy')
     const story = storyRequest(storyParams(location.search, location.hash), { reduced: ui.reducedMotion.peek(), introSeen: ui.introSeen.peek(), legacy })
     if (story) void import('../story/attach').then((m) => !this.destroyed && (this.stopStory = m.attachStory(this, story)))
+  }
+
+  /** M10c: a live story camera move pauses the per-move label placement (4 Hz) and the furniture loops. */
+  setStoryPaused(on: boolean): void {
+    setLabelPlacementPaused(on)
+    this.furniture?.setPaused(on)
   }
 
   /** Whether a layer group is on (story mode saves and restores it). */
@@ -260,13 +276,14 @@ export class ConsoleMap {
       console.warn('labels.json unavailable; keeping the HTML labels:', e)
       return null
     })
-    if (!ls?.length || this.labels) return
+    if (!ls?.length || this.labels || this.destroyed) return
     this.labelRows = ls
     this.labels = new LabelLayer(this.map)
     this.labels.setLabels(ls)
     if (this.lastPad) this.setPad(this.lastPad)
     if (this.lastPadOptions) this.setPadOptions(...this.lastPadOptions)
     if (this.lastStations) await this.setStations(this.lastStations.stations, this.lastStations.scenarioId)
+    if (this.destroyed) return
     this.applyVisibility()
     this.selectMap?.refresh()
   }
@@ -274,7 +291,7 @@ export class ConsoleMap {
   /** Basemap raster sources (tilejson.json, see basemap.ts), under every other layer. */
   async setBasemap(sources: BasemapSource[]): Promise<void> {
     await this.ready
-    if (!sources.length || this.hasBasemap) return
+    if (this.destroyed || !sources.length || this.hasBasemap) return
     const ids: string[] = []
     sources.forEach((src, i) => {
       const id = `basemap-${i}`
@@ -292,6 +309,7 @@ export class ConsoleMap {
 
   async setScenarioData(d: { bands: BandsFC; isochrones: IsochroneFC; edges: EdgesFC; partner: PartnerFC; variant: string }): Promise<void> {
     await this.ready
+    if (this.destroyed) return
     this.variant = d.variant
     this.edges = d.edges
     ;(this.map.getSource('bands') as GeoJSONSource).setData(d.bands)
@@ -353,7 +371,7 @@ export class ConsoleMap {
   private async syncCollapse(fd: FieldData, scenarioId: string): Promise<void> {
     const L = data()
     const [pad, manifest] = await Promise.all([L.optional(() => L.pad()), L.optional(() => L.manifest())])
-    if (this.fieldData !== fd || !this.fieldLayer) return
+    if (this.destroyed || this.fieldData !== fd || !this.fieldLayer) return
     const p = pad?.pad
     this.collapsePad = p && fd.resM !== null ? padGridMetres(fd.t.nom, fd.resM, p.lon, p.lat) : null
     this.fieldScenario = scenarioId
@@ -447,6 +465,7 @@ export class ConsoleMap {
 
   async setRoute(route: RouteFC | null): Promise<void> {
     await this.ready
+    if (this.destroyed) return
     this.lastRoute = route
     this.selectMap?.refresh()
     ;(this.map.getSource('route') as GeoJSONSource).setData(route ?? EMPTY)
@@ -456,7 +475,7 @@ export class ConsoleMap {
   /** Hatched unknown cells from a field alpha (A = 0 unknown), placed on the field-index bounds. */
   async setUnknownMask(mask: { alpha: Uint8ClampedArray; width: number; height: number; bounds: [number, number, number, number] }): Promise<void> {
     await this.ready
-    if (this.map.getSource('unknown')) return
+    if (this.destroyed || this.map.getSource('unknown')) return
     const [w, s, e, n] = mask.bounds
     this.map.addSource('unknown', {
       type: 'image',
@@ -474,6 +493,7 @@ export class ConsoleMap {
 
   /** Station science points (markers), access cells and walk-in lines for one scenario. */
   async setStations(stations: Station[], scenarioId: string): Promise<void> {
+    if (this.destroyed) return
     this.stationsScenario = scenarioId
     this.lastStations = { stations, scenarioId }
     this.stationMarkers.forEach((m) => m.remove())
@@ -505,6 +525,7 @@ export class ConsoleMap {
       return [new Marker({ element: el, anchor: 'left', offset: [12, 0] }).setLngLat([s.lon, s.lat]).addTo(this.map)]
     })
     await this.ready
+    if (this.destroyed) return
     this.furniture?.setStations(stations)
     ;(this.map.getSource('walkin') as GeoJSONSource).setData(walkInLines(stations, scenarioId))
     const pts = stations.flatMap((s) => {
@@ -518,6 +539,7 @@ export class ConsoleMap {
 
   /** F8 siting heatmap (siting.png on siting_png.json corners) and the proposed pad + alternatives. */
   async setSiting(img: { url: string; coordinates: [number, number][] } | null, proposal: { lon: number; lat: number; title: string; alternatives: { rank: number; lon: number; lat: number }[] } | null): Promise<void> {
+    if (this.destroyed) return
     this.sitingMarkers.forEach((m) => m.remove())
     this.sitingMarkers = []
     if (proposal) {
@@ -532,6 +554,7 @@ export class ConsoleMap {
       for (const a of proposal.alternatives) mk('pad-alt', `#${a.rank}`, `Siting alternative rank ${a.rank} (pad.json): same rule, not adopted`, a.lon, a.lat)
     }
     await this.ready
+    if (this.destroyed) return
     if (img && !this.map.getSource('siting')) {
       const c = img.coordinates as [[number, number], [number, number], [number, number], [number, number]]
       this.map.addSource('siting', { type: 'image', url: img.url, coordinates: c })
@@ -541,6 +564,7 @@ export class ConsoleMap {
   }
 
   setPad(p: { lon: number; lat: number; label: string; title: string }): void {
+    if (this.destroyed) return
     this.lastPad = p
     this.padMarker?.remove()
     const el = document.createElement('div')
@@ -561,6 +585,7 @@ export class ConsoleMap {
 
   /** D21 parking options (scenarios/pads/index.json, official pad excluded): small markers, the selected one highlighted; click selects. */
   setPadOptions(opts: { id: string; lon: number; lat: number; label: string; title: string; selected: boolean }[], onPick: (id: string) => void): void {
+    if (this.destroyed) return
     this.lastPadOptions = [opts, onPick]
     this.padOptionMarkers.forEach((m) => m.remove())
     this.padOptionMarkers = opts.map((o) => {
@@ -576,6 +601,9 @@ export class ConsoleMap {
         el.classList.add('hl-label-covered')
         el.textContent = ''
         this.labels!.bind(code, { title: o.title, onActivate: () => onPick(o.id) })
+        // X3 (e2e H5-3): the square sits exactly on the pad spot; a mouse click there goes through to
+        // the map (live pad tool, map selection). The pill selects; keyboard focus + Enter still works.
+        el.style.pointerEvents = 'none'
       }
       el.addEventListener('click', (ev) => {
         ev.stopPropagation()
@@ -587,6 +615,7 @@ export class ConsoleMap {
   }
 
   fitTo(points: { lon: number; lat: number }[]): void {
+    if (this.destroyed) return
     const f = CONFIG.aoiFocus
     const b = new LngLatBounds([f.west, f.south], [f.east, f.north])
     for (const p of points) b.extend([p.lon, p.lat])
@@ -600,7 +629,7 @@ export class ConsoleMap {
       const sid = this.fieldScenario
       void data()
         .optional(() => data().manifest())
-        .then((m) => this.budget === minutes && this.headline?.setHeadline(m ? collapseHeadline(m as unknown as Record<string, unknown>, sid, minutes) : null))
+        .then((m) => !this.destroyed && this.budget === minutes && this.headline?.setHeadline(m ? collapseHeadline(m as unknown as Record<string, unknown>, sid, minutes) : null))
     }
     this.applyFilters()
     this.renderEdgeLabels()
@@ -679,11 +708,13 @@ export class ConsoleMap {
     this.stopStory?.()
     this.stopStorm?.()
     this.camera?.destroy()
+    this.stopOverlays?.()
     this.selectMap?.destroy()
     this.terrain?.destroy()
     this.labels?.destroy()
     this.destroyed = true
     this.rover?.destroy()
+    this.input.destroy()
     this.furniture?.destroy()
     this.stopCollapse?.()
     this.headline?.destroy()
