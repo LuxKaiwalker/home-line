@@ -4,6 +4,7 @@
 //   demo     kiosk.json in a loop, live; any input exits and leaves the app as it was
 //   capture  ?capture=<id>: the storyboard at its fixed frame step under virtual time (vtime.ts), no
 //            wall clock; a recorder drives it through window.__capture (see notes/M10.md)
+import type { Map as MlMap } from 'maplibre-gl'
 import type { ConsoleMap } from '../map/consoleMap'
 import { loadLabels } from '../map/labels/layer'
 import { loadFlightPath } from '../map/flythrough/route'
@@ -172,21 +173,44 @@ declare global {
 
 const nextFrame = (): Promise<void> => new Promise((r) => requestAnimationFrame(() => r()))
 
+/** settle() gives up after this many renders (or 50 ms waits) and takes the frame as it is. */
+export const SETTLE_MAX_RENDERS = 400
+
+/** The map's style, GeoJSON updates and every in-view tile are loaded, and the 3D terrain is not loading. */
+export function settled(map: Pick<MlMap, 'isStyleLoaded' | 'areTilesLoaded' | 'getContainer'>): boolean {
+  return !!map.isStyleLoaded() && map.areTilesLoaded() && map.getContainer().getAttribute('data-terrain') !== 'loading'
+}
+
 /** Wait until the map has drawn the current state with every tile, terrain and relief loaded. */
-async function settle(stage: StoryStage): Promise<void> {
+export async function settle(stage: Pick<StoryStage, 'map' | 'pending'>): Promise<void> {
   const map = stage.map
   await stage.pending
-  for (let i = 0; i < 400; i++) {
-    await new Promise<void>((r) => {
-      const to = setTimeout(r, 50)
-      map.once('render', () => {
-        clearTimeout(to)
-        r()
+  let renders = 0
+  const counted = (): void => void renders++
+  map.on('render', counted)
+  try {
+    for (let i = 0; i < SETTLE_MAX_RENDERS; i++) {
+      await new Promise<void>((r) => {
+        const onRender = (): void => {
+          clearTimeout(to)
+          r()
+        }
+        const to = setTimeout(() => {
+          map.off('render', onRender)
+          r()
+        }, 50)
+        map.once('render', onRender)
+        map.triggerRepaint()
       })
-      map.triggerRepaint()
-    })
-    const terrain = map.getContainer().getAttribute('data-terrain')
-    if (map.loaded() && map.areTilesLoaded() && terrain !== 'loading') break
+      // Not map.loaded(): the station pulse (map furniture) sets a paint property on every animation
+      // frame, which keeps the map's style and sources flagged dirty for good, so loaded() never held
+      // and every frame ran into the cap twice (~40 s a frame in SwiftShader, notes/Kcap.md). One
+      // render after apply() has updated the sources for the new camera; then the style (sources,
+      // GeoJSON updates, images) and every in-view tile being loaded means the frame is drawn.
+      if (renders > 0 && settled(map)) break
+    }
+  } finally {
+    map.off('render', counted)
   }
   await nextFrame()
   await nextFrame()
