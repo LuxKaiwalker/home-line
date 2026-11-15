@@ -7,7 +7,7 @@
 //   ui.exaggeration -> setTerrain exaggeration (1 = true shape: the 1.878 factor is in the tiles)
 //   mission clock  -> relief light = sun azimuth at the whole simulated minute (conditions/clock.json)
 //   ui.reducedMotion -> no camera animation
-import type { Map as MlMap } from 'maplibre-gl'
+import type { ControlPosition, Map as MlMap } from 'maplibre-gl'
 import { DATA_MODE, dataUrl } from '../../env'
 import { data } from '../../data/loader'
 import { parseClockSun, type ClockFile, type SunData } from '../../hud/sun'
@@ -58,10 +58,11 @@ export class TerrainController {
   /** layer the relief shading sits under (it goes above the basemap) */
   private readonly beforeId: string
 
-  constructor(map: MlMap, beforeId: string) {
+  /** position: where the 2D/3D control sits (the Plan map: top-left; the Mission Planer: bottom-right) */
+  constructor(map: MlMap, beforeId: string, position: ControlPosition = 'top-left') {
     this.map = map
     this.beforeId = beforeId
-    map.addControl(this.control, 'top-left')
+    map.addControl(this.control, position)
     this.notice = new TerrainNotice(map.getContainer())
     this.setState('off')
     this.stops.push(

@@ -110,3 +110,15 @@
 /* keep the slider row and long file names inside the 230 px panel */
 .mp-layers-body { grid-template-columns: minmax(0, 1fr); }
 .mp-layers-note code { overflow-wrap: anywhere; }
+
+/* 2D/3D terrain control (map/terrain), bottom right: the same dark card as Maps and Layers. */
+.mission-map .maplibregl-ctrl-bottom-right .maplibregl-ctrl { margin: 0 10px 10px 0; }
+.mission-map .maplibregl-ctrl-group.hl-terrain-ctrl { flex-direction: row; align-items: center; gap: 10px; padding: 5px; background: rgba(33, 26, 23, 0.94); border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4); color: var(--ink); font: 12px system-ui, sans-serif; }
+.mission-map .hl-terrain-seg { gap: 2px; padding: 2px; border-radius: 8px; background: rgba(0, 0, 0, 0.25); }
+.mission-map .maplibregl-ctrl-group .hl-terrain-seg button { height: 26px; min-width: 34px; padding: 0 10px; border: 0; border-radius: 6px; background: transparent; color: var(--muted); font: 600 12px system-ui, sans-serif; cursor: pointer; }
+.mission-map .maplibregl-ctrl-group .hl-terrain-seg button:hover:not(:disabled):not([aria-checked='true']) { color: var(--ink); background: rgba(255, 255, 255, 0.06); }
+.mission-map .maplibregl-ctrl-group .hl-terrain-seg button[aria-checked='true'] { background: var(--accent); color: #1a120e; }
+.mission-map .maplibregl-ctrl-group .hl-terrain-seg button:disabled { opacity: 0.4; cursor: default; }
+.mission-map .hl-terrain-exag { gap: 6px; padding-right: 6px; color: var(--muted); font-size: 11px; }
+.mission-map .hl-terrain-exag input { width: 80px; accent-color: var(--accent); }
+.mission-map .hl-terrain-exag output { min-width: 32px; color: var(--ink); font: 11px system-ui, sans-serif; font-variant-numeric: tabular-nums; }

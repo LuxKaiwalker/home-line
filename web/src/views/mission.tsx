@@ -76,6 +76,13 @@ function MissionPanel({ mmap, handlers, mapsEl, layersEl, initial }: { mmap: Mis
   const nextId = useRef(1)
   const cache = useRef(new Map<string, Leg | null>())
   const restored = useRef(false)
+  // The Waypoints card starts closed; it opens by itself when a waypoint is added (not on removal).
+  const wpDetails = useRef<HTMLDetailsElement>(null)
+  const wpCount = useRef(0)
+  useEffect(() => {
+    if (wps.length > wpCount.current && wpDetails.current) wpDetails.current.open = true
+    wpCount.current = wps.length
+  }, [wps.length])
   // Science stations (stations.json): undefined while loading, null when they cannot be loaded.
   const [stations, setStations] = useState<Station[] | null | undefined>(undefined)
   const [copied, setCopied] = useState(false)
@@ -333,16 +340,17 @@ function MissionPanel({ mmap, handlers, mapsEl, layersEl, initial }: { mmap: Mis
 
   return (
     <div class="panel-body mp-body">
-      <h2>Mission Planer</h2>
       <DummyNote />
-      <p class="caption">
-        Click the map to add a waypoint. Each leg is the fastest walk on the {d.grid.resM} m grid for <code>{d.scenario.id}</code>; the dashed line is the way home from the last waypoint.
-      </p>
       {notice && <p class="mp-notice">{notice}</p>}
+
+      <section class="mp-card">
+        <h3>Estimated times and consumption</h3>
+        <Estimates b={budget} n={wps.length} />
+      </section>
 
       {clock && (
         <section class="mp-card">
-          <details open>
+          <details>
             <summary>EVA start</summary>
             <StartTime startMs={startMs} clock={clock} onChange={setStartMs} sunSiteLabel={`the pad (${d.pad.lat.toFixed(5)}°, ${d.pad.lon.toFixed(5)}°E)`} />
           </details>
@@ -350,8 +358,36 @@ function MissionPanel({ mmap, handlers, mapsEl, layersEl, initial }: { mmap: Mis
       )}
 
       <section class="mp-card">
-        <h3>Estimated times and consumption</h3>
-        <Estimates b={budget} n={wps.length} />
+        <details ref={wpDetails}>
+          <summary>
+            Waypoints <span class="muted">({wps.length})</span>
+          </summary>
+          <WaypointList wps={wps} legs={legs} setWps={setWps} />
+          {wps.length > 0 && (
+            <div class="mp-share">
+              <button type="button" class="mp-clear" onClick={copyLink}>
+                {copied ? 'Link copied ✓' : 'Copy link to this plan'}
+              </button>
+              <span class="muted">The plan lives in the link: it survives a reload and opens the same plan anywhere.</span>
+            </div>
+          )}
+        </details>
+        <details>
+          <summary>Reachable-area boundary</summary>
+          <label class="mp-select">
+            <span class="sr-only">Boundary shown on the map</span>
+            <select value={boundary} onChange={(e) => setBoundary((e.target as HTMLSelectElement).value)}>
+              {options.map((o) => (
+                <option key={o.id} value={o.id}>
+                  {o.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <p class="caption">
+            From <code>{boundaryFile(boundary, d)}</code> ({d.scenario.id}): the area from which the crew can walk back to the pad within that time.
+          </p>
+        </details>
       </section>
 
       <section class="mp-card mp-export">
@@ -369,38 +405,9 @@ function MissionPanel({ mmap, handlers, mapsEl, layersEl, initial }: { mmap: Mis
         </label>
       </section>
 
-      <section class="mp-card">
-        <details open>
-          <summary>
-            Waypoints <span class="muted">({wps.length})</span>
-          </summary>
-          <WaypointList wps={wps} legs={legs} setWps={setWps} />
-          {wps.length > 0 && (
-            <div class="mp-share">
-              <button type="button" class="mp-clear" onClick={copyLink}>
-                {copied ? 'Link copied ✓' : 'Copy link to this plan'}
-              </button>
-              <span class="muted">The plan lives in the link: it survives a reload and opens the same plan anywhere.</span>
-            </div>
-          )}
-        </details>
-        <details open>
-          <summary>Reachable-area boundary</summary>
-          <label class="mp-select">
-            <span class="sr-only">Boundary shown on the map</span>
-            <select value={boundary} onChange={(e) => setBoundary((e.target as HTMLSelectElement).value)}>
-              {options.map((o) => (
-                <option key={o.id} value={o.id}>
-                  {o.label}
-                </option>
-              ))}
-            </select>
-          </label>
-          <p class="caption">
-            From <code>{boundaryFile(boundary, d)}</code> ({d.scenario.id}): the area from which the crew can walk back to the pad within that time.
-          </p>
-        </details>
-      </section>
+      <p class="caption mp-howto">
+        Click the map to add a waypoint. Each leg is the fastest walk on the {d.grid.resM} m grid for <code>{d.scenario.id}</code>; the dashed line is the way home from the last waypoint.
+      </p>
 
       <p class="caption mp-sources">
         <b>Estimates.</b> Leg times and leg O₂ are computed in your browser with the engine's walking model (<code>config/crew.yaml</code>, <code>config/variants.yaml</code>) on

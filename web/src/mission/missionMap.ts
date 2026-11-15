@@ -127,7 +127,7 @@ export class MissionMap {
       this.h.onAdd(e.lngLat.lng, e.lngLat.lat)
     })
     // Relief shading above the basemap / topography / slope rasters, under the boundary and the plan.
-    this.terrain = new TerrainController(m, 'band-fill')
+    this.terrain = new TerrainController(m, 'band-fill', 'bottom-right') // 2D/3D control styled in mission.css
     ui.view.value = '3d'
   }
 
