@@ -23,6 +23,7 @@ import {
   SLOPE_COLORS,
   SLOPE_DEFAULT_ON,
   SLOPE_DEFAULT_OPACITY,
+  SLOPE_OPACITY,
   slopeClasses,
   slopeClassOf,
   slopeColorVar,
@@ -134,15 +135,22 @@ describe('colours are tokens', () => {
 })
 
 describe('opacity and default', () => {
-  it('opacity clamps to tokens overlayOpacity', () => {
-    expect(clampSlopeOpacity(2)).toBe(OPACITY.max)
-    expect(clampSlopeOpacity(0)).toBe(OPACITY.min)
-    expect(clampSlopeOpacity(-1)).toBe(OPACITY.min)
+  // spec change (team lead 22:03): the slope layer keeps the Mission Planer's 10-100 % range, default 45 %
+  it('opacity clamps to 10-100 % (Mission Planer range), default 45 %', () => {
+    expect(SLOPE_OPACITY.min).toBe(0.1)
+    expect(SLOPE_OPACITY.max).toBe(1)
+    expect(clampSlopeOpacity(2)).toBe(1)
+    expect(clampSlopeOpacity(0)).toBe(0.1)
+    expect(clampSlopeOpacity(-1)).toBe(0.1)
+    expect(clampSlopeOpacity(0.8)).toBe(0.8)
+    expect(clampSlopeOpacity(0.2)).toBe(0.2)
     expect(clampSlopeOpacity(NaN)).toBe(SLOPE_DEFAULT_OPACITY)
+    expect(SLOPE_DEFAULT_OPACITY).toBe(0.45)
+    // the other Plan overlays keep the tokens range
     expect(OPACITY.min).toBe(TOKENS.overlayOpacity.min)
     expect(OPACITY.max).toBe(TOKENS.overlayOpacity.max)
     setSlopeOpacity(5)
-    expect(slopeOpacity.peek()).toBe(OPACITY.max)
+    expect(slopeOpacity.peek()).toBe(1)
   })
 
   it('default on/off = Plan slopeClass default', () => {
@@ -219,7 +227,7 @@ describe('slope layer on the map', () => {
     h.setVisible(true)
     expect(calls.load).toBe(1)
     h.setOpacity!(9)
-    expect(l.paint['raster-opacity']).toBe(OPACITY.max)
+    expect(l.paint['raster-opacity']).toBe(SLOPE_OPACITY.max) // the slope layer's own 10-100 % range (team lead 22:03)
     h.destroy()
     expect(layers.size + sources.size).toBe(0)
     expect(calls.revoked).toEqual(['blob:slope-0'])

@@ -11,7 +11,7 @@
 // recipe below is mirrored as CSS custom properties in slope.css (the test checks both agree).
 import { CITED, type CfgValue } from '../../../config'
 import { color, type ColorToken } from '../../../ui/tokens'
-import { clampOpacity as clampOverlayOpacity, DEFAULT_ON, DEFAULT_OPACITY, OPACITY } from '../catalog'
+import { DEFAULT_ON, DEFAULT_OPACITY, OPACITY } from '../catalog'
 
 export type SlopeClassId = 'padFlat' | 'walkable' | 'beyondTested' | 'nogoNominal' | 'nogoAlways'
 export const SLOPE_CLASS_IDS: readonly SlopeClassId[] = ['padFlat', 'walkable', 'beyondTested', 'nogoNominal', 'nogoAlways']
@@ -125,10 +125,11 @@ export function renderSlope(
 
 // ---- opacity and default -----------------------------------------------------------------------
 
-/** Opacity range of every Plan overlay (tokens overlayOpacity, DESIGN §3.1). */
-export const SLOPE_OPACITY = OPACITY
+/** Opacity range of the slope layer: 10-100 %, the Mission Planer's (team lead 22:03), not the 35-55 % of
+ *  the other Plan overlays (tokens overlayOpacity); default 45 % as before. */
+export const SLOPE_OPACITY = { min: 0.1, max: 1, step: OPACITY.step } as const
 export const SLOPE_DEFAULT_OPACITY = DEFAULT_OPACITY
-export const clampSlopeOpacity = clampOverlayOpacity
+export const clampSlopeOpacity = (v: number): number => Math.min(SLOPE_OPACITY.max, Math.max(SLOPE_OPACITY.min, Number.isFinite(v) ? v : SLOPE_DEFAULT_OPACITY))
 /** Same default as the built-in slope-classes overlay it replaces. */
 export const SLOPE_DEFAULT_ON: boolean = DEFAULT_ON.slopeClass
 /** The built-in overlay this layer replaces (map/overlays/catalog.ts). */
