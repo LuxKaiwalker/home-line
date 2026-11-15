@@ -14,8 +14,6 @@ export const VIEWS: Record<Route['name'], Loader> = {
   cuff: async () => (await import('./cuff')).view,
   about: async () => (await import('./about')).view,
   hud: async () => slotView('hud'),
-  hud3d: async () => slotView('hud3d'),
-  nav: async () => slotView('nav'),
   notfound: async () => (el, route) => {
     const path = route.name === 'notfound' ? route.path : ''
     el.innerHTML = `<div class="page"><h1>Not found</h1><p>No page at <code></code>. <a href="#/">Back to the plan</a>.</p></div>`

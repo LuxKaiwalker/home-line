@@ -10,7 +10,7 @@ import { readJson, readPngRGBA, REPO } from '../hud/testutil'
 import type { FieldsIndex } from '../hud/types'
 import { decodeGrid, decodeState, FieldData, fieldAt, setActiveField, type Bounds } from '../map/field/decode'
 import { hashCanonical, type EngineIdentity } from './canonical'
-import { cyclePad, dragRows, PAD_VALIDITY, snapTarget, spotValues, type DragFields } from './drag'
+import { CLICK_SLOP_PX, cyclePad, dragRows, isDragMove, PAD_VALIDITY, snapTarget, spotValues, type DragFields } from './drag'
 import { buildCatalog, planAvailability } from './options'
 import { createRoverDrag } from './rover'
 import { createPlanEditStore } from './store'
@@ -286,5 +286,20 @@ describe('keyboard alternative: arrow keys cycle the pads', () => {
     expect(rd.keep()).toBe(true)
     expect(store.committed.value.plan.pad).toBe('rank4')
     expect(rd.cycle(1)!.step.plan.pad).toBe('rank1') // rank4 -> rank1 (pad_default skipped)
+  })
+})
+
+describe('click vs drag on the rover (H2b): only movement beyond the click slop is a drag', () => {
+  it('the slop is the platform default (~4 px), above MapLibre\'s own 3 px drag start', () => {
+    expect(CLICK_SLOP_PX).toBe(4)
+  })
+  it('a press that moves no farther than the slop is a click; beyond it, a drag', () => {
+    const o = { x: 100, y: 200 }
+    expect(isDragMove(o, o)).toBe(false)
+    expect(isDragMove(o, { x: 103, y: 200 })).toBe(false)
+    expect(isDragMove(o, { x: 100, y: 196 })).toBe(false) // exactly the slop: still a click
+    expect(isDragMove(o, { x: 102.9, y: 202.9 })).toBe(true) // 4.1 px diagonal
+    expect(isDragMove(o, { x: 95, y: 200 })).toBe(true)
+    expect(isDragMove(o, { x: 100, y: 260 })).toBe(true)
   })
 })

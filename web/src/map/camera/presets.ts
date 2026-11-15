@@ -1,5 +1,5 @@
 // WS16 task 9 (M9): camera presets, keys 1–5 (DESIGN U16), as pure data. The controller (index.ts)
-// turns a preset into a camera move: 1 overhead (north up, 0° tilt); 2 isometric (45°); 3 low (70°);
+// turns a preset into a camera move: 1 overhead (north up, 0° tilt); 2 isometric (45°); 3 low (60°, = the 3D tilt cap);
 // 4 focus on the selection; 5 follow the crew (M10's flythrough follow camera, not a copy of it).
 import { PRESETS } from './config'
 

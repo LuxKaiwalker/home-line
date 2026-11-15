@@ -28,7 +28,7 @@ function distToPolyline(q: [number, number], pts: [number, number][]): number {
 
 describe('config (design.yaml camera.flythrough)', () => {
   it('reads the DESIGN U6 values', () => {
-    expect(FLYTHROUGH).toEqual({ sampleM: 20, spline: 'centripetal_catmull_rom', behindM: 250, aboveM: 120, lookaheadM: 150 })
+    expect(FLYTHROUGH).toEqual({ sampleM: 20, spline: 'centripetal_catmull_rom', behindM: 250, aboveM: 175, lookaheadM: 150 })
   })
 })
 
@@ -115,7 +115,7 @@ describe.skipIf(!have)('flythrough path on the real route (nom_104)', () => {
     expect(maxCamMove).toBeLessThan(250 * ((FOLLOW_TURN_DEG_PER_MIN * dt * Math.PI) / 180) + 3)
   })
 
-  it('places the camera 250 m behind and 120 m above the look-at point 150 m ahead', () => {
+  it('places the camera 250 m behind and 175 m above (pitch 55°) the look-at point 150 m ahead', () => {
     const fp = flightPath(plan, metric, 'nom_104')
     const t = 20 // walking to S7
     const st = plan.stateAt(t)
@@ -125,7 +125,8 @@ describe.skipIf(!have)('flythrough path on the real route (nom_104)', () => {
     const look = path.toXY(pose.target)
     const ahead = path.xyAt(st.distanceWalkedM + 150)
     expect(Math.hypot(look[0] - ahead[0], look[1] - ahead[1])).toBeLessThan(1e-6)
-    expect(pose.altM).toBe(120)
+    expect(pose.altM).toBe(175)
+    expect(pose.pitch).toBeCloseTo(55, 0)
     const { cam, horizM } = cameraOffset(pose, metric)
     expect(horizM).toBeCloseTo(250, 6)
     const c = path.toXY(cam)

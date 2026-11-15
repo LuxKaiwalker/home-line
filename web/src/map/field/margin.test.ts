@@ -13,9 +13,9 @@ import { describe, expect, it } from 'vitest'
 import { FieldGrid, fieldGrid } from '../../hud/fields'
 import { decodeRGBA } from '../../hud/fields'
 import { Plan } from '../../hud/plan'
-import { computeReadout, playbackPosition, type HudContext } from '../../hud/readout'
+import { computeReadout, hudMarginInputs, playbackPosition, type HudContext } from '../../hud/readout'
 import { loadConfig, readJson, readPngRGBA, REPO } from '../../hud/testutil'
-import type { FieldsIndex, RouteFC, TimelineEvent } from '../../hud/types'
+import type { FieldsIndex, Rad, RouteFC, TimelineEvent } from '../../hud/types'
 import { o2Reserve } from '../../views/o2'
 import { CONFIG } from '../../config'
 import { FIELD_LAYER } from './constants'
@@ -65,7 +65,6 @@ const field = new FieldData(SUIT, { opt: grid(`opt_${SUIT}/t_home`), nom: grid(`
 const hudT = hudGrid(`${SC}/t_home`)
 const plan = new Plan(route, timeline as TimelineEvent[], hudT)
 const cfg = loadConfig()
-const ctx: HudContext = { cfg, fields: { tHome: hudT, o2Home: hudGrid(`${SC}/o2_home`) }, plan, budgetMin: cfg.walkbackBudgetsMin[0], pad: plan.start }
 
 const pt = new PlanTimeline(timeline)
 const tStar = manifest[TSTAR_KEY].value
@@ -75,6 +74,11 @@ const RESERVE = o2Reserve().litres
 const T_EVA = clockFile.eva.eva_min
 const T_DARK = clockFile.eva.t_dark_min
 const D_ALLOW = CONFIG.dAllowMgy
+// the HUD context as hud/hud.ts loadHudData builds it, incl. the exact margin inputs (X2, D89)
+const ctx: HudContext = {
+  cfg, fields: { tHome: hudT, o2Home: hudGrid(`${SC}/o2_home`) }, plan, budgetMin: cfg.walkbackBudgetsMin[0], pad: plan.start,
+  margin: hudMarginInputs(plan, rad as unknown as Rad, T_DARK, cfg, { reserveL: RESERVE, dAllowMgy: D_ALLOW }),
+}
 
 function inputsAt(t: number, o2Left?: number): MarginInputs {
   const r = resolveMarginInputs({ t, tDark: T_DARK, tauDose: undefined, tEva: T_EVA, o2Left, reserve: RESERVE }, { timeline: pt, dose, dAllowMgy: D_ALLOW })
@@ -117,12 +121,11 @@ describe('inputs mirror WS2 (config and published values)', () => {
 // shader leaves that sub-pixel uncoloured; fieldAt quotes the nearest pixel, checked here.
 const DRAWN_NULL_ROWS = ['arrive S6', 'o2_checkpoint 150', 'leave S6', 'arrive S1', 'o2_checkpoint 210', 'leave S1', 'o2_checkpoint 240']
 
-// 5-min minutes where hud/readout.ts differs from the WS2 formula by > 0.5 min. The HUD margin is
-// H(t) - T_home with H interpolated linearly between timeline rows (A-WS7-3). Between rows the
-// WS2 margin is not linear in t: the D39 storm tau(t) (dose-bound 40-200), the arrival task-O2
-// step smeared over the walk before it (275, 280), the walking O2 rate (255-265). At every
-// timeline row both agree (test above + below). Pinned so any change in either is seen.
-const HUD_INTERP_DIFFERS = [40, 45, 50, 55, 65, 70, 80, 85, 95, 100, 105, 110, 115, 130, 135, 140, 145, 160, 165, 170, 175, 185, 190, 200, 255, 260, 265, 275, 280]
+// 5-min minutes where hud/readout.ts differs from the WS2 formula by > 0.5 min. Until X2 the HUD
+// interpolated H(t) linearly between timeline rows (A-WS7-3) and differed at 29 of these points
+// (up to 31 min at t = 40). Since X2 (D89) the HUD computes this same function (marginAt with the
+// field's inputs), so the list is empty; pinned so any divergence is seen.
+const HUD_INTERP_DIFFERS: number[] = []
 // 5-min points where the route position has no nominal t_home pixel (no field value; HUD null too)
 const NO_VALUE_5MIN = [35, 195]
 

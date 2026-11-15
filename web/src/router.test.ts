@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { canonicalHref, href, isLegacy, legacyParam, NAV_ITEMS, parseRoute, redirectFor, type Route } from './router'
 
-describe('hash router (SPEC F17 routes; mount slots for WS7/8/9)', () => {
+describe('hash router (SPEC F17 routes; mount slot for WS7)', () => {
   it.each([
     ['', { name: 'console' }],
     ['#/', { name: 'console' }],
@@ -13,8 +13,8 @@ describe('hash router (SPEC F17 routes; mount slots for WS7/8/9)', () => {
     ['#/cuff', { name: 'cuff' }],
     ['#/about', { name: 'about' }],
     ['#/hud', { name: 'hud' }],
-    ['#/hud3d', { name: 'hud3d' }],
-    ['#/nav', { name: 'nav' }],
+    ['#/hud3d', { name: 'hud' }],
+    ['#/nav', { name: 'scorecard' }],
     ['#/nope', { name: 'notfound', path: '/nope' }],
     ['#/station', { name: 'notfound', path: '/station' }],
   ])('%s', (hash, want) => expect(parseRoute(hash)).toEqual(want))
@@ -26,7 +26,7 @@ describe('hash router (SPEC F17 routes; mount slots for WS7/8/9)', () => {
   })
 
   it('the nav lists every page and slot', () => {
-    expect(NAV_ITEMS.map((n) => n.route.name)).toEqual(['console', 'trade', 'conditions', 'cuff', 'hud', 'hud3d', 'nav', 'scorecard', 'about'])
+    expect(NAV_ITEMS.map((n) => n.route.name)).toEqual(['console', 'trade', 'conditions', 'cuff', 'hud', 'scorecard', 'about'])
   })
 })
 
@@ -39,8 +39,6 @@ describe('mode routes and redirects (DESIGN §4.2)', () => {
     ['#/trade', { name: 'trade' }, '#/trade'],
     ['#/conditions', { name: 'conditions' }, '#/fly/conditions'],
     ['#/hud', { name: 'hud' }, '#/fly/hud'],
-    ['#/hud3d', { name: 'hud3d' }, '#/fly/3d'],
-    ['#/nav', { name: 'nav' }, '#/evidence/nav'],
     ['#/cuff', { name: 'cuff' }, '#/report/cuff'],
     ['#/scorecard', { name: 'scorecard' }, '#/evidence/scorecard'],
     ['#/scorecard?key=rad.baseline_uGy_day', { name: 'scorecard', key: 'rad.baseline_uGy_day' }, '#/evidence/scorecard?key=rad.baseline_uGy_day'],
@@ -80,6 +78,34 @@ describe('mode routes and redirects (DESIGN §4.2)', () => {
 
   it('href() keeps writing the old paths, which still parse (legacy layout links, <Num> scorecard links)', () => {
     for (const [, route] of TABLE) expect(parseRoute(href(route))).toEqual(route)
+  })
+})
+
+// D98 / D99: the navigation add-on and the first-person 3D view are removed; their old links land on
+// EVIDENCE and on the 2D HUD (FLY), never on "Not found".
+describe('removed views redirect (D98 /nav -> Evidence, D99 /hud3d -> Fly 2D)', () => {
+  it.each([
+    ['#/nav', '#/evidence/scorecard'],
+    ['#/evidence/nav', '#/evidence/scorecard'],
+    ['#/nav/', '#/evidence/scorecard'],
+    ['#/hud3d', '#/fly/hud'],
+    ['#/fly/3d', '#/fly/hud'],
+    ['#/hud3d/', '#/fly/hud'],
+  ])('%s redirects to %s', (old, want) => {
+    expect(redirectFor(old)).toBe(want)
+    expect(redirectFor(want)).toBeNull()
+  })
+
+  it('keeps the legacy switch across the redirect', () => {
+    expect(redirectFor('#/nav?legacy=1')).toBe('#/evidence/scorecard?legacy=1')
+    expect(redirectFor('#/fly/3d?legacy=hud')).toBe('#/fly/hud?legacy=hud')
+  })
+
+  it('no route, link or nav entry names the removed views', () => {
+    expect(NAV_ITEMS.map((n) => n.route.name)).not.toContain('nav')
+    expect(NAV_ITEMS.map((n) => n.route.name)).not.toContain('hud3d')
+    expect(parseRoute('#/evidence/nav')).toEqual({ name: 'scorecard' })
+    expect(parseRoute('#/fly/3d')).toEqual({ name: 'hud' })
   })
 })
 

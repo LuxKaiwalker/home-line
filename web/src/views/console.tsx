@@ -59,7 +59,9 @@ export const view: View = async (el) => {
   // Live pad tool (D48, WS13 U2; team lead D81): lazy, only in builds with VITE_LIVE=1.
   let alive = true
   let disposeLive: (() => void) | undefined
-  if (import.meta.env.VITE_LIVE === '1') void import('../live').then((m) => { if (alive) disposeLive = m.padTool(panelEl.parentElement!.appendChild(document.createElement('aside')), m.consoleMapPort(cmap)) })
+  // X3 (e2e H5-2): the live aside gets the side panel's fixed width, so its text never resizes the map.
+  const liveAside = () => Object.assign(panelEl.parentElement!.appendChild(document.createElement('aside')), { className: 'console-panel console-live' })
+  if (import.meta.env.VITE_LIVE === '1') void import('../live').then((m) => { if (alive) disposeLive = m.padTool(liveAside(), m.consoleMapPort(cmap)) })
   return () => {
     alive = false
     disposeLive?.()
@@ -90,8 +92,9 @@ function ConsolePanel({ cmap }: { cmap: ConsoleMap }) {
   const [padUse, setPadUse] = useState<PadInUse | null>(null)
   const [sitingShown, setSitingShown] = useState(false)
   const [partner, setPartner] = useState<PartnerFC | null>(null)
-  const [route, setRoute] = useState<RouteFC | null>(null)
-  const [timeline, setTimeline] = useState<TimelineEvent[] | null>(null)
+  // Route + timeline with the manifest key prefix they were loaded for (X3, e2e H5-6): after a pad or
+  // scenario switch the old route is never rendered under the new keys while the new files load.
+  const [routeData, setRouteData] = useState<{ key: string; route: RouteFC | null; timeline: TimelineEvent[] | null } | null>(null)
   const [credit, setCredit] = useState<string | null>(null)
   // D21 parking options: null = the official pad (pad.json, existing paths).
   const [pads, setPads] = useState<PadsIndexLoad | null>(null)
@@ -166,6 +169,7 @@ function ConsolePanel({ cmap }: { cmap: ConsoleMap }) {
         } else {
           const src = basemapSources(tj, (p) => dataUrl(p))
           await cmap.setBasemap(src)
+          if (!alive) return
           setCredit(tj.attribution ?? BASEMAP_CREDIT)
           note('basemap', `HiRISE colour ortho, z${tj.minzoom}–${tj.maxzoom}${tj.zoom_bounds ? ` (z${Object.keys(tj.zoom_bounds).join('/z')} near the stations)` : ''}`)
         }
@@ -176,10 +180,13 @@ function ConsolePanel({ cmap }: { cmap: ConsoleMap }) {
       // without it, the alpha of the shared slope field (SPEC §6.1).
       try {
         const cs = await L.optional(() => L.cellstate())
+        if (!alive) return
         if (cs) {
           const a = await loadAlpha(dataUrl(cs.image))
+          if (!alive) return
           if (a.width !== cs.width || a.height !== cs.height) return note('unknown', `${cs.image} is ${a.width}×${a.height}, cellstate.json says ${cs.width}×${cs.height}`)
           await cmap.setUnknownMask({ ...a, bounds: cs.bounds })
+          if (!alive) return
           const pct = cs.pct?.unknown
           if (alive)
             note(
@@ -193,14 +200,16 @@ function ConsolePanel({ cmap }: { cmap: ConsoleMap }) {
           return
         }
         const fi = await L.optional(() => L.fieldsIndex())
+        if (!alive) return
         const g = fi && unknownMaskField(fi)
         if (!g) return note('unknown', fi ? 'no cell states and no shared slope field' : 'terrain/cellstate.json not available yet')
         const a = await loadAlpha(dataUrl(g.file))
+        if (!alive) return
         if (a.width !== g.width || a.height !== g.height) return note('unknown', `${g.file} is ${a.width}×${a.height}, index says ${g.width}×${g.height}`)
         await cmap.setUnknownMask({ ...a, bounds: g.bounds })
         if (alive) note('unknown', `from ${g.file} (A = 0; no terrain/cellstate.json)`)
       } catch (e) {
-        note('unknown', e instanceof Error ? e.message : String(e))
+        if (alive) note('unknown', e instanceof Error ? e.message : String(e))
       }
     })()
     return () => {
@@ -277,17 +286,20 @@ function ConsolePanel({ cmap }: { cmap: ConsoleMap }) {
           if (alive) setError(e)
         }
       }
+      if (!alive) return
       const routeFile = pf ? pf.route : `route_${scenario.id}.geojson`
+      const key = pf && padSel ? padKey(padSel, 'route') : `route.${scenario.id}` // = routeProps.routeKey
       try {
         const r = await L.optional(() => (pf ? L.json<RouteFC>(pf.route) : L.route(scenario.id)))
         if (!alive) return
-        setRoute(r)
-        setTimeline(r ? await L.optional(() => (pf ? L.json<TimelineEvent[]>(pf.timeline) : L.timeline(scenario.id))) : null)
+        const tl = r ? await L.optional(() => (pf ? L.json<TimelineEvent[]>(pf.timeline) : L.timeline(scenario.id))) : null
+        if (!alive) return
+        setRouteData({ key, route: r, timeline: tl })
         await cmap.setRoute(r)
-        note('route', r ? (routeSummary(r) ? '' : `${routeFile} has no legs (no reachable station)`) : `no ${routeFile}`)
+        if (alive) note('route', r ? (routeSummary(r) ? '' : `${routeFile} has no legs (no reachable station)`) : `no ${routeFile}`)
       } catch (e) {
-        setRoute(null)
-        setTimeline(null)
+        if (!alive) return
+        setRouteData({ key, route: null, timeline: null })
         await cmap.setRoute(null)
         if (alive) note('route', e instanceof Error ? e.message : String(e))
       }
@@ -341,6 +353,7 @@ function ConsolePanel({ cmap }: { cmap: ConsoleMap }) {
     ? { label: `parking option ${padIndex?.options.find((o) => o.id === padSel)?.label ?? padSel}`, routeFile: padF.route, timelineFile: padF.timeline, routeKey: padKey(padSel, 'route'), timelineKey: padKey(padSel, 'timeline') }
     : { label: scenario.id, routeFile: `route_${scenario.id}.geojson`, timelineFile: `timeline_${scenario.id}.json`, routeKey: `route.${scenario.id}`, timelineKey: `timeline.${scenario.id}` }
   const label = (g: LayerGroup) => (g === 'partner' ? partnerLabel(partner) : LAYER_LABELS[g])
+  const rd = routeData?.key === routeProps.routeKey ? routeData : null
 
   return (
     <div class="panel-body">
@@ -348,7 +361,7 @@ function ConsolePanel({ cmap }: { cmap: ConsoleMap }) {
       {error != null && <DataProblem error={error} what="Scenario layers" />}
 
       {padSel && padF ? (
-        <PadHeadline id={padSel} summary={padSummary} file={padF.summary} budget={budget} error={padError} />
+        <PadHeadline id={padSel} summary={padSummary?.id === padSel ? padSummary : null} file={padF.summary} budget={budget} error={padError} />
       ) : (
         <section class="headline">
           <div class="headline-value">
@@ -372,7 +385,7 @@ function ConsolePanel({ cmap }: { cmap: ConsoleMap }) {
 
       {padIndex && nominal && <PadPicker index={padIndex} selected={padSel} onPick={pickPad} suitKg={nominal.suit_kg} />}
 
-      <RouteSection {...routeProps} route={route} timeline={timeline} shown={visible.route} onShow={(on) => toggle('route', on)} />
+      <RouteSection {...routeProps} route={rd?.route ?? null} timeline={rd?.timeline ?? null} loading={!rd} shown={visible.route} onShow={(on) => toggle('route', on)} />
 
       <section>
         <h3>Scenario</h3>
@@ -711,11 +724,21 @@ function RouteSection(p: {
   timelineKey: string
   route: RouteFC | null
   timeline: TimelineEvent[] | null
+  /** The route files for this key are still loading. */
+  loading?: boolean
   shown: boolean
   onShow: (on: boolean) => void
 }) {
   const r = routeSummary(p.route)
   const tf = p.timelineFile
+  if (p.loading) {
+    return (
+      <section>
+        <h3>Planned route</h3>
+        <p class="muted">Loading the route for {p.label}…</p>
+      </section>
+    )
+  }
   if (!r) {
     return (
       <section>

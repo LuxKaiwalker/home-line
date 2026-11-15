@@ -12,6 +12,7 @@ import { hover, registerSelectionAction, select, selection, type SelectionRef } 
 import { TOKENS } from '../ui/tokens'
 import { ISOLATION_OPACITY } from './camera/config'
 import { locate, type FocusSources } from './camera/focus'
+import { isDragMove } from '../edit/drag'
 import './select.css'
 
 /** A labels.json row as the label layer keeps it (code + the file's kind/ref). */
@@ -146,6 +147,8 @@ export class MapSelection {
   private lastMove: MouseEv | null = null
   private cross: PointMarker | null = null
   private dimmed: { id: string; prop: string; set: unknown; orig: unknown }[] = []
+  /** where the last left press went down (I1: a left drag is not a click on a DOM object) */
+  private press: { x: number; y: number } | null = null
   private isolated = false
 
   constructor(map: SelectMap, sources: () => SelectSources, opts: SelectOptions = {}) {
@@ -158,12 +161,14 @@ export class MapSelection {
     const c = map.getContainer()
     // capture: label pills stop their click from bubbling (their own handlers still run after this)
     c.addEventListener('click', this.onDomClick, true)
+    c.addEventListener('pointerdown', this.onPress, { capture: true })
     this.stops.push(
       () => {
         map.off('click', this.onClick)
         map.off('mousemove', this.onMove)
         map.off('mouseout', this.onOut)
         c.removeEventListener('click', this.onDomClick, true)
+        c.removeEventListener('pointerdown', this.onPress, { capture: true })
         if (this.hoverRaf && typeof cancelAnimationFrame === 'function') cancelAnimationFrame(this.hoverRaf)
       },
       effect(() => {
@@ -201,7 +206,16 @@ export class MapSelection {
     selectFromMap(this.map.queryRenderedFeatures(ev.point), ev.lngLat)
   }
 
+  private readonly onPress = (e: Event): void => {
+    const p = e as PointerEvent
+    this.press = p.button === 0 ? { x: p.clientX, y: p.clientY } : null
+  }
+
   private readonly onDomClick = (e: Event): void => {
+    // I1: the left button only interacts; a left drag that ends on the object it began on is no click
+    // (map features: MapLibre fires no map click past its click tolerance)
+    const m = e as MouseEvent
+    if (this.press && typeof m.clientX === 'number' && isDragMove(this.press, { x: m.clientX, y: m.clientY })) return
     const r = domRef(e.target, this.sources().labels)
     if (r) select(r, 'map')
   }
