@@ -1,7 +1,8 @@
 // WS5 mount slot for /hud (web/src/views/slot.ts): export mount(el, ctx) -> cleanup.
 // Config comes from config/hud.yaml, crew.yaml and conditions.yaml (D39 storm_replay), parsed at
 // build time by WS5's YAML plugin.
-// WS8 (3D) reuses the same pieces: loadHudData, computeReadout, createHudPanel, PlaybackClock.
+// Also exports the pieces (loadHudData, computeReadout, createHudPanel, PlaybackClock); their
+// former 3D user, WS8's first-person view, was removed in D99.
 import conditionsRaw from '../../../config/conditions.yaml'
 import crewRaw from '../../../config/crew.yaml'
 import hudRaw from '../../../config/hud.yaml'

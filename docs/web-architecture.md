@@ -15,14 +15,15 @@ what is gone. The 3D *map* (MapLibre terrain, 2D/3D toggle, flythrough) is a dif
 | --- | --- | --- | --- |
 | `maplibre-gl` | `^6.18.0` | **6.18.0** | runtime |
 | `@maplibre/maplibre-gl-style-spec` | (dep of maplibre-gl) | 26.7.0 | runtime (types for style JSON) |
-| `three` | `^0.187.0` | **0.187.0** | runtime (was only in the lazy `/hud3d` chunk; since D99 nothing imports it, the dependency is still listed) |
 | `preact` | `^11.2.0` | **11.2.0** | runtime (`preact` + `preact/hooks`; JSX via `jsxImportSource: preact`) |
 | `vite` | `^8.3.6` | 8.3.8 | dev |
 | `vitest` | `^5.1.0` | 5.1.0 | dev |
 | `typescript` | `~7.0.2` | 7.0.2 | dev |
-| `@types/three` | `^0.187.0` | 0.187.0 | dev |
 | `yaml` | `^2.9.1` | 2.9.1 | dev (build-time YAML parsing only) |
 | `@types/geojson`, `@types/node` | | | dev |
+
+`three` and `@types/three` (0.187.0) were removed in R1c: since D99 nothing imports them; they
+were only in the lazy `/hud3d` chunk.
 
 **No signals or store library.** `@preact/signals` is not installed; no zustand / nanostores /
 redux / mobx / jotai. State today (see §4.5) is Preact `useState` inside views, plain module-level
