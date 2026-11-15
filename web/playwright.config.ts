@@ -11,9 +11,11 @@ const PORT = Number(process.env.HL_VISUAL_PORT ?? 4179)
 // Click-sensitive specs: real mouse clicks while the map animates (descent intro camera, mission clock
 // playing). In software GL every animated frame blocks the page's main thread while the WebGL canvas is
 // read back for the compositor, and each mouse event of a click waits for a frame; under parallel load a
-// click then outlasts its 5 s timeout (issue #131, notes/M10d.md). These specs run in their own
-// projects, one worker, after the screenshot projects, so nothing else competes for the CPU.
-const CLICK_SPECS = /(shell-layout|story-intro|map-input|rover-click|console-fixes)\.spec\.ts$/
+// click then outlasts its 5 s timeout (issue #131, notes/M10d.md). Rover drags too: every move step
+// waits for a map frame, so official-plan's three drags outlasted the 90 s test timeout (T2fix).
+// These specs run in their own projects, one worker, after the screenshot projects, so nothing else
+// competes for the CPU.
+const CLICK_SPECS = /(shell-layout|story-intro|map-input|rover-click|console-fixes|hover-replay|official-plan)\.spec\.ts$/
 const VIEWPORTS: [string, { width: number; height: number }][] = [
   ['1440x900', { width: 1440, height: 900 }],
   ['1024x768', { width: 1024, height: 768 }],

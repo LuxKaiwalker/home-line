@@ -1,14 +1,16 @@
-// Drag-the-rover UI (U15): the readout that follows the rover while dragging (exact lookups + ghost
-// rows) and the delta strip shown on release (what changes against the committed plan, from the
-// precomputed pads index only: every number goes through <Num> with its manifest key).
+// Drag-the-rover UI (U15): the readout that follows the rover while dragging (exact lookups; planning
+// values say which pad they come from on release, L7b) and the delta strip shown on release (what
+// changes against the committed plan, from the precomputed pads index only: every number goes through <Num> with its manifest key).
 import { Num } from '../components/Num'
+import { formatValue } from '../prov/provenance'
 import { padKey, PADS_INDEX, type PadOption, type PadsIndexView } from '../data/pads'
+import { liveStatus, type LiveStatus } from '../state/live'
 import { useSignalValue } from '../state/signal'
 import { FieldReadout } from '../ui/cards/cards'
 import { Button, TrustChip } from '../ui/components'
 import { t, type CopyKey } from '../ui/copy'
 import { editButtons } from './bind'
-import { dragRows, type SpotFail, type SpotValues } from './drag'
+import { dragRows, PAD_VALIDITY, type SpotFail, type SpotValues } from './drag'
 import { isCustomPad } from './options'
 import type { RoverDrag } from './rover'
 import type { DeltaRow, PlanEditStore } from './store'
@@ -25,24 +27,66 @@ export function validityText(v: SpotValues): string {
   return DASH
 }
 
-function GhostRow({ label }: { label: string }) {
+/**
+ * A planning value the drag does not compute (D85: no live recompute while dragging). Honest about
+ * what happens: on release the rover snaps to `pad` and that pad's precomputed value is shown.
+ */
+function PendingRow({ label, pad }: { label: string; pad: string | null }) {
   return (
-    <div class="hl-readout hl-edit-ghost" data-state="ghost" data-trust="live">
+    <div class="hl-readout hl-edit-pending" data-state="pending">
       <div class="hl-readout__label">
         <span>{label}</span>
       </div>
-      <div class="hl-readout__value" title={t('edit.ghost')}>
-        {t('edit.computing')}
+      <div class="hl-readout__value" title={pad ? t('edit.onReleaseTip', { pad_name: pad }) : t('edit.noSnap')}>
+        {pad ? t('edit.onRelease', { pad_name: pad }) : DASH}
       </div>
     </div>
   )
 }
 
-/** While dragging: validity, elevation ("—": no elevation field), slope (field lookup); the rest a ghost. */
-export function DragReadout({ values, target }: { values: SpotValues; target: PadOption | null }) {
+/** What the readout's snap line says, by live-planner status (seam: state/live.ts). Truthful (L7b, T2). */
+export function snapText(status: LiveStatus): CopyKey {
+  return status === 'ready' ? 'edit.snapLive' : status === 'checking' || status === 'warming' ? 'edit.snapWaiting' : 'edit.snapStatic'
+}
+
+/** The delta strip's note on how the pad was chosen, by live-planner status. */
+export function deltaNote(status: LiveStatus): CopyKey {
+  return status === 'ready' ? 'edit.liveCustomSpot' : status === 'checking' || status === 'warming' ? 'edit.parkingWaiting' : 'edit.snapStatic'
+}
+
+const REFUSED_COPY: Record<SpotFail, CopyKey> = { steep: 'edit.refusedSteep', unknown: 'edit.refusedUnknown', outside: 'cards.pad.invalidOutside' }
+
+/**
+ * Why a precomputed pad is skipped as a snap target (the U15 spot rule on its 20 × 20 m block), with
+ * the block's max slope when the slope field gave one (a field lookup, like the slope row).
+ */
+export function refusedText(name: string, failed: readonly SpotFail[], maxSlopeDeg: number | null = null, rule = PAD_VALIDITY): string {
+  const vars = { max_slope_deg: rule.maxSlopeDeg, block_m: rule.blockM, slope: formatValue(maxSlopeDeg, 'deg', { dp: 1 }) }
+  const reason = failed.map((f) => t(f === 'steep' && maxSlopeDeg === null ? 'edit.refusedSteepNoValue' : REFUSED_COPY[f], vars)).join(', ')
+  return t('edit.padRefused', { pad_name: name, reason })
+}
+
+export interface DragReadoutProps {
+  values: SpotValues
+  /** the snap target (pads index row) */
+  target: PadOption | null
+  /** display name of a pad (map code, e.g. P2); default the pads index label */
+  name?: (id: string) => string
+  /** the nearest precomputed pad when the spot check refuses it, with the failed checks */
+  refused?: { id: string; failed: readonly SpotFail[]; maxSlopeDeg?: number | null } | null
+  /** live-planner status (default: the state/live.ts seam) */
+  status?: LiveStatus
+}
+
+/** While dragging: validity, elevation ("—": no elevation field), slope (field lookup); the rest pending until release. */
+export function DragReadout({ values, target, name, refused, status }: DragReadoutProps) {
+  const live = useSignalValue(liveStatus)
+  const st = status ?? live
+  const nameOf = name ?? ((id: string) => (target && target.id === id ? target.label : id))
+  const targetName = target ? nameOf(target.id) : null
   const rows = dragRows(values)
   return (
-    <div class="hl-edit-drag" role="status" aria-live="polite" data-validity={values.validity}>
+    <div class="hl-edit-drag" role="status" aria-live="polite" data-validity={values.validity} data-live={st}>
       <div class="hl-edit-drag__validity" data-source="field">
         {validityText(values)}
       </div>
@@ -59,14 +103,19 @@ export function DragReadout({ values, target }: { values: SpotValues; target: Pa
         ) : r.key === 'slope' ? (
           <FieldReadout key={r.key} label={t('cards.pad.slope')} v={values.slopeDeg} file={SLOPE_FILE} units="deg" />
         ) : r.key === 'feasibleEvas' ? (
-          <GhostRow key={r.key} label={t('cards.pad.feasibleEvas')} />
+          <PendingRow key={r.key} label={t('cards.pad.feasibleEvas')} pad={targetName} />
         ) : r.key === 'reachable' ? (
-          <GhostRow key={r.key} label={t('cards.pad.reachable')} />
+          <PendingRow key={r.key} label={t('cards.pad.reachable')} pad={targetName} />
         ) : null,
       )}
+      {refused && (
+        <div class="hl-edit-drag__refused" data-refused={refused.id} data-source="field" data-file={SLOPE_FILE}>
+          {refusedText(nameOf(refused.id), refused.failed, refused.maxSlopeDeg ?? null)}
+        </div>
+      )}
       <div class="hl-edit-drag__snap">
-        {t('edit.snapStatic')}
-        {target ? ` · ${target.label}` : ''}
+        {target ? t(snapText(st)) : t('edit.noSnap')}
+        {targetName ? ` · ${targetName}` : ''}
       </div>
     </div>
   )
@@ -132,6 +181,7 @@ function InputRow({ row, pads }: { row: DeltaRow; pads: PadsIndexView }) {
 export function DeltaStrip({ store, rover, pads }: { store: PlanEditStore; rover: RoverDrag; pads: PadsIndexView }) {
   const d = useSignalValue(store.draft)
   useSignalValue(store.canUndo)
+  const live = useSignalValue(liveStatus)
   if (!d || d.phase !== 'released') return null
   const from = store.committed.peek().plan.pad
   const to = d.step.plan.pad
@@ -159,11 +209,11 @@ export function DeltaStrip({ store, rover, pads }: { store: PlanEditStore; rover
           </span>
         </div>
       ))}
-      {!store.live.value && <p class="hl-edit-delta__note">{t('edit.snapStatic')}</p>}
+      {!store.live.value && <p class="hl-edit-delta__note">{t(deltaNote(live))}</p>}
       {!d.availability.ok && <p class="hl-edit-delta__note">{t(d.availability.reason ?? 'states.offline.unavailableHere')}</p>}
       <div class="hl-edit-delta__actions">
         {buttons.map((b) => (
-          <Button key={b.id} variant={b.id === 'keep' ? 'primary' : 'secondary'} disabled={!b.enabled} title={t(b.hint ?? b.label)} onClick={() => (b.id === 'keep' ? rover.keep() : rover.discard())}>
+          <Button key={b.id} variant={b.id === 'keep' ? 'primary' : 'secondary'} disabled={!b.enabled} reason={t(b.reason ?? b.hint ?? b.label)} title={t(b.hint ?? b.label)} onClick={() => (b.id === 'keep' ? rover.keep() : rover.discard())}>
             {t(b.label)}
           </Button>
         ))}

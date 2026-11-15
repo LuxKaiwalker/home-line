@@ -22,7 +22,7 @@ import { ui } from '../../state/ui'
 import { SelectionCard } from '../cards/cards'
 import { ensureFor, loadCardData, type CardData, type CellLookup } from '../cards/data'
 import { t } from '../copy'
-import { shell } from '../shell/store'
+import { hostIn, shell } from '../shell/store'
 import { byClass, byRole, byTag, installDom, one, type FakeDocument, type FakeNode } from '../testing/dom'
 import { SearchButton } from './button'
 import { labelOf, Palette, resetSearchIndex, runItem, searchIndex } from './palette'
@@ -127,6 +127,19 @@ describe.skipIf(!HAVE)('search palette (real data)', () => {
     expect(selection.selected.value).toEqual({ kind: 'station', id: 'S7' })
     expect(selection.source.value).toBe('search')
     expect(shell.sidebarOpen.value).toBe(true)
+  })
+
+  it('L2d: with the Plan map hosting station cards, Enter on S7 selects it and leaves the sidebar shut', () => {
+    const off = hostIn('station')
+    try {
+      mount(<Palette items={items} onClose={() => {}} navigate={() => {}} />)
+      type('S7')
+      key('Enter')
+      expect(selection.selected.value).toEqual({ kind: 'station', id: 'S7' })
+      expect(shell.sidebarOpen.value).toBe(false) // the station card on the map shows it (views/planStation.tsx)
+    } finally {
+      off()
+    }
   })
 
   it('↓ / ↑ move the active option (wrapping) and Enter takes the active one', () => {

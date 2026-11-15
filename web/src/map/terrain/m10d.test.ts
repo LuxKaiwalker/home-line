@@ -1,4 +1,4 @@
-// M10d (follow-up to M10c RR item 8): the 3D frame-rate watch (below 30 fps for 3 s -> flat, M8/T1) is
+// M10d (follow-up to M10c RR item 8): the 3D frame-rate watch (below performance.fps_3d_min — 20 fps since D38/L13 — for 3 s -> flat, M8/T1) is
 // suspended while a story plays (intro, kiosk, capture), so a slow GPU never drops the descent to 2D in
 // the middle of the intro, and it resumes with a fresh window when the story ends. Written before the
 // implementation. CPU only.
@@ -10,7 +10,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { REPO } from '../../hud/testutil'
 import { ui } from '../../state'
 import { installDom, type FakeDocument, type FakeNode } from '../../ui/testing/dom'
-import { TERRAIN_PENDING } from './config'
+import { TERRAIN, TERRAIN_PENDING } from './config'
+
+/** a frame rate under the threshold (L13: 15 fps against D38's 20; was 20 against 30) */
+const SLOW = TERRAIN.fps3dMin - 5
 import { FpsWatch, fpsWatchSuspended, setFpsWatchSuspended, type FpsState } from './fps'
 import { TerrainController } from './index'
 
@@ -39,28 +42,28 @@ describe('M10d: FpsWatch is suspended while a story plays', () => {
   it('resumes after the story with a fresh window: slow frames before or during the story do not count', () => {
     const w = new FpsWatch()
     // 2.5 s slow just before the story starts (slow, not yet tripped)
-    const a = run(w, 20, 0, 2500)
+    const a = run(w, SLOW, 0, 2500)
     expect(a.state).toBe('slow')
     setFpsWatchSuspended(true)
     const b = run(w, 10, a.end, 8000)
     setFpsWatchSuspended(false)
     expect(fpsWatchSuspended()).toBe(false)
     // right after the story: still slow, but the window starts now, so it does not trip at once
-    const c = run(w, 20, b.end, TERRAIN_PENDING.slowWindowMs - 500)
+    const c = run(w, SLOW, b.end, TERRAIN_PENDING.slowWindowMs - 500)
     expect(c.states.has('tripped')).toBe(false)
     // the watch is back: slow for the full window trips it
-    const d = run(w, 20, c.end, 1000)
+    const d = run(w, SLOW, c.end, 1000)
     expect(d.state).toBe('tripped')
   })
 
   it('the fresh window also applies to a watch that saw no frames during the story', () => {
     const w = new FpsWatch()
-    const a = run(w, 20, 0, 2900)
+    const a = run(w, SLOW, 0, 2900)
     expect(a.state).toBe('slow')
     setFpsWatchSuspended(true)
     setFpsWatchSuspended(false)
     // contiguous frames (no idle gap): without the fresh window this would trip at 3 s
-    expect(run(w, 20, a.end, 500).states.has('tripped')).toBe(false)
+    expect(run(w, SLOW, a.end, 500).states.has('tripped')).toBe(false)
   })
 })
 

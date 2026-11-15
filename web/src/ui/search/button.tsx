@@ -5,6 +5,7 @@ import type { ComponentType } from 'preact'
 import { useEffect, useState } from 'preact/hooks'
 import { IconButton } from '../components'
 import { t } from '../copy'
+import { scheduleIndexBuild } from './index/idle'
 import type { PaletteProps } from './palette'
 
 type PaletteC = ComponentType<PaletteProps>
@@ -23,6 +24,9 @@ export interface SearchButtonProps {
 export function SearchButton({ win = typeof window === 'undefined' ? undefined : window, palette }: SearchButtonProps) {
   const [open, setOpen] = useState(false)
   const [P, setP] = useState<PaletteC | null>(() => loaded)
+  // L12: the expanded index builds in an idle callback after the intro has started (index/idle.ts), or on first open
+  const pl = palette?.loader
+  useEffect(() => scheduleIndexBuild({ win, loader: pl && (() => pl) }), [])
   useEffect(() => {
     if (!win) return
     // §4.4: Ctrl+K and / arrive as the shell's cancelable `hl:shortcut` action 'search' (keys.ts).
@@ -39,7 +43,7 @@ export function SearchButton({ win = typeof window === 'undefined' ? undefined :
   }, [open])
   return (
     <>
-      <IconButton icon="search" label={t('nav.search')} aria-haspopup="dialog" aria-expanded={open ? 'true' : 'false'} aria-keyshortcuts="Control+K Meta+K /" onPointerEnter={prefetch} onFocus={prefetch} onClick={() => setOpen(true)} />
+      <IconButton icon="search" label={t('nav.search')} title={t('hints.shell.search')} aria-haspopup="dialog" aria-expanded={open ? 'true' : 'false'} aria-keyshortcuts="Control+K Meta+K /" onPointerEnter={prefetch} onFocus={prefetch} onClick={() => setOpen(true)} />
       {open && P && <P {...palette} win={palette?.win ?? win} onClose={() => setOpen(false)} />}
     </>
   )

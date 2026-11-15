@@ -1,5 +1,6 @@
 // WP14 (D116): VITE_ROUTE_EDIT=0 hides route editing on a build (the published Pages site until the
-// team lead's OK): padTool never mounts the Edit-route panel, so no rail entry, no route DOM and no
+// team lead's OK): padTool never mounts the Edit-route panel, so no Edit-route entry (L3: the drawer,
+// ui/shell/editroute.tsx; formerly a rail section), no route DOM and no
 // map waypoints (WP6 installs those with the panel). Unset (the localhost demo, every other build)
 // mounts it as before. Also: a route 422's Error.stop (contract v1.2.0) reaches the panel's text.
 import type { ComponentChildren } from 'preact'
@@ -110,6 +111,8 @@ describe('padTool and VITE_ROUTE_EDIT (D116)', () => {
     if (flag !== undefined) vi.stubEnv('VITE_ROUTE_EDIT', flag)
     const live = await import('./index')
     const { railSections } = await import('../ui/shell/store')
+    // L3 (D111): the panel registers into the Edit-route drawer (ui/shell/editroute.tsx), not the rail
+    const { editRouteSection } = await import('../ui/shell/editroute')
     const { render: draw } = await import('preact')
     const { act: step } = await import('preact/test-utils')
     const fetch = withRouteMock(createMockFetch())
@@ -121,14 +124,16 @@ describe('padTool and VITE_ROUTE_EDIT (D116)', () => {
     }
     const renderRail = () => {
       for (const s of railSections.peek()) step(() => draw(s.render() as ComponentChildren, root as unknown as Element))
+      const r = editRouteSection.peek()
+      if (r) step(() => draw(r() as ComponentChildren, root as unknown as Element))
     }
-    return { live, cmap, railSections, tick, renderRail, unmount: () => step(() => draw(null, root as unknown as Element)) }
+    return { live, cmap, railSections, editRouteSection, tick, renderRail, unmount: () => step(() => draw(null, root as unknown as Element)) }
   }
 
-  it('unset: the Edit-route panel mounts as before (rail entry, route DOM, map waypoint layer)', async () => {
+  it('unset: the Edit-route panel mounts as before (Edit-route entry, route DOM, map waypoint layer)', async () => {
     const t = await mountWith(undefined)
     expect(t.live.ROUTE_EDIT_ENABLED).toBe(true)
-    const has = () => t.railSections.peek().some((s) => s.id === ROUTE_ID)
+    const has = () => t.editRouteSection.peek() !== undefined
     await t.tick(400, has)
     expect(spy).toHaveBeenCalledTimes(1)
     expect(has()).toBe(true)
@@ -149,6 +154,7 @@ describe('padTool and VITE_ROUTE_EDIT (D116)', () => {
       await t.tick(50)
       expect(spy).not.toHaveBeenCalled()
       expect(t.railSections.peek().some((s) => s.id === ROUTE_ID)).toBe(false)
+      expect(t.editRouteSection.peek()).toBeUndefined()
       t.renderRail()
       expect(routeDom(root)).toEqual([])
       expect(routeDom(panel)).toEqual([])

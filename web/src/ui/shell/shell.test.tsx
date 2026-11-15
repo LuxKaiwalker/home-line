@@ -3,13 +3,14 @@
 import { act } from 'preact/test-utils'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { NAV_ITEMS } from '../../router'
+import { mission } from '../../state/mission'
 import { ui } from '../../state/ui'
 import { t } from '../copy'
 import { all, byClass, byTag, hasClass, installDom, one, type FakeDocument, type FakeNode } from '../testing/dom'
 import { TOKENS } from '../tokens'
 import { buildLegacyFrame, buildShellFrame, frameKindFor, type Frame } from './frame'
 import { mountShell, type ShellHandle } from './Shell'
-import { applyRoute, breakpointFor, openSidebar, registerRailSection, setSidebarContent, shell } from './store'
+import { applyRoute, breakpointFor, hostIn, openSidebar, registerRailSection, setSidebarContent, shell } from './store'
 
 let doc: FakeDocument
 const text = (n: FakeNode): string => n.textContent.replace(/\s+/g, ' ').trim()
@@ -81,6 +82,30 @@ describe('shell frame and islands', () => {
   })
   afterEach(() => act(() => h.destroy()))
 
+  it('L7b (T9): the Plan top bar has one "Official plan" action: disabled with its reason on the official plan, enabled when the plan differs, and it goes back', () => {
+    const btn = () => one(byTag(one(byClass(root(), 'hl-topbar__plan')), 'button'))
+    expect(text(btn())).toBe(t('nav.officialPlan'))
+    expect(btn().hasAttribute('disabled')).toBe(true)
+    expect(btn().getAttribute('title')).toBe(t('edit.officialPlanSame'))
+    expect(one(byClass(root(), 'hl-officialplan')).getAttribute('title')).toBe(t('edit.officialPlanSame'))
+    act(() => void (mission.plan.pad.value = 'rank3'))
+    expect(btn().hasAttribute('disabled')).toBe(false)
+    expect(btn().getAttribute('title')).toBe(t('edit.officialPlanTip'))
+    fire(btn(), 'click')
+    expect(mission.plan.pad.value).toBeNull()
+    expect(btn().hasAttribute('disabled')).toBe(true)
+    // Plan mode only
+    act(() => void applyRoute({ name: 'hud' }, '#/fly/hud'))
+    expect(byClass(root(), 'hl-officialplan')).toHaveLength(0)
+  })
+
+  it('L7b: follows the live-status window event while mounted (state/live.ts seam)', () => {
+    expect(win.count('hl:live-status')).toBe(1)
+    act(() => h.destroy())
+    expect(win.count('hl:live-status')).toBe(0)
+    act(() => void (h = mountShell(f, () => {}, win as unknown as Window)))
+  })
+
   it('keeps the anchors other code relies on: .topbar and main.outlet in one subtree (live layer, value snapshot)', () => {
     expect(hasClass(f.topbar as unknown as FakeNode, 'topbar')).toBe(true)
     const main = one(byTag(root(), 'main'))
@@ -136,7 +161,7 @@ describe('shell frame and islands', () => {
     const cases = [
       [{ name: 'console' }, 'plan'],
       [{ name: 'station', id: 'S1' }, 'plan'],
-      [{ name: 'trade' }, 'plan'],
+      [{ name: 'trade' }, 'report'], // L2 (D111, L0 Q2): the trade table is a Report document
       [{ name: 'conditions' }, 'fly'],
       [{ name: 'hud' }, 'fly'],
       [{ name: 'cuff' }, 'report'],
@@ -152,6 +177,9 @@ describe('shell frame and islands', () => {
   })
 
   it('rail and dock collapse write the panel sizes of the UI store (320/56, 120/40)', () => {
+    // the docked desktop rail is the documents' rail (L2: Plan and Fly use the icon column + sheet)
+    act(() => void applyRoute({ name: 'cuff' }, '#/report/cuff'))
+    expect(root().getAttribute('data-railmode')).toBe('docked')
     const toggle = one(byClass(root(), 'hl-rail__toggle'))
     expect(toggle.getAttribute('aria-label')).toBe(t('nav.rail.collapse'))
     fire(toggle, 'click')
@@ -159,9 +187,10 @@ describe('shell frame and islands', () => {
     expect(root().getAttribute('data-rail')).toBe('collapsed')
     expect(root().style['--hl-rail-w']).toBe(`${TOKENS.layout.leftRailCollapsed}px`)
     // collapsed on desktop: icon-only links keep their names
-    expect(byClass(root(), 'hl-rail__view').map((a) => a.getAttribute('aria-label'))).toEqual([t('nav.views.mission'), t('modes.plan.label'), t('nav.views.trade')])
+    expect(byClass(root(), 'hl-rail__view').map((a) => a.getAttribute('aria-label'))).toEqual([t('nav.views.cuff'), t('nav.views.trade')])
     fire(one(byClass(root(), 'hl-rail__toggle')), 'click')
     expect(ui.panels.leftRail.value).toBe(TOKENS.layout.leftRail)
+    act(() => void applyRoute({ name: 'hud' }, '#/fly/hud')) // the dock: map modes
     const dockBtn = byTag(one(byClass(root(), 'hl-dock__head')), 'button')[0]
     fire(dockBtn, 'click')
     expect(ui.panels.timeline.value).toBe(TOKENS.layout.timelineCollapsed)
@@ -175,7 +204,7 @@ describe('shell frame and islands', () => {
     expect(root().getAttribute('data-bp')).toBe('tablet')
     expect(ui.panels.leftRail.value).toBe(TOKENS.layout.leftRail) // desktop preference: open
     expect(root().getAttribute('data-rail')).toBe('collapsed')
-    expect(byClass(root(), 'hl-rail__view').map((a) => a.getAttribute('aria-label'))).toEqual([t('nav.views.mission'), t('modes.plan.label'), t('nav.views.trade')])
+    expect(byClass(root(), 'hl-rail__view').map((a) => a.getAttribute('aria-label'))).toEqual([t('nav.views.mission'), t('modes.plan.label')])
     expect(byClass(root(), 'hl-rail__title')).toHaveLength(0)
     expect(byClass(root(), 'probe')).toHaveLength(0)
     expect(one(byClass(root(), 'hl-rail__body')).hasAttribute('hidden')).toBe(false)
@@ -192,11 +221,51 @@ describe('shell frame and islands', () => {
     act(() => void applyRoute({ name: 'trade' }, '#/trade'))
     expect(shell.railSheet.value).toBe(false)
     expect(root().getAttribute('data-rail')).toBe('collapsed')
-    // back on desktop the rail is the 320 px column again
+    // back on desktop the rail of a document mode (trade = Report, L2) is the 320 px column again
     act(() => void (shell.breakpoint.value = breakpointFor(1440)))
     expect(root().getAttribute('data-rail')).toBe('open')
     expect(byClass(root(), 'hl-rail__title')).toHaveLength(1)
     act(() => off())
+  })
+
+  it('L2 (D111): desktop Plan and Fly default to the 56 px icon column; its toggle opens the rail as a sheet over the map', () => {
+    act(() => void (shell.breakpoint.value = breakpointFor(1440)))
+    for (const [r, h] of [[{ name: 'console' }, '#/'], [{ name: 'hud' }, '#/fly/hud']] as const) {
+      act(() => void applyRoute(r, h))
+      expect(root().getAttribute('data-railmode')).toBe('sheet')
+      expect(root().getAttribute('data-rail')).toBe('collapsed')
+      expect(ui.panels.leftRail.value).toBe(TOKENS.layout.leftRail) // the documents' preference is kept
+      expect(byClass(root(), 'hl-rail__title')).toHaveLength(0)
+    }
+    fire(one(byClass(root(), 'hl-rail__toggle')), 'click')
+    expect(shell.railSheet.value).toBe(true)
+    expect(root().getAttribute('data-rail')).toBe('open')
+    act(() => void applyRoute({ name: 'scorecard' }, '#/evidence/scorecard'))
+    expect(root().getAttribute('data-railmode')).toBe('docked')
+  })
+
+  it('L2 (D111): while the Plan map view hosts the layout, the dock, the hosted rail sections and the Details toggle leave Plan', () => {
+    let off = () => {}
+    act(() => void (off = registerRailSection({ id: 'layers', modes: ['plan'], title: 'nav.rail.layers', icon: 'layers', render: () => <p class="probe">x</p> })))
+    act(() => void (shell.railSheet.value = true))
+    expect(byClass(root(), 'probe')).toHaveLength(1)
+    const details = () => byTag(root(), 'button').filter((b) => b.getAttribute('aria-controls') === 'hl-sidebar')
+    expect(details()).toHaveLength(1)
+    let undo: (() => void)[] = []
+    act(() => void (undo = ['timeline', 'station', 'layers'].map(hostIn)))
+    expect(root().getAttribute('data-dock')).toBe('none')
+    expect(byClass(root(), 'hl-dock__head')).toHaveLength(0)
+    expect(byClass(root(), 'probe')).toHaveLength(0)
+    expect(details()).toHaveLength(0)
+    expect(byClass(root(), 'hl-strip')).toHaveLength(1)
+    act(() => void applyRoute({ name: 'hud' }, '#/fly/hud')) // Fly keeps its dock and Details toggle
+    expect(root().getAttribute('data-dock')).not.toBe('none')
+    expect(details()).toHaveLength(1)
+    act(() => {
+      undo.forEach((u) => u())
+      off()
+    })
+    expect(shell.hosted.value).toEqual([])
   })
 
   it('sidebar: closed until opened (§4.3 opens on selection), empty-state card, A5 content slot', () => {
@@ -214,6 +283,7 @@ describe('shell frame and islands', () => {
   it('rail sections registered by later packages show in their modes only', () => {
     let off = () => {}
     act(() => void (off = registerRailSection({ id: 'layers', modes: ['plan'], title: 'nav.rail.layers', icon: 'layers', render: () => <p class="probe">x</p> })))
+    act(() => void (shell.railSheet.value = true)) // L2: desktop Plan shows sections in the rail sheet
     expect(byClass(root(), 'probe')).toHaveLength(1)
     act(() => void applyRoute({ name: 'hud' }, '#/fly/hud'))
     expect(byClass(root(), 'probe')).toHaveLength(0)
@@ -240,8 +310,8 @@ describe('shell frame and islands', () => {
     expect(shell.focusMode.value).toBe(false)
   })
 
-  it('installs one keydown and one resize listener on the window', () => {
-    expect(win.count('keydown')).toBe(1)
+  it('installs two keydown listeners (shortcuts; L2: Esc for the layout containers) and one resize listener on the window', () => {
+    expect(win.count('keydown')).toBe(2)
     expect(win.count('resize')).toBe(1)
   })
 })

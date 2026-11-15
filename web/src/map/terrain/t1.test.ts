@@ -10,7 +10,7 @@ import { parse } from 'yaml'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { Plan } from '../../hud/plan'
 import { REPO } from '../../hud/testutil'
-import { ELEVATION_FACTOR, FLYTHROUGH } from '../../story/config'
+import { CHASE, ELEVATION_FACTOR, FLYTHROUGH } from '../../story/config'
 import { Director, type DirectorOptions } from '../../story/director'
 import { parseStoryboard } from '../../story/storyboard'
 import { CONFIG } from '../../config'
@@ -202,8 +202,9 @@ describe('T1: no camera pose exceeds the 3D pitch cap (terrain_3d.max_pitch_deg)
     const o = realOptions()
     let worst = 0
     for (let tm = 0; tm <= o.tEnd + 30; tm += 0.25) worst = Math.max(worst, o.fp.poseAt(tm).pitch)
-    expect(worst).toBeCloseTo((Math.atan2(FLYTHROUGH.behindM, FLYTHROUGH.aboveM) * 180) / Math.PI, 6)
-    expect(worst).toBeLessThanOrEqual(55.1)
+    // L10: atan(250/175) = 55.008°, capped at camera.flythrough.max_pitch_deg = 55
+    expect(worst).toBeCloseTo(Math.min(CHASE.maxPitchDeg, (Math.atan2(FLYTHROUGH.behindM, FLYTHROUGH.aboveM) * 180) / Math.PI), 6)
+    expect(worst).toBeLessThanOrEqual(55)
   })
   for (const id of ['flythrough', 'video_beat1', 'intro', 'kiosk', 'storm']) {
     it(`${id}.json: every frame's camera pitch <= the cap`, () => {

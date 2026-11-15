@@ -289,6 +289,14 @@ describe('buttons and card actions (A5 registry)', () => {
     s.propose({ budgetMin: 40 })
     expect(editButtons(s).filter((b) => b.enabled).map((b) => b.id)).toEqual(['keep', 'discard', 'undo'])
   })
+  it('every disabled button says why (D117)', () => {
+    const s = stat()
+    expect(editButtons(s).map((b) => [b.id, b.reason ?? null])).toEqual([
+      ['keep', 'hints.disabled.keepNothing'], ['discard', 'hints.disabled.discardNothing'], ['undo', 'edit.undoEmpty'], ['redo', 'edit.redoEmpty'],
+    ])
+    s.propose({ budgetMin: 40 })
+    for (const b of editButtons(s)) expect(b.enabled ? b.reason === undefined : b.reason !== undefined, b.id).toBe(true)
+  })
   it('Keep / Undo are registered only while they do something', () => {
     const s = stat()
     const off = registerEditActions(s)

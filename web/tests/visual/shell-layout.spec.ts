@@ -8,7 +8,10 @@
  *     while the descent intro (M10) hides the chrome, and pauses again while the clock runs.
  *   - Tablet (768–1279): the map region keeps the full width beside a 56 px icon rail and everything
  *     above the 96 px dock; the selection card overlays the map and never covers the dock or the rail.
- *   - Desktop: 320 rail | map | 360 sidebar, 120 dock, as before.
+ *   - Desktop: 56 px icon rail in Plan (L2, D111: like the tablet; its toggle opens a sheet over the map)
+ *     | map | 360 sidebar, 120 dock.
+ *   - L2d (D111): a station selection opens its marker card on the map (#hl-lay-station, "Open station"
+ *     link), the sidebar stays closed; the sidebar checks above use the official pad card instead.
  * Run: cd web && npm run build && npx playwright test tests/visual/shell-layout.spec.ts
  */
 import { expect, test, type Page } from 'playwright/test'
@@ -36,7 +39,7 @@ async function clickPlayAndPause(page: Page): Promise<void> {
 
 test.describe('timeline dock Play', () => {
   test('a real click plays and pauses on the plan map', async ({ page }) => {
-    await page.goto('/?intro=0#/')
+    await page.goto('/?intro=0&view=2d#/')
     await page.locator('.hl-tl__play').waitFor({ timeout: 30_000 })
     await clickPlayAndPause(page)
   })
@@ -44,7 +47,7 @@ test.describe('timeline dock Play', () => {
   test.describe('with the descent intro playing', () => {
     test.use({ reducedMotion: 'no-preference' }) // the intro never plays under reduced motion
     test('the first click on Play skips the intro and plays', async ({ page }) => {
-      await page.goto('/#/')
+      await page.goto('/?view=2d#/')
       await page.locator('.hl-tl__play').waitFor({ timeout: 30_000 })
       await page.locator('html[data-story-chrome="hide"]').waitFor({ state: 'attached', timeout: 30_000 })
       const play = page.locator('.hl-tl__play')
@@ -59,13 +62,13 @@ test.describe('shell layout (§4.3)', () => {
   test('the map region keeps the viewport; a selection never covers the dock', async ({ page }) => {
     const vp = page.viewportSize()!
     const tablet = vp.width < 1280
-    await page.goto('/?intro=0#/')
+    await page.goto('/?intro=0&view=2d#/')
     await page.locator('.hl-tl__play').waitFor({ timeout: 30_000 })
     const main = await box(page, 'main.outlet')
     const rail = await box(page, '.hl-rail')
     const dock = await box(page, '.hl-dock')
     const dockH = tablet ? 96 : 120
-    const railW = tablet ? 56 : 320
+    const railW = 56 // L2 (D111): the icon column in Plan at every size
     expect(Math.round(rail.width)).toBe(railW)
     expect(Math.round(dock.height)).toBe(dockH)
     expect(Math.round(main.x)).toBe(railW)
@@ -79,6 +82,28 @@ test.describe('shell layout (§4.3)', () => {
     await search.fill('S7')
     await expect(page.getByRole('option', { selected: true })).toContainText('S7')
     await search.press('Enter')
+    // L2d (D111, L0 row 12): in Plan a station opens its marker card on the map, not the sidebar
+    const card = page.locator('#hl-lay-station')
+    await card.locator('.hl-card').first().waitFor({ timeout: 30_000 })
+    await expect(card.getByRole('link', { name: 'Open station' })).toHaveAttribute('href', /#\/station\/S7$/)
+    await expect(page.locator('.hl-shell')).toHaveAttribute('data-sidebar', 'closed')
+    const m1 = await box(page, 'main.outlet')
+    expect(Math.round(m1.width)).toBe(vp.width - railW) // the map keeps its size
+    // the card body loads lazily and grows: the card settles inside the map, clear of the dock
+    await expect.poll(async () => overlaps(await box(page, '#hl-lay-station'), await box(page, '.hl-dock')), { timeout: 5_000 }).toBe(false)
+    const c = await box(page, '#hl-lay-station')
+    expect(c.x).toBeGreaterThanOrEqual(m1.x - 1)
+    expect(c.x + c.width).toBeLessThanOrEqual(m1.x + m1.width + 1)
+    expect(overlaps(c, await box(page, '.hl-rail'))).toBe(false)
+    await page.keyboard.press('Escape') // the topmost container closes first
+    await expect(card).toHaveCount(0)
+
+    // any other selection still opens the sidebar: the official pad, through search as well
+    await page.keyboard.press('Control+k')
+    await search.fill('PAD')
+    const pad = page.getByRole('option').filter({ hasText: /^PAD(?![0-9])/ }).first()
+    await pad.waitFor({ timeout: 10_000 })
+    await pad.click()
     await page.locator('.hl-shell[data-sidebar="open"]').waitFor({ state: 'attached', timeout: 30_000 })
     await page.locator('.hl-sidebar .hl-card').first().waitFor({ timeout: 30_000 })
     const side = await box(page, '.hl-sidebar')
@@ -97,9 +122,8 @@ test.describe('shell layout (§4.3)', () => {
     await clickPlayAndPause(page)
   })
 
-  test('tablet: the rail toggle opens the full rail over the map and a rail link closes it', async ({ page }) => {
-    test.skip(page.viewportSize()!.width >= 1280, 'tablet only')
-    await page.goto('/?intro=0#/')
+  test('the rail toggle opens the full rail over the map (tablet; desktop Plan too, L2) and closes it again', async ({ page }) => {
+    await page.goto('/?intro=0&view=2d#/')
     await page.locator('.hl-tl__play').waitFor({ timeout: 30_000 })
     const toggle = page.locator('.hl-rail__toggle')
     await expect(toggle).toHaveAttribute('aria-expanded', 'false')
@@ -107,7 +131,7 @@ test.describe('shell layout (§4.3)', () => {
     await expect(page.locator('.hl-shell')).toHaveAttribute('data-rail', 'open')
     expect(Math.round((await box(page, '.hl-rail')).width)).toBe(320)
     expect(Math.round((await box(page, 'main.outlet')).x)).toBe(56) // overlay: the map does not move
-    await page.locator('.hl-rail__view', { hasText: 'Trade table' }).click()
+    await toggle.click()
     await expect(page.locator('.hl-shell')).toHaveAttribute('data-rail', 'collapsed')
   })
 })

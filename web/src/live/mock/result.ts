@@ -4,6 +4,8 @@
 // versions (the manifest and the scenario index grow as stages finish). contract.test.ts checks every
 // version against its contract. Geometry and numbers are placeholders around the mock pad, NOT results.
 import type { Manifest } from '../../data/types'
+import missionExample from '../../../../contracts/bundle/examples/mission.mission_planer.json'
+import { LIVE_LABEL } from '../config'
 import { MOCK_STAGES } from './fixtures'
 import { MOCK_PAD_VALID } from './pads'
 
@@ -69,8 +71,8 @@ export const MOCK_RESULT_STAGES: Record<(typeof MOCK_STAGES)[number], Record<str
   },
 }
 
-/** The file at `path` as the tree holds it once `stagesDone` have finished (null = not written yet). */
-export function mockResultFile(path: string, stagesDone: readonly string[]): unknown | null {
+/** The staged files only (MOCK_RESULT_STAGES), without the exporter's mission.json. */
+function stagedFile(path: string, stagesDone: readonly string[]): unknown | null {
   let out: unknown = null
   for (const st of MOCK_STAGES) {
     if (!stagesDone.includes(st)) continue
@@ -80,6 +82,16 @@ export function mockResultFile(path: string, stagesDone: readonly string[]): unk
   return out
 }
 
+/**
+ * The file at `path` as the tree holds it once `stagesDone` have finished (null = not written yet).
+ * Once every stage is done the "mission" exporter has run as on the server (WP9b, D110): the
+ * manifest gains its sim_plan entry and mission.json is served.
+ */
+export function mockResultFile(path: string, stagesDone: readonly string[]): unknown | null {
+  if (MOCK_STAGES.every((st) => stagesDone.includes(st))) return withMission(path, stagedFile(path, MOCK_STAGES))
+  return stagedFile(path, stagesDone)
+}
+
 /** Every (stage, path, document) of the mock tree, for the contract test. */
 export function mockResultDocs(): { stage: string; path: string; doc: unknown }[] {
   return Object.entries(MOCK_RESULT_STAGES).flatMap(([stage, f]) => Object.entries(f).map(([path, doc]) => ({ stage, path, doc })))
@@ -87,23 +99,42 @@ export function mockResultDocs(): { stage: string; path: string; doc: unknown }[
 
 export const MOCK_RESULT_SCENARIO = SCN
 
-// --- D76 "Send to simulator" slot: a manifest entry of kind sim_plan ---
-// The compiled-plan format for the simulator is open (D76), so the slot never assumes a file name or
-// schema: it lists whatever manifest entries carry kind "sim_plan". The path below is a neutral
-// placeholder for the mock only; the manifest contract allows extra entry fields (manifest.schema.json).
+// --- "Send to simulator" (D76 slot, D103 format, D110): mission.json and its manifest entry ---
+// WP9b's exporter writes results/{hash}/mission.json for every live job, with a manifest entry of kind
+// "sim_plan". The mock's mission.json is the contract example (contracts/bundle/examples/
+// mission.mission_planer.json) with the origin of a live job; its numbers are the example's
+// placeholders, NOT a result of the mock tree.
 
-/** Placeholder path of the mock's sim_plan file (not a format, not a real name). */
-export const MOCK_SIM_FILE = 'sim/mock_sim_export.dat'
+/** Path of the mock's sim_plan file: mission.json at the result root, as WP9b writes it. */
+export const MOCK_SIM_FILE = 'mission.json'
+
+/** The mock live job's mission.json: the contract example, origin computed_live, engine grid. */
+export const MOCK_MISSION_LIVE = {
+  ...missionExample,
+  mission_id: 'm-000000mock01',
+  title: `Mock live job · 1 waypoint · ${SCN}`,
+  created_utc: MOCK_UTC,
+  origin: 'computed_live',
+  origin_label: LIVE_LABEL,
+  planner: { ...missionExample.planner, app_commit: MOCK_COMMIT, routing_grid_res_m: 3, files: { route: `route_${SCN}.geojson`, timeline: `timeline_${SCN}.json` } },
+}
 
 /** `m` plus one entry of kind sim_plan (a copy; `m` is unchanged). */
 export function withSimPlan(m: Manifest, file = MOCK_SIM_FILE): Manifest {
   return { ...m, [`sim.${SCN}.export`]: { ...entry(null, null, file), kind: 'sim_plan' } } as unknown as Manifest
 }
 
-/** The complete mock tree (every stage done), optionally with a sim_plan manifest entry. */
+/** A finished tree's file after the mission exporter ran (manifest entry + mission.json). */
+function withMission(path: string, doc: unknown | null): unknown | null {
+  if (path === 'manifest.json' && doc) return withSimPlan(doc as Manifest)
+  if (path === MOCK_SIM_FILE) return MOCK_MISSION_LIVE
+  return doc
+}
+
+/**
+ * The complete mock tree (every stage done), with (sim) or without the exporter's sim_plan entry and
+ * mission.json: without it, mission.json answers 404 (the slot's "not available" state).
+ */
 export function mockFinishedTree(sim: boolean): (path: string) => unknown | null {
-  return (path) => {
-    const doc = mockResultFile(path, MOCK_STAGES)
-    return sim && path === 'manifest.json' ? withSimPlan(doc as Manifest) : doc
-  }
+  return (path) => (sim ? withMission(path, stagedFile(path, MOCK_STAGES)) : stagedFile(path, MOCK_STAGES))
 }

@@ -129,6 +129,8 @@
     },
     "station": {
       "title": "Science target",
+      "open": "Open station",
+      "openTip": "The full station page: Navcam photo, panorama, timeline and tasks",
       "objective": "Objective",
       "tasks": "Tasks",
       "dwell": "Dwell",
@@ -380,7 +382,9 @@
     "compassSun": "Sun",
     "compassSunAt": "Sun at azimuth {azimuth}° · elevation {elevation}°",
     "compassSunNone": "Sun direction unknown at this minute",
-    "fieldLookup": "Field lookup: {file} (nearest pixel)"
+    "fieldLookup": "Field lookup: {file} (nearest pixel)",
+    "hoverEstimate": "Estimate: home in {t_home} min · hold Alt for the way home",
+    "hoverNoValue": "No time home known here"
   },
 
   "layers": {
@@ -456,9 +460,20 @@
       "landmarks": "Landmarks",
       "coordinates": "Coordinates",
       "layers": "Layers",
-      "commands": "Commands"
+      "commands": "Commands",
+      "areas": "Map layers and areas",
+      "legs": "Route legs",
+      "events": "Timeline events",
+      "scenarios": "Scenarios",
+      "report": "Report and evidence",
+      "glossary": "Glossary terms"
     },
-    "distanceFromPad": "{distance} from the rover pad"
+    "distanceFromPad": "{distance} from the rover pad",
+    "events": {
+      "depart": "Departure from the rover",
+      "arrive": "Arrival",
+      "return": "Back at the rover"
+    }
   },
 
   "shortcuts": {
@@ -483,10 +498,24 @@
 
   "edit": {
     "computing": "computing…",
+    "roverCard": "Rover move",
     "ghost": "Ghost: not yet computed",
     "deltaTitle": "What this change costs",
     "keepOrDiscard": "Enter to keep, Escape to discard",
     "snapStatic": "Live planning is offline: the rover snaps between the precomputed parking options",
+    "snapLive": "Release to snap to a parking option · for a custom spot, click the map (live planner)",
+    "snapWaiting": "Release to snap to a parking option · live planning is not ready yet",
+    "liveCustomSpot": "The rover snapped to a parking option · for a custom spot, click the map (live planner)",
+    "parkingWaiting": "The rover snapped to a parking option · live planning is not ready yet",
+    "noSnap": "No valid parking option to snap to: on release the rover goes back",
+    "onRelease": "{pad_name} on release",
+    "onReleaseTip": "Not computed for the dragged spot: on release the rover snaps to {pad_name} and shows its precomputed value",
+    "padRefused": "{pad_name} is not a valid rover pad: {reason}",
+    "refusedSteep": "slope up to {slope} on the {block_m} × {block_m} m block (limit {max_slope_deg}°)",
+    "refusedSteepNoValue": "slope over {max_slope_deg}° on the {block_m} × {block_m} m block",
+    "refusedUnknown": "terrain not assessed on the {block_m} × {block_m} m block",
+    "officialPlanTip": "Back to the official plan: official rover pad, default crew and walkback budget, no live result, nothing selected",
+    "officialPlanSame": "Already showing the official plan",
     "previewNote": "Instant preview: an estimate until the full plan is computed",
     "undoEmpty": "Nothing to undo",
     "redoEmpty": "Nothing to redo",
@@ -667,6 +696,66 @@
     "privacy": "Privacy",
     "addOns": "Optional add-ons",
     "independence": "Independent team project for the Space Apps Challenge; not affiliated with any space agency."
+  },
+
+  "hints": {
+    "badges": {
+      "estimate": { "label": "Estimate", "explanation": "Instant estimate from the precomputed fields, not a computed route; compute the full plan for checked numbers." },
+      "computed": { "label": "Computed live", "explanation": "Computed on request by the same engine as the official plan, but not checked against the scorecard." }
+    },
+    "disabled": {
+      "engineChooses": "The engine chooses the stations; press My order to pick them yourself",
+      "undoEmpty": "Nothing to undo",
+      "redoEmpty": "Nothing to redo",
+      "jobRunning": "A plan is being computed; wait for it or cancel it first",
+      "needsLive": "Needs the live planner, which is not available right now",
+      "historyBack": "No earlier selection to go back to",
+      "historyForward": "No later selection to go forward to",
+      "collapsePlaying": "Wait until the collapse animation has finished",
+      "keepNothing": "Move the rover first: there is no change to keep",
+      "keepDragging": "Release the rover first, then keep or discard the move",
+      "discardNothing": "Move the rover first: there is no change to discard"
+    },
+    "shell": {
+      "search": "Search stations, places and commands · Ctrl+K or /",
+      "details": "Show or hide the details of the current selection",
+      "shortcuts": "Keyboard and mouse shortcuts · ?"
+    },
+    "map": {
+      "mouse": "Left click selects · right-drag moves the map · Ctrl + right-drag rotates and tilts · wheel zooms"
+    },
+    "layers": {
+      "cap": "Up to {max} thematic overlays at once; turning on one more turns off the oldest"
+    },
+    "timeline": {
+      "scrub": "Click or drag to move through the EVA · ← / → one minute, Shift for ten",
+      "play": "Play or pause the mission clock · Space"
+    },
+    "job": {
+      "stage": "{stage} · {elapsed} elapsed",
+      "expected": "Usually takes about {expected}",
+      "overdue": "Taking longer than usual · {elapsed} elapsed"
+    }
+  },
+  "layout": {
+    "strip": {
+      "label": "Plan headline",
+      "reach": "{budget}-min reach",
+      "reachShort": "{budget} min",
+      "margin": "Tightest margin",
+      "marginShort": "Margin",
+      "scenario": "Scenario",
+      "budget": "Walkback budget",
+      "budgetValue": "{budget} min"
+    },
+    "summary": {
+      "loading": "Loading the route for {label}…",
+      "noRoute": "No route for {label}",
+      "total": "total",
+      "stations": "{n} stations"
+    },
+    "storageTitle": "Stored in this browser",
+    "privacy": "No accounts, logins or cookies. Saved plans, and which panels and view you left open, stay in this browser; nothing else uses browser storage."
   },
 
   "a11y": {

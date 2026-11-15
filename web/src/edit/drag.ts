@@ -7,7 +7,8 @@
 //   validity     the U15 spot rule on those fields (config/design.yaml pad_validity):
 //                every cell of the 20 × 20 m block around the spot assessed, max slope ≤ 5°,
 //                and the flat 30-min disc (1764 m) inside the field grid.
-// Everything else (feasible EVAs, reachable area) is a ghost marked "computing…"; with the backend
+// Everything else (feasible EVAs, reachable area) is not computed while dragging (D85): the readout
+// names the pad whose precomputed value shows on release (L7b); with the backend
 // off nothing is computed for the dragged spot: on release the rover snaps to the nearest
 // precomputed pad (official + D21 parking options) whose spot is valid, and that pad's precomputed
 // values are shown. Nothing here fetches or estimates anything.

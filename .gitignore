@@ -11,6 +11,8 @@ __pycache__/
 
 # Web
 node_modules/
+# worktrees link web/node_modules to a shared install (a symlink, which "node_modules/" does not match)
+node_modules
 web/dist/
 
 # Editors / OS
@@ -24,3 +26,6 @@ web/dist/
 .env.*
 web/test-results/
 web/playwright-report/
+
+# worktree symlinks to a shared install must never be committed (#157 hotfix)
+web/node_modules

@@ -1,0 +1,107 @@
+/* Layout containers (L1, D111): drawers, bottom drawer, marker card, map-edge popover, collapsible
+   section. Tokens only (kit rule 2). Containers are absolutely positioned inside the map container
+   (position: relative), so the percentages below are shares of the map, not of the page.
+   Motion: one short slide/fade on open (--motion-panel-min); under prefers-reduced-motion the token is
+   0 ms (tokens.css), and the app's own reduced-motion switch (ui.reducedMotion) sets data-motion=reduce,
+   which turns the animation off as well. */
+
+/* ---------- right drawer: leaves at least 60 % of the map width ---------- */
+.hl-lay-drawer {
+  position: absolute; top: 0; right: 0; bottom: 0; z-index: 25; /* bottom: above the bottom drawer (inline, from the store) */
+  width: min(var(--layout-sidebar), 40%); max-width: 40%;
+  display: flex; flex-direction: column; min-height: 0;
+  color: var(--color-text); background: var(--color-sidebar);
+  border-left: 1px solid var(--color-card-border);
+  box-shadow: 0 0 24px var(--color-bg);
+  animation: hl-lay-in-right var(--motion-panel-min) ease-out;
+}
+.hl-lay-drawer[hidden] { display: none; }
+.hl-lay-drawer__head {
+  display: flex; align-items: center; gap: var(--space-2); flex: none;
+  padding: var(--space-2) var(--space-2) var(--space-2) var(--space-4);
+  border-bottom: 1px solid var(--color-card-border);
+}
+.hl-lay-drawer__title, .hl-lay-card__title {
+  flex: 1; min-width: 0; margin: 0;
+  font-size: var(--font-size-body); line-height: var(--line-height-body); font-weight: var(--font-weight-heading);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.hl-lay-drawer__body { flex: 1; min-height: 0; overflow: auto; padding: var(--space-3) var(--space-4); }
+
+/* ---------- bottom drawer: one line collapsed, at most 40 % of the map and the viewport expanded ---------- */
+.hl-lay-bottom {
+  position: absolute; left: 0; right: 0; bottom: 0; z-index: 24;
+  display: flex; flex-direction: column; min-height: 0;
+  max-height: min(40%, 40vh);
+  color: var(--color-text); background: var(--color-sidebar);
+  border-top: 1px solid var(--color-card-border);
+}
+.hl-lay-bottom__bar {
+  display: flex; align-items: center; gap: var(--space-2); flex: none;
+  min-height: var(--layout-timeline-collapsed); padding: 0 var(--space-2);
+}
+.hl-lay-bottom__grip { flex: none; touch-action: none; }
+.hl-lay-bottom__tabs { flex: 1; min-width: 0; border-bottom: 0; }
+.hl-lay-bottom__summary {
+  flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
+  font-size: var(--font-size-small); line-height: var(--line-height-small); color: var(--color-text-muted);
+}
+.hl-lay-bottom__body { flex: 1; min-height: 0; overflow: auto; border-top: 1px solid var(--color-card-border); }
+.hl-lay-bottom__body[hidden] { display: none; }
+.hl-lay-bottom__panel { padding: var(--space-3) var(--space-4); animation: hl-lay-in-up var(--motion-panel-min) ease-out; }
+
+/* ---------- marker card ---------- */
+.hl-lay-card {
+  position: absolute; z-index: 26;
+  width: min(280px, calc(100% - var(--space-4)));
+  display: flex; flex-direction: column;
+  color: var(--color-text); background: var(--color-card);
+  border: 1px solid var(--color-card-border); border-radius: var(--radius-card);
+  box-shadow: 0 0 24px var(--color-bg);
+  animation: hl-lay-fade var(--motion-panel-min) ease-out;
+}
+.hl-lay-card__head { display: flex; align-items: center; gap: var(--space-2); padding: var(--space-2) var(--space-2) var(--space-2) var(--space-3); }
+.hl-lay-card__body { padding: 0 var(--space-3) var(--space-3); font-size: var(--font-size-small); line-height: var(--line-height-small); }
+
+/* ---------- map-edge popover ---------- */
+.hl-lay-pop { position: absolute; z-index: 27; display: flex; gap: var(--space-1); }
+.hl-lay-pop--top-left { top: var(--space-2); left: var(--space-2); flex-direction: column; align-items: flex-start; }
+.hl-lay-pop--top-right { top: var(--space-2); right: var(--space-2); flex-direction: column; align-items: flex-end; }
+.hl-lay-pop--bottom-left { bottom: var(--space-2); left: var(--space-2); flex-direction: column-reverse; align-items: flex-start; }
+.hl-lay-pop--bottom-right { bottom: var(--space-2); right: var(--space-2); flex-direction: column-reverse; align-items: flex-end; }
+.hl-lay-pop--left-top { top: var(--space-2); left: var(--space-2); flex-direction: row; align-items: flex-start; }
+.hl-lay-pop--right-top { top: var(--space-2); right: var(--space-2); flex-direction: row-reverse; align-items: flex-start; }
+.hl-lay-pop__panel {
+  width: min(320px, 80vw); max-height: min(60vh, 480px); overflow: auto;
+  display: flex; flex-direction: column; gap: var(--space-2);
+  font-size: var(--font-size-small); line-height: var(--line-height-small); color: var(--color-text);
+  background: var(--color-card); border: 1px solid var(--color-card-border); border-radius: var(--radius-card);
+  padding: var(--space-3); box-shadow: 0 0 24px var(--color-bg);
+  animation: hl-lay-fade var(--motion-panel-min) ease-out;
+}
+.hl-lay-pop__panel[hidden] { display: none; }
+.hl-lay-pop__title { font-weight: var(--font-weight-heading); font-size: var(--font-size-body); line-height: var(--line-height-body); }
+
+/* ---------- collapsible section ---------- */
+.hl-lay-sec { border-top: 1px solid var(--color-card-border); }
+.hl-lay-sec__head { margin: 0; font-size: var(--font-size-body); line-height: var(--line-height-body); font-weight: var(--font-weight-heading); }
+.hl-lay-sec__btn {
+  display: flex; align-items: center; gap: var(--space-2); width: 100%;
+  padding: var(--space-2) 0; font: inherit; font-weight: inherit; text-align: left; cursor: pointer;
+  color: var(--color-text); background: transparent; border: 0; border-radius: var(--radius-input);
+}
+.hl-lay-sec__btn:hover { background: var(--color-card); }
+.hl-lay-sec__btn:focus-visible { outline: var(--line-focus-ring) solid var(--color-select); outline-offset: 2px; }
+.hl-lay-sec__title { flex: 1; min-width: 0; }
+.hl-lay-sec__hint { color: var(--color-text-muted); font-weight: var(--font-weight-body); font-size: var(--font-size-small); }
+.hl-lay-sec__body { padding: 0 0 var(--space-3); }
+.hl-lay-sec__body[hidden] { display: none; }
+
+/* ---------- motion ---------- */
+@keyframes hl-lay-in-right { from { transform: translateX(var(--space-5)); opacity: 0; } }
+@keyframes hl-lay-in-up { from { transform: translateY(var(--space-3)); opacity: 0; } }
+@keyframes hl-lay-fade { from { opacity: 0; } }
+[data-motion=reduce].hl-lay-drawer, [data-motion=reduce] .hl-lay-bottom__panel, [data-motion=reduce].hl-lay-card, [data-motion=reduce] .hl-lay-pop__panel { animation: none; }
+@media (prefers-reduced-motion: reduce) {
+  .hl-lay-drawer, .hl-lay-bottom__panel, .hl-lay-card, .hl-lay-pop__panel { animation: none; }
+}

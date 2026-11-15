@@ -4,19 +4,24 @@
 import { render } from 'preact'
 import { useEffect, useRef, useState } from 'preact/hooks'
 import { canonicalHref, LANDING_HASH, type Route } from '../../router'
+import { listenLiveStatus } from '../../state/live'
 import { effect, useSignalValue } from '../../state/signal'
 import { SHOWN_MODES, ui, type Mode } from '../../state/ui'
 import { cx, Icon, IconButton } from '../components'
 import { t } from '../copy'
+import { bindBrowserStorage, installLayoutKeys } from '../layout'
 import { SearchButton } from '../search/button'
 import type { Frame } from './frame'
 import { HELP_ROWS, installShortcuts } from './keys'
+import { OfficialPlanButton } from './OfficialPlan'
 import {
   breakpointFor,
   closeSidebar,
   dockCollapsed,
   dockContent,
+  dockHosted,
   hasDock,
+  hostedInPlan,
   isMapMode,
   MODE_KEY,
   MODE_VIEWS,
@@ -24,6 +29,7 @@ import {
   railCollapsed,
   railIconOnly,
   railSections,
+  railSheetMode,
   setDockCollapsed,
   setRailCollapsed,
   shell,
@@ -78,6 +84,7 @@ export function TopBar() {
   useSignalValue(shell.lastHash)
   const bp = useSignalValue(shell.breakpoint)
   const sidebarOpen = useSignalValue(shell.sidebarOpen)
+  useSignalValue(shell.hosted)
   const [menu, setMenu] = useState(false)
   useEffect(() => setMenu(false), [mode])
   const phone = bp === 'phone'
@@ -103,19 +110,26 @@ export function TopBar() {
           <ModeTabs mode={mode} />
         )}
       </nav>
-      <div class="hl-topbar__plan" id="hl-topbar-plan" />
+      <div class="hl-topbar__plan" id="hl-topbar-plan">
+        {/* L2 (D111): the Plan headline strip renders here (views/planStrip.tsx, a portal into this host);
+            L7b's Official plan button sits next to it */}
+        <div class="hl-strip" id="hl-headline-strip" />
+        {mode === 'plan' && <OfficialPlanButton />}
+      </div>
       <div class="hl-topbar__end">
         <SearchButton />
-        {isMapMode(mode) && (
+        {/* L2 (D111, L0 Q5): once the station card replaces the sidebar in Plan, the Details toggle goes */}
+        {isMapMode(mode) && !hostedInPlan('station') && (
           <IconButton
             icon="panel-right"
             label={t('cards.common.details')}
+            title={t('hints.shell.details')}
             pressed={sidebarOpen}
             aria-controls="hl-sidebar"
             onClick={() => (shell.sidebarOpen.value = !sidebarOpen)}
           />
         )}
-        <IconButton icon="keyboard" label={t('nav.shortcuts')} aria-haspopup="dialog" aria-keyshortcuts="?" onClick={() => (shell.helpOpen.value = true)} />
+        <IconButton icon="keyboard" label={t('nav.shortcuts')} title={t('hints.shell.shortcuts')} aria-haspopup="dialog" aria-keyshortcuts="?" onClick={() => (shell.helpOpen.value = true)} />
       </div>
     </>
   )
@@ -127,8 +141,11 @@ export function Rail() {
   useSignalValue(ui.panels.leftRail)
   const sheet = useSignalValue(shell.railSheet)
   const bp = useSignalValue(shell.breakpoint)
-  const sections = useSignalValue(railSections).filter((s) => s.modes.includes(mode))
-  const tablet = bp === 'tablet'
+  useSignalValue(shell.hosted)
+  // L2 (D111): a Plan section the map view shows itself (e.g. 'layers' in a popover) leaves the rail
+  const sections = useSignalValue(railSections).filter((s) => s.modes.includes(mode) && !(mode === 'plan' && hostedInPlan(s.id)))
+  // L2 (D111): Plan and Fly on desktop behave like the tablet rail (icon column + sheet over the map)
+  const tablet = railSheetMode()
   // §4.3: desktop rail 320 collapsible to 56 (ui.panels.leftRail); tablet rail = 56 px icon column whose
   // toggle opens the full rail as a sheet over the map (shell.railSheet), so the map keeps the width.
   const collapsed = tablet ? !sheet : railCollapsed()
@@ -201,7 +218,10 @@ export function Sidebar() {
 export function Dock() {
   useSignalValue(ui.panels.timeline)
   const content = useSignalValue(dockContent)
+  useSignalValue(shell.hosted)
   const collapsed = dockCollapsed()
+  // L2 (D111): the Plan map view shows the timeline in its bottom drawer; one timeline at a time
+  if (dockHosted()) return null
   return (
     <>
       <div class="hl-dock__head">
@@ -298,8 +318,10 @@ export function mountShell(frame: Frame, navigate: (hash: string) => void, win: 
     set('data-bp', bp)
     set('data-focus', shell.focusMode.value ? 'on' : 'off')
     set('data-sidebar', shell.sidebarOpen.value && isMapMode(mode) ? 'open' : 'closed')
-    set('data-rail', (bp === 'tablet' ? !shell.railSheet.value : railCollapsed()) ? 'collapsed' : 'open')
-    set('data-dock', hasDock(mode, shell.route.value) ? (dockCollapsed() ? 'collapsed' : 'open') : 'none')
+    const sheet = railSheetMode()
+    set('data-railmode', sheet ? 'sheet' : 'docked')
+    set('data-rail', (sheet ? !shell.railSheet.value : railCollapsed()) ? 'collapsed' : 'open')
+    set('data-dock', hasDock(mode, shell.route.value) && !dockHosted() ? (dockCollapsed() ? 'collapsed' : 'open') : 'none')
     root.style.setProperty('--hl-rail-w', `${ui.panels.leftRail.value}px`)
     root.style.setProperty('--hl-side-w', `${ui.panels.sidebar.value}px`)
     root.style.setProperty('--hl-dock-h', `${ui.panels.timeline.value}px`)
@@ -308,7 +330,14 @@ export function mountShell(frame: Frame, navigate: (hash: string) => void, win: 
   const measure = () => (shell.breakpoint.value = breakpointFor(win.innerWidth))
   measure()
   win.addEventListener('resize', measure)
+  // L2 (D111): Esc closes the topmost layout container first (installed before the shell keys, which
+  // then skip the handled event; not while the help dialog is open); the open panels are remembered
+  // in this browser (privacy note on /about)
+  bindBrowserStorage()
+  const stopLayoutKeys = installLayoutKeys(win, { blocked: () => shell.helpOpen.peek() })
   const stopKeys = installShortcuts(win, navigate)
+  // the live layer reports its status through this window event (state/live.ts seam, L7b)
+  const stopLive = listenLiveStatus(win)
   // U14 (A5): the sidebar follows the selection store; cards load in their own chunk.
   let alive = true
   let stopSelection: (() => void) | undefined
@@ -338,6 +367,8 @@ export function mountShell(frame: Frame, navigate: (hash: string) => void, win: 
       stopSelection?.()
       stopDock?.()
       stopKeys()
+      stopLayoutKeys()
+      stopLive()
       stopLayout()
       win.removeEventListener('resize', measure)
       for (const el of [s.skip, s.top, s.rail, s.sidebar, s.dock, s.overlay]) render(null, el)

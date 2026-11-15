@@ -1,0 +1,25 @@
+/* Plan mount slots (L2-shell, D111). Tokens only (kit rule 2). */
+
+/* the layout host: same box as the map, above the MapLibre controls; the map keeps the pointer except
+   where a container is */
+.plan-layout { position: absolute; inset: 0; z-index: 3; pointer-events: none; }
+.plan-layout > [data-plan-slot] { position: absolute; inset: 0; pointer-events: none; }
+.plan-layout > [data-plan-slot] > * { pointer-events: auto; }
+/* map-edge popovers end at the bottom drawer */
+.plan-layout > .plan-layout__edge { bottom: var(--plan-inset-bottom, 0); }
+/* MapLibre's bottom corners (scale bar, cursor readout) sit above the bottom drawer */
+.console--layout .console-map .maplibregl-ctrl-bottom-left,
+.console--layout .console-map .maplibregl-ctrl-bottom-right { bottom: var(--plan-inset-bottom, 0); }
+/* the descent intro hides the chrome (story.css); like the shell dock, the bottom drawer keeps the
+   pointer, so a click on Play there both skips the intro and plays (shell.css, A7b) */
+html[data-story-chrome='hide'] .plan-layout > .plan-layout__bottom > *,
+html[data-story-chrome='hide'] .plan-layout > .plan-layout__bottom .hl-ui { pointer-events: auto; }
+
+/* sections: in the side panel they are invisible wrappers (the old layout, element for element) */
+.panel-body > .plan-section { display: contents; }
+.plan-sectionhost.panel-body { padding: 0; }
+.plan-sectionhost > .plan-section > section > h3:first-child { margin-top: 0; }
+/* once every section has moved to a container, the side panel goes (the live aside is L3's) */
+.console--layout.console--panel-empty > .console-panel:not(.console-live) { display: none; }
+
+.plan-summary { display: inline-flex; align-items: center; gap: var(--space-1); white-space: nowrap; color: var(--color-text); }

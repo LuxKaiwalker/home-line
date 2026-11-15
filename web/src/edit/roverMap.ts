@@ -2,12 +2,16 @@
 // ConsoleMap in the shell frame only (the legacy frame stays as it was).
 //
 //   pointer   the rover marker is draggable (left button only, I1); while dragging, a readout under
-//             it shows exact field lookups at the dragged cell (validity, elevation "—", slope) and
-//             ghost rows ("computing…"); on release it snaps to the nearest valid precomputed pad
+//             it shows exact field lookups at the dragged cell (validity, elevation "—", slope), which
+//             pad the planning values will come from on release, why a nearer pad is refused, and a
+//             snap line true to the live planner's status (state/live.ts, L7b); on release it snaps
+//             to the nearest valid precomputed pad
 //   map       on release the console shows that pad's precomputed homeline (mission.plan written
 //             without an undo step) and the previous homeline fades out over it (reduced motion: no
 //             fade); Escape / Discard puts the committed plan back, Enter / Keep commits (H1 undo step)
-//   sidebar   the delta strip sits above the selection card while a released draft is open
+//   strip     while a released draft is open, the delta strip shows in the rover card when a map view
+//             hosts it (state/roverCard.ts; Plan: views/planStation.tsx, L2d), else above the selection
+//             card in the sidebar
 //   keyboard  the rover marker is focusable; with the rover selected, arrow keys cycle the pads
 //   click     a press that moves no farther than CLICK_SLOP_PX is a click, not a drag (H2b): it
 //             selects the pad through the A5 map adapter, exactly as M9's map wiring and the pad's
@@ -25,6 +29,7 @@ import { dataUrl } from '../env'
 import { FieldGrid, loadField } from '../hud/fields'
 import { fieldAt, loadFieldData, type FieldData } from '../map/field'
 import { mission } from '../state/mission'
+import { roverCardHosted, setRoverStrip } from '../state/roverCard'
 import { selection } from '../state/selection'
 import { selectFromMap } from '../state/selectionAdapter'
 import { effect } from '../state/signal'
@@ -35,6 +40,7 @@ import { openSidebar, setSidebarContent, sidebarContent, type Render } from '../
 import { applyToMission, installPlanEdit, missionApply } from './bind'
 import { crossfadeFrom, crossfadeMs } from './crossfade'
 import { isDragMove, type DragFields } from './drag'
+import { registerEditOfficial } from './official'
 import { isCustomPad, loadEditCatalog, planAvailability, type EditCatalog, type EditPlan, type LonLat } from './options'
 import { createRoverDrag, type RoverDrag } from './rover'
 import { createPlanEditStore, type PlanEditStore, type PlanStep } from './store'
@@ -233,6 +239,27 @@ export function wireRoverMarker(m: RoverMarker, w: RoverWire): () => void {
   }
 }
 
+/** labels.json pad row (contracts/labels.schema.json), as far as the readout needs it. */
+export interface PadLabelRow {
+  code?: string
+  kind?: string
+  ref?: string
+}
+
+/** Pad id -> the code the map shows on its label pill (PAD, P2 … P5): the same names in the readout. */
+export function padCodes(rows: readonly PadLabelRow[], officialId: string): Map<string, string> {
+  const out = new Map<string, string>()
+  for (const r of rows) {
+    if (r.kind !== 'pad' || !r.code || !r.ref) continue
+    const id = r.ref === 'pad.json' ? officialId : r.ref.startsWith(`${PADS_INDEX}#`) ? r.ref.slice(PADS_INDEX.length + 1) : null
+    if (id) out.set(id, r.code)
+  }
+  return out
+}
+
+/** Readout offset from the dragged spot (px): right of and below the pointer and the rover handle. */
+export const READOUT_OFFSET: [number, number] = [28, 24]
+
 const sameStep = (a: PlanStep | null, b: PlanStep): boolean => !!a && a.key === b.key && JSON.stringify(a.plan) === JSON.stringify(b.plan)
 
 export function installRoverDrag(map: MlMap): RoverHandle {
@@ -246,7 +273,8 @@ export function installRoverDrag(map: MlMap): RoverHandle {
   // readout under the rover while dragging
   const readoutEl = document.createElement('div')
   readoutEl.className = 'hl-edit-drag-host'
-  const readout = new Marker({ element: readoutEl, anchor: 'top', offset: [0, 18] })
+  // L6/L7b: the card sits below-right of the pointer, clear of the drop point and the rover handle
+  const readout = new Marker({ element: readoutEl, anchor: 'top-left', offset: READOUT_OFFSET })
   let readoutOn = false
 
   // what the map shows: the committed plan, or a released draft's precomputed plan
@@ -294,21 +322,39 @@ export function installRoverDrag(map: MlMap): RoverHandle {
     if (s?.phase === 'dragging') return
     const at = restAt(rover)
     marker.setLngLat([at.lon, at.lat])
+    if (card) publishCard()
   }
 
-  // ---- sidebar: the delta strip above whatever the sidebar shows (A5 selection card) -----------
+  // ---- the delta strip: in the hosted rover card (L2d), else above whatever the sidebar shows ----
   let base: Render | undefined
   let mine: Render | null = null
+  let card: Render | null = null
+  function publishCard(): void {
+    if (!card || !rover || !store) return
+    const at = restAt(rover)
+    const rd = rover
+    const st = store
+    setRoverStrip({ render: card, lngLat: [at.lon, at.lat], dismiss: () => void (st.draft.peek()?.phase === 'released' && rd.discard()) })
+  }
   function mountStrip(on: boolean): void {
-    if (on && !mine && store && rover && pads) {
-      base = sidebarContent.peek()
+    if (on && !mine && !card && store && rover && pads) {
       const st = store
       const rd = rover
       const pd = pads
+      const strip: Render = () => h(DeltaStrip, { store: st, rover: rd, pads: pd, key: 'hl-edit-delta' })
+      if (roverCardHosted()) {
+        card = strip
+        publishCard()
+        return
+      }
+      base = sidebarContent.peek()
       const b = base
-      mine = () => [h(DeltaStrip, { store: st, rover: rd, pads: pd, key: 'hl-edit-delta' }), b ? h('div', { key: 'base' }, b()) : null]
+      mine = () => [strip(), b ? h('div', { key: 'base' }, b()) : null]
       setSidebarContent(mine)
       openSidebar()
+    } else if (!on && card) {
+      card = null
+      setRoverStrip(null)
     } else if (!on && mine) {
       if (sidebarContent.peek() === mine) setSidebarContent(base)
       mine = null
@@ -333,14 +379,19 @@ export function installRoverDrag(map: MlMap): RoverHandle {
     try {
       const catalog = await loadEditCatalog((p) => L.json(p))
       const padScenarioSuit = catalog.scenarios.find((s) => s.id === catalog.padScenario)?.suit_kg ?? 104
-      const [{ fields }, rawPads] = await Promise.all([loadDragFields(padScenarioSuit), L.json<unknown>(PADS_INDEX)])
+      const [{ fields }, rawPads, labels] = await Promise.all([loadDragFields(padScenarioSuit), L.json<unknown>(PADS_INDEX), L.optional(() => L.json<{ labels?: PadLabelRow[] }>('labels.json'))])
       if (!alive) return
       pads = parsePadsIndex(rawPads)
+      const codes = padCodes(labels?.labels ?? [], catalog.officialPadId)
+      const pd = pads
+      const nameOf = (id: string): string => codes.get(id) ?? pd.options.find((o) => o.id === id)?.label ?? id
       store = createPlanEditStore({ catalog, initial: initialPlan(catalog), onApply: missionApply })
       offs.push(installPlanEdit(store))
       rover = createRoverDrag(store, fields)
       const st = store
       const rd = rover
+      // the shell's "Official plan" action (L7b, T9) resets this store and the rover
+      offs.push(registerEditOfficial(st, rd))
       shown = st.committed.peek()
       // map follows the store: released draft = its precomputed plan; otherwise the committed plan
       offs.push(
@@ -362,7 +413,8 @@ export function installRoverDrag(map: MlMap): RoverHandle {
           const s = rd.state.value
           if (s?.phase === 'dragging' && s.values) {
             const target = s.target ? (pads!.options.find((o) => o.id === s.target!.id) ?? null) : null
-            render(h(DragReadout, { values: s.values, target }), readoutEl)
+            const refused = s.refused ? { id: s.refused.pad.id, failed: s.refused.failed, maxSlopeDeg: s.refused.maxSlopeDeg } : null
+            render(h(DragReadout, { values: s.values, target, name: nameOf, refused }), readoutEl)
             readout.setLngLat([s.at.lon, s.at.lat])
             if (!readoutOn) readout.addTo(map)
             readoutOn = true
