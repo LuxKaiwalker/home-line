@@ -4,7 +4,7 @@
 // FLY) and announces every action as a `hl:shortcut` CustomEvent on window, so later packages (search
 // U17, camera U16, selection history A5, undo U15) handle theirs without editing the shell:
 //   window.addEventListener('hl:shortcut', (e) => { if (e.detail.action === 'search') { …; e.preventDefault() } })
-import { canonicalHref, type Route } from '../../router'
+import type { Route } from '../../router'
 import type { ClockDriver } from '../../state/clock'
 import { ui, type Mode } from '../../state/ui'
 import type { CopyKey } from '../copy'
@@ -132,7 +132,6 @@ export function runShortcut(a: ShortcutAction, env: ShortcutEnv): boolean {
     case 'toggle3d': {
       const next = ui.view.peek() === '3d' ? '2d' : '3d'
       ui.view.value = next
-      if (route.name === 'hud' || route.name === 'hud3d') env.navigate(canonicalHref({ name: next === '3d' ? 'hud3d' : 'hud' }))
       return true
     }
     case 'playPause':

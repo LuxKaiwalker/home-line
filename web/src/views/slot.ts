@@ -1,7 +1,6 @@
 // Mount points for views owned by other workstreams (C, adjustment 4):
 //   /hud   -> web/src/hud/index.ts(x)   (WS7)
-//   /hud3d -> web/src/fp3d/index.ts(x)  (WS8)
-//   /nav   -> web/src/nav/index.ts(x)   (WS9)
+// The /hud3d (WS8, F20) and /nav (WS9, F21/F22) slots are removed (D99, D98); router.ts redirects them.
 // Contract: the module exports `mount(el, ctx)`; it may return a cleanup function (sync or async).
 // The shell lazy-loads it only on that route, so Three.js etc. never weigh on the other pages.
 // Until the module exists the route shows a placeholder. WS5 never writes inside those folders.
@@ -24,21 +23,13 @@ export interface SlotModule {
 const modules = import.meta.glob<SlotModule>([
   '../hud/index.ts',
   '../hud/index.tsx',
-  '../fp3d/index.ts',
-  '../fp3d/index.tsx',
-  '../nav/index.ts',
-  '../nav/index.tsx',
 ])
 
-/** D19 (user 2026-11-14 14:19): label of the navigation / visual-odometry views. */
+/** D19 (user 2026-11-14 14:19): label of the navigation / visual-odometry findings (scorecard). */
 export const ADDON_LABEL = 'Optional add-on (not part of the core plan)'
 
 export const SLOTS = {
-  hud: { dir: 'hud', owner: 'WS7', title: 'Live HUD (F18, F19)', optional: false },
-  hud3d: { dir: 'fp3d', owner: 'WS8', title: '3D first-person replay (F20)', optional: false },
-  // D19: navigation (F21, F22) is an optional add-on; the core plan uses the F19 drift circle and
-  // fixes at the rover pad and surveyed stations.
-  nav: { dir: 'nav', owner: 'WS9', title: 'Navigation (F21, F22)', optional: true },
+  hud: { dir: 'hud', owner: 'WS7', title: 'Live HUD (F18, F19)' },
 } as const
 export type SlotName = keyof typeof SLOTS
 
@@ -53,14 +44,6 @@ export function slotView(name: SlotName): View {
     const container = document.createElement('div')
     container.className = 'slot'
     container.dataset.slot = name
-    if (slot.optional) {
-      const banner = document.createElement('div')
-      banner.className = 'addon-banner'
-      banner.innerHTML = `<b></b> The core plan uses the F19 drift circle (simulated drift, % of distance walked) and position fixes at the rover pad and
-        the surveyed stations; nothing in the planning console depends on this view.`
-      banner.querySelector('b')!.textContent = ADDON_LABEL + '.'
-      el.append(banner)
-    }
     el.append(container)
     const load = findSlotLoader(name)
     if (!load) {
