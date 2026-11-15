@@ -1,6 +1,7 @@
-# Route features end to end: harness and demo script (WP8a, D97)
+# Route features end to end: harness and demo script (WP8a, D97; WP8c, D110)
 
-Gates: **W1 13:30** (ordered stations end to end on localhost), **W2 16:00** (free waypoints + saving),
+Gates: **W1 13:30** (ordered stations end to end on localhost), **W2 16:00** (free waypoints + saving,
+and the simulator export: scenarios h and i),
 **W3 16:45** (WP8b = the final run of this harness against the real API). Capture 17:00–19:00.
 
 The harness is `tests/e2e/route/`. It drives the real web app in a browser, in the style of the H5
@@ -11,9 +12,10 @@ and timings, screenshots, and one JSON result file.
 
 | File | What |
 |---|---|
-| `tests/e2e/route/drive-route.mjs` | The driver: scenarios a–g, `--mock` or `--real <api>` |
-| `tests/e2e/route/mock-api.mjs` | A tiny mock API built from `contracts/backend/examples`. It runs a staged job on a clock, has an infeasible variant and gives 422s naming the stop |
-| `tests/e2e/route/serve-web.mjs` | Vite **dev** server (not a production build, so not heavy) with `VITE_LIVE=1`. Mock mode: `VITE_API_BASE` = the mock. Real mode: same-origin proxy to the API |
+| `tests/e2e/route/drive-route.mjs` | The driver: scenarios a–i, `--mock` or `--real <api>` |
+| `tests/e2e/route/mock-api.mjs` | A tiny mock API built from `contracts/backend/examples`. It runs a staged job on a clock, has an infeasible variant and gives 422s naming the stop. WP8c: live trees carry `mission.json` (manifest kind `sim_plan`), the official tree a precomputed one |
+| `tests/e2e/route/serve-web.mjs` | Vite **dev** server (not a production build, so not heavy) with `VITE_LIVE=1` and `VITE_SIM_EXPORT=1` (the "Send to simulator" control, as the live-demo build). Mock mode: `VITE_API_BASE` = the mock. Real mode: same-origin proxy to the API |
+| `tests/e2e/route/check_mission.py` | WP8c: validates one downloaded `mission.json` against `contracts/bundle/mission.schema.json` and checks the `mission_id` rule (the helper of `tests/test_mission_contract.py`). Run by the driver with `uv run --no-sync python`; no npm dependency |
 
 ## How to run
 
@@ -43,6 +45,15 @@ node tests/e2e/route/drive-route.mjs --mock --web-dir /path/to/checkout/web --ou
     "EVA duration", 30.0 min short.
   - The numbers are placeholders, not results. The mock's hash is not the server's D57 hash, so the
     hash-parity criterion runs only in real mode.
+  - WP8c, simulator export (interfaces "Simulator export"): a live tree's `manifest.json` gets one entry
+    of kind `sim_plan` (`sim.mission` → `mission.json`), and once the job is done `mission.json` is a
+    placeholder mission (origin `computed_live`, label `labels.live`) built from
+    `contracts/bundle/examples/mission.mission_planer.json`'s fixed blocks and the mock's legs: waypoints in
+    the submitted order, `summary.feasible` = the run record's feasibility, `mission_id` by the README
+    rule. The official tree (manifest untouched, as WP9c) serves `mission.json` with origin `precomputed`
+    (route S7, S6, S1, S4 from the static route file). `serve-web.mjs --sim-official` answers
+    `sim/official/mission.json` with the same document while the checkout under test has no
+    `web/public/sim/official/mission.json` (an existing file wins).
 
 ### Real mode (WP8b; read-only use of the API)
 
@@ -60,18 +71,28 @@ node tests/e2e/route/drive-route.mjs --real http://127.0.0.1:8012 --official-has
 - Each real job takes about 6 min (H5: 360–490 s). `--job-wait-s` defaults to 900.
 - The S4, S1, S2 result is cached after the first run (same hash). The second run attaches at once, so
   "first stage before done" then reads `null` (cached), as in H5 step 4.
+- Real data (orchestrator, prod smoke job): S4, S1, S2 is **infeasible** (leg 3 S2 → pad, O2, 23.84 min
+  short), so in real mode h uses S4, S1, S6, S7 (feasible) and h-infeasible uses S4, S1, S2. a and b keep
+  their own `--ordered` / `--infeasible` (a's checks follow the run record's planned legs, so S4, S1, S2
+  still runs; WP8b decides whether a and the main demo script move to S4, S1, S6, S7 as well).
+- h and i need no mocking in real mode: `mission.json` comes from the server (WP9b exporter; the official
+  one from WP9c). i's schema check passes only once WP9c's schema (origin `precomputed`) is in the
+  harness checkout, or with `--mission-schema`.
 - If S4, S1, S2, S7, S8 turns out **feasible** on the real engine, b fails on `runRecordInfeasible`. Pick
   another order with `--infeasible S…` and use the same order in the demo script below.
 - Server data on `/home/vincent/hl-data/server` is shared. A real job there runs only inside
   `flock /tmp/hl-heavy.lock` (common rules).
 
 ### Options
-`--scenarios a,b,c,e,f,g`, `--ordered S4,S1,S2`, `--infeasible S4,S1,S2,S7,S8`, `--web <url>`,
+`--scenarios a,b,c,e,f,g,h,i`, `--ordered S4,S1,S2`, `--infeasible S4,S1,S2,S7,S8`, `--web <url>`,
 `--web-port`, `--api-port`, `--wp6` (runs d), `--out`. Environment: `PW` (playwright/index.mjs, default
 `~/coding/hl-h2/web/node_modules/playwright/index.mjs`), `CHROMIUM`.
 The exit code is 0 when every scenario that ran passes, 1 when one fails, and 2 on a driver crash.
 Output: `route-e2e-result.json` (criteria, timings, job polls, network log, console errors and warnings)
-and the screenshots `a-*.png` … `g-*.png`.
+and the screenshots `a-*.png` … `i-*.png`. h and i also save the downloads (`h-mission.json`,
+`i-mission.json`, `i-static-mission.json`; `*.fetched.json` = no download happened and the driver fetched
+the link only to report what it points to). `--mission-schema <path>` validates against another schema
+(e.g. WP9c's before it merges).
 
 ## Scenarios and pass criteria
 
@@ -86,10 +107,16 @@ A criterion that is `null` is informational and is not judged.
 | e | Saving (R7): permalink in a fresh page, Save to My plans, reload, open, rename, export, import, delete | `permalinkRenders` (computed_live), `permalinkRouteOrdered`, `permalinkStopsInOrder`, `saved`, `listedAfterReload`, `renamed` (also after reload), `openedFromList`, `exportCarriesRoute`, `importSameHash` (import lands on `#/plan/{same hash}`), `deleted` (also after reload), `noUncaught` |
 | f | Static first: every `/api/v1` request refused by the browser | `staticHeadline23`, `offlineBanner`, `noRouteControlsShown`, `computeDisabled`, `noUncaught` |
 | g | Official permalink | `precomputedLabel`, `sameAsStatic` (first three numbers = the static console's: 23 / 30 / 15.2), `official23`, `noneWithheld`, `noUncaught` |
+| h | **Export to the simulator (W2, D110)**: a feasible ordered route (mock S4, S1, S2; **real S4, S1, S6, S7**, `--export-route`) → Compute → "Send to simulator" → the downloaded `mission.json` | `resultShown`, `runRecordAsExpected` (feasible), `exportControlShown` (on the route panel, else on `#/plan/{hash}`), `controlHasHook` (`[data-sim-export]`, design S1), `controlOriginLive` (`data-origin=computed_live`), `downloaded` (a Playwright download event, saved as `h-mission.json`), `fileNamedMissionJson`, `schemaValid` (`check_mission.py` against `contracts/bundle/mission.schema.json`), `originComputedLive`, `waypointsInRouteOrder` (waypoint `station`, else the nearest station within 150 m, = the route), `feasibleMatchesRunRecord` (`summary.feasible` = run record `feasibility.feasible`), `plannedLegsOnly` (all legs routed, in chain order), `missionIdRule` (README rule, `tests/test_mission_contract.py mission_id`), `sameAsResultFile` (= `results/{hash}/mission.json`), `noUncaught` |
+| h-infeasible | The same export on an **infeasible** route (mock = b's S4, S1, S2, S7, S8; **real S4, S1, S2**: leg 3 S2 → pad, O2, 23.84 min short; `--export-infeasible`) | The criteria of h, with `runRecordAsExpected` = infeasible: the file still validates, every stop is a waypoint in order, `summary.feasible` is **false** like the run record, and `plannedLegsOnly`: only the first `legs_planned` legs are `routed` (pad → wp1 → …), no later leg is |
+| i | **Official plan's export**: `#/plan/{official}` (else the console) → "Send to simulator"; then static first (API refused) | `exportControlShown`, `controlHasHook`, `controlOriginPrecomputed`, `downloaded`, `fileNamedMissionJson`, `schemaValid` (needs WP9c's schema: `origin` gains `precomputed`), `originPrecomputed`, `missionIdRule`, `noUncaught`. Static first is **reported, not judged** (`staticFirst.observed`: control shown, downloaded, valid, from `sim/official/mission.json`) |
 
 ### Results
 
-WP8b fills this table on the real API. The mock run is WP8a's, on the UI described in the next section.
+WP8b fills this table on the real API. The mock runs a–g are WP8a's, on the UI described in the next
+section; h, h-infeasible and i are WP8c's (section "Simulator export"). WP8c run2 re-ran a–g on
+origin/design 471e975 + R7b #126 with `VITE_SIM_EXPORT=1` and the mock's `mission.json`: a, b, c, e, g
+PASS, d SKIP, and **f now PASS** (the route panel hides offline on design: R5-A is resolved there).
 
 | | Mock (WP8a run3 + run5) | Real (WP8b) | Key numbers (mock) |
 |---|---|---|---|
@@ -100,6 +127,9 @@ WP8b fills this table on the real API. The mock run is WP8a's, on the UI describ
 | e | **PASS** | | permalink 0.8 s; save, reload, rename, open and delete all work; the export (403 B) carries `route` (ordered S4, S1, S2); import gives the same hash in 0.2 s |
 | f | **FAIL** (one criterion) | | static headline 23 % unchanged; offline banner after 0.2 s; **the route panel stays visible with 11 controls (2 enabled), Compute disabled** (finding R5-A) |
 | g | **PASS** | | "Precomputed · official plan", 23 / 15.2 / 28.7 %, the same as the static console |
+| h | **FAIL** (WP8c run1, run2: design before S1, see "Simulator export") | | control found only on `#/plan/{hash}` (A5s link `.live-sim-file`, no `data-sim-export`); click → **no download**: Chrome ignored `download` on the cross-origin link and opened the JSON in the tab. The file itself (fetched for the record) is schema-valid, `computed_live`, waypoints S4, S1, S2, feasible = run record, `mission_id` by the rule, = the result file |
+| h-infeasible | **FAIL** (WP8c run3: design before S1) | | same three S1 criteria as h; the file passes every content check: valid, waypoints S4, S1, S2, S7, S8, `summary.feasible` false = run record (leg 4 S7 → S8), legs pad→wp1…wp3→wp4 routed, wp4→wp5 and wp5→pad `routed: false` |
+| i | **FAIL** (WP8c run1, run2: design before S1) | | no control on `#/plan/{official}` or the console: the official manifest has no `sim_plan` entry (WP9c leaves it untouched), the S1 path is not there yet. Static first: no control (reported, not judged) |
 
 ## UI under test (mock run)
 
@@ -139,6 +169,50 @@ Evidence: `/tmp/hl-way/wp8a/run3/` and `/tmp/hl-way/wp8a/run5/` (screenshots and
   plan's timeline (S7 S6 S1 S4) while a route result is on the map.
 - **Mock-only:** the permalink of a mock route result shows the official headline (23 %), because the
   mock serves the static tree. Real results have their own numbers.
+
+## Simulator export (WP8c, D110): UI under test, findings, requests
+
+Team lead 12:20: the export to the simulator is the main feature; h is part of gate W2. Builders
+(`/tmp/hl-way/interfaces.md` "Simulator export"): WP9b writes `mission.json` into every live result
+tree (manifest kind `sim_plan`), WP9c writes `web/public/sim/official/mission.json` (origin
+`precomputed`, schema enum extended), design package **S1** (branch `ws15-design-system-S1`) builds
+the control: `data-sim-export` on it, `data-origin` = `computed_live` | `precomputed`; a live result
+downloads its `sim_plan` file; the official plan uses `/api/v1/results/{official}/mission.json` when
+the API answers, else `sim/official/mission.json`; a 404 shows "Simulator file not available for this
+plan". The flag comes from a live-demo npm script (`VITE_SIM_EXPORT=1`); `serve-web.mjs` sets it.
+
+UI under test, run1 (h, i), run2 (a–i) and run3 (h, h-infeasible) (`/tmp/hl-way/wp8c/run{1,2,3}`, logs `/tmp/hl-way/wp8c-run{1,2,3}.log`): scratch worktree
+`/tmp/hl-way/wt/wp8c-ui` = origin/design (471e975) + R7b #126 (56dfcfc, fast-forward), not pushed.
+No open design PR had the S1 change yet, so this is the A5s slot: a plain `<a class="live-sim-file"
+href=… download>` on `#/plan/{hash}`, listing `sim_plan` manifest files, and the console route card
+slot (`.hl-simslot__file`, static manifest: never shown).
+
+Findings:
+- **SIM-1 (h, blocks the demo): `<a download>` does not download across origins.** The web
+  (5173 in the demo, 4230 here) and the API (8012, 8170 here) are different origins, so Chrome ignores
+  the `download` attribute and navigates the tab to the JSON (`urlAfter` =
+  `…/api/v1/results/{hash}/mission.json`). S1 should fetch the file and save it through a `Blob`
+  object URL (same-origin), or WP9b's route should answer `Content-Disposition: attachment;
+  filename=mission.json`. The mock does neither on purpose, so h catches it. In real mode through the
+  harness's same-origin proxy the link would download: run real mode with `--web http://localhost:5173`
+  to test the demo's cross-origin path.
+- **SIM-2 (h):** before S1 the control is not on the route panel after Compute; the presenter has to
+  open the provenance/plan page. h looks on the panel first (5 s), then on `#/plan/{hash}`, and reports
+  `where`.
+- **SIM-3 (i):** before S1 the official plan has no control at all (its manifest has no `sim_plan`
+  entry, by design of WP9c). S1's official path is required for i.
+- **SIM-4 (i, schema):** the precomputed mission validates only against WP9c's schema (origin enum gains
+  `precomputed`). Until WP9c merges, i's `schemaValid` fails on that one error; use
+  `--mission-schema <wp9c checkout>/contracts/bundle/mission.schema.json` to check ahead.
+- **SIM-5 (mission_id rule, for WP9b):** the README rule hashes `JSON.stringify` output; a Python
+  builder must produce the same text (`json.dumps(…, separators=(",", ":"), ensure_ascii=False)`, as
+  the contract test does) and avoid floats that print differently (`10.0` vs `10`, `1e-05` vs `1e-5`).
+  h checks the id with the test helper on the downloaded bytes.
+
+Selector requests (S1): `data-sim-export` on the control and `data-origin` (as announced); also, please,
+`data-state` on it (`idle` | `downloading` | `done` | `unavailable`) so the 404 case is readable without
+the text, and the control on the route panel's result box (`.hl-route__result`), not only on
+`#/plan/{hash}`, for the demo beat below.
 
 ## Selector requests
 
@@ -180,6 +254,23 @@ Setup:
 | 55–70 | Scroll to **"This order does not work"** | Read it out: "**Leg 5: S7 → S8 · Limit: EVA length (D28) · Short by 30.0 min**" (mock text; WP8b puts the real leg, limit and minutes here). "The failing leg is marked in red in the list and on the map. The engine did not reorder my stops. It tells me where my order breaks and by how much." |
 | 75 | Uncheck **S8** (or drag S7 above S2), Compute again | "Change the order or drop a station, then compute again." |
 | 85 | (optional) Open the provenance link → **Save to My plans** | "Saved in this browser only. The permalink and the exported plan_inputs.json carry the route." |
+
+### Beat: "export to the simulator" (15–20 s, on the feasible route S4, S1, S6, S7)
+
+On real data S4, S1, S2 is infeasible (leg 3 S2 → pad, O2), so the export beat uses **S4, S1, S6, S7**,
+which is feasible: the file then carries a complete plan. Warm its cache with h in real mode before
+recording.
+
+Setup: the dev server with the simulator flag (S1's live-demo npm script, or `VITE_SIM_EXPORT=1
+VITE_LIVE=1 npm run dev`); the simulator (Unity) open next to the browser with "Load mission" ready.
+
+| t (s) | Click / action | Say |
+|---|---|---|
+| 0 | **My order** → check **S4**, **S1**, **S6**, **S7** → **Compute plan** (cached: done at once) | "A route the crew can actually walk: four stations, in my order." |
+| 5 | On the result: **Send to simulator** (`[data-sim-export]`, label "Computed live") | "This route goes to the simulator as one file, mission.json." |
+| 8 | The download lands (`mission.json`, about 5 kB on the mock) | "Waypoints S4, S1, S6, S7 in my order, the legs, the planned timeline and the margins, in the pad frame the simulator uses." |
+| 12 | Simulator → **Load mission** → pick the file | "The simulator walks exactly this plan and compares the live walk with it: time, oxygen and position." |
+| 15–20 | (optional) Official plan → **Send to simulator** | "The official plan exports the same way, labelled precomputed; it also works with live planning offline." (only if i's static-first check showed it) |
 
 Fallback if the API is down during the capture: the static app is unchanged (scenario f, 23 %). Say
 "live planning is offline; the precomputed plan stays". Do not show the panel, because of R5-A.
