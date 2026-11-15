@@ -16,6 +16,7 @@ import { actionsFor, select, type SelectionRef } from '../../state/selection'
 import { t, type CopyKey } from '../copy'
 import { Button, Card, cx, Icon, ListRow, Readout, TrustChip, type ChipKind, type IconName } from '../components'
 import { lowestMarginRow, OFFICIAL_PAD, timelineRow, type CardData, type LabelRow, type RouteData } from './data'
+import { SimSlot } from './simslot'
 
 // ---------------------------------------------------------------- shared pieces
 
@@ -379,6 +380,7 @@ export function RouteSummaryCard({ d }: { d: CardData }) {
     return (
       <Card title={t('cards.routeSummary.title')} chip="simulated">
         <p class="hl-cardx__muted">{t('cards.routeSummary.noRoute')}</p>
+        <SimSlot />
       </Card>
     )
   }
@@ -416,6 +418,7 @@ export function RouteSummaryCard({ d }: { d: CardData }) {
           )
         })}
       </ol>
+      <SimSlot />
     </Card>
   )
 }
