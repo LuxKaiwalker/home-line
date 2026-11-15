@@ -1,6 +1,16 @@
 // Hash router (SPEC F17). Hash routes survive GitHub Pages (no SPA fallback) and work logged out.
 // Pages: / (planning console), /station/:id, /trade, /conditions, /scorecard, /cuff, /about.
 // Mount slots for other workstreams: /hud (WS7), /hud3d (WS8), /nav (WS9).
+//
+// Mode routes (DESIGN §4.2, WS15 task 4 / A4). PLAN keeps the root and its old URLs (`#/`,
+// `#/station/:id`, `#/trade`): `#/plan/{hash}` is the plan-permalink namespace (§4.2 "any mode with
+// that plan loaded", F28, owned by src/live/), so PLAN cannot live under `#/plan`. The other modes:
+//   FLY       #/fly/hud  #/fly/3d  #/fly/conditions          (#/fly = #/fly/hud)
+//   REPORT    #/report/cuff                                  (#/report = #/report/cuff until U10)
+//   EVIDENCE  #/evidence/scorecard[?key=K]  #/evidence/nav  #/evidence/about  (#/evidence = scorecard)
+// parseRoute accepts the old and the new paths; the shell replaces an old hash by canonicalHref
+// (redirectFor), so every old link and deep link keeps working. href() still writes the old paths,
+// which every layout understands (the legacy layout never redirects).
 
 export type Route =
   | { name: 'console' }
@@ -17,6 +27,21 @@ export type Route =
 
 const SIMPLE = ['trade', 'conditions', 'cuff', 'about', 'hud', 'hud3d', 'nav'] as const
 
+type ModeView = 'hud' | 'hud3d' | 'conditions' | 'cuff' | 'scorecard' | 'nav' | 'about'
+/** New canonical path of every view outside PLAN (DESIGN §4.2). */
+export const MODE_PATHS: Readonly<Record<ModeView, string>> = {
+  hud: '/fly/hud',
+  hud3d: '/fly/3d',
+  conditions: '/fly/conditions',
+  cuff: '/report/cuff',
+  scorecard: '/evidence/scorecard',
+  nav: '/evidence/nav',
+  about: '/evidence/about',
+}
+/** The view a bare mode path shows (#/fly, #/report, #/evidence). */
+const MODE_ROOT: Readonly<Record<string, ModeView>> = { fly: 'hud', report: 'cuff', evidence: 'scorecard' }
+const MODE_PATH_VIEW: Readonly<Record<string, ModeView>> = Object.fromEntries(Object.entries(MODE_PATHS).map(([v, p]) => [p, v as ModeView]))
+
 export function parseRoute(hash: string): Route {
   const raw = hash.replace(/^#/, '')
   const [pathPart, query = ''] = raw.split('?', 2)
@@ -26,6 +51,15 @@ export function parseRoute(hash: string): Route {
 
   if (segs.length === 0) return { name: 'console' }
   const [head, ...rest] = segs
+  if (Object.hasOwn(MODE_ROOT, head) && rest.length <= 1) {
+    const sub = `/${head}/${rest[0] ?? ''}`
+    const view = rest.length === 0 ? MODE_ROOT[head] : Object.hasOwn(MODE_PATH_VIEW, sub) ? MODE_PATH_VIEW[sub] : undefined
+    if (view === 'scorecard') {
+      const key = params.get('key')
+      return key ? { name: 'scorecard', key } : { name: 'scorecard' }
+    }
+    if (view) return { name: view }
+  }
   if (head === 'station' && rest.length === 1) return { name: 'station', id: decodeURIComponent(rest[0]) }
   if (head === 'scorecard' && rest.length === 0) {
     const key = params.get('key')
@@ -56,6 +90,53 @@ export function href(route: Route): string {
     default:
       return `#/${route.name}`
   }
+}
+
+/** The canonical (mode) hash of a route, DESIGN §4.2. PLAN routes keep their URLs. */
+export function canonicalHref(route: Route): string {
+  if (Object.hasOwn(MODE_PATHS, route.name)) {
+    const path = MODE_PATHS[route.name as ModeView]
+    return route.name === 'scorecard' && route.key ? `#${path}?key=${encodeURIComponent(route.key)}` : `#${path}`
+  }
+  return href(route)
+}
+
+/**
+ * Where the shell should send `hash`: its canonical mode hash when it is an old (or bare mode) path,
+ * else null. Query parameters other than the route's own (e.g. legacy) are kept. Unknown paths are
+ * not redirected (they render "Not found", and #/plan/... stays with the live layer).
+ */
+export function redirectFor(hash: string): string | null {
+  const route = parseRoute(hash)
+  if (route.name === 'notfound') return null
+  const [pathPart, query = ''] = hash.replace(/^#/, '').split('?', 2)
+  const path = '/' + pathPart.split('/').filter(Boolean).join('/')
+  const target = canonicalHref(route)
+  const [tPath, tQuery = ''] = target.slice(1).split('?', 2)
+  if (path === tPath) return null
+  const params = new URLSearchParams(tQuery)
+  for (const [k, v] of new URLSearchParams(query)) if (!params.has(k)) params.set(k, v)
+  const qs = params.toString()
+  return `#${tPath}${qs ? `?${qs}` : ''}`
+}
+
+/**
+ * The `legacy` switch (DESIGN U0 "?legacy=view", kit rule 10): from the page query (`?legacy=1#/trade`,
+ * survives navigation) or the hash query (`#/trade?legacy=1`). null when absent.
+ */
+export function legacyParam(search: string, hash: string): string | null {
+  const fromSearch = new URLSearchParams(search.replace(/^\?/, '')).get('legacy')
+  if (fromSearch !== null) return fromSearch
+  const q = hash.replace(/^#/, '').split('?', 2)[1]
+  return q === undefined ? null : new URLSearchParams(q).get('legacy')
+}
+
+/** True when `route` renders in the old layout: legacy=1|true|all|'' for every view, or a comma list of route names. */
+export function isLegacy(param: string | null, route: Route): boolean {
+  if (param === null) return false
+  const v = param.trim().toLowerCase()
+  if (v === '' || v === '1' || v === 'true' || v === 'all') return true
+  return v.split(',').some((n) => n.trim() === route.name.toLowerCase())
 }
 
 /** Top navigation, in display order. Slots (hud/hud3d/nav) are listed but owned by WS7/8/9. */
