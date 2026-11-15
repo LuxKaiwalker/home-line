@@ -149,6 +149,34 @@ of it.
   the zlib build matches the fixture's, else entries and CRCs). A full rebuild from `data/interim`
   is compared byte for byte locally, while the recorded source sha256s still match.
 
+## Mission file (v1.1.0, draft — additive, awaiting C)
+
+`mission.schema.json` validates **`mission.json`**, one hand-built mission from the web Mission
+Planer (`/mission`), sent to the simulator on its own (download → "Load mission", POST to a
+local listener, or WebGL `SendMessage`). It does not replace the plan bundle: the bundle carries
+the terrain and the fields (`t_home`, `o2_home`, `home_bearing`, `pointer`) for any position; the
+mission file carries **what the user planned** and **what should happen when**, so the simulator
+compares the live walk with it and never recomputes planner numbers (handover rule 1).
+
+| Block | Content |
+| --- | --- |
+| `frame` | the pad-local frame above (projection, `pad_xy_m`, pad lon / lat / elev); Unity = (x, z, y) |
+| `scenario`, `world` | scenario of the fields; which plan bundle / world pack to load for off-route lookups |
+| `constants`, `conditions` | budget constants (crew.yaml via `budget.ts`), F18 amber threshold, time to dark, storm switch, t* |
+| `waypoints[]` | visit order, lon/lat + x/y/z, note, tags, stop minutes, planned arrive / leave, T_home, O₂_home |
+| `legs[]` | `out` legs pad → #1 → … → #n and one `home` leg along WS2's pointer path; length, time, O₂, row range |
+| `path` | rows `[leg, s_m, x_m, y_m, z_m, t_eva_min, o2_used_l, t_home_min, o2_home_l]` per routing-grid vertex (5 m), not resampled |
+| `timeline` | planned state over EVA time (`margin.ts` points): O₂ used, T_home, O₂_home, margin, binding term; `lowest` |
+| `summary` | the panel's totals and `feasible` |
+
+Deviation in the simulator = live value − the planned value at the same EVA minute (`timeline`,
+linear in t) or at the nearest `path` row (cross-track distance). Status colours follow SPEC
+F18: margin > `margin_amber_min` green, 0 … amber, < 0 red "TURN BACK NOW".
+
+The numbers are **browser estimates** on the 5 m routing grid (`mission/data.ts`), not WS2's
+validated 3 m results: `origin` is always `mission_planer`, and `origin_label` says so on screen.
+Unknown values are `null`; an unrouted leg makes `feasible` false and `timeline` null.
+
 ## Clarification (2026-11-14, D57, no schema change)
 
 `config_hash` and `config_snapshot.json` cover `config/*.yaml` **except `backend.yaml`** (server-only

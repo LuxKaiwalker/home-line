@@ -4,24 +4,31 @@
 // waypoint; each leg is routed in the browser (src/mission/router.ts), the way home from the last
 // waypoint is WS2's (pointer field, T_home, O2 home).
 // Each waypoint carries a note, quick tags and a planned stop time (station work: EVA time + O2).
-// Later (PDF "Mission Planer"): O2 / radiation budget dropdown, reachable foundries, Save.
+// The plan lives in the address (#/mission?plan=…, mission/share.ts) and in this browser, so it can be
+// shared as a link and survives a reload.
+// Later (PDF "Mission Planer"): O2 / radiation budget dropdown, reachable foundries.
 import '../mission/mission.css'
 import { render } from 'preact'
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks'
 import { CITED, CONFIG } from '../config'
 import { DataProblem, DummyNote } from '../components/labels'
 import { BASEMAP_CREDIT, basemapSources } from '../map/basemap'
-import { dataUrl } from '../env'
+import { dataUrl, DATA_MODE } from '../env'
 import { BUDGET_CONSTANTS, missionBudget, stopMinutes, type MissionBudget } from '../mission/budget'
 import { loadMissionData, type MissionData } from '../mission/data'
 import { MissionMap } from '../mission/missionMap'
 import { MapsControl } from '../mission/MapsControl'
 import { boundaryOptions, defaultBoundary, legPairs, moveWaypoint, removeWaypoint, replaceWaypoint, routeLegs, toggleTag, WAYPOINT_TAGS, type LonLat, type Waypoint } from '../mission/plan'
 import { LegRouter, type Leg } from '../mission/router'
+import { decodePlan, encodePlan } from '../mission/share'
+import { href, type Route } from '../router'
+import { buildTrack, legProfile, missionMargin } from '../mission/margin'
+import { buildMission, downloadJson, finalizeMission } from '../mission/export'
 import { ensureManifest } from './common'
 import type { View } from './types'
 
-export const view: View = async (el) => {
+export const view: View = async (el, route) => {
+  const initial = route.name === 'mission' ? { plan: route.plan, add: route.add } : {}
   el.innerHTML = `<div class="console mission"><div class="console-map mission-map"></div><aside class="console-panel mission-panel"></aside></div>`
   const mapEl = el.querySelector<HTMLElement>('.mission-map')!
   const panelEl = el.querySelector<HTMLElement>('.mission-panel')!
@@ -32,7 +39,7 @@ export const view: View = async (el) => {
   // The switcher sits inside the MapLibre container: keep its clicks from adding waypoints.
   for (const ev of ['mousedown', 'mouseup', 'click', 'dblclick', 'pointerdown', 'pointerup', 'touchstart', 'touchend', 'wheel']) mapsEl.addEventListener(ev, (e) => e.stopPropagation())
   mapEl.append(mapsEl)
-  render(<MissionPanel mmap={mmap} handlers={handlers} mapsEl={mapsEl} />, panelEl)
+  render(<MissionPanel mmap={mmap} handlers={handlers} mapsEl={mapsEl} initial={initial} />, panelEl)
   return () => {
     render(null, mapsEl)
     render(null, panelEl)
@@ -46,7 +53,27 @@ const fmtMin = (v: number | null, digits = 1) => (v === null ? '–' : `${v.toFi
 const fmtL = (v: number | null, digits = 1) => (v === null ? '–' : `${v.toFixed(digits)} L`)
 const fmtM = (v: number) => (v >= 1000 ? `${(v / 1000).toFixed(2)} km` : `${Math.round(v)} m`)
 
-function MissionPanel({ mmap, handlers, mapsEl }: { mmap: MissionMap; handlers: Handlers; mapsEl: HTMLElement }) {
+const SAVED_KEY = 'homeline.mission.plan'
+
+function loadSaved(): string | null {
+  try {
+    return localStorage.getItem(SAVED_KEY)
+  } catch {
+    return null
+  }
+}
+function save(plan: string): void {
+  try {
+    if (plan) localStorage.setItem(SAVED_KEY, plan)
+    else localStorage.removeItem(SAVED_KEY)
+  } catch {
+    /* storage blocked: the link still holds the plan */
+  }
+}
+
+type Initial = { plan?: string; add?: string }
+
+function MissionPanel({ mmap, handlers, mapsEl, initial }: { mmap: MissionMap; handlers: Handlers; mapsEl: HTMLElement; initial: Initial }) {
   const [d, setD] = useState<MissionData | null>(null)
   const [error, setError] = useState<unknown>(null)
   const [step, setStep] = useState('scenarios and pad')
@@ -56,6 +83,8 @@ function MissionPanel({ mmap, handlers, mapsEl }: { mmap: MissionMap; handlers: 
   const [credit, setCredit] = useState<string | null>(null)
   const nextId = useRef(1)
   const cache = useRef(new Map<string, Leg | null>())
+  const restored = useRef(false)
+  const [copied, setCopied] = useState(false)
 
   // Load once.
   useEffect(() => {
@@ -90,21 +119,65 @@ function MissionPanel({ mmap, handlers, mapsEl }: { mmap: MissionMap; handlers: 
   }, [d])
   const options = useMemo(() => (d ? boundaryOptions(d.bands, d.isochrones, d.edges) : []), [d])
 
+  /** Grid cell of a spot, or why it cannot be a waypoint. */
+  const cellAt = (lon: number, lat: number): number | 'outside' | 'blocked' => {
+    const p = d!.tHome.pixelOf(lon, lat)
+    if (!p) return 'outside'
+    const cell = p.row * d!.tHome.width + p.col
+    return d!.grid.passable[cell] ? cell : 'blocked'
+  }
+
   /** Snap a click to the routing grid: null + a notice when the spot cannot be walked from. */
   const snap = (lon: number, lat: number): number | null => {
     if (!d) return null
-    const p = d.tHome.pixelOf(lon, lat)
-    if (!p) {
+    const c = cellAt(lon, lat)
+    if (c === 'outside') {
       setNotice('That spot is outside the terrain data: no waypoint added.')
       return null
     }
-    const cell = p.row * d.tHome.width + p.col
-    if (!d.grid.passable[cell]) {
+    if (c === 'blocked') {
       setNotice(`No walk home from that spot in ${d.scenario.id} (blocked, too steep, unknown terrain or not reached): no waypoint there.`)
       return null
     }
     setNotice(null)
-    return cell
+    return c
+  }
+
+  // Restore once the data is in: the link's plan, else this browser's last plan.
+  useEffect(() => {
+    if (!d || restored.current) return
+    restored.current = true
+    const src = initial.plan ?? loadSaved() ?? ''
+    const plan = decodePlan(src)
+    if (plan === null) {
+      setNotice(initial.plan ? 'The plan in this link is damaged or from another version: starting empty.' : null)
+      return
+    }
+    const out: Waypoint[] = []
+    for (const w of plan) {
+      const c = cellAt(w.lon, w.lat)
+      if (typeof c === 'number') out.push({ ...w, id: nextId.current++, cell: c })
+    }
+    const lost = plan.length - out.length
+    if (lost) setNotice(`${lost} waypoint${lost === 1 ? '' : 's'} of the saved plan ${lost === 1 ? 'has' : 'have'} no walk home in ${d.scenario.id} and ${lost === 1 ? 'was' : 'were'} left out.`)
+    setWps(out)
+  }, [d])
+
+  // Keep the address and this browser's copy in step with the plan (replaceState: no re-render).
+  const planStr = useMemo(() => encodePlan(wps), [wps])
+  useEffect(() => {
+    if (!restored.current) return
+    save(planStr)
+    const r: Route = planStr ? { name: 'mission', plan: planStr } : { name: 'mission' }
+    history.replaceState(history.state, '', href(r))
+    setCopied(false)
+  }, [planStr])
+
+  const copyLink = () => {
+    navigator.clipboard?.writeText(location.href).then(
+      () => setCopied(true),
+      () => setNotice('Could not copy: copy the address from the browser bar instead.'),
+    )
   }
 
   handlers.onAdd = (lon, lat) => {
@@ -146,6 +219,49 @@ function MissionPanel({ mmap, handlers, mapsEl }: { mmap: MissionMap; handlers: 
     [legs, home, wps],
   )
 
+  // The planned margin over time (storm replay off: the page has no storm switch yet).
+  const margin = useMemo(() => {
+    if (!d || !wps.length || legs.some((l) => l === null)) return null
+    const homeAt = (cell: number) => {
+      const row = Math.floor(cell / d.tHome.width)
+      const col = cell % d.tHome.width
+      return { tHomeMin: d.tHome.valueAtPixel(row, col), o2HomeL: d.o2Home ? d.o2Home.valueAtPixel(row, col) : null }
+    }
+    const track = buildTrack(legs.map((l) => legProfile(l!, homeAt)), wps.map((w) => w.stopMin))
+    return missionMargin(track, { tDarkMin: d.tDarkMin, rad: d.rad, storm: false })
+  }, [d, legs, wps])
+
+  const exportMission = async () => {
+    if (!d || !wps.length) return
+    const w = d.tHome.width
+    const elevAt = (lon: number, lat: number) => {
+      const p = d.tHome.pixelOf(lon, lat)
+      const v = p ? d.grid.elev[p.row * w + p.col] : NaN
+      return Number.isFinite(v) ? v : null
+    }
+    const doc = buildMission({
+      proj: CONFIG.analysisProj,
+      pad: { kind: d.padKind, id: d.padId, lon: d.pad.lon, lat: d.pad.lat, elevM: d.padElevM, source: d.pad.sourceLabel },
+      scenario: { id: d.scenario.id, variant: d.scenario.variant, suit_kg: d.scenario.suit_kg },
+      planner: { gridResM: d.grid.resM, elevationResM: d.elevationResM, files: d.files },
+      constants: { ...BUDGET_CONSTANTS, marginAmberMin: CONFIG.marginAmberMin },
+      conditions: { evaStartLmst: d.evaStartLmst, tDarkMin: d.tDarkMin, storm: false },
+      wps,
+      legs,
+      homePath: home.path?.coords ?? null,
+      homeReachesPad: home.path?.reachesPad ?? false,
+      budget,
+      margin,
+      cellLonLat: (c) => d.tHome.lonLatOf(Math.floor(c / w), c % w),
+      elevAt,
+      homeAt: (lon, lat) => ({ tHomeMin: d.tHome.valueAt(lon, lat), o2HomeL: d.o2Home ? d.o2Home.valueAt(lon, lat) : null }),
+      label: CONFIG.simulatedLabel,
+      dummy: DATA_MODE === 'dummy',
+    })
+    const fin = await finalizeMission(doc)
+    downloadJson(fin, `mission_${fin.mission_id}.json`)
+  }
+
   // Draw.
   useEffect(() => {
     if (!d) return
@@ -176,12 +292,31 @@ function MissionPanel({ mmap, handlers, mapsEl }: { mmap: MissionMap; handlers: 
         <Estimates b={budget} n={wps.length} />
       </section>
 
+      <section class="mp-card mp-export">
+        <button type="button" disabled={!wps.length} onClick={() => void exportMission()} title="mission.json for the EVA simulator (contracts/bundle/mission.schema.json)">
+          Download mission.json
+        </button>
+        {margin && (
+          <span class="muted">
+            {' '}lowest margin {margin.lowest.marginMin.toFixed(1)} min ({margin.lowest.binding})
+          </span>
+        )}
+      </section>
+
       <section class="mp-card">
         <details open>
           <summary>
             Waypoints <span class="muted">({wps.length})</span>
           </summary>
           <WaypointList wps={wps} legs={legs} setWps={setWps} />
+          {wps.length > 0 && (
+            <div class="mp-share">
+              <button type="button" class="mp-clear" onClick={copyLink}>
+                {copied ? 'Link copied ✓' : 'Copy link to this plan'}
+              </button>
+              <span class="muted">Saved in this browser; the link opens the same plan anywhere.</span>
+            </div>
+          )}
         </details>
         <details open>
           <summary>Reachable-area boundary</summary>
