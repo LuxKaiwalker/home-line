@@ -1,5 +1,6 @@
 // "Send to simulator" on #/plan/{hash} (D76 slot, D103 format, D110: the main feature for the ship),
-// behind VITE_SIM_EXPORT (default off; on only in the live demo build, npm run dev:live-demo). It
+// behind VITE_SIM_EXPORT (default off; config.ts SIM_EXPORT_MODE, D116: 'official' = the official
+// plan only, from the static file; 'all' = also live results; npm run dev:live-demo uses all). It
 // offers the plan's mission.json (contracts/bundle/mission.schema.json):
 //  - a live result (origin computed_live): the manifest entry of kind "sim_plan" (WP9b's exporter
 //    writes results/{hash}/mission.json for every live job), else results/{hash}/mission.json;
@@ -9,13 +10,22 @@
 // pure function of its props. 404 everywhere → "Simulator file not available for this plan". Hooks
 // for the WP8c harness: data-sim-export and data-origin on the control (see ui/cards/simslot.tsx).
 import type { Manifest } from '../data/types'
-import { dataUrl } from '../env'
-import { MISSION_FILE, MISSION_TEXT, officialMissionUrl, onMissionClick, simPlanFiles as cardSimPlanFiles, type MissionOrigin, type MissionProbe } from '../ui/cards/simslot'
-import { LIVE_LABEL, PRECOMPUTED_LABEL } from './config'
+import {
+  MISSION_TEXT,
+  missionControlProps,
+  missionNote,
+  missionTargetFor,
+  simPlanFiles as cardSimPlanFiles,
+  type MissionFetchFor,
+  type MissionOrigin,
+  type MissionProbe,
+  type MissionTarget,
+} from '../ui/cards/simslot'
+import { LIVE_LABEL, PRECOMPUTED_LABEL, type SimExportMode } from './config'
 import type { RunOrigin } from './types'
 
 export const SIM_PLAN_KIND = 'sim_plan'
-export type { MissionOrigin, MissionProbe }
+export type { MissionFetchFor, MissionOrigin, MissionProbe, MissionTarget }
 
 export interface SimFile {
   /** Manifest key of the entry. */
@@ -29,30 +39,16 @@ export function simPlanFiles(manifest: Manifest | null | undefined): SimFile[] {
   return cardSimPlanFiles(manifest)
 }
 
-export interface MissionTarget {
-  origin: MissionOrigin
-  /** Candidate URLs, best first. */
-  urls: string[]
-}
-
-const uniq = (xs: string[]) => [...new Set(xs)]
-
-/**
- * Where the plan's mission.json is. Null when there is no plan to export (no manifest and no
- * origin). A missing origin counts as computed live (only the official tree is precomputed).
- */
-export function missionTarget(manifest: Manifest | null | undefined, base: string, origin?: RunOrigin | null): MissionTarget | null {
-  if (!manifest && !origin) return null
-  const files = simPlanFiles(manifest)
-  const declared = (files.find((f) => f.file.split('/').pop() === MISSION_FILE) ?? files[0])?.file
-  const fromTree = dataUrl(declared ?? MISSION_FILE, 'real', base)
-  if (origin === 'precomputed') return { origin: 'precomputed', urls: uniq([fromTree, officialMissionUrl()]) }
-  return { origin: 'computed_live', urls: [fromTree] }
+/** Where the plan's mission.json is (ui/cards/simslot.tsx missionTargetFor; D110, D116 modes). */
+export function missionTarget(manifest: Manifest | null | undefined, base: string, origin?: RunOrigin | null, mode: Exclude<SimExportMode, 'off'> = 'all'): MissionTarget | null {
+  return missionTargetFor(manifest, base, origin, mode)
 }
 
 export interface SimSlotProps {
-  /** SIM_EXPORT_ENABLED (VITE_SIM_EXPORT). */
+  /** SIM_EXPORT_ENABLED (VITE_SIM_EXPORT set to a mode). */
   enabled: boolean
+  /** SIM_EXPORT_MODE when enabled (D116); default all. */
+  mode?: SimExportMode
   manifest: Manifest | null
   /** Result base URL (files resolve as dataUrl(file, 'real', base)). */
   base: string
@@ -60,15 +56,15 @@ export interface SimSlotProps {
   origin?: RunOrigin | null
   /** planmount's check of the file; omitted = still checking. */
   probe?: MissionProbe
+  /** Per-URL fetch for the download (planmount's simFetch; default fetch). */
+  fetchFor?: MissionFetchFor
 }
 
-export function SimSlot({ enabled, manifest, base, origin, probe = { state: 'checking' } }: SimSlotProps) {
-  if (!enabled) return null
-  const target = missionTarget(manifest, base, origin)
+export function SimSlot({ enabled, mode = 'all', manifest, base, origin, probe = { state: 'checking' }, fetchFor }: SimSlotProps) {
+  if (!enabled || mode === 'off') return null
+  const target = missionTarget(manifest, base, origin, mode)
   if (!target) return null
   const label = target.origin === 'precomputed' ? PRECOMPUTED_LABEL : LIVE_LABEL
-  const note =
-    probe.state === 'ok' ? (probe.version ? MISSION_TEXT.format(probe.version) : MISSION_TEXT.noVersion) : probe.state === 'failed' ? MISSION_TEXT.failed(probe.message) : probe.state === 'checking' ? MISSION_TEXT.checking : ''
   return (
     <section class="live-card live-sim" aria-label="Send to simulator">
       <h3>Send to simulator</h3>
@@ -76,23 +72,16 @@ export function SimSlot({ enabled, manifest, base, origin, probe = { state: 'che
         {target.origin === 'precomputed' ? MISSION_TEXT.official : MISSION_TEXT.live} · {label}
       </p>
       {probe.state === 'missing' ? (
-        <p class="live-sim-missing" role="status" data-sim-export="missing" data-origin={target.origin}>
+        <p class="live-sim-missing" role="status" data-sim-export="missing" data-origin={target.origin} data-state="unavailable">
           {MISSION_TEXT.missing}
         </p>
       ) : (
         <p>
-          <a
-            class="live-btn live-sim-file"
-            href={probe.state === 'ok' ? probe.url : target.urls[0]}
-            download={MISSION_FILE}
-            data-sim-export={probe.state === 'ok' ? 'ready' : probe.state}
-            data-origin={target.origin}
-            onClick={onMissionClick(probe)}
-          >
+          <a class="live-btn live-sim-file" {...missionControlProps(probe, probe.state === 'ok' ? probe.url : target.urls[0], target.origin, fetchFor)}>
             {MISSION_TEXT.download}
           </a>{' '}
-          <span class="caption live-sim-format" role="status" data-sim-version={probe.state === 'ok' ? (probe.version ?? '') : undefined}>
-            {note}
+          <span class="caption live-sim-format" role="status" data-sim-status="" data-sim-version={probe.state === 'ok' ? (probe.version ?? '') : undefined}>
+            {missionNote(probe)}
           </span>
         </p>
       )}

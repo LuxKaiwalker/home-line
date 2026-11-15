@@ -14,6 +14,7 @@ import { importPlanFile, loadPlan, parsePlanRoute, permalink, type ImportState, 
 import { ImportPage, PlanLoading, PlanPage, PlanProblem, PlayHeader, ProvenancePage } from './planview'
 import { missionTarget, type MissionProbe } from './simslot'
 import type { LoaderFor } from './stage'
+import type { SimExportMode } from './config'
 import type { RunOrigin } from './types'
 
 type OkLoad = Extract<PlanLoad, { state: 'ok' }>
@@ -71,6 +72,8 @@ export interface PlanRouteOptions {
   loaderFor?: LoaderFor
   /** SIM_EXPORT_ENABLED (VITE_SIM_EXPORT). */
   simEnabled: boolean
+  /** SIM_EXPORT_MODE (D116) when simEnabled: 'official' = the official plan only, static file; default all. */
+  simMode?: SimExportMode
   /**
    * Fetch for the "Send to simulator" check of a plan's mission.json (D110), per URL. Default the
    * global fetch; the dev mock answers the API's URLs (index.ts).
@@ -113,10 +116,10 @@ export function mountPlanRoute(app: HTMLElement, opts: PlanRouteOptions): Cleanu
   /** mission.json checks per hash (D110); only a found file is kept, anything else is asked again. */
   const probes = new Map<string, MissionProbe>()
   const probeFor = (load: OkLoad): MissionProbe | undefined => {
-    if (!opts.simEnabled) return undefined
+    if (!opts.simEnabled || opts.simMode === 'off') return undefined
     const have = probes.get(load.hash)
     if (have) return have
-    const target = missionTarget(load.tree.manifest, load.base, load.record.origin)
+    const target = missionTarget(load.tree.manifest, load.base, load.record.origin, opts.simMode ?? 'all')
     if (!target) return undefined
     const checking: MissionProbe = { state: 'checking' }
     probes.set(load.hash, checking)
@@ -215,7 +218,7 @@ export function mountPlanRoute(app: HTMLElement, opts: PlanRouteOptions): Cleanu
       render(
         <>
           {mountMap && <div class="live-plan-map" />}
-          <PlanPage load={load} permalink={link} simEnabled={opts.simEnabled} simProbe={(simProbe = probes.get(load.hash) ?? simProbe)} importState={importState} onImportFile={onFile} />
+          <PlanPage load={load} permalink={link} simEnabled={opts.simEnabled} simMode={opts.simMode} simFetch={opts.simFetch} simProbe={(simProbe = probes.get(load.hash) ?? simProbe)} importState={importState} onImportFile={onFile} />
         </>,
         box,
       )

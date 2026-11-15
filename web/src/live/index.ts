@@ -26,7 +26,7 @@ import './live.css'
 import { createApiClient, type ApiClient, type FetchLike } from './client'
 import { dataUrl } from '../env'
 import { isMissionText, officialMissionUrl, setOfficialMissionSource } from '../ui/cards/simslot'
-import { API_BASE, SIM_EXPORT_ENABLED } from './config'
+import { API_BASE, SIM_EXPORT_ENABLED, SIM_EXPORT_MODE } from './config'
 import { bannerFor, watchHealth, type LiveState } from './health'
 import { consoleMapPort as basePort, type ConsoleMapLike, type MapPort } from './mapPort'
 import type { RouteConsoleMap } from './route/map'
@@ -36,7 +36,7 @@ import { mountPlanRoute, resultDataUrl } from './planmount'
 import { mockLiveLoader } from './result'
 
 export { ApiError, createApiClient, type ApiClient, type ApiClientOptions } from './client'
-export { API_BASE, LIVE_ENABLED, LIVE_LABEL, OFFLINE_LABEL, WARMING_LABEL } from './config'
+export { API_BASE, LIVE_ENABLED, LIVE_LABEL, OFFLINE_LABEL, SIM_EXPORT_MODE, WARMING_LABEL, type SimExportMode } from './config'
 export { bannerFor, checkHealth, watchHealth, type Banner, type HealthWatch, type LiveState } from './health'
 export { startJob, type JobCallbacks, type JobHandle, type JobOptions, type JobOutcome } from './jobs'
 export { liveLoader } from './result'
@@ -51,6 +51,7 @@ export { importPlanFile, loadPlan, parsePlanRoute, planUrl, type ImportState, ty
 export { canonicalJson, checkPlanInputsText, exportPlanInputs } from './planio'
 export { mountPlanRoute, playPlan, type PlanRouteOptions } from './planmount'
 export { missionTarget, simPlanFiles, SimSlot, type MissionProbe, type MissionTarget } from './simslot'
+export { SendToSimulator, type SendToSimulatorProps } from '../ui/cards/simslot-export'
 export { mountPrivacy, PRIVACY_TEXT, PRIVACY_TITLE } from './privacy'
 export type * from './types'
 
@@ -103,7 +104,8 @@ export function mountLive(anchor: Element, client: ApiClient = liveClient()): ()
   // #/plan routes (F28, F35): only when the app shell's .outlet is next to the anchor.
   const app = (anchor as Partial<Element>).parentElement
   const stopPlan = app && typeof window !== 'undefined' ? planRoute(app, client) : () => {}
-  const official = SIM_EXPORT_ENABLED ? officialMissionSource(client) : null
+  // D116: mode 'official' reads the static file only, so no API lookup
+  const official = SIM_EXPORT_MODE === 'all' ? officialMissionSource(client) : null
   const watch = watchHealth(client, (s) => {
     current = s
     official?.(s)
@@ -160,6 +162,7 @@ function planRoute(app: HTMLElement, client: ApiClient): () => void {
   return mountPlanRoute(app, {
     client,
     simEnabled: SIM_EXPORT_ENABLED,
+    simMode: SIM_EXPORT_MODE,
     // the dev mock answers the API's URLs; static files (sim/official/mission.json) come from the page's origin
     ...(USE_MOCK ? { simFetch: (url: string) => (url.startsWith(API_BASE) ? lazyMockFetch : fetch) } : {}),
     onLiveState,

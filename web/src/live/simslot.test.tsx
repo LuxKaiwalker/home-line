@@ -4,14 +4,15 @@
 //  - 404 everywhere -> "Simulator file not available for this plan", no link;
 //  - hooks for the WP8c harness: data-sim-export and data-origin on the control;
 //  - the mock's mission.json is a valid mission (origin computed_live, labels.live).
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import missionExample from '../../../contracts/bundle/examples/mission.mission_planer.json'
 import missionSchema from '../../../contracts/bundle/mission.schema.json'
 import { checkSchema, type JsonSchema } from '../data/schema'
 import type { Manifest } from '../data/types'
 import { dataUrl } from '../env'
-import { isMissionText, missionVersion, OFFICIAL_MISSION_PATH, officialMissionUrl, probeMission } from '../ui/cards/simslot'
+import { downloadMission, isMissionText, missionControlProps, missionVersion, OFFICIAL_MISSION_PATH, officialMissionUrl, probeMission } from '../ui/cards/simslot'
 import { createApiClient } from './client'
-import { LIVE_LABEL, PRECOMPUTED_LABEL } from './config'
+import { LIVE_LABEL, PRECOMPUTED_LABEL, SIM_EXPORT_ENABLED, SIM_EXPORT_MODE, simExportModeFrom } from './config'
 import { createMockFetch } from './mock/fetch'
 import { MOCK_OFFICIAL_HASH } from './mock/hashes'
 import { MOCK_MISSION_LIVE, MOCK_SIM_FILE, mockFinishedTree, mockResultFile } from './mock/result'
@@ -27,21 +28,57 @@ const base = (h: string) => `${API}/api/v1/results/${h}`
 const MISSION_TEXT = JSON.stringify(MOCK_MISSION_LIVE)
 const json = (status: number, body: string) => new Response(body, { status })
 
-/** Inline the schema's local #/$defs refs (checkSchema does not follow $ref). */
+/**
+ * Inline the schema's local #/$defs refs (checkSchema does not follow $ref) and drop object/array
+ * `const`s (checkSchema compares those by identity); the test checks those parts against the
+ * contract's own example instead, which the mock keeps unchanged.
+ */
 function inlineDefs(node: unknown, defs: Record<string, unknown>): unknown {
   if (Array.isArray(node)) return node.map((n) => inlineDefs(n, defs))
   if (!node || typeof node !== 'object') return node
   const { $ref, $defs: _d, ...rest } = node as Record<string, unknown>
   void _d
+  if (rest.const && typeof rest.const === 'object') delete rest.const
   const out = Object.fromEntries(Object.entries(rest).map(([k, v]) => [k, inlineDefs(v, defs)]))
   if (typeof $ref === 'string') return { ...(inlineDefs(defs[$ref.replace('#/$defs/', '')], defs) as object), ...out }
   return out
 }
 
+describe('VITE_SIM_EXPORT modes (D116)', () => {
+  it('unset/0/anything else -> off; official -> official; 1/true/all -> all; off in this environment', () => {
+    for (const v of [undefined, '', '0', 'false', 'yes', 'OFFICIAL', 'All']) expect(simExportModeFrom(v)).toBe('off')
+    expect(simExportModeFrom('official')).toBe('official')
+    for (const v of ['1', 'true', 'all', true]) expect(simExportModeFrom(v)).toBe('all')
+    expect(SIM_EXPORT_MODE).toBe('off')
+    expect(SIM_EXPORT_ENABLED).toBe(false)
+  })
+
+  it("'official': the official plan from the static file only (no API URL), nothing for a live result", () => {
+    const live = mockFinishedTree(true)('manifest.json') as Manifest
+    expect(missionTarget(live, base(MOCK_OFFICIAL_HASH), 'precomputed', 'official')).toEqual({ origin: 'precomputed', urls: [officialMissionUrl()] })
+    expect(missionTarget(live, base(LIVE_HASH), 'computed_live', 'official')).toBeNull()
+    expect(toHtml(<SimSlot enabled mode="official" manifest={live} base={base(LIVE_HASH)} origin="computed_live" />)).toBe('')
+    const html = toHtml(<SimSlot enabled mode="official" manifest={live} base={base(MOCK_OFFICIAL_HASH)} origin="precomputed" />)
+    expect(html).toContain(`href="${officialMissionUrl()}"`)
+    expect(html).toContain('data-origin="precomputed"')
+    expect(html).not.toContain('api.test')
+  })
+
+  it("'all': live results and the official plan (API copy first); 'off': nothing", () => {
+    const live = mockFinishedTree(true)('manifest.json') as Manifest
+    expect(missionTarget(live, base(LIVE_HASH), 'computed_live', 'all')!.urls).toEqual([`${base(LIVE_HASH)}/mission.json`])
+    expect(missionTarget(live, base(MOCK_OFFICIAL_HASH), 'precomputed', 'all')!.urls[0]).toBe(`${base(MOCK_OFFICIAL_HASH)}/mission.json`)
+    expect(toHtml(<SimSlot enabled mode="off" manifest={live} base={base(LIVE_HASH)} origin="computed_live" />)).toBe('')
+  })
+})
+
 describe('the mock live job serves a mission.json (WP9b shape)', () => {
   it('validates against contracts/bundle/mission.schema.json, origin computed_live with labels.live', () => {
     const s = inlineDefs(missionSchema, (missionSchema as { $defs: Record<string, unknown> }).$defs) as JsonSchema
     expect(checkSchema(MOCK_MISSION_LIVE, s)).toEqual([])
+    // everything but the origin and the who/when fields is the contract example as given
+    const changed = Object.keys(MOCK_MISSION_LIVE).filter((k) => JSON.stringify((MOCK_MISSION_LIVE as Record<string, unknown>)[k]) !== JSON.stringify((missionExample as Record<string, unknown>)[k]))
+    expect(changed.sort()).toEqual(['created_utc', 'mission_id', 'origin', 'origin_label', 'planner', 'title'])
     expect(MOCK_MISSION_LIVE.origin).toBe('computed_live')
     expect(MOCK_MISSION_LIVE.origin_label).toBe(LIVE_LABEL)
     expect(MOCK_MISSION_LIVE.planner.routing_grid_res_m).toBe(3)
@@ -79,9 +116,13 @@ describe('where the mission.json is', () => {
     })
   })
 
-  it('the live layer finds the official hash through /defaults and /plans/import', async () => {
-    const client = createApiClient({ base: API, fetch: createMockFetch() })
+  it('the live layer finds the official hash through /defaults and /plans/import (only a computed result)', async () => {
+    const fetch = createMockFetch({ importAnswer: (inputs) => ({ hash: MOCK_OFFICIAL_HASH, inputs, computed: true }) })
+    const client = createApiClient({ base: API, fetch })
     expect(await officialMissionApiUrl(client)).toBe(`${base(MOCK_OFFICIAL_HASH)}/mission.json`)
+    expect(fetch.calls.map((c) => `${c.method} ${c.path}`)).toEqual(['GET /defaults', 'POST /plans/import'])
+    const notComputed = createApiClient({ base: API, fetch: createMockFetch({ importAnswer: (inputs) => ({ hash: MOCK_OFFICIAL_HASH, inputs, computed: false }) }) })
+    expect(await officialMissionApiUrl(notComputed)).toBeNull()
     const down = createApiClient({ base: API, fetch: () => Promise.reject(new TypeError('Failed to fetch')) })
     expect(await officialMissionApiUrl(down)).toBeNull()
   })
@@ -158,5 +199,88 @@ describe('the slot: states and harness hooks', () => {
 
   it('flag off: nothing, whatever the plan', () => {
     expect(toHtml(<SimSlot enabled={false} manifest={live} base={base(LIVE_HASH)} origin="computed_live" probe={{ state: 'ok', url, version: '1.1.0', text: MISSION_TEXT }} />)).toBe('')
+  })
+})
+
+describe('download: fetch -> Blob -> object URL (SIM-1), data-state', () => {
+  /** Stub the browser bits saveMissionText uses; returns what was saved. */
+  function stubSave() {
+    const saved: { name: string; size: number; revoked: boolean }[] = []
+    const urls = new Map<string, { name: string; size: number; revoked: boolean }>()
+    vi.stubGlobal('URL', Object.assign(Object.create(URL), {
+      createObjectURL: (b: Blob) => {
+        const id = `blob:test/${urls.size}`
+        urls.set(id, { name: '', size: b.size, revoked: false })
+        return id
+      },
+      revokeObjectURL: (id: string) => void (urls.get(id)!.revoked = true),
+    }))
+    const a = { href: '', download: '', click: () => saved.push({ ...urls.get(a.href)!, name: a.download }), remove: () => {} }
+    vi.stubGlobal('document', { createElement: () => a, body: { appendChild: () => {} } })
+    return { saved, urls }
+  }
+  afterEach(() => {
+    vi.unstubAllGlobals()
+    vi.useRealTimers()
+  })
+
+  it('a found file is saved as mission.json through a blob URL, which is revoked', async () => {
+    vi.useFakeTimers()
+    const { saved, urls } = stubSave()
+    expect(await downloadMission('/x', MISSION_TEXT)).toEqual({ state: 'done' })
+    expect(saved).toEqual([{ name: 'mission.json', size: new Blob([MISSION_TEXT]).size, revoked: false }])
+    vi.runAllTimers()
+    expect([...urls.values()].every((u) => u.revoked)).toBe(true)
+  })
+
+  it('without a checked body it fetches the URL (cross-origin API) and saves that', async () => {
+    const { saved } = stubSave()
+    const fetch = createMockFetch({ trees: { [LIVE_HASH]: mockFinishedTree(true) } })
+    expect(await downloadMission(`${base(LIVE_HASH)}/mission.json`, null, () => fetch)).toEqual({ state: 'done' })
+    expect(saved.map((x) => x.name)).toEqual(['mission.json'])
+    expect(fetch.calls.map((c) => c.path)).toEqual([`/results/${LIVE_HASH}/mission.json`])
+  })
+
+  it('404 -> unavailable (missing); 5xx, network error or a failed save -> unavailable with the reason', async () => {
+    stubSave()
+    const fetch = createMockFetch({ trees: { [LIVE_HASH]: mockFinishedTree(false) } })
+    expect(await downloadMission(`${base(LIVE_HASH)}/mission.json`, null, () => fetch)).toEqual({ state: 'unavailable', reason: null })
+    expect(await downloadMission('/a', null, () => async () => json(503, ''))).toEqual({ state: 'unavailable', reason: 'HTTP 503' })
+    expect(await downloadMission('/a', null, () => () => Promise.reject(new TypeError('Failed to fetch')))).toEqual({ state: 'unavailable', reason: 'Failed to fetch' })
+    vi.stubGlobal('URL', { createObjectURL: () => { throw new Error('no blob URLs') } })
+    expect(await downloadMission('/a', MISSION_TEXT)).toEqual({ state: 'unavailable', reason: 'no blob URLs' })
+  })
+
+  /** A click on the control (no DOM): the element's attributes and the status line next to it. */
+  async function click(props: ReturnType<typeof missionControlProps>) {
+    const attrs = new Map<string, string>(Object.entries({ 'data-state': props['data-state'] }))
+    const status = { textContent: '' }
+    const el = { getAttribute: (k: string) => attrs.get(k) ?? null, setAttribute: (k: string, v: string) => void attrs.set(k, v), parentElement: { querySelector: () => status } }
+    let prevented = false
+    props.onClick({ currentTarget: el, preventDefault: () => (prevented = true) } as unknown as MouseEvent)
+    expect(prevented).toBe(true) // never the plain cross-origin link
+    expect(attrs.get('data-state')).toBe('downloading')
+    await vi.waitFor(() => expect(attrs.get('data-state')).not.toBe('downloading'))
+    return { state: attrs.get('data-state'), status: status.textContent }
+  }
+
+  it('the control: idle -> downloading -> done; a 404 at click time -> unavailable with the message', async () => {
+    stubSave()
+    const url = `${base(LIVE_HASH)}/mission.json`
+    const ok = missionControlProps({ state: 'ok', url, version: '1.1.0', text: MISSION_TEXT }, url, 'computed_live')
+    expect(ok['data-state']).toBe('idle')
+    expect(ok.download).toBe('mission.json')
+    expect(await click(ok)).toEqual({ state: 'done', status: 'mission.json saved' })
+    const gone = createMockFetch({ trees: { [LIVE_HASH]: mockFinishedTree(false) } })
+    const unchecked = missionControlProps({ state: 'checking' }, url, 'computed_live', () => gone)
+    expect(await click(unchecked)).toEqual({ state: 'unavailable', status: 'Simulator file not available for this plan' })
+    const broken = missionControlProps({ state: 'failed', message: 'x' }, url, 'computed_live', () => async () => json(500, ''))
+    expect(await click(broken)).toEqual({ state: 'unavailable', status: 'Download failed (HTTP 500)' })
+  })
+
+  it('rendered hooks: data-state idle on the control, unavailable on the missing message', () => {
+    const live = mockFinishedTree(true)('manifest.json') as Manifest
+    expect(toHtml(<SimSlot enabled manifest={live} base={base(LIVE_HASH)} origin="computed_live" />)).toContain('data-state="idle"')
+    expect(toHtml(<SimSlot enabled manifest={live} base={base(LIVE_HASH)} origin="computed_live" probe={{ state: 'missing' }} />)).toContain('data-state="unavailable"')
   })
 })

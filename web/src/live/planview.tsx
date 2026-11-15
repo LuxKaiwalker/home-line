@@ -6,12 +6,12 @@
 import type { ComponentChildren } from 'preact'
 import { headline60, marginLabel, tightestMargin } from '../views/decisions'
 import { routeSummary } from '../views/route'
-import { LIVE_LABEL, OFFLINE_LABEL, PRECOMPUTED_LABEL, TITLE_MAX_CHARS, UPLOAD_MAX_BYTES } from './config'
+import { LIVE_LABEL, OFFLINE_LABEL, PRECOMPUTED_LABEL, TITLE_MAX_CHARS, UPLOAD_MAX_BYTES, type SimExportMode } from './config'
 import { LiveNum } from './num'
 import { canonicalJson, exportPlanInputs } from './planio'
 import { planUrl, type ImportState, type PlanLoad, type PlanTree } from './plan'
 import { RangeFlags } from './rangeflags'
-import { SimSlot, type MissionProbe } from './simslot'
+import { SimSlot, type MissionFetchFor, type MissionProbe } from './simslot'
 import type { RunOrigin, RunRecord } from './types'
 
 /** The label of a result by origin, from config/backend.yaml labels. */
@@ -268,14 +268,18 @@ export interface PlanPageProps {
   permalink: string
   /** SIM_EXPORT_ENABLED. */
   simEnabled: boolean
+  /** SIM_EXPORT_MODE (D116) when simEnabled; default all. */
+  simMode?: SimExportMode
   /** planmount's check of the plan's mission.json (D110); omitted = still checking. */
   simProbe?: MissionProbe
+  /** Per-URL fetch for the mission.json download (planmount simFetch). */
+  simFetch?: MissionFetchFor
   importState: ImportState
   onImportFile: (file: File) => void
 }
 
 /** #/plan/{hash}: the result read-only. The map (when mounted) draws through ConsoleMap. */
-export function PlanPage({ load, permalink, simEnabled, simProbe, importState, onImportFile }: PlanPageProps) {
+export function PlanPage({ load, permalink, simEnabled, simMode, simProbe, simFetch, importState, onImportFile }: PlanPageProps) {
   const { hash, record, tree, base } = load
   const title = typeof record.inputs.title === 'string' ? record.inputs.title : null
   return (
@@ -299,7 +303,7 @@ export function PlanPage({ load, permalink, simEnabled, simProbe, importState, o
       <PlanHeadline tree={tree} hash={hash} />
       <PlanRouteSection tree={tree} hash={hash} />
       <PlanActions record={record} hash={hash} permalink={permalink} />
-      <SimSlot enabled={simEnabled} manifest={tree.manifest} base={base} origin={record.origin} probe={simProbe} />
+      <SimSlot enabled={simEnabled} mode={simMode} manifest={tree.manifest} base={base} origin={record.origin} probe={simProbe} fetchFor={simFetch} />
       <ImportPanel state={importState} onFile={onImportFile} />
     </Page>
   )
