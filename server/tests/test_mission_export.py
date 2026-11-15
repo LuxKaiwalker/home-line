@@ -141,6 +141,39 @@ def test_waypoints_in_route_order_and_labels(ordered):
         assert lg["time_min"] == p["t_min"] and lg["o2_l"] == p["o2_L"]
 
 
+def test_o2_used_on_every_path_row(ordered, auto):
+    """WP9e (Unity import test P1): o2_used_l on every path row, as the Mission Planer's export
+    writes it; a leg's ends are the leg values (O2 at the previous stop's leave, + the leg's
+    o2_l), inner rows linear in t_eva_min between them (the leg's mean rate)."""
+    for run in (ordered, auto):
+        doc = _doc(run)
+        rows = doc["path"]["rows"]
+        assert rows and [i for i, r in enumerate(rows) if r[6] is None] == []
+        assert all(a[6] <= b[6] for a, b in zip(rows[:-1], rows[1:], strict=True))
+        leave = {f"wp{w['index']}": w["o2_used_at_leave_l"] for w in doc["waypoints"]}
+        for lg in doc["legs"]:
+            seg = rows[lg["first_row"]:lg["first_row"] + lg["n_rows"]]
+            (t0, o0), (t1, o1) = (seg[0][5], seg[0][6]), (seg[-1][5], seg[-1][6])
+            assert o0 == (0 if lg["from"] == "pad" else leave[lg["from"]])
+            assert o1 - o0 == pytest.approx(lg["o2_l"], abs=1e-3)
+            for r in seg:
+                assert r[6] == pytest.approx(o0 + (o1 - o0) * (r[5] - t0) / (t1 - t0), abs=6e-4)
+
+
+@pytest.mark.parametrize(("times", "start", "end", "want"), [
+    ([0, 1, 3, 4], 10.0, 18.0, [10, 12, 16, 18]),  # linear in time, not in vertex index
+    ([5, 5, 6, 9], 0.0, 4.0, [0, 0, 1, 4]),
+    ([2, 3], 1.0, 2.0, [1, 2]),  # ends only
+    ([0, 1, 2], 10.0, None, [10, None, None]),  # an unknown end: inner rows unknown
+    ([0, None, 2], 10.0, 12.0, [10, None, 12]),  # an unknown time
+    ([None, 1, 2], 10.0, 12.0, [10, None, 12]),
+    ([3, 3, 3], 1.0, 1.5, [1, None, 1.5]),  # no time elapses
+    ([], 1.0, 2.0, []),
+])
+def test_o2_rows_known_answers(times, start, end, want):
+    assert mission._o2_rows(times, start, end) == pytest.approx(want)
+
+
 def test_frame_pad_origin_and_station_positions(ordered):
     from tools.make_bundle import Frame
 
