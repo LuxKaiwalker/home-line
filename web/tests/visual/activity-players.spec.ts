@@ -203,8 +203,9 @@ for (const drawer of DRAWERS)
       await openPlan(page, drawer)
       await startPlayer(page, p)
       await expectRunning(page, p)
-      await press(page, page.locator('.hl-modes__tab', { hasText: 'Report' }).first())
-      await expect(page).toHaveURL(/#\/report/)
+      // REPORT is hidden (no tab): Science is the other shown mode
+      await press(page, page.locator('.hl-modes__tab', { hasText: 'Science' }).first())
+      await expect(page).toHaveURL(/#\/stations/)
       await expect(html(page)).toHaveAttribute('data-activity', 'none')
       // back in Plan: nothing plays, the clock stands still
       await press(page, page.locator('.hl-modes__tab', { hasText: 'Plan' }).first())

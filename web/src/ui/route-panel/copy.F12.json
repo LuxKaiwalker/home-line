@@ -1,0 +1,11 @@
+{
+  "limitedBy": "limited by {term}",
+  "terms": {
+    "O2": "O₂",
+    "daylight": "daylight",
+    "dose": "dose (storm replay)",
+    "EVA duration": "EVA duration"
+  },
+  "dose": "Dose margin (storm replay)",
+  "doseTitle": "The dose term of the margin with the 20 May 2024 solar storm replayed on this route (D39). Computed in your browser."
+}

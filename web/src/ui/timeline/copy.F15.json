@@ -1,0 +1,18 @@
+{
+  "estimate": "Estimate",
+  "viewLabel": "Strip view",
+  "margin": "Margin",
+  "elevation": "Elevation",
+  "height": "Height {v} m",
+  "heightUnknown": "Height —",
+  "heightLoading": "Loading terrain heights…",
+  "noHeight": "No height known along part of this route: no elevation profile.",
+  "aria": "Height along your route: {lo} to {hi}",
+  "legendTitle": "Along-route grade on the terrain heights (fp3d far grid, {res} m), in the Slope layer's classes (config/site.yaml)",
+  "padFlat": "< {v}° pad-flat",
+  "walkable": "< {v}° walkable",
+  "beyondTested": "< {v}° beyond tested",
+  "nogoNominal": "< {v}° no-go (nominal)",
+  "nogoAlways": "≥ {v}° no-go",
+  "stopAt": "Stop at {name}: {t0}–{t1}"
+}

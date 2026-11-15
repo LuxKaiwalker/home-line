@@ -80,7 +80,7 @@ function dom(root: FakeNode) {
 /** The about page as the static view renders it (headings only). */
 function aboutPage() {
   const page = node('DIV', '', 'page')
-  add(page, node('H1', 'About MARVIS'), node('P', 'A static site …'), node('H2', 'Data'), node('H2', 'Real, modelled, simulated'), node('H2', 'Licences'), node('P', 'Code: Apache-2.0.'))
+  add(page, node('H1', 'About HOMELINE'), node('P', 'A static site …'), node('H2', 'Data'), node('H2', 'Real, modelled, simulated'), node('H2', 'Licences'), node('P', 'Code: Apache-2.0.'))
   const outlet = add(node('MAIN', '', 'outlet'), page)
   return { outlet, page }
 }
@@ -240,7 +240,7 @@ describe('mountPrivacy', () => {
     const { outlet, page } = aboutPage()
     const { root, doc } = dom(outlet)
     const off = mountPrivacy(root, doc)
-    expect(headings(page)).toEqual(['About MARVIS', 'A static site …', 'Data', 'Real, modelled, simulated', `[${PRIVACY_TITLE} | ${PRIVACY_TEXT.join(' ')}]`, 'Licences', 'Code: Apache-2.0.'])
+    expect(headings(page)).toEqual(['About HOMELINE', 'A static site …', 'Data', 'Real, modelled, simulated', `[${PRIVACY_TITLE} | ${PRIVACY_TEXT.join(' ')}]`, 'Licences', 'Code: Apache-2.0.'])
     const section = page.children.find((c) => c.tagName === 'SECTION')!
     expect(section.className).toBe('live-privacy')
     expect(section.children.map((c) => c.tagName)).toEqual(['H2', 'P'])
@@ -299,7 +299,7 @@ describe('about view', () => {
     const { root, doc } = dom(outlet)
     vi.stubGlobal('document', Object.assign(doc, { querySelector: root.querySelector, querySelectorAll: root.querySelectorAll }))
     const html = await renderAbout()
-    expect(html).toContain('About MARVIS')
+    expect(html).toContain('About HOMELINE')
     await vi.waitFor(() => expect(liveSpy.calls).toHaveLength(1))
     expect(headings(page)).toContain(`[${PRIVACY_TITLE} | ${PRIVACY_TEXT.join(' ')}]`)
   })

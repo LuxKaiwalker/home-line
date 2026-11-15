@@ -1,7 +1,7 @@
 // "Go to time" (search.md §2.2 #2, §4.2): `t 45`, `t45`, `t 1:20`, `at 01:20` → one row that seeks the
 // mission clock. The minute is the user's own input (formatted hh:mm in the title), not a validated number.
 import { missionClock } from '../../../state/mission'
-import { ui } from '../../../state/ui'
+import { HIDDEN_MODES, ui } from '../../../state/ui'
 import { isMapMode, modeHash } from '../../shell/store'
 import type { QueryPattern, QueryRow } from './types'
 
@@ -19,9 +19,9 @@ export function parseTime(q: string): number | null {
   return m[3] !== undefined ? Number(m[3]) : Number(m[1]) * 60 + Number(m[2])
 }
 
-/** Choose: FLY when not in a map mode (the shell's mode navigation), then seek the one mission clock. */
+/** Choose: FLY (PLAN while FLY is hidden, D145) when not in a map mode, then seek the one mission clock. */
 export function seekTo(min: number, navigate: (hash: string) => void): void {
-  if (!isMapMode(ui.mode.peek() ?? 'plan')) navigate(modeHash('fly'))
+  if (!isMapMode(ui.mode.peek() ?? 'plan')) navigate(modeHash(HIDDEN_MODES.has('fly') ? 'plan' : 'fly'))
   missionClock.seek(min)
 }
 

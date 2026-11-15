@@ -63,3 +63,11 @@
 
 /* the Flat vs real toggle lives in the layers popover (borrowed while it is open); never at the map corner */
 .console--layout .maplibregl-ctrl-top-right .collapse-toggle { display: none; }
+
+/* ---------- PORT I1: Plan port rows in the layers popover; map-edge controls bottom left (L1c base maps) */
+.plan-layers__port { gap: var(--space-2); }
+.plan-edgectl {
+  position: absolute; left: var(--space-2); bottom: calc(var(--space-2) + var(--space-6) + var(--space-6)); z-index: 28;
+  display: flex; flex-direction: column; align-items: flex-start; gap: var(--space-1);
+  max-width: min(320px, calc(100cqw - var(--space-4)));
+}

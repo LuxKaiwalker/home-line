@@ -13,7 +13,8 @@ api:
     # The ONLY CORS source: FastAPI CORSMiddleware reads this list; nginx adds no CORS headers
     # (an origin allowed in two places breaks the browser). A Unity WebGL origin is added here.
     - "https://luxkaiwalker.github.io"   # GitHub Pages origin of LuxKaiwalker/home-line
-    - "https://homeline.vxliu.com"       # custom Pages domain
+    - "https://marvis.vxliu.com"         # custom Pages domain (MARVIS rename, 2026-11-15)
+    - "https://homeline.vxliu.com"       # previous custom Pages domain, kept working
     - "http://localhost:5173"            # vite dev server
   docs_path: /api/docs             # F35 OpenAPI page
 

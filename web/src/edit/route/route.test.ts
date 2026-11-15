@@ -73,7 +73,9 @@ describe('validity per stop', () => {
   it('limits: at most max_stops; stops closer than min_stop_spacing_m are refused', () => {
     expect(ROUTE_LIMITS).toMatchObject({ maxStops: 8, maxFreePoints: 4, minStopSpacingM: 50 })
     const many: PlanRoute = { mode: 'ordered', stops: Array.from({ length: 9 }, (_, i) => ({ lon: 137.38 + i * 0.01, lat: -4.78 })) }
-    expect(checkRoute(many, { stations, pad }).route).toEqual(['tooManyStops', 'tooManyFreePoints'])
+    expect(checkRoute(many, { stations, pad }).route).toEqual(['tooManyStops'])
+    // F4: no separate free-point cap in the browser: 8 free points are a valid count
+    expect(checkRoute({ mode: 'ordered', stops: many.stops.slice(0, ROUTE_LIMITS.maxStops) }, { stations, pad }).route).toEqual([])
     const s1 = stations[0]
     const close: PlanRoute = { mode: 'ordered', stops: [{ station: 'S1' }, { lon: s1.lon + 0.0001, lat: s1.lat }] }
     expect(checkRoute(close, { stations, pad }).stops[1].problems).toContain('spacing')

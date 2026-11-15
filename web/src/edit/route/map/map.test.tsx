@@ -395,6 +395,8 @@ describe('static first (VITE_LIVE off): the static build does not contain the ro
     visit(SRC)
     // I1a: edit/route/browser/ (the in-browser route computation) builds on map/ and is itself live-only
     // (the static-entry test above covers all of edit/route/)
-    expect(importers.filter((f) => !f.startsWith(`edit${sep}route${sep}browser${sep}`)).sort()).toEqual(['edit/route/panel.tsx', 'live/route/mount.tsx'])
+    // PORT I1 (§7b decision): the Plan view loads R3's map editing and the station card its "Add to route"
+    // button by import() only (lazy chunk; live/route/route.test.tsx PORT_LAZY_ENTRIES)
+    expect(importers.filter((f) => !f.startsWith(`edit${sep}route${sep}browser${sep}`)).sort()).toEqual(['edit/route/panel.tsx', 'live/route/mount.tsx', 'ui/cards/selectionCard.tsx', 'views/planPort.tsx'])
   })
 })

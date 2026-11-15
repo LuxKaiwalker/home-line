@@ -4,7 +4,7 @@
 // plan-edit undo) handle a chosen row exactly as they handle the key. Esc is not a command: the layout
 // store's closeTopmost() owns it. Owner 'shell' = keys.ts never delegates back here (no recursion).
 import { canGoBack, canGoForward } from '../../state/selection'
-import { MODES, ui, type Mode } from '../../state/ui'
+import { SHOWN_MODES, ui, type Mode } from '../../state/ui'
 import type { IconName } from '../components'
 import { runShortcut, type ShortcutAction } from '../shell/keys'
 import { isMapMode } from '../shell/store'
@@ -39,14 +39,14 @@ type ShortcutCommand = Omit<Command, 'run' | 'owner' | 'shortcut'> & { shortcut:
 /** A command that runs its keys.ts action (owner 'shell'). */
 export const shortcutCommand = (c: ShortcutCommand): Command => ({ ...c, owner: 'shell', run: () => viaShortcut(c.shortcut) })
 
-const MODE_ICON: Readonly<Record<Mode, IconName>> = { plan: 'map', fly: 'compass', report: 'file-text', evidence: 'shield-check' }
+const MODE_ICON: Readonly<Record<Mode, IconName>> = { plan: 'map', science: 'flask-conical', fly: 'compass', report: 'file-text', evidence: 'shield-check' }
 
 /** The shell's commands, in palette order. */
 export function shellCommands(): Command[] {
   const mapOnly = { enabled: inMapMode, reason: () => 'commands.reason.mapOnly' as const }
   const flyOnly = { enabled: inFly, reason: () => 'commands.reason.flyOnly' as const }
   return [
-    ...MODES.map((mode) =>
+    ...SHOWN_MODES.map((mode) => // hidden modes (state/ui HIDDEN_MODES) have no command
       shortcutCommand({ id: `mode.${mode}`, label: `modes.${mode}.label`, keywords: ['mode', 'view', 'go', mode], icon: MODE_ICON[mode], group: 'view', shortcut: { action: 'mode', mode } }),
     ),
     shortcutCommand({ id: 'view.toggle3d', label: 'shortcuts.toggle3d', keywords: ['3d', '2d', 'terrain', 'view', 'toggle'], icon: 'rotate-3d', group: 'map', shortcut: { action: 'toggle3d' } }),
@@ -114,7 +114,8 @@ export function shellCommands(): Command[] {
       shortcut: { action: 'camera', preset: 4 },
       ...mapOnly,
     }),
-    // follow crew = M10's flythrough (same button, spec Q1): one command, keyword flythrough
+    // follow crew = M10's flythrough (same button, spec Q1): one command, keyword flythrough.
+    // D145 narrowed (F13): the Plan map's Flythrough button stays, so this command and key 5 stay
     shortcutCommand({
       id: 'camera.follow',
       label: 'commands.followCrew',

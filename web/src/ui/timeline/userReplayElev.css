@@ -1,0 +1,17 @@
+/* PORT F15: main's Margin / Elevation switch and elevation strip (origin/main mission.css .mp-dock__tabs,
+   .mp-elev__*), on the user replay's readout. Tokens only. */
+.plan-replay__tabs { display: flex; gap: 3px; }
+.plan-replay__chip { padding: 2px var(--space-2); border: 1px solid var(--color-card-border); border-radius: var(--radius-pill); background: transparent; color: var(--color-text-muted); font: inherit; font-size: var(--font-size-small); cursor: pointer; }
+.plan-replay__chip[aria-selected='true'] { background: var(--color-select); border-color: var(--color-select); color: var(--color-bg); font-weight: 600; }
+.plan-elev { min-width: 0; }
+.plan-elev__track { cursor: default; }
+.plan-elev__area { fill: var(--color-text-faint); opacity: 0.18; stroke: none; }
+.plan-elev__line { fill: none; stroke: var(--color-text-muted); stroke-width: 2; stroke-linejoin: round; }
+.plan-elev__cursor { position: absolute; top: 0; bottom: 0; width: 0; border-left: 2px solid var(--color-select); pointer-events: none; z-index: 2; }
+.plan-elev__dot { position: absolute; width: 8px; height: 8px; margin: -4px 0 0 -4px; border-radius: var(--radius-pill); background: var(--color-select); pointer-events: none; z-index: 2; }
+.plan-elev__ylab { position: absolute; left: 2px; z-index: 1; padding: 1px 3px; border-radius: var(--radius-chip); background: color-mix(in srgb, var(--color-bg) 80%, transparent); font-size: var(--font-size-small); line-height: 1; color: var(--color-text-muted); font-variant-numeric: tabular-nums; pointer-events: none; }
+.plan-elev__ylab--top { top: 1px; }
+.plan-elev__ylab--bot { bottom: 2px; }
+.plan-elev__legend { list-style: none; margin: 0; padding: 0; display: grid; gap: 1px; font-size: var(--font-size-small); color: var(--color-text-muted); }
+.plan-elev__legend li { display: flex; align-items: center; gap: 5px; white-space: nowrap; }
+.plan-elev__swatch { display: inline-block; width: 10px; height: 10px; border-radius: var(--radius-chip); }

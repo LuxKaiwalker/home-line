@@ -14,9 +14,13 @@
 import type { CustomLayerInterface, Map as MlMap } from 'maplibre-gl'
 import { TOKENS } from '../../ui/tokens'
 import { TERRAIN } from './config'
+import { FAR_FIELD, farDemSource, pitchCap, type TileSet } from './farfield'
+import { DEM_PROTOCOL, installDemProtocol, lowestFarHeight, type DemTileUrls } from './protocol'
 import { DEM_SOURCE, demSource, type TerrainTiles } from './tiles'
 
 export const RELIEF_LAYER_ID = 'relief-shading'
+/** V1: the relief shading on the far-field pyramid; replaces relief-shading while 3D is on (not in a story) */
+export const RELIEF_FAR = { layer: 'relief-shading-far', source: 'relief-far-dem' } as const
 
 export interface TerrainHandle {
   /** terrain on (3D) or off (flat; the relief shading stays) */
@@ -38,16 +42,78 @@ export function tileClipMatrix(z: number, x: number, y: number): Float64Array {
 
 type Drapeable = CustomLayerInterface & { terrainTileRevision?: number }
 
-export function addTerrain(map: MlMap, tj: TerrainTiles, prefix: (p: string) => string, beforeId: string | undefined, initial: { exaggeration: number; azimuth: number | null }): TerrainHandle {
+/** V1: sky and horizon fog while terrain is on (tokens; blends from terrain_3d.far_field.sky). */
+export function skySpec(): Parameters<MlMap['setSky']>[0] {
   const c = TOKENS.color
-  if (!map.getSource(DEM_SOURCE.terrain)) map.addSource(DEM_SOURCE.terrain, demSource(tj, prefix))
-  if (!map.getSource(DEM_SOURCE.relief)) map.addSource(DEM_SOURCE.relief, demSource(tj, prefix))
-  if (!map.getLayer(RELIEF_LAYER_ID)) {
+  const s = FAR_FIELD.sky
+  return {
+    'sky-color': c.bg,
+    'horizon-color': c.card,
+    'fog-color': c.card,
+    'sky-horizon-blend': s.skyHorizonBlend,
+    'horizon-fog-blend': s.horizonFogBlend,
+    'fog-ground-blend': s.fogGroundBlend,
+    'atmosphere-blend': s.atmosphereBlend,
+  }
+}
+
+/** A story (intro, kiosk, capture) owns the camera: StoryStage sets html[data-story]. */
+function storyOn(): boolean {
+  try {
+    return typeof document !== 'undefined' && !!document.documentElement?.dataset?.story
+  } catch {
+    return false
+  }
+}
+
+/** z/x/y into a tiles.json URL template, prefixed with the data root. */
+const tileUrl = (tj: TerrainTiles, prefix: (p: string) => string) => (z: number, x: number, y: number) =>
+  prefix(tj.tiles[0].replace('{z}', String(z)).replace('{x}', String(x)).replace('{y}', String(y)))
+
+/**
+ * @param far V1 (D141): terrain_low/tiles.json. With it the 3D mesh and the relief shading read one
+ *   pyramid from terrain_low's zooms up (farfield.ts), so a pitched view has ground to its far edge;
+ *   without it (an older data tree) the planning-extent tiles only, as before.
+ */
+export function addTerrain(
+  map: MlMap,
+  tj: TerrainTiles,
+  prefix: (p: string) => string,
+  beforeId: string | undefined,
+  initial: { exaggeration: number; azimuth: number | null },
+  far?: TerrainTiles | null,
+): TerrainHandle {
+  const c = TOKENS.color
+  const nearSpec = demSource(tj, prefix)
+  let uninstallProtocol: (() => void) | null = null
+  let spec = nearSpec
+  /** lowest far-field height (map m, exaggeration 1); null until read */
+  let floor: number | null = null
+  if (far && typeof (globalThis as { OffscreenCanvas?: unknown }).OffscreenCanvas === 'function') {
+    const nearSet: TileSet = { minzoom: tj.minzoom, maxzoom: nearSpec.maxzoom ?? tj.maxzoom, bounds: tj.bounds }
+    const farSet: TileSet = { minzoom: far.minzoom, maxzoom: far.maxzoom, bounds: far.bounds }
+    const urls: DemTileUrls = { near: nearSet, far: farSet, nearUrl: tileUrl(tj, prefix), farUrl: tileUrl(far, prefix) }
+    uninstallProtocol = installDemProtocol(urls)
+    void lowestFarHeight(urls)
+      .then((h) => {
+        floor = h
+        clipFloor()
+      })
+      .catch(() => undefined)
+    spec = farDemSource(nearSet, farSet, DEM_PROTOCOL, [tj.attribution, far.attribution].filter(Boolean).join('; ') || undefined)
+  }
+  const farOn = spec !== nearSpec
+  if (!map.getSource(DEM_SOURCE.terrain)) map.addSource(DEM_SOURCE.terrain, spec)
+  // the 2D relief shading keeps the planning-extent tiles (2D unchanged by V1; the intro has its own relief-low)
+  if (!map.getSource(DEM_SOURCE.relief)) map.addSource(DEM_SOURCE.relief, nearSpec)
+  const reliefLayer = (id: string, source: string, visible: boolean): void => {
+    if (map.getLayer(id)) return
     map.addLayer(
       {
-        id: RELIEF_LAYER_ID,
+        id,
         type: 'hillshade',
-        source: DEM_SOURCE.relief,
+        source,
+        layout: { visibility: visible ? 'visible' : 'none' },
         paint: {
           'hillshade-illumination-anchor': 'map',
           ...(initial.azimuth !== null ? { 'hillshade-illumination-direction': initial.azimuth } : {}),
@@ -59,8 +125,59 @@ export function addTerrain(map: MlMap, tj: TerrainTiles, prefix: (p: string) => 
       beforeId && map.getLayer(beforeId) ? beforeId : undefined,
     )
   }
+  reliefLayer(RELIEF_LAYER_ID, DEM_SOURCE.relief, true)
+  if (farOn) {
+    if (!map.getSource(RELIEF_FAR.source)) map.addSource(RELIEF_FAR.source, spec)
+    reliefLayer(RELIEF_FAR.layer, RELIEF_FAR.source, false)
+  }
   let exag = initial.exaggeration
   let on = false
+  /**
+   * V1: MapLibre 6.18 puts the camera's far plane on a flat plane at the lowest point of the tile under
+   * the map centre (Terrain.getMinTileElevationForLngLatZoom -> transform.minElevationForCurrentTile), so
+   * from a ridge the lower ground beyond fell behind the far plane and was clipped (a black top edge with
+   * every tile loaded). The floor is held at or below the lowest point of the Gale pyramid.
+   */
+  function clipFloor(): void {
+    type T = { getMinTileElevationForLngLatZoom(l: unknown, z: number): number; __hlFloor?: true }
+    const t = (map as unknown as { terrain?: T | null }).terrain
+    if (!t || floor === null || t.__hlFloor) return
+    const orig = t.getMinTileElevationForLngLatZoom.bind(t)
+    t.getMinTileElevationForLngLatZoom = (l, z) => Math.min(orig(l, z), (floor ?? 0) * exag)
+    t.__hlFloor = true
+  }
+  // V1: in 3D (not in a story) the far relief replaces the planning-extent one (same tiles inside the extent)
+  let farShown = false
+  const reliefSwap = (): void => {
+    const want = farOn && on && !storyOn()
+    if (want === farShown || !map.getLayer(RELIEF_FAR.layer)) return
+    farShown = want
+    map.setLayoutProperty(RELIEF_FAR.layer, 'visibility', want ? 'visible' : 'none')
+    map.setLayoutProperty(RELIEF_LAYER_ID, 'visibility', want ? 'none' : 'visible')
+  }
+  /**
+   * V1: the manual tilt cap follows the camera height (zoom). Only moves the viewer makes (an event with
+   * originalEvent: drag-tilt, wheel zoom) are held to it; the programmatic cameras keep their own caps
+   * (flythrough camera.flythrough.max_pitch_deg, the open pose, stories), and maxPitch stays
+   * terrain_3d.max_pitch_deg (a maxPitch that followed the zoom clamped a jumpTo to the old zoom's cap).
+   */
+  const capPitch = (e?: { originalEvent?: unknown }): void => {
+    if (!farOn) return
+    reliefSwap()
+    if (!on || !e?.originalEvent || storyOn()) return
+    const m = map as Partial<MlMap>
+    const zoom = m.getZoom?.()
+    const pitch = m.getPitch?.()
+    if (zoom === undefined || pitch === undefined) return
+    const cap = pitchCap(zoom, FAR_FIELD.pitchCap)
+    if (pitch > cap + 0.01) m.setPitch?.(cap)
+  }
+  const sky = (next: boolean): void => {
+    if (!farOn) return
+    // setSky(undefined) resets the style's sky to MapLibre's transparent default (the typing wants a spec)
+    const m = map as unknown as { setSky?: (s: ReturnType<typeof skySpec> | undefined) => void }
+    m.setSky?.(next ? skySpec() : undefined)
+  }
   let draped: { id: string; impl: Drapeable } | null = null
 
   const drape = (): void => {
@@ -84,12 +201,17 @@ export function addTerrain(map: MlMap, tj: TerrainTiles, prefix: (p: string) => 
       on = next
       if (next) {
         map.setTerrain({ source: DEM_SOURCE.terrain, exaggeration: exag })
+        clipFloor()
         map.setMaxPitch(TERRAIN.maxPitch3d)
+        reliefSwap()
+        sky(true)
         map.dragRotate.enable()
         map.touchZoomRotate.enableRotation()
         map.keyboard.enable()
       } else {
         map.setTerrain(null)
+        sky(false)
+        reliefSwap()
         map.dragRotate.disable()
         map.touchZoomRotate.disableRotation()
       }
@@ -106,11 +228,13 @@ export function addTerrain(map: MlMap, tj: TerrainTiles, prefix: (p: string) => 
     },
     setExaggeration(x) {
       exag = x
-      if (on) map.setTerrain({ source: DEM_SOURCE.terrain, exaggeration: x })
+      if (on) {
+        map.setTerrain({ source: DEM_SOURCE.terrain, exaggeration: x })
+        clipFloor()
+      }
     },
     setLightAzimuth(az) {
-      if (!map.getLayer(RELIEF_LAYER_ID)) return
-      map.setPaintProperty(RELIEF_LAYER_ID, 'hillshade-illumination-direction', az ?? undefined)
+      for (const id of [RELIEF_LAYER_ID, RELIEF_FAR.layer]) if (map.getLayer(id)) map.setPaintProperty(id, 'hillshade-illumination-direction', az ?? undefined)
     },
     drapeField(layerId) {
       const l = map.getLayer(layerId) as unknown as { implementation?: Drapeable } | undefined
@@ -124,10 +248,14 @@ export function addTerrain(map: MlMap, tj: TerrainTiles, prefix: (p: string) => 
       on = false
       drape()
       map.setTerrain(null)
-      if (map.getLayer(RELIEF_LAYER_ID)) map.removeLayer(RELIEF_LAYER_ID)
-      for (const id of Object.values(DEM_SOURCE)) if (map.getSource(id)) map.removeSource(id)
+      sky(false)
+      ;(map as Partial<MlMap>).off?.('move', capPitch)
+      uninstallProtocol?.()
+      for (const id of [RELIEF_LAYER_ID, RELIEF_FAR.layer]) if (map.getLayer(id)) map.removeLayer(id)
+      for (const id of [...Object.values(DEM_SOURCE), RELIEF_FAR.source]) if (map.getSource(id)) map.removeSource(id)
     },
   }
+  ;(map as Partial<MlMap>).on?.('move', capPitch)
   return handle
 }
 

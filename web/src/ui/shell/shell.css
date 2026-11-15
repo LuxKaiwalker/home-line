@@ -210,3 +210,15 @@ html[data-story-chrome='hide'] .hl-shell .hl-dock, html[data-story-chrome='hide'
 /* L7b (T9): the Official plan action in the Plan top bar */
 .hl-officialplan { display: inline-flex; }
 .hl-officialplan .hl-btn { white-space: nowrap; }
+
+/* sub-entries of a rail view (the station detail pages under Science stations) */
+.hl-rail__subviews { margin: var(--space-1) 0 0; padding: 0 0 0 var(--space-4); list-style: none; display: flex; flex-direction: column; gap: var(--space-1); border-left: 1px solid var(--color-card-border); margin-left: var(--space-3); }
+.hl-rail__subview {
+  display: flex; align-items: baseline; gap: var(--space-2); padding: var(--space-1) var(--space-2);
+  color: var(--color-text-muted); text-decoration: none; border-radius: var(--radius-input);
+  transition: background-color var(--motion-hover-min) linear, color var(--motion-hover-min) linear;
+}
+.hl-rail__subview span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.hl-rail__subview:hover { color: var(--color-text); background: var(--color-card); }
+.hl-rail__subview.is-active { color: var(--color-text); background: var(--color-card); }
+.hl-rail__subview:focus-visible { outline: var(--line-focus-ring) solid var(--color-select); outline-offset: var(--line-focus-ring); }

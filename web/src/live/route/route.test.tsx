@@ -621,6 +621,24 @@ describe('VITE_LIVE off: nothing mounts', () => {
   const ROUTE_DIRS = [resolve(SRC, 'edit', 'route'), resolve(SRC, 'live', 'route'), resolve(SRC, 'live')]
   const inRoute = (f: string) => ROUTE_DIRS.some((d) => f === d || f.startsWith(d + sep))
 
+  // PORT I1 (§7b decision, 21:20): the Plan port makes the route core part of the Plan view. It may be
+  // reached ONLY through an unguarded import() of these lazy entry modules (their own chunk, loaded on Plan
+  // mount / on use); the walk does not follow into them. Every other edge stays forbidden: no static import
+  // of edit/route/** from outside (next test), no route module in the main graph, and live/isolation.test.ts
+  // still walks into these chunks and forbids any static edge to src/live/.
+  const PORT_LAZY_ENTRIES = new Set(
+    [
+      ['edit', 'route', 'browser', 'runner.ts'], // R1 planning runner (views/planPort.tsx)
+      ['edit', 'route', 'browser', 'compute.ts'], // R1 core (U4 export)
+      ['edit', 'route', 'browser', 'start.ts'],
+      ['edit', 'route', 'browser', 'data.ts'],
+      ['edit', 'route', 'instant', 'adapter.ts'],
+      ['edit', 'route', 'map', 'plan.ts'], // R3 map editing
+      ['edit', 'route', 'map', 'addToRoute.tsx'], // R3 station card "Add to route"
+      ['edit', 'route', 'undo.ts'], // I2 planning undo (state/planningActivity.ts)
+    ].map((p) => resolve(SRC, ...p)),
+  )
+
   it('the static module graph (static and unguarded dynamic imports) holds no route module', () => {
     const seen = new Set<string>()
     const stack = [resolve(SRC, 'main.ts')]
@@ -636,7 +654,7 @@ describe('VITE_LIVE off: nothing mounts', () => {
       for (const m of src.matchAll(DYNAMIC_RE)) {
         const to = resolveImport(f, m[1])
         const guarded = /import\.meta\.env\.VITE_LIVE\b/.test(src.slice(0, m.index).split('\n').slice(-4).join('\n'))
-        if (to && !guarded) stack.push(to)
+        if (to && !guarded && !PORT_LAZY_ENTRIES.has(to)) stack.push(to)
       }
     }
     expect([...seen].filter(inRoute).map((f) => relative(SRC, f))).toEqual([])

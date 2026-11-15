@@ -18,6 +18,7 @@ import { t } from '../ui/copy'
 import { Popover, useLayoutInsets } from '../ui/layout'
 import { hostIn } from '../ui/shell/store'
 import { FullscreenButton, RoverButton } from './planChrome' // L2f: the last map-edge tools
+import { MapControls } from './planPortSlots'
 import { registerPlanMount, SectionHost, type PlanMountCtx, type Sections } from './planSlots'
 import './planLayers.css'
 
@@ -91,6 +92,8 @@ function LayersBody({ sections, mapEl }: { sections: Sections; mapEl: HTMLElemen
         <h3 class="plan-layers__title hl-ovl__group-title">{t('layers.groups.planning')}</h3>
         <SectionHost name="layers" sections={sections} />
       </section>
+      {/* PORT I1: the Plan port's rows (route legend + toggles R4, slope L1a, Curiosity L1b, …) */}
+      <MapControls slot="layers-popover" class="plan-layers__group plan-layers__port" />
       <LayerPanel />
     </>
   )
@@ -114,6 +117,8 @@ export function PlanEdge({ sections, mapEl }: { sections: Sections; mapEl: HTMLE
         <RoverButton />
         <FullscreenButton />
       </div>
+      {/* PORT I1: map-edge controls (base map choice L1c), bottom left above the legend chip */}
+      <MapControls slot="map-edge" class="plan-edgectl" />
       <Popover id={LEGEND_ID} icon="info" label={legend} title={legend} edge="bottom-left" class="plan-pop plan-pop--legend">
         <SectionHost name="legend" sections={sections} />
       </Popover>

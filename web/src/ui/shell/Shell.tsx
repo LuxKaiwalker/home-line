@@ -6,7 +6,7 @@ import { useEffect, useRef, useState } from 'preact/hooks'
 import { canonicalHref, LANDING_HASH, type Route } from '../../router'
 import { listenLiveStatus } from '../../state/live'
 import { effect, useSignalValue } from '../../state/signal'
-import { MODES, ui, type Mode } from '../../state/ui'
+import { SHOWN_MODES, ui, type Mode } from '../../state/ui'
 import { cx, Icon, IconButton } from '../components'
 import { t } from '../copy'
 import { bindBrowserStorage, installLayoutKeys } from '../layout'
@@ -14,6 +14,7 @@ import { SearchButton } from '../search/button'
 import type { Frame } from './frame'
 import { HELP_ROWS, installShortcuts } from './keys'
 import { OfficialPlanButton } from './OfficialPlan'
+import { StationLinks } from './StationLinks'
 import {
   breakpointFor,
   closeSidebar,
@@ -36,7 +37,7 @@ import {
   sidebarContent,
 } from './store'
 
-const sameView = (a: Route, b: Route): boolean => a.name === b.name || (a.name === 'station' && b.name === 'console')
+const sameView = (a: Route, b: Route): boolean => a.name === b.name
 
 function useMode(): Mode {
   return useSignalValue(ui.mode) ?? 'plan'
@@ -65,7 +66,7 @@ export function SkipLink() {
 export function ModeTabs({ mode }: { mode: Mode }) {
   return (
     <ul class="hl-modes" role="list">
-      {MODES.map((m) => (
+      {SHOWN_MODES.map((m) => (
         <li key={m}>
           <a class={cx('hl-modes__tab', m === mode && 'is-active')} href={modeHash(m)} aria-current={m === mode ? 'page' : undefined} aria-keyshortcuts={MODE_KEY[m]}>
             <span>{t(`modes.${m}.label`)}</span>
@@ -163,6 +164,8 @@ export function Rail() {
                   <Icon name={v.icon} />
                   {!iconOnly && <span>{label}</span>}
                 </a>
+                {/* the station detail pages, as sub-entries of Science stations */}
+                {v.route.name === 'stations' && !iconOnly && <StationLinks route={route} />}
               </li>
             )
           })}

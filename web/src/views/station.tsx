@@ -13,6 +13,8 @@ import { CfgNum, Num } from '../components/Num'
 import { DragNote } from '../components/DragNote'
 import { Page, preactView, Show, useLoad } from './page'
 import { FAR_NOT_VALIDATED, scopeText } from './validation'
+import './stations.css'
+import { indexWords, OBJECTIVE_SOURCE, SCORING, selectionFor, stationsKey, STATIONS_SOURCE } from './stationsWhy'
 
 import { STORM_TIMING_NOTE, compassTick, homeFor, isHiddenLandmark, landmarkNote, marginLabel, type Landmark } from './decisions'
 export { MARGIN_LABEL, marginLabel } from './decisions'
@@ -96,6 +98,7 @@ function CardBody({ d }: { d: StationData }) {
     <div class="card-grid">
       <section class="card-main">
         {s.objective && <p class="objective">{s.objective}</p>}
+        <WhyStation s={s} />
         {s.reachability_label && <p class="finding">{s.reachability_label} in every scenario (D26).</p>}
         {d.cardError != null && <DataProblem error={d.cardError} what={`Station card ${cf}`} />}
         {!card && d.cardError == null && <p class="muted">Station card file {NO_CARD}: Navcam, panorama, landmarks and timeline are missing; values below come from stations.json.</p>}
@@ -446,5 +449,67 @@ function Compass({ landmarks, station }: { landmarks: Landmark[]; station: strin
         {landmarks.length > hidden.length ? ' Solid ticks: above the computed skyline.' : ''}
       </figcaption>
     </figure>
+  )
+}
+
+// Copy for the F7 score line: which of its config values are assumed (D32, D44) and which are the SPEC rule.
+const WEIGHTS_ASSUMED = 'F7 weights are a team choice (D32, stations.yaml scoring_weights_assumed), labelled assumed'
+const NO_MANUAL_PRIORITY_ASSUMED = 'Scored stations get no manual priority (D44, stations.yaml extras.assumed), labelled assumed'
+const RIDGE_RADIUS_NOTE =
+  'Ridge density: share of boxwork ridge cells in the 1 m terrain model within that radius of the point (stations.yaml ridge_density_radius_m, the SPEC F7 rule; not assumed).'
+
+/** Why this station was chosen (stations.yaml rule, F7 score) and the way into the Mission Planer. */
+function WhyStation({ s }: { s: Station }) {
+  const why = selectionFor(s.id)
+  const W = SCORING.weights
+  const src = STATIONS_SOURCE
+  return (
+    <section class="kv mp-card st-why-card">
+      <h3>Why this station</h3>
+      {why.objective && !s.objective && (
+        <p class="objective">
+          {why.objective} <span class="muted">({OBJECTIVE_SOURCE})</span>
+        </p>
+      )}
+      <p>
+        {why.kind === 'named' ? (
+          <>
+            Named in the science plan and placed by its own rule: <i>{why.rule}</i>.
+          </>
+        ) : why.kind === 'extra' ? (
+          <>
+            Not hand-named: found by the score as {why.rule}.
+          </>
+        ) : (
+          <span class="muted">No selection rule for {s.id} in {src}.</span>
+        )}
+      </p>
+      <p>
+        Score <Num v={s.value} file="stations.json" k={`stations.${s.id}.value`} /> ={' '}
+        <CfgNum v={W.crism} source={stationsKey('scoring_weights.crism')} /> × mineral signal ({indexWords(why.crismIndex) ?? 'unknown index'}, MRO CRISM) +{' '}
+        <CfgNum v={W.ridge_density} source={stationsKey('scoring_weights.ridge_density')} /> × boxwork ridge density within{' '}
+        <CfgNum v={SCORING.ridgeRadiusM} units="m" source={stationsKey('ridge_density_radius_m')} /> + <CfgNum v={W.manual} source={stationsKey('scoring_weights.manual')} /> × priority
+        {why.manualPriority !== null && why.manualPrioritySource !== null && (
+          <>
+            {' '}
+            (<CfgNum v={why.manualPriority} source={why.manualPrioritySource} /> here
+            {why.manualPriorityAssumed && (
+              <>
+                {' '}
+                <AssumedTag note={NO_MANUAL_PRIORITY_ASSUMED} />
+              </>
+            )}
+            )
+          </>
+        )}
+        . {SCORING.weightsAssumed && <AssumedTag note={WEIGHTS_ASSUMED} />}
+      </p>
+      <p class="caption">{RIDGE_RADIUS_NOTE}
+      </p>
+      <div class="st-actions">
+        <a href={`#/?add=${encodeURIComponent(s.id)}`} data-add-to-route={s.id}>+ Add to route</a>
+        <a href={href({ name: 'stations' })}>All science stations</a>
+      </div>
+    </section>
   )
 }

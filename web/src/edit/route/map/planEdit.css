@@ -1,0 +1,72 @@
+/* PORT R3: free-point handles, edit notice and editing cursor on the Plan map. Tokens only.
+   Colour meaning (DESIGN §3.1): a free point is the user's own stop (text colour, card ground); red
+   (limit) only for a place that would be refused; yellow (select) only for focus. */
+@import '../../../ui/tokens.css';
+
+.hl-r3-editing .maplibregl-canvas-container.maplibregl-interactive,
+.hl-r3-editing .maplibregl-canvas { cursor: crosshair; }
+
+.hl-r3-handle {
+  /* no `position` here: the handle IS the maplibre marker element, whose .maplibregl-marker
+     { position: absolute } must win (a later `position: relative` put it in flow as a full-width bar).
+     The absolute marker is already the containing block of the remove button. */
+  display: grid;
+  place-items: center;
+  min-width: var(--space-5);
+  height: var(--space-5);
+  padding: 0 var(--space-1);
+  border: var(--line-focus-ring) solid var(--color-text);
+  border-radius: var(--radius-chip);
+  background: var(--color-card);
+  color: var(--color-text);
+  font-family: var(--font-mono);
+  font-size: var(--font-size-label);
+  line-height: var(--line-height-label);
+  cursor: grab;
+  user-select: none;
+}
+.hl-r3-handle.is-dragging { cursor: grabbing; opacity: var(--overlay-opacity-max); }
+.hl-r3-handle[data-validity='invalid'] { border-color: var(--color-limit); color: var(--color-limit); }
+.hl-r3-handle:focus-visible { outline: var(--line-focus-ring) solid var(--color-select); }
+
+.hl-r3-handle__remove {
+  position: absolute;
+  top: calc(-1 * var(--space-3));
+  right: calc(-1 * var(--space-3));
+  display: none;
+  width: var(--space-4);
+  height: var(--space-4);
+  padding: 0;
+  border: 1px solid var(--color-card-border);
+  border-radius: var(--radius-pill);
+  background: var(--color-card);
+  color: var(--color-text);
+  font: inherit;
+  line-height: 1;
+  cursor: pointer;
+}
+.hl-r3-handle.is-hover .hl-r3-handle__remove,
+.hl-r3-handle.is-menu .hl-r3-handle__remove,
+.hl-r3-handle:focus-within .hl-r3-handle__remove { display: block; }
+.hl-r3-handle.is-dragging .hl-r3-handle__remove { display: none; }
+.hl-r3-handle__remove:focus-visible { outline: var(--line-focus-ring) solid var(--color-select); }
+
+.hl-r3-notice {
+  position: absolute;
+  left: 50%;
+  bottom: var(--space-6);
+  z-index: 2;
+  max-width: min(90%, var(--layout-sidebar));
+  transform: translateX(-50%);
+  padding: var(--space-1) var(--space-3);
+  border: 1px solid var(--color-card-border);
+  border-radius: var(--radius-card);
+  background: var(--color-card);
+  color: var(--color-text);
+  font-size: var(--font-size-small);
+  line-height: var(--line-height-small);
+  box-shadow: 0 var(--space-1) var(--space-3) var(--color-shadow);
+  pointer-events: none;
+}
+.hl-r3-notice[hidden] { display: none; }
+.hl-r3-notice[data-kind='refused'] { border-color: var(--color-limit); }

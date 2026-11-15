@@ -2,8 +2,8 @@
  * Plan bottom drawer (L2b, D111; L0 rows 4 and 5) in a real browser, both viewports of the visual config.
  * Not a screenshot test.
  *   - Collapsed: one line along the bottom map edge with the route summary and the slim scrubber.
- *   - Expanded: at most 40 % of the map height; tab "Plan table" (route legs + stations tables, trust
- *     chips, no unbacked number) and tab "Timeline" (the timeline dock body).
+ *   - Expanded: at most 40 % of the map height; only tab "Timeline" (the timeline dock body;
+ *     F7, user 22:59: no plan-table tab, no "Compare plans").
  *   - RR1 issue 1: with a selection open, the timeline track keeps its width (≥ the 360 px sidebar
  *     token; it was crushed to about 90 px) and no side panel covers the drawer.
  * Run: cd web && npm run build && npx playwright test tests/visual/plan-bottom.spec.ts
@@ -43,23 +43,19 @@ test('collapsed: one line with the route summary and the slim scrubber', async (
   expect(await page.locator(`${DRAWER} .num-unbacked`).count()).toBe(0)
 })
 
-test('expanded: ≤ 40 % of the map; plan table and timeline tabs', async ({ page }) => {
+test('expanded: ≤ 40 % of the map; only the timeline tab', async ({ page }) => {
   await open(page)
   const map = await box(page, '.console-map')
   await page.locator(GRIP).click()
   await expect(page.locator(GRIP)).toHaveAttribute('aria-expanded', 'true')
-  await expect(tab(page, 'plan-table')).toHaveAttribute('aria-selected', 'true')
+  // F7 (user 22:59): the drawer holds only the replay: one tab, no plan table, no "Compare plans"
+  await expect(page.locator('#hl-lay-plan-bottom-tab-plan-table')).toHaveCount(0)
+  await expect(page.locator('[data-testid="plan-compare-plans"]')).toHaveCount(0)
+  await expect(tab(page, 'timeline')).toHaveAttribute('aria-selected', 'true')
   const body = page.locator('#hl-lay-plan-bottom')
-  await expect(body.locator('.route-legs')).toBeVisible({ timeout: 30_000 })
-  await expect(body.getByRole('table').first()).toBeVisible()
-  await expect(body.locator('section', { has: page.locator('h3', { hasText: /^Stations$/ }) })).toHaveCount(1)
-  expect(await body.locator('.num').count()).toBeGreaterThan(0)
-  expect(await body.locator('.num-unbacked').count()).toBe(0)
   expect((await box(page, DRAWER)).height).toBeLessThanOrEqual(map.height * 0.4 + 1)
   expect(await box(page, '.console-map')).toEqual(map) // overlay: the map box does not change
 
-  await tab(page, 'timeline').click()
-  await expect(tab(page, 'timeline')).toHaveAttribute('aria-selected', 'true')
   await expect(body.locator('.hl-tl__track')).toBeVisible({ timeout: 30_000 })
   await expect(page.locator('.hl-tl__play').filter({ visible: true })).toHaveCount(1) // one timeline at a time
   expect((await box(page, DRAWER)).height).toBeLessThanOrEqual(map.height * 0.4 + 1)

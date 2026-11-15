@@ -253,9 +253,9 @@ describe.skipIf(!HAVE)('search palette (real data)', () => {
     expect(ui.view.value).toBe('3d')
     const nav = vi.fn()
     setCommandEnv({ navigate: nav })
-    runItem(cmd('mode.evidence'), { navigate: () => {} })
+    runItem(cmd('mode.science'), { navigate: () => {} }) // D145: FLY is hidden, no mode.fly
     expect(nav).toHaveBeenCalledTimes(1)
-    expect(labelOf(cmd('mode.evidence'))).toBe(t('modes.evidence.label'))
+    expect(labelOf(cmd('mode.science'))).toBe(t('modes.science.label'))
   })
 
   it('commands group: every registered command can be found, with its keys beside it', () => {

@@ -2,7 +2,7 @@
 // The forbidden-term list is parsed from the DESIGN §3.8 wording table, so the glossary stays the
 // single source; labels that already exist in config/ must match it word for word.
 import { describe, expect, it } from 'vitest'
-import { readFileSync } from 'node:fs'
+import { readdirSync, readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { parse as parseYaml } from 'yaml'
@@ -58,12 +58,13 @@ function termRegex(term: string): RegExp {
 
 /**
  * §3.8 forbids "Waypoint (except user points)"; the parenthetical is dropped by forbiddenTerms(). The
- * Mission Planer's waypoints (#/mission, copy under mission.*) are the user's own points, so the word
- * is allowed there and nowhere else (J1c, D135).
+ * user's own points live in Plan's Route panel list and map editing (route.list.*, route.mapEdit.*; the
+ * Mission Planer's mission.* before the Plan port), so the word is allowed there and nowhere else (J1c,
+ * D135, PORT I4).
  */
-const USER_POINT_PREFIX = 'mission.'
+const USER_POINT_PREFIXES = ['route.list.', 'route.mapEdit.']
 function userPointException(term: string, path: string): boolean {
-  return term.toLowerCase() === 'waypoint' && path.startsWith(USER_POINT_PREFIX)
+  return term.toLowerCase() === 'waypoint' && USER_POINT_PREFIXES.some((p) => path.startsWith(p))
 }
 
 const PLACEHOLDER = /\{[a-z][a-z0-9_]*\}/g
@@ -147,12 +148,14 @@ describe('copy.json: wording (DESIGN §3.8)', () => {
     expect(hits).toEqual([])
   })
 
-  it('allows "waypoint" only for user points, i.e. the Mission Planer (§3.8 "Waypoint (except user points)", D135)', () => {
+  it('allows "waypoint" only for user points, i.e. the Route panel list and map editing (§3.8 "Waypoint (except user points)", D135)', () => {
     expect(terms.map((s) => s.toLowerCase())).toContain('waypoint')
-    expect(userPointException('Waypoint', 'mission.waypoints.title')).toBe(true)
+    expect(userPointException('Waypoint', 'route.list.title')).toBe(true)
+    expect(userPointException('Waypoint', 'route.mapEdit.notice.pointAdded')).toBe(true)
     expect(userPointException('Waypoint', 'cards.station.title')).toBe(false)
-    expect(userPointException('Waypoint', 'missionary.x')).toBe(false)
-    expect(userPointException('Buffer', 'mission.estimates.timeMargin')).toBe(false)
+    expect(userPointException('Waypoint', 'route.listing.x')).toBe(false)
+    expect(userPointException('Waypoint', 'mission.waypoints.title')).toBe(false)
+    expect(userPointException('Buffer', 'route.list.title')).toBe(false)
   })
 
   it('the matcher catches the forbidden terms (self-check)', () => {
@@ -228,5 +231,40 @@ describe('copy.ts accessor', () => {
   })
   it('lists placeholders of a key', () => {
     expect(placeholders('tooltips.thread').sort()).toEqual(['binding', 'margin', 't_home'])
+  })
+})
+
+describe('copy.json: the Plan port strings (route.*, PORT I4)', () => {
+  // Every route.* key is read somewhere in the app: as a literal 'route.…' key, or under the static prefix of
+  // a template key (`route.panel.sections.${name}`). PENDING = keys whose reader has not merged yet (none since wave 1).
+  const PENDING: string[] = []
+  const SRC = join(UI, '..')
+  const files = (dir: string): string[] =>
+    readdirSync(dir, { withFileTypes: true }).flatMap((e) =>
+      e.isDirectory() ? files(join(dir, e.name)) : /\.tsx?$/.test(e.name) && !/\.test\.tsx?$/.test(e.name) ? [join(dir, e.name)] : [],
+    )
+  const src = files(SRC).map((f) => readFileSync(f, 'utf8')).join('\n')
+  const literal = new Set([...src.matchAll(/['"](route\.[A-Za-z.]+)['"]/g)].map((m) => m[1]))
+  const prefixes = [...src.matchAll(/`(route\.[A-Za-z.]+\.)\$\{/g)].map((m) => m[1])
+  const keys = ALL.filter((l) => l.path.startsWith('route.')).map((l) => l.path)
+
+  it('has no unused route.* key', () => {
+    const unused = keys.filter((k) => !literal.has(k) && !prefixes.some((p) => k.startsWith(p)) && !PENDING.includes(k))
+    expect(unused).toEqual([])
+  })
+  it('PENDING lists only keys that are still unused', () => {
+    expect(PENDING.filter((k) => literal.has(k))).toEqual([])
+  })
+  it('carries the team lead labels word for word', () => {
+    expect(t('route.panel.estimates.estimate')).toBe('Estimate')
+    expect(t('route.panel.fast')).toBe('Fast route · may not be the fastest')
+    expect(t('route.layers.curiosity.live')).toBe('live NASA data')
+    expect(t('route.map.official')).toBe('Official route for this pad')
+    expect(t('route.map.mine')).toBe('Your route')
+    expect(t('route.export.marvis')).toBe('Send to MARVIS')
+    expect(t('route.export.download')).toBe('Download mission.json')
+    expect(t('route.settings.storm', { date: '20 May 2024' })).toBe('Include solar storm replay (20 May 2024) in the margin')
+    expect(t('modes.science.label')).toBe('Science')
+    expect(t('nav.views.stations')).toBe('Science stations')
   })
 })

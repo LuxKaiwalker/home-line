@@ -106,11 +106,11 @@ export interface RoutePanelViewProps {
   editor?: boolean
 }
 
-/** J1d: the drawer's way to the Mission Planer tab while the route editor is hidden. */
+/** J1d: the drawer's way to route planning while the route editor is hidden (PORT I3: the Mission Planer tab is gone; route planning is the Plan view's Route panel, #/). */
 export function MissionPlanerLink() {
   return (
     <p class="hl-route__mission" data-mission-link>
-      <a class="hl-btn hl-btn--secondary" href={href({ name: 'mission' })} title={t('edit.planInMissionTip')}>
+      <a class="hl-btn hl-btn--secondary" href={href({ name: 'console' })} title={t('edit.planInMissionTip')}>
         <Icon name="map" /> {t('edit.planInMission')}
       </a>
     </p>

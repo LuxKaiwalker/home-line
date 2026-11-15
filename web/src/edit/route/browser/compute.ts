@@ -29,7 +29,7 @@ import { accessCell, cellOf, lonLatOfCell } from '../map/grid'
 import { legPairs, routeLegs } from '../map/legs'
 import { CROSSINGS, type Leg } from '../map/router'
 import { ACCESS_RADIUS_M } from '../map/validity'
-import { BUDGET_CONSTANTS, missionBudget, type MissionBudget } from './budget'
+import { BUDGET_CONSTANTS, missionBudget, stopMinutes, type MissionBudget } from './budget'
 import { ANALYSIS_PROJ, DEFAULT_DWELL_MIN, MARGIN_AMBER_MIN, type BrowserPad, type BrowserRouteData } from './data'
 import { buildMission, finalizeMission, ORIGIN_LABEL, type LonLat, type MissionExportInput, type Waypoint } from './export'
 import { buildTrack, legProfile, missionMargin, type MarginPoint, type MarginProfile, type Term, type TrackSample } from './margin'
@@ -268,21 +268,24 @@ function rowCheck(c: LegCheck | undefined): Pick<BrowserLegRow, 'checkMin' | 'ch
  * Pure and synchronous; the leg cache in `d.legCache` is reused and updated (moving one stop re-routes
  * only its two legs).
  */
-export function computeBrowserRoute(d: BrowserRouteData, padLonLat: LonLat | { lon: number; lat: number }, stops: readonly RouteStop[]): BrowserRouteResult {
-  const pad = Array.isArray(padLonLat) ? { lon: padLonLat[0], lat: padLonLat[1] } : { lon: (padLonLat as { lon: number }).lon, lat: (padLonLat as { lat: number }).lat }
-  const names = stopNames({ mode: 'ordered', stops })
-  const n = stops.length
-  const issues: BrowserStopIssue[] = []
-  const warnings: string[] = []
-  if (distanceM(pad, d.fieldsPad) > 1.5 * d.tHome.resM) warnings.push('fields_pad_mismatch')
+/** Where a route's stops are routed from (the first part of computeBrowserRoute, exported for the
+ *  planning runner, which sends the missing legs to the worker before computing). */
+export interface RouteCells {
+  pad: { lon: number; lat: number }
+  positions: ({ lon: number; lat: number } | null)[]
+  padCell: number | null
+  cells: (number | null)[]
+  issues: BrowserStopIssue[]
+}
 
-  // positions, dwell and cells
+export function routeCells(d: BrowserRouteData, padLonLat: LonLat | { lon: number; lat: number }, stops: readonly RouteStop[]): RouteCells {
+  const pad = Array.isArray(padLonLat) ? { lon: padLonLat[0], lat: padLonLat[1] } : { lon: (padLonLat as { lon: number }).lon, lat: (padLonLat as { lat: number }).lat }
+  const issues: BrowserStopIssue[] = []
   const positions = stops.map((s) => {
     if (!isStationStop(s)) return { lon: s.lon, lat: s.lat }
     const st = d.stations.find((x) => x.id === s.station)
     return st ? { lon: st.lon, lat: st.lat } : null
   })
-  const dwellMin = stops.map((s) => (isStationStop(s) ? (d.stations.find((x) => x.id === s.station)?.dwellMin ?? DEFAULT_DWELL_MIN) : DEFAULT_DWELL_MIN))
   const padSnap = snapCell(d, pad.lon, pad.lat, null)
   if (padSnap.code) issues.push({ index: -1, code: padSnap.code })
   const comp = padSnap.cell === null ? null : reachableFrom(d, padSnap.cell)
@@ -295,9 +298,33 @@ export function computeBrowserRoute(d: BrowserRouteData, padLonLat: LonLat | { l
     if (s.code) issues.push({ index: i, code: s.code })
     return s.cell
   })
+  return { pad, positions, padCell: padSnap.cell, cells, issues }
+}
+
+/** Options of computeBrowserRoute (R1, Plan port). Absent = the Edit-route estimate, unchanged. */
+export interface ComputeOptions {
+  /** planned stop minutes per stop (the Mission Planer's stopMin); undefined entries keep the default dwell */
+  dwellMin?: readonly (number | undefined)[]
+}
+
+/**
+ * The browser estimate of an ordered route: legs, totals, tightest margin and feasibility.
+ * Pure and synchronous; the leg cache in `d.legCache` is reused and updated (moving one stop re-routes
+ * only its two legs).
+ */
+export function computeBrowserRoute(d: BrowserRouteData, padLonLat: LonLat | { lon: number; lat: number }, stops: readonly RouteStop[], opts: ComputeOptions = {}): BrowserRouteResult {
+  const names = stopNames({ mode: 'ordered', stops })
+  const n = stops.length
+  const warnings: string[] = []
+  const { pad, positions, padCell, cells, issues } = routeCells(d, padLonLat, stops)
+  if (distanceM(pad, d.fieldsPad) > 1.5 * d.tHome.resM) warnings.push('fields_pad_mismatch')
+  const dwellMin = stops.map((s, i) => {
+    const o = opts.dwellMin?.[i]
+    if (o !== undefined) return stopMinutes(o)
+    return isStationStop(s) ? (d.stations.find((x) => x.id === s.station)?.dwellMin ?? DEFAULT_DWELL_MIN) : DEFAULT_DWELL_MIN
+  })
 
   // out legs through the leg cache (-1 = no cell: cached as a pair, never routed)
-  const padCell = padSnap.cell
   const pairs = legPairs(padCell ?? -1, cells.map((c) => ({ cell: c ?? -1 })))
   const routerLegs = n ? routeLegs(pairs, (a, b) => (a < 0 || b < 0 ? null : d.router.route(a, b)), d.legCache) : []
   routerLegs.forEach((l, i) => {

@@ -34,6 +34,9 @@ import type { View } from './types'
 import { makeSections, mountPlanSlots, PlanSummary, S, SectionsCtx } from './planSlots'
 import './planBottom' // L2b: the plan-bottom drawer (plan table + timeline tabs)
 import './planLayers' // L2c (D111): layers popover, legend chip, map-edge tools (registers its Plan mount)
+import { PlanSlot } from './planPortSlots' // PORT W0a: Route panel, pad layer, strip mount points
+import { installPlanPort, mountPlanPort, PlanLinkNotice } from './planPort' // PORT I1: the Plan port packages
+import { planning, usePlanning } from '../state/planning'
 import { HeadlineStrip } from './planStrip' // L2a: the headline strip (registers its Plan mount)
 import './planStation' // L2d: station + rover marker cards
 import './planChrome' // L2f: data notes, cursor chip, Rover + Full screen tools (no console or live aside in Plan)
@@ -74,11 +77,16 @@ export const view: View = async (el) => {
     if (onStation) onStation(id)
     else location.hash = href({ name: 'station', id })
   })
+  // PORT I1: the Plan port (Route panel, route layers, overlays, planning runner, #/?route= sync); shell frame only
+  if (shellFrame) installPlanPort()
+  const stopPort = shellFrame ? mountPlanPort() : () => {}
+  const noticeEl = shellFrame ? mapEl.appendChild(document.createElement('div')) : null
+  if (noticeEl) render(<PlanLinkNotice />, noticeEl)
   const root = panelEl.appendChild(document.createElement('div'))
   root.className = 'console-root'
   render(
     <SectionsCtx.Provider value={sections}>
-      <ConsolePanel cmap={cmap} />
+      <ConsolePanel cmap={cmap} shell={shellFrame} />
     </SectionsCtx.Provider>,
     root,
   )
@@ -137,6 +145,8 @@ export const view: View = async (el) => {
   return () => {
     alive = false
     disposeLive?.()
+    stopPort()
+    if (noticeEl) render(null, noticeEl)
     stopSlots()
     render(null, root)
     cmap.destroy()
@@ -147,7 +157,7 @@ export function findScenario(idx: ScenariosIndex, variant: string, suit: number)
   return idx.scenarios.find((s) => s.variant === variant && s.suit_kg === suit)
 }
 
-function ConsolePanel({ cmap }: { cmap: ConsoleMap }) {
+function ConsolePanel({ cmap, shell = false }: { cmap: ConsoleMap; shell?: boolean }) {
   const L = data()
   const [idx, setIdx] = useState<ScenariosIndex | null>(null)
   const [stations, setStations] = useState<Station[] | null>(null)
@@ -172,6 +182,9 @@ function ConsolePanel({ cmap }: { cmap: ConsoleMap }) {
   // D21 parking options: null = the official pad (pad.json, existing paths).
   const [pads, setPads] = useState<PadsIndexLoad | null>(null)
   const padSel = useSignalValue(mission.plan.pad)
+  // PORT I1 (R4): in Plan the pad-aware "Official route for this pad" layer (map/routes) is the route on the
+  // map; the furniture route group stays hidden there (Fly / flythrough / ?legacy=1 keep it)
+  const showOfficial = usePlanning((s) => s.view.showOfficial)
   const setPadSel = (id: string | null) => (mission.plan.pad.value = id)
   const [padSummary, setPadSummary] = useState<PadSummaryView | null>(null)
   const [padError, setPadError] = useState<unknown>(null)
@@ -308,8 +321,9 @@ function ConsolePanel({ cmap }: { cmap: ConsoleMap }) {
   const mode = padViewMode(padSel)
 
   // Parking-option markers (official pad excluded: it is the "Pad" marker); click selects.
+  // PORT I1 (P2): in Plan the pad layer (map/pads) draws the pad markers and their card: no duplicates here
   useEffect(() => {
-    if (!padIndex) return
+    if (!padIndex || shell) return
     cmap.setPadOptions(
       padIndex.options
         .filter((o) => !o.official && o.lon !== null && o.lat !== null)
@@ -435,17 +449,30 @@ function ConsolePanel({ cmap }: { cmap: ConsoleMap }) {
         {error != null && <DataProblem error={error} what="Scenario layers" />}
       </S>
 
-      <HeadlineStrip
-        h30={padSel && padF ? null : { v: h.reachable_pct, k: `reachable_pct.${scenario.id}.${hb}`, file: 'scenarios/index.json', budget: hb }}
-        h60={padSel && padF ? null : headline60(scenario)}
-        sid={scenario.id}
-        pad={padSel && padF ? { id: padSel, summary: padSummary?.id === padSel ? padSummary : null, file: padF.summary } : null}
-        route={rd ? { timeline: rd.timeline, file: routeProps.timelineFile, key: routeProps.timelineKey } : null}
-        scenarioText={`${scenario.variant} · ${scenario.suit_kg} kg`}
-        budget={budget}
+      {/* PORT W0a seams (views/planPortSlots.tsx): null / today's headline strip and summary until I1 wires the packages */}
+      <PlanSlot name="pad-layer" cmap={cmap} />
+      <PlanSlot name="route-panel" cmap={cmap} />
+      <PlanSlot
+        name="context-bar"
+        cmap={cmap}
+        fallback={
+          <HeadlineStrip
+            h30={padSel && padF ? null : { v: h.reachable_pct, k: `reachable_pct.${scenario.id}.${hb}`, file: 'scenarios/index.json', budget: hb }}
+            h60={padSel && padF ? null : headline60(scenario)}
+            sid={scenario.id}
+            pad={padSel && padF ? { id: padSel, summary: padSummary?.id === padSel ? padSummary : null, file: padF.summary } : null}
+            route={rd ? { timeline: rd.timeline, file: routeProps.timelineFile, key: routeProps.timelineKey } : null}
+            scenarioText={`${scenario.variant} · ${scenario.suit_kg} kg`}
+            budget={budget}
+          />
+        }
       />
       <S name="summary">
-        <PlanSummary route={rd?.route ?? null} label={routeProps.label} file={routeProps.timelineFile} routeKey={routeProps.routeKey} loading={!rd} stations={stations?.length ?? null} />
+        <PlanSlot
+          name="drawer-summary"
+          cmap={cmap}
+          fallback={<PlanSummary route={rd?.route ?? null} label={routeProps.label} file={routeProps.timelineFile} routeKey={routeProps.routeKey} loading={!rd} stations={stations?.length ?? null} />}
+        />
       </S>
 
       <S name="headline">
@@ -476,7 +503,7 @@ function ConsolePanel({ cmap }: { cmap: ConsoleMap }) {
       <S name="padpicker">{padIndex && nominal && <PadPicker index={padIndex} selected={padSel} onPick={pickPad} suitKg={nominal.suit_kg} />}</S>
 
       <S name="route">
-        <RouteSection {...routeProps} route={rd?.route ?? null} timeline={rd?.timeline ?? null} loading={!rd} shown={visible.route} onShow={(on) => toggle('route', on)} />
+        <RouteSection {...routeProps} route={rd?.route ?? null} timeline={rd?.timeline ?? null} loading={!rd} shown={shell ? showOfficial : visible.route} onShow={(on) => (shell ? planning.toggleView('showOfficial', on) : toggle('route', on))} />
       </S>
 
       <S name="scenario">
@@ -549,7 +576,7 @@ function ConsolePanel({ cmap }: { cmap: ConsoleMap }) {
       <section>
         <h3>Layers</h3>
         {(Object.keys(LAYER_LABELS) as LayerGroup[])
-          .filter((g) => g !== 'slider')
+          .filter((g) => g !== 'slider' && !(shell && g === 'route'))
           .map((g) => (
             <label class="toggle">
               <input type="checkbox" checked={visible[g]} onChange={(e) => toggle(g, (e.target as HTMLInputElement).checked)} />

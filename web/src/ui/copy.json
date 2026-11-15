@@ -5,13 +5,14 @@
 
   "modes": {
     "plan": { "label": "Plan", "question": "Where can we go and still get home?" },
+    "science": { "label": "Science", "question": "Why these spots, and what is there to find?" },
     "fly": { "label": "Fly", "question": "What will it be like, minute by minute?" },
     "report": { "label": "Report", "question": "Is this plan safe, and what does it cost?" },
     "evidence": { "label": "Evidence", "question": "Why believe it?" }
   },
 
   "nav": {
-    "wordmark": "MARVIS",
+    "wordmark": "HOMELINE",
     "modesMenu": "Modes",
     "share": "Share",
     "liveIndicator": "Live",
@@ -43,7 +44,7 @@
     },
     "views": {
       "console": "Official plan",
-      "mission": "Plan your EVA (estimate)",
+      "stations": "Science stations",
       "trade": "Trade table",
       "conditions": "Conditions",
       "cuff": "Cuff card",
@@ -133,7 +134,7 @@
       "open": "Open station",
       "openTip": "The full station page: Navcam photo, panorama, timeline and tasks",
       "addToRoute": "Add to route",
-      "addToRouteTip": "Add this station to the route in Plan your EVA (estimate)",
+      "addToRouteTip": "Add this station to your route (estimate)",
       "objective": "Objective",
       "tasks": "Tasks",
       "dwell": "Dwell",
@@ -440,7 +441,9 @@
     "expand": "Show the plan table and the timeline",
     "collapse": "Hide the plan table and the timeline",
     "planTable": "Plan table",
-    "timeline": "Timeline"
+    "timeline": "Timeline",
+    "comparePlans": "Compare plans",
+    "comparePlansTip": "Compare the pads and plans side by side (trade table). Back returns to this plan."
   },
 
   "planChrome": {
@@ -596,7 +599,7 @@
     "storm": "Storm replay on / off",
     "fullscreen": "Full screen on / off",
     "reason": {
-      "mapOnly": "Only on the Plan and Fly maps",
+      "mapOnly": "Only on the Plan map",
       "flyOnly": "Only in Fly",
       "only3d": "Only in the 3D map view",
       "noHistory": "No other selection to go to",
@@ -614,7 +617,7 @@
     "escape": "Clear selection, cancel ghost, exit focus mode",
     "undoRedo": "Undo / redo",
     "history": "Previous / next selection",
-    "modes": "Plan, Fly, Report, Evidence",
+    "modes": "Plan, Science",
     "toggle3d": "2D / 3D",
     "help": "Shortcut help",
     "mouseSelect": "Map: select (drag the rover to move it)",
@@ -648,8 +651,8 @@
     "undoEmpty": "Nothing to undo",
     "redoEmpty": "Nothing to redo",
     "previewEstimates": "Feasible EVAs and reachable stations are estimates until the full plan is computed",
-    "planInMission": "Plan a route → Plan your EVA (estimate)",
-    "planInMissionTip": "Route stops, stop times and the browser estimate are in the Plan your EVA (estimate) tab",
+    "planInMission": "Plan a route",
+    "planInMissionTip": "Route stops, stop times and the browser estimate are in the Route panel of Plan",
     "reasons": {
       "customPad": "A rover pad spot of your own needs live planning",
       "dwell": "A changed dwell needs live planning",
@@ -808,7 +811,7 @@
       "turnBack": "Turn-back"
     },
     "permalinkHint": "Scan to open this plan",
-    "printFooter": "MARVIS · Space Apps project · simulated EVA over real terrain and data"
+    "printFooter": "HOMELINE · Space Apps project · simulated EVA over real terrain and data"
   },
 
   "evidence": {
@@ -898,7 +901,7 @@
     },
     "storageTitle": "Stored in this browser",
     "privacy": "No accounts, logins or cookies. Saved plans, and which panels and view you left open, stay in this browser; nothing else uses browser storage.",
-    "curiosity": "The Mission Planer's Curiosity layer is off by default; turning it on loads the rover's drives and pictures from mars.nasa.gov, so it contacts NASA's site."
+    "curiosity": "The Plan map's Curiosity layer is off by default; turning it on loads the rover's drives and pictures from mars.nasa.gov, so it contacts NASA's site."
   },
 
   "a11y": {
@@ -906,193 +909,316 @@
     "mapSummaryStations": "{reachable_count} of {station_count} science targets are reachable on foot"
   },
 
-  "mission": {
-    "loading": {
-      "what": "Mission Planer data",
-      "firstStep": "scenarios and pad",
-      "step": "Loading {step}…"
-    },
-    "notices": {
-      "outside": "That spot is outside the terrain data: no waypoint added.",
-      "blocked": "No walk home from that spot in {scenario} (blocked, too steep, unknown terrain or not reached): no waypoint there.",
-      "noStation": "No science station \"{id}\" in stations.json: nothing added.",
-      "stationInPlan": "{id} is already in the plan.",
-      "stationNoAccess": "{id} has no walkable access cell in {scenario}: not added.",
-      "stationUnreachable": "{id} is not reachable from this pad: no walkable route from the pad comes within {radius} m of its access point. Not added.",
-      "unreachable": "That spot is not reachable from this pad: no walkable route from the pad comes within {radius} m of it. No waypoint there.",
-      "stationAdded": "Added {id} as waypoint #{n}, with a {stop_min}-min stop.",
-      "planDamaged": "The plan in this link is damaged or from another version: starting empty.",
-      "lostOne": "{n} waypoint of the saved plan has no walk home in {scenario} and was left out.",
-      "lostMany": "{n} waypoints of the saved plan have no walk home in {scenario} and were left out.",
-      "copyFailed": "Could not copy: copy the address from the browser bar instead.",
-      "routeFull": "The route already has {n} stops, the most one route can have: {id} not added.",
-      "padLostOne": "{n} waypoint with no walk home to this pad was left out.",
-      "padLostMany": "{n} waypoints with no walk home to this pad were left out."
-    },
+  "route": {
     "pads": {
-      "label": "Start: rover pad",
       "official": "Official pad",
-      "loading": "Loading the walk-home fields of {pad}…",
-      "noFields": "No browser fields for this pad in this scenario",
-      "note": "The official pad and the next three of the pad ranking (scenarios/pads/index.json), each with its own walk-home fields."
+      "loading": "Loading pad {pad}…",
+      "planFromHere": "Plan from here",
+      "pickerLabel": "P{rank}",
+      "defaultPad": "Default pad",
+      "error": "Pad {pad} could not be loaded. The map keeps the current pad."
     },
-    "estimates": {
-      "title": "Estimated times and consumption",
-      "notRouted": "A leg could not be routed (see the waypoint list): times and O₂ are unknown until it is moved or removed.",
-      "routing": "Routing {n} new leg(s)… times and O₂ follow when the routes are in.",
-      "timeHome": "Time home",
-      "timeHomeFrom": "Time home from #{n}",
-      "timeHomeTitle": "The engine's T_home at the last waypoint (fastest walk back to the pad)",
-      "walkOut": "Walk out (all legs)",
-      "atWaypoints": "Time at waypoints",
-      "atWaypointsTitle": "Sum of the planned stop times",
-      "evaTotal": "EVA total",
-      "evaTotalValue": "{used} of {limit} min",
-      "timeMargin": "Time margin",
-      "timeMarginTitle": "EVA limit − walk out − time home",
-      "o2Left": "O₂ left at the last waypoint",
-      "o2LeftTitle": "{capacity} L primary supply − {used} used (legs + {stops} L at stops)",
-      "o2Stops": "O₂ for stops",
-      "o2StopsTitle": "{minutes} min × {rate} L/min station task rate",
-      "o2Need": "O₂ needed (home + reserve)",
-      "o2NeedTitle": "O₂ home {home} + reserve {reserve} L",
-      "o2Margin": "O₂ margin",
-      "o2MarginValue": "{litres} L · {minutes} min at max effort"
+    "strip": {
+      "pad": "Pad {pad}",
+      "label": "Plan context",
+      "officialPad": "Official pad",
+      "padTitle": "Active pad",
+      "officialPlan": "Official plan",
+      "yourRoute": "Your route",
+      "stops": "{n} stops",
+      "stop": "{n} stop",
+      "margin": "margin",
+      "marginValue": "margin {value} min",
+      "marginTitle": "Tightest margin of the official route",
+      "marginPending": "margin computing",
+      "unreachable": "stop {n} not reachable",
+      "unreachableHome": "way home not reachable",
+      "estimate": "Estimate",
+      "fast": "Fast route",
+      "fastTitle": "Fast route · may not be the fastest",
+      "planRoute": "Plan a route",
+      "editRoute": "Edit route",
+      "scenario": "Scenario",
+      "budget": "Walkback budget",
+      "budgetValue": "{budget} min",
+      "summary": { "label": "Reach from the active pad", "reach": "{budget}-min reach" }
     },
-    "start": {
-      "title": "EVA start",
-      "sunSite": "the pad ({lat}°, {lon}°E)",
-      "earth": "Earth (UTC)",
-      "sol": "Mars sol",
-      "lmst": "LMST",
-      "localTime": "Local time at Gale",
-      "localTimeValue": "Sol {sol}, {lmst} LMST",
-      "season": "Season",
-      "seasonTitle": "Areocentric solar longitude (season) and Mars year",
-      "seasonValue": "Ls {ls}°, MY {year}",
-      "sun": "Sun at start",
-      "sunTitle": "Sun's centre at {site}, no refraction ({ref})",
-      "sunValue": "{elevation}° up, az {azimuth}°",
-      "sunset": "Sunset",
-      "sunsetTitle": "Flat horizon at {deg}° (config clock.sun_horizon_elevation_deg)",
-      "sunsetUtc": "{utc} UTC",
-      "sunsetLmst": "{utc} UTC · {lmst} LMST",
-      "daylight": "Daylight left",
-      "daylightTitle": "Minutes from EVA start until the sun sets on a flat horizon: the margin's daylight term",
-      "sunDown": "sun is down",
-      "sunDownNotice": "The sun is below the horizon at this start: the daylight margin is negative from the first minute.",
-      "isDefault": "Default: {lmst} LMST on the sol of {date} (clock.json).",
-      "changed": "Changed from the default {lmst} LMST, sol of {date}.",
-      "reset": "Reset"
+    "panel": {
+      "title": "Route",
+      "fast": "Fast route · may not be the fastest",
+      "close": "Close the route panel",
+      "collapse": "Collapse the route panel",
+      "expand": "Expand the route panel",
+      "empty": "Click the map or a station to add a stop",
+      "unavailable": "Route planning unavailable",
+      "sections": { "list": "Stops", "settings": "EVA settings", "export": "Export and share" },
+      "pads": {
+        "label": "Start pad",
+        "loading": "Loading pad {pad}…",
+        "error": "Pad {pad} could not be loaded. Try again, or pick another pad.",
+        "indexLoading": "Loading the pads…",
+        "indexError": "The pad list could not be loaded: the official pad stays in use.",
+        "noFields": "No walk-home fields for this pad: it shows its official plan only",
+        "note": "The official pad and the next pads of the pad ranking, each with its own precomputed plan."
+      },
+      "estimates": {
+        "title": "Estimates",
+        "estimate": "Estimate",
+        "estimateTitle": "Computed in this browser from the pad's walk-home fields; not a checked plan",
+        "total": "Total time",
+        "margin": "Margin",
+        "marginTitle": "The engine's four-term margin (O₂, daylight, dose, EVA duration) at the tightest point of the route, as the route core gives it",
+        "o2": "O₂ on the legs",
+        "o2Title": "Sum of the O₂ the route core gives per leg",
+        "minutes": "{v} min",
+        "litres": "{v} L",
+        "unknown": "–",
+        "idle": "Estimates follow once the route is computed.",
+        "computing": "Computing the route…",
+        "partial": "{done} of {n} legs in; the rest follow…",
+        "error": "The route could not be computed: {error}",
+        "infeasible": "Leg {n} ({from} → {to}) cannot be walked: {reason}",
+        "infeasibleBare": "Leg {n} ({from} → {to}) cannot be walked",
+        "pad": "pad",
+        "reasons": { "unreachable": "not reachable on foot", "budget": "over the budget", "slope": "too steep" },
+        "reachTitle": "Reach of this pad",
+        "reach": "{budget}-min reach",
+        "reachNone": "No precomputed reach for this pad",
+        "reachLoading": "Loading the reach of this pad…"
+      }
     },
-    "waypoints": {
-      "title": "Waypoints",
-      "count": "({n})",
-      "empty": "No waypoints yet: click the map.",
-      "copyLink": "Copy link to this plan",
-      "linkCopied": "Link copied ✓",
-      "legFromPad": "Pad → #{to}",
-      "legFrom": "#{from} → #{to}",
-      "legStats": "{minutes} min · {distance} · {o2} L O₂",
-      "noRoute": "no walkable route from the previous point",
-      "routing": "routing…",
-      "stationLink": "{id} details →",
-      "stationLinkTitle": "Open the station card",
-      "moveUp": "Move up",
-      "moveUpLabel": "Move waypoint {n} up",
-      "moveUpIcon": "↑",
-      "moveDown": "Move down",
-      "moveDownLabel": "Move waypoint {n} down",
-      "moveDownIcon": "↓",
-      "remove": "Delete",
-      "removeLabel": "Delete waypoint {n}",
-      "removeIcon": "✕",
-      "clearAll": "Clear all",
-      "markerStop": "stop {minutes} min"
-    },
-    "editor": {
-      "addDetails": "Add stop time, tags, note",
-      "plannedStop": "Planned stop",
-      "plannedStopLabel": "Planned stop time at waypoint {n} in minutes",
+    "list": {
+      "empty": "Click the map to add a point, or add a station from its card.",
+      "title": "Stops",
+      "listLabel": "Route stops in walking order",
+      "kind": { "station": "Station", "point": "Point" },
+      "pad": "Pad",
+      "legFrom": "From {from}",
+      "estimate": "Estimate {minutes} min",
+      "computing": "computing…",
+      "unreachable": {
+        "unreachable": "Not reachable: no walkable path",
+        "budget": "Not reachable within the time budget",
+        "slope": "Not reachable: too steep",
+        "other": "Not reachable"
+      },
+      "unreachableTitle": "The leg into this stop has no feasible path; move, reorder or remove a stop.",
+      "home": "Back to the pad",
+      "handle": "Reorder {name}: drag, or press Alt with the up or down arrow",
+      "moveUp": "Move {name} up",
+      "moveDown": "Move {name} down",
+      "remove": "Delete {name}",
+      "clearAll": "Clear all stops",
+      "details": "Add stop time, tags, note",
+      "stopTime": "Planned stop",
+      "stopTimeLabel": "Planned stop time at {name} in minutes, up to {max}",
       "unit": "min",
-      "stopO2": "≈ {o2} L O₂",
-      "tagsLabel": "Tags for waypoint {n}",
+      "tagsLabel": "Tags for {name}",
+      "noteLabel": "Note for {name}",
       "notePlaceholder": "Note: resource, task, what to carry out here…",
-      "noteLabel": "Note for waypoint {n}"
+      "summaryStop": "stop {minutes} min",
+      "announce": {
+        "moved": "{name} moved to position {n} of {total}",
+        "first": "{name} is already first",
+        "last": "{name} is already last",
+        "removed": "{name} removed from the route",
+        "cleared": "All stops removed"
+      }
     },
-    "boundary": {
-      "title": "Reachable-area boundary",
-      "selectLabel": "Boundary shown on the map",
-      "caption": "From {file} ({scenario}): the area from which the crew can walk back to the pad within that time."
+    "settings": {
+      "storm": "Include solar storm replay ({date}) in the margin",
+      "title": "Settings",
+      "stormOn": "On: your route's four-term margin includes the dose term, with the storm at your route's worst moment; the official plan's numbers stay as published.",
+      "stormOff": "Off: your route's margin drops the dose term; the official plan's numbers stay as published.",
+      "start": {
+        "title": "EVA start",
+        "earth": "Earth (UTC)",
+        "sol": "Mars sol",
+        "lmst": "LMST",
+        "localTime": "Local time at Gale",
+        "localTimeValue": "Sol {sol}, {lmst} LMST",
+        "utc": "UTC",
+        "utcValue": "{utc} UTC",
+        "season": "Season",
+        "seasonTitle": "Areocentric solar longitude (season) and Mars year",
+        "seasonValue": "Ls {ls}°, MY {year}",
+        "sun": "Sun at start",
+        "sunTitle": "Sun's centre at {site}, no refraction ({ref})",
+        "sunSite": "the pad ({lat}°, {lon}°E)",
+        "sunValue": "{elevation}° up, az {azimuth}°",
+        "sunset": "Sunset",
+        "sunsetTitle": "Flat horizon at {deg}° (config clock.sun_horizon_elevation_deg)",
+        "sunsetUtc": "{utc} UTC",
+        "sunsetLmst": "{utc} UTC · {lmst} LMST",
+        "daylight": "Daylight left",
+        "daylightTitle": "Minutes from EVA start until the sun sets on a flat horizon: the margin's daylight term",
+        "daylightValue": "{min} min",
+        "sunDown": "sun is down",
+        "sunDownNotice": "The sun is below the horizon at this start: the daylight margin is negative from the first minute.",
+        "isDefault": "Default: {lmst} LMST on the sol of {date} (clock.json).",
+        "changed": "Changed from the default {lmst} LMST, sol of {date}.",
+        "custom": "custom start · outside the validated scenario",
+        "reset": "Reset"
+      },
+      "boundary": {
+        "selectLabel": "Boundary shown on the map",
+        "none": "No boundary",
+        "band": "{budget}-min walk home, {variant}",
+        "edges": "{budget}-min edge, coloured by cause",
+        "iso": "{minutes}-min isochrone",
+        "caption": "The area from which the crew can walk back to the pad within that time."
+      }
     },
     "export": {
-      "button": "Download mission.json",
-      "buttonTitle": "mission.json for the EVA simulator (contracts/bundle/mission.schema.json)",
-      "routingTitle": "Wait until every leg is routed",
-      "lowestMargin": "lowest margin {margin} min ({binding})",
-      "storm": "Replay the {date} storm during this EVA",
-      "stormTitle": "The storm series is shifted so its tripwire fires at the route's largest T_home; the dose term joins the margin",
-      "stormNoRad": "rad.json is not loaded: no storm series to replay"
+      "marvis": "Send to MARVIS",
+      "download": "Download mission.json",
+      "busy": "Preparing mission.json…",
+      "what": { "route": "Your route · Estimate", "official": "No route yet: the official plan of this pad" },
+      "result": {
+        "sent": "Sent: MARVIS starts the EVA.",
+        "refused": "MARVIS did not start the EVA: {reason}",
+        "saved": "Saved as {file}. In MARVIS, load it from the Missions tab of the map.",
+        "fallback": "Download mission.json instead",
+        "notFound": "MARVIS not reachable: mission.json downloaded",
+        "noReason": "no reason given"
+      },
+      "errors": {
+        "route": "The route cannot be exported yet: {reason}",
+        "pad": "This pad has no routing fields, so its route cannot be exported.",
+        "official": "The official plan of this pad could not be loaded: {reason}",
+        "generic": "Could not build mission.json: {reason}"
+      },
+      "share": { "button": "Copy share link", "copied": "Link copied", "select": "Copy this link:", "label": "Share link" },
+      "link": { "invalid": "This link could not be read, so nothing was loaded. Your plan is unchanged." }
     },
-    "help": {
-      "howto": "Click the map to add a waypoint. Each leg is the fastest walk on the {res_m} m grid for {scenario}; the dashed line is the way home from the last waypoint.",
-      "sourcesLead": "Estimates.",
-      "sources": "Leg times and leg O₂ are computed in your browser with the engine's walking model ({crew}, {variants}) on the {res_m} m grid with {elevation_res_m} m terrain heights ({elevation_file}), so they can differ from the engine's {route_res_m} m routes. Time home and O₂ home come from the engine's fields ({fields}). O₂ capacity: primary supply per {o2_source} (computed from its formula); reserve: {reserve_min} min at the effort cap; EVA limit: {eva_h} h. Planned time at a waypoint is station work at the station task rate ({crew_file} {rate_key}, {rate} L/min); tags and notes are labels only.",
-      "basemap": "Basemap: {credit}."
+    "map": {
+      "official": "Official route for this pad",
+      "mine": "Your route",
+      "computing": "Still computing",
+      "infeasible": "Not feasible from here on",
+      "legend": "Routes",
+      "stop": "Stop {n}: {name}",
+      "stopInfeasible": "Stop {n}: {name} · not reachable in time"
     },
-    "maps": {
-      "button": "Maps",
-      "buttonTitle": "Change the map type",
+    "layers": {
+      "slope": {
+        "title": "Slope",
+        "what": "Ground slope in the engine's own classes; class edges come from config/site.yaml",
+        "opacity": "Slope layer opacity",
+        "loading": "Loading slope…",
+        "error": "Slope layer unavailable: {error}",
+        "noField": "fields/index.json has no slope field",
+        "encodeError": "Could not draw the slope image",
+        "note": "Cell slope from {file}; class edges from {site}. Ground without data is left clear.",
+        "edgeSource": "Edge from {source}",
+        "classes": {
+          "padFlat": "Pad-flat",
+          "walkable": "Walkable",
+          "beyondTested": "Beyond the tested range",
+          "nogoNominal": "No-go in the nominal case",
+          "nogoAlways": "No-go always",
+          "unknown": "No data"
+        },
+        "range": { "below": "under {max}", "between": "{min} to {max}", "above": "{min} and steeper", "clear": "left clear" }
+      },
+      "curiosity": {
+        "title": "Curiosity route and photos",
+        "live": "live NASA data",
+        "what": "Curiosity's real drives inside this map. Click a drive end for the pictures the rover took there.",
+        "privacy": "Off by default. Turning it on loads the rover's drives and raw images from mars.nasa.gov, so your browser contacts NASA's site.",
+        "loading": "Loading Curiosity's drives from NASA…",
+        "stops": "{n} drive ends, sols {first}–{last}. Source: NASA/JPL-Caltech MMGIS.",
+        "none": "No Curiosity drive end inside this map.",
+        "unavailable": "NASA's data is unavailable right now ({reason}). The rest of the map works as before.",
+        "retry": "Try again",
+        "reasons": {
+          "timeout": "no answer in time",
+          "network": "the site could not be reached",
+          "server": "NASA's server reported an error",
+          "http": "the request was refused",
+          "format": "the answer was not in the expected format"
+        },
+        "card": {
+          "title": "Curiosity drive end {rmc} · sol {sol}",
+          "meta": "This drive {distance} · odometer {odometer} · {lat}°, {lon}°E",
+          "sol": "sol {sol}",
+          "sols": "sols {first}–{last}",
+          "loading": "Loading pictures from NASA…",
+          "unavailable": "The pictures are unavailable right now ({reason}).",
+          "mastcam": "Mastcam (colour)",
+          "navcam": "Navcam",
+          "count": "{n} pictures",
+          "navcamRule": "Frames tagged with this stop's site and drive: the rover had not moved.",
+          "mastcamRule": "NASA's data gives Mastcam frames no position, so they are matched by {sols}. Frames from sol {sol} may predate the drive.",
+          "noneAtStop": "None at this stop.",
+          "noneOn": "None on {sols}.",
+          "showAll": "Show all {n}",
+          "imageTitle": "{instrument} · sol {sol} · {taken}",
+          "imageAlt": "{camera} raw image ({instrument}), sol {sol}, taken {taken}",
+          "truncated": "Long stay or many frames: only the first sols and pages were searched.",
+          "credit": "Raw images, NASA/JPL-Caltech/MSSS ·",
+          "archive": "raw-image archive",
+          "viewer": {
+            "label": "Raw image {n} of {total}",
+            "caption": "{camera} · {instrument} · sol {sol} · {taken}",
+            "predates": "Taken on the drive's sol: may predate the drive.",
+            "open": "Open on mars.nasa.gov",
+            "prev": "Previous image",
+            "next": "Next image",
+            "close": "Close image"
+          }
+        }
+      }
+    },
+    "basemaps": {
+      "label": "Map type",
       "satellite": "Satellite",
       "topo": "Topography",
       "material": "Material",
-      "noBasemap": "No basemap tiles in this data tree",
-      "rendering": "Rendering {type}…",
+      "rendering": "Rendering the {type} map…",
+      "error": "The {type} map could not be drawn ({reason}). Satellite is still available.",
       "encodeError": "could not encode the relief image",
       "topoLegend": "Contours every {step} m (bold every {bold} m) · {low} to {high} m (MOLA areoid), {res_m} m terrain heights",
-      "materialTitle": "Rock unit, inferred from elevation",
-      "unitTitle": "{name}: Curiosity samples from {low} to {high} m",
-      "noUnit": "No unit band reaches this terrain.",
-      "grey": "Grey: no sample at that height",
-      "greyTitle": "Heights above or below every Curiosity sample in the database (it ends at sol {sol}, before the boxwork region)",
-      "materialNote": "Mount Sharp's layers are nearly flat, so each unit is drawn at the heights where Curiosity sampled it (± {margin_m} m, fading beyond). Not a mineral survey. Data: Curiosity APXS (PDS), via the team's Unity rock database."
+      "topoNote": "Drawn in your browser from the same terrain heights the route estimates use. For orientation, not a survey.",
+      "materialTitle": "Mineral units",
+      "noUnit": "No rocks on this terrain.",
+      "materialNote": "Same layer as the Unity EVA map in MARVIS: the dominant class of the {count} field rocks nearby (Gaussian, {sigma_m} m). Not a mineral survey."
     },
-    "layers": {
-      "head": "Layers",
-      "openIcon": "▾",
-      "closedIcon": "▸",
-      "loading": "loading…",
-      "slope": "Slope",
-      "slopeTitle": "Ground slope in classes from config/site.yaml (pad-flat, walkable, beyond tested, no-go)",
-      "noSlopeField": "fields/index.json has no slope field",
-      "encodeError": "could not encode the slope image",
-      "opacity": "Opacity",
-      "opacityLabel": "Slope layer opacity",
-      "slopeNote": "Cell slope, {file}; edges from {site}. Unknown ground is left clear.",
-      "curiosity": "Curiosity route + photos",
-      "curiosityTitle": "Curiosity's real drives inside this map, live from NASA. Click a yellow drive end for its pictures",
-      "curiosityError": "Could not reach NASA: {error}",
-      "curiosityStops": "{n} drive ends, sols {first}–{last}. Click a yellow dot for its pictures. Live: NASA/JPL-Caltech MMGIS.",
-      "curiosityNone": "No Curiosity drive end inside this map."
+    "padmap": {
+      "marker": { "title": "{pad}: open its plan" },
+      "card": {
+        "official": "Official plan of this pad",
+        "precomputed": "Precomputed plan of this pad",
+        "feasible": "Feasible EVAs",
+        "shown": "Shown on the map",
+        "noFields": "No routing fields for this pad: its plan can be viewed, a route cannot start here.",
+        "loading": "Loading this pad's numbers…",
+        "none": "No precomputed numbers for this pad.",
+        "error": "This pad's numbers could not be loaded.",
+        "rangeNote": "Range: conservative to optimistic."
+      },
+      "status": { "error": "Pad {pad} could not be loaded; the map keeps the previous plan." }
     },
-    "photos": {
-      "title": "Curiosity drive end {rmc} · sol {sol}",
-      "meta": "This drive {distance} · odometer {odometer} · {lat}°, {lon}°E",
-      "sol": "sol {sol}",
-      "sols": "sols {first}–{last}",
-      "loading": "Loading pictures from NASA…",
-      "loadError": "Could not load the pictures: {error}",
-      "mastcam": "Mastcam (colour)",
-      "navcam": "Navcam",
-      "noneAtStop": "None at this stop.",
-      "noneOn": "None on {sols}.",
-      "showAll": "Show all {n}",
-      "imageTitle": "{instrument} · sol {sol} · {taken}",
-      "imageAlt": "{instrument} sol {sol}",
-      "note": "Navcam: frames with this stop's site/drive. Mastcam has no position in NASA's data, so it is matched by {sols} (frames from before the drive on sol {sol} can be included).",
-      "truncated": "Long stay or many frames: only the first sols/pages were searched.",
-      "credit": "Raw images, NASA/JPL-Caltech/MSSS ·",
-      "archive": "raw-image archive"
+    "mapEdit": {
+      "notice": {
+        "tooManyStops": "At most {n} stops in a route.",
+        "tooManyFreePoints": "At most {n} points of your own.",
+        "spacing": "Too close to another stop or the pad: keep {m} m apart.",
+        "outside": "Outside the mapped area: no route can be planned there.",
+        "unreachable": "No known walk home from there: choose a walkable spot.",
+        "unknownStation": "Station {station} is not on this map.",
+        "stationInRoute": "{station} is already in your route.",
+        "stationAdded": "{station} added to your route.",
+        "pointAdded": "{name} added to your route.",
+        "pointMoved": "{name} moved.",
+        "removed": "{name} removed from your route."
+      },
+      "handle": { "title": "{name}: drag to move, Delete to remove", "remove": "Remove {name}" },
+      "card": { "add": "Add to route", "addTip": "Add this station to your route (estimate)", "inRoute": "In your route" }
+    },
+    "fly": {
+      "mine": "Your route",
+      "mineTip": "Fly your route (Estimate): the camera follows your route; the HUD numbers and the crew marker stay the official plan's"
     }
   }
 }

@@ -1,0 +1,37 @@
+/* L1b Curiosity layer: popover row + drive-end card. Tokens only (DESIGN §9); purple = live (§3.1). */
+.hl-curiosity { display: flex; flex-direction: column; gap: var(--space-1); padding: var(--space-2) 0; border-top: 1px solid var(--color-card-border); }
+.hl-curiosity__head { display: flex; align-items: center; gap: var(--space-2); }
+.hl-curiosity__head .hl-toggle { flex: 1; min-width: 0; }
+.hl-curiosity__live { display: inline-flex; align-items: center; gap: var(--space-1); color: var(--color-live); font-size: var(--font-size-label); line-height: var(--line-height-label); font-weight: var(--font-weight-label); white-space: nowrap; }
+.hl-curiosity__live .hl-chip__mark { width: var(--space-3); height: var(--space-3); }
+.hl-curiosity__what, .hl-curiosity__privacy, .hl-curiosity__muted, .hl-curiosity__rule, .hl-curiosity__note, .hl-curiosity__meta { margin: 0; font-size: var(--font-size-small); line-height: var(--line-height-small); color: var(--color-text-muted); }
+.hl-curiosity__privacy { color: var(--color-text-muted); }
+.hl-curiosity__unavailable { margin: 0; font-size: var(--font-size-small); line-height: var(--line-height-small); color: var(--color-text); }
+.hl-curiosity__unavailable p { margin: 0 0 var(--space-1); }
+.hl-curiosity__more { align-self: flex-start; padding: var(--space-1) var(--space-2); font: inherit; font-size: var(--font-size-small); color: var(--color-text); background: transparent; border: 1px solid var(--color-card-border); border-radius: var(--radius-input); cursor: pointer; }
+.hl-curiosity__more:focus-visible { outline: var(--line-focus-ring) solid var(--color-select); outline-offset: var(--line-focus-ring); }
+
+.hl-curiosity-host { position: static; }
+.hl-lay-card.hl-curiosity-card { width: min(360px, calc(100% - var(--space-4))); }
+.hl-curiosity-card .hl-lay-card__body { max-height: min(60vh, 420px); overflow: auto; }
+.hl-curiosity__photos { display: flex; flex-direction: column; gap: var(--space-2); }
+.hl-curiosity__cam { display: flex; flex-direction: column; gap: var(--space-1); }
+.hl-curiosity__cam-title { margin: 0; font-size: var(--font-size-small); line-height: var(--line-height-small); font-weight: var(--font-weight-label); color: var(--color-text); }
+.hl-curiosity__grid { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(4, 1fr); gap: var(--space-1); }
+.hl-curiosity__grid .hl-curiosity__thumb { display: block; width: 100%; padding: 0; border: 0; cursor: zoom-in; border-radius: var(--radius-input); overflow: hidden; background: var(--color-bg); }
+.hl-curiosity__grid .hl-curiosity__thumb:focus-visible { outline: var(--line-focus-ring) solid var(--color-select); outline-offset: var(--line-focus-ring); }
+.hl-curiosity__grid img { display: block; width: 100%; aspect-ratio: 1; object-fit: cover; }
+.hl-curiosity__note a { color: var(--color-text); }
+
+/* F14: the raw-image viewer (portalled to body, above the map and the plan chrome) */
+.hl-curiosity-viewer { position: fixed; inset: 0; z-index: 60; display: flex; align-items: center; justify-content: center; padding: var(--space-4); background: color-mix(in srgb, var(--color-bg) 85%, transparent); }
+.hl-curiosity-viewer__box { display: flex; flex-direction: column; gap: var(--space-2); max-width: 100%; max-height: 100%; padding: var(--space-3); background: var(--color-card); border: 1px solid var(--color-card-border); border-radius: var(--radius-input); color: var(--color-text); }
+.hl-curiosity-viewer__head, .hl-curiosity-viewer__foot { display: flex; align-items: center; gap: var(--space-2); }
+.hl-curiosity-viewer__count { flex: 1; font-size: var(--font-size-small); line-height: var(--line-height-small); color: var(--color-text-muted); }
+.hl-curiosity-viewer__foot { justify-content: space-between; }
+.hl-curiosity-viewer__fig { margin: 0; display: flex; flex-direction: column; gap: var(--space-1); min-height: 0; }
+.hl-curiosity-viewer__fig img { display: block; max-width: 100%; max-height: 70vh; object-fit: contain; background: var(--color-bg); }
+.hl-curiosity-viewer__cap { font-size: var(--font-size-small); line-height: var(--line-height-small); color: var(--color-text-muted); }
+.hl-curiosity-viewer__btn { padding: var(--space-1) var(--space-2); font: inherit; color: var(--color-text); background: transparent; border: 1px solid var(--color-card-border); border-radius: var(--radius-input); cursor: pointer; }
+.hl-curiosity-viewer__btn:focus-visible, .hl-curiosity-viewer__open:focus-visible { outline: var(--line-focus-ring) solid var(--color-select); outline-offset: var(--line-focus-ring); }
+.hl-curiosity-viewer__open { color: var(--color-text); font-size: var(--font-size-small); }

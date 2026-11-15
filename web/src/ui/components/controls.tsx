@@ -76,7 +76,7 @@ export function Segmented<T extends string>({ label, options, value, onChange, d
   )
 }
 
-const MODE_ICON: Record<Mode, IconName> = { plan: 'map', fly: 'compass', report: 'file-text', evidence: 'shield-check' }
+const MODE_ICON: Record<Mode, IconName> = { plan: 'map', science: 'flask-conical', fly: 'compass', report: 'file-text', evidence: 'shield-check' }
 
 /** The four-mode switch of the top bar (DESIGN §4.1), labels from copy.json. */
 export function ModeSwitch({ value, onChange, force }: { value: Mode; onChange: (m: Mode) => void; force?: ForcedState }) {

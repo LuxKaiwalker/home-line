@@ -33,7 +33,7 @@ import { registerPlanMount, SectionHost, type Sections } from './planSlots'
 import './planStation.css'
 
 export { SELECTION_CARD, STATION_CARD }
-export { StationAddToRoute } from '../ui/cards/selectionCard' // J1d: "Add to route" -> #/mission?add=<id>
+export { StationAddToRoute } from '../ui/cards/selectionCard' // J1d -> PORT I1: "Add to route" = R3 button + Route panel
 export const ROVER_CARD = 'rover'
 /** L2f: the rover card's collapsible "Custom pad" section (the live pad tool; the crew panel with it while
  *  no Edit-route drawer hosts the crew) */

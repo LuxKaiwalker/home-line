@@ -36,6 +36,8 @@ import { CameraController, type ControllerMap } from './camera'
 import { installOverlays } from './overlays'
 import { MapSelection, SELECT_ROUTE_HIT, type SelectMap, type SelectSources } from './select'
 import { installMapInput, type InputMap, type MapInput } from './input'
+import { installMapExtensions, type MapHost, type MapLayerSlot, type RouteLayerHandle, type RouteLayerKind } from './extensions'
+import type { PadEnv } from '../pads/types'
 import { activeField, BINDING_LABEL, driveMargin, FIELD_TRUST, fieldModeQuery, fieldRequested, loadFieldData, loadFieldLayer, setActiveField, VARIANT_OF, webgl2Available, zeroEdgeLabels, type FieldData, type MarginState } from './field'
 
 /** The GPU field layer handle (field/layer.ts, loaded lazily). */
@@ -159,6 +161,11 @@ export class ConsoleMap {
   })
   // WS16 task 11 (M11): U7 overlays + layer manager (all off by default)
   private stopOverlays: (() => void) | null = null
+  // PORT W0a: extension points (map/extensions.ts); packages register, ConsoleMap hosts them
+  private ext: MapHost | null = null
+  private pendingPadEnv: PadEnv | null | undefined = undefined
+  /** PORT I1 (P2): a non-official pad environment is shown (map/pads/) */
+  private padEnvActive = false
   private destroyed = false
   private readonly input: MapInput
 
@@ -261,8 +268,14 @@ export class ConsoleMap {
     this.applyVisibility()
     void this.initLabels()
     // L10 (D111): the flythrough shows the route (with the crew marker) and the stations while it flies
+    // D145 (narrowed, F13): only the top-bar Fly tab is hidden; the Plan map keeps its Flythrough button
+    // ("Your route" stays off: flythrough/control.ts FLY_MINE_TOGGLE)
     this.map.addControl(new FlythroughControl({ get: (g) => this.layerVisible(g), set: (g, on) => this.setVisible(g, on) }), 'top-right')
     this.stopStorm = installStorm(this.map)
+    // PORT I1 (R3): the extensions install before MapSelection, so their 'click' listener runs first; a click
+    // an edit handler consumed (originalEvent.preventDefault()) selects nothing underneath (map/select.ts)
+    this.ext = installMapExtensions({ map: m, beforeId: (slot) => this.slotBefore(slot), marker: (el) => new Marker({ element: el }), inShell: !!m.getContainer().closest('.hl-shell') })
+    if (this.pendingPadEnv !== undefined) this.ext.setPadEnvironment(this.pendingPadEnv)
     this.selectMap = new MapSelection(m as unknown as SelectMap, this.selectSources, { setSelectedLabel, marker: (el) => new Marker({ element: el }) })
     this.selectMap.addLayers()
     this.groupLayers.route.push(SELECT_ROUTE_HIT)
@@ -271,6 +284,45 @@ export class ConsoleMap {
     const legacy = !!this.map.getContainer().closest('.hl-frame-legacy')
     const story = storyRequest(storyParams(location.search, location.hash), { reduced: ui.reducedMotion.peek(), introSeen: ui.introSeen.peek(), legacy })
     if (story) void import('../story/attach').then((m) => !this.destroyed && (this.stopStory = m.attachStory(this, story)))
+  }
+
+  /** PORT W0a: beforeId of an extension layer slot (map/extensions.ts MapLayerSlot), bottom to top. */
+  private slotBefore(slot: MapLayerSlot): string | undefined {
+    const m = this.map
+    const has = (id: string) => (m.getLayer(id) ? id : undefined)
+    if (slot === 'basemap') {
+      const ids = (m.getStyle().layers ?? []).map((l) => l.id)
+      const i = ids.indexOf('basemap')
+      return i >= 0 ? ids[i + 1] : ids[0]
+    }
+    if (slot === 'overlay') return has('iso-lines')
+    if (slot === 'plan') return has('walkin-line')
+    if (slot === 'route') return ROUTE_LAYERS.find((id) => m.getLayer(id))
+    return undefined
+  }
+
+  /** PORT W0a: the active pad's environment (pads/ loadPadEnv) to the registered pad handlers (P2,
+   *  map/pads/). null = the official pad as ConsoleMap loads it today. No handler registered: no-op. */
+  setPadEnvironment(env: PadEnv | null): void {
+    // PORT I1 (P2): while a picker pad is shown its polygon bands replace the official GPU field; the
+    // official edge labels hide (they are the official pad's)
+    const active = !!env && !env.info.official
+    if (active !== this.padEnvActive) {
+      this.padEnvActive = active
+      if (this.ext) this.applyVisibility() // the layers exist once the extensions are installed
+    }
+    if (this.ext) this.ext.setPadEnvironment(env)
+    else this.pendingPadEnv = env
+  }
+
+  /** PORT W0a: the installed route layer of `kind` (R4, map/routes/); undefined until registered. */
+  routeLayers(kind: RouteLayerKind): RouteLayerHandle | undefined {
+    return this.ext?.routeLayer(kind)
+  }
+
+  /** PORT W0a: the extension host (overlays, base maps by id); null before the style is loaded. */
+  extensions(): MapHost | null {
+    return this.ext
   }
 
   /** M10c: a live story camera move pauses the per-move label placement (4 Hz) and the furniture loops. */
@@ -717,14 +769,15 @@ export class ConsoleMap {
     for (const mk of this.padOptionMarkers) mk.getElement().hidden = !this.visible.stations
     this.labels?.setGroupVisible(this.visible.stations)
     for (const mk of this.sitingMarkers) mk.getElement().hidden = !this.visible.siting
-    for (const mk of this.edgeMarkers) mk.getElement().hidden = !this.visible.edges || this.collapseHidesEdges
+    for (const mk of this.edgeMarkers) mk.getElement().hidden = !this.visible.edges || this.collapseHidesEdges || this.padEnvActive
     // GPU field: replaces the polygon bands (and the hatch image when it has the cell states).
     const fl = this.fieldLayer
     if (fl && m.getLayer(fl.id)) {
-      const hatch = this.fieldOn && !!this.fieldData?.state
-      const showBands = this.fieldOn && this.visible.bands
+      const gpu = this.fieldOn && !this.padEnvActive // PORT I1 (P2): a picker pad shows its polygon bands
+      const hatch = gpu && !!this.fieldData?.state
+      const showBands = gpu && this.visible.bands
       const showHatch = hatch && this.visible.unknown
-      if (this.fieldOn) for (const id of POLYGON_BAND_LAYERS) if (m.getLayer(id)) m.setLayoutProperty(id, 'visibility', 'none')
+      if (gpu) for (const id of POLYGON_BAND_LAYERS) if (m.getLayer(id)) m.setLayoutProperty(id, 'visibility', 'none')
       if (hatch && m.getLayer('unknown-hatch')) m.setLayoutProperty('unknown-hatch', 'visibility', 'none')
       fl.update({ showBands, showHatch })
       m.setLayoutProperty(fl.id, 'visibility', showBands || showHatch ? 'visible' : 'none')
@@ -752,6 +805,7 @@ export class ConsoleMap {
     this.stopStorm?.()
     this.camera?.destroy()
     this.stopOverlays?.()
+    this.ext?.destroy()
     this.selectMap?.destroy()
     this.terrain?.destroy()
     this.labels?.destroy()

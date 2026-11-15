@@ -61,10 +61,11 @@ def test_ranges_known_answers():
 
 
 def test_cors_origins_known_answer():
-    """Decision 6 + hosting (2026-11-14): exactly these origins, in backend.yaml only."""
+    """Decision 6 + hosting (2026-11-14) + MARVIS domain (2026-11-15): exactly these origins,
+    in backend.yaml only."""
     c = st.load()
-    assert c.api.cors_origins == ["https://luxkaiwalker.github.io", "https://homeline.vxliu.com",
-                                  "http://localhost:5173"]
+    assert c.api.cors_origins == ["https://luxkaiwalker.github.io", "https://marvis.vxliu.com",
+                                  "https://homeline.vxliu.com", "http://localhost:5173"]
     assert "api.cors_origins" not in c.assumed  # confirmed, no longer assumed
 
 

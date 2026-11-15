@@ -47,3 +47,21 @@ export function t(key: CopyKey, vars: CopyVars = {}): string {
     return String(v)
   })
 }
+
+/**
+ * PORT W0a: a typed `t` for a package's own copy file (`<folder>/copy.<pkg>.json`, merged into
+ * copy.json route.<pkg> by I4). Same placeholder rules as t(). After the merge I4 replaces
+ * `copyFrom(own)` with `t('route.<pkg>.…')`; keys stay the same below the namespace.
+ */
+export function copyFrom<T extends object>(own: T): (key: Paths<T>, vars?: CopyVars) => string {
+  return (key, vars = {}) => {
+    let node: unknown = own
+    for (const part of String(key).split('.')) node = node && typeof node === 'object' ? (node as Record<string, unknown>)[part] : undefined
+    if (typeof node !== 'string') throw new Error(`copy: no text at "${String(key)}"`)
+    return node.replace(PLACEHOLDER, (_, name: string) => {
+      const v = vars[name]
+      if (v === undefined || v === null) throw new Error(`copy: "${String(key)}" needs a value for {${name}}`)
+      return String(v)
+    })
+  }
+}

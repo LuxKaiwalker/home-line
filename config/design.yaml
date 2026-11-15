@@ -26,7 +26,15 @@ terrain_3d:                          # added by D6b 2026-11-15 (DESIGN U1 items 
   idle_gap_s: 1.0                    # assumed: true (M8): a frame gap longer than this is an idle map (MapLibre renders on demand), never a slow frame
   light_update_sim_min: 1            # DESIGN U1 item 4: relief light follows the clock at most once per simulated minute
   max_pitch_deg: 60                  # added by T1 2026-11-15 (assumed: true): manual 3D tilt cap (map maxPitch). MapLibre 6.18 selects zero tiles for every source above ~60 deg at zoom 16-17 with the terrain at about -7020 map m (-3740 m x 1.878): only the black background draws (notes/T1.md, flybug-*.png)
-  assumed: [fps_window_s, idle_gap_s, max_pitch_deg]
+  far_field:                         # added by V1 2026-11-15 (D141, all assumed: true): 3D far field (notes in web/src/map/terrain/farfield.ts). MapLibre 6.18 drops every far tile whose distance-based zoom is under the source minzoom (terrain/ 10, HiRISE 13): the pitched top edge drew nothing
+    dem_minzoom: 6                   # 3D DEM pyramid: terrain_low/ (z6-10, Gale) below terrain/ (z10-15, planning extent); tiles outside both are upsampled from terrain_low's finest zoom
+    pitch_cap:                       # manual 3D tilt cap by zoom (camera height): full terrain_3d.max_pitch_deg from zoom_full up, pitch_low at zoom_low and below, linear between
+      zoom_low: 11
+      pitch_low: 40
+      zoom_full: 14
+    sky: {sky_horizon_blend: 0.5, horizon_fog_blend: 0.6, fog_ground_blend: 0.15, atmosphere_blend: 0}   # MapLibre sky spec blends (0..1): the far ground fades into the horizon colour
+    preload: {terrain_zooms: [13, 15], basemap_zooms: [15, 17], radius_m: 250, step_m: 80, max_tiles: 600, concurrency: 4}   # flythrough: tiles around the route (true metres) fetched when the flight starts
+  assumed: [fps_window_s, idle_gap_s, max_pitch_deg, far_field]
 plan_view:                           # added by L13 2026-11-15 (team lead 12:54, D111): the view Plan mode opens with
   default: 3d                        # team lead 12:54: 3D is the default view in Plan mode (the intro ends in it); T toggles, the viewer's choice is remembered; ?view=2d|3d overrides
   pitch_deg: 45                      # assumed: true (L13): the tilt Plan mode opens with in 3D (= camera.presets.isometric.pitch; <= terrain_3d.max_pitch_deg, MapLibre 6.18 draws no tiles above ~60 deg). P4a 2026-11-15 (user: 'a default tilt in the map at the beginning'): THE default map tilt at start, on the Plan map and the Mission Planer (first load, reload, after the intro ended or skipped); 2D stays 0; under camera.flythrough.max_pitch_deg (55)
@@ -57,7 +65,8 @@ route:                               # added by D6b 2026-11-15 (DESIGN U4; notes
   coming_opacity: 0.5                # DESIGN U4 "coming legs at 50% opacity"
   width_px: 2.5                      # assumed: true (M5): route line width
   turnback_tick_m: 30                # assumed: true (M5): turn-back tick length across the arriving direction, ground metres
-  assumed: [width_px, turnback_tick_m]
+  heuristic_weight: 1.6              # assumed: true (PORT R2, Notion port plan §3): weighted A* w for the browser's fast route (cost <= w x fastest; labelled "Fast route"); the idle refine runs at w = 1
+  assumed: [width_px, turnback_tick_m, heuristic_weight]
 thread:
   update_hz: 30
   dash_steps: 14                     # frames per dash cycle

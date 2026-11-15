@@ -233,6 +233,11 @@ interface Ctx {
 }
 
 const want = (c: Ctx, state: string) => !c.only || c.only.test(state)
+// HL_SNAPSHOT_TOURS (comma list of console, conditions, hud; unset = all): skips whole tours, not just their
+// recording, so a --only subset on #/station, #/trade … does not click through all 60 view states. Plan-port
+// package checks only (orchestrator 20:58); the full snapshot (unset) is unchanged.
+const TOURS = process.env.HL_SNAPSHOT_TOURS ? new Set(process.env.HL_SNAPSHOT_TOURS.split(',').map((t) => t.trim())) : null
+const tour = (name: string) => !TOURS || TOURS.has(name)
 
 async function record(c: Ctx, page: Page, state: string): Promise<void> {
   const v = await settle(page, state)
@@ -327,6 +332,11 @@ async function clickAndRecord(c: Ctx, page: Page, btn: Loc, state: string): Prom
 async function consoleView(c: Ctx): Promise<void> {
   const page = await open(c, '#/')
   await settle(page, '#/ (initial)')
+  if (!tour('console')) {
+    await record(c, page, '#/ (station links only)') // collects #/station/<id> links; not stored unless wanted
+    await page.close()
+    return
+  }
   const radios = (label: string) => page.locator(`[role="radiogroup"][aria-label="${label}"] button`)
   const budgets = radios('Walkback budget')
   const nb = await budgets.count()
@@ -371,6 +381,7 @@ async function simpleView(c: Ctx, hash: string): Promise<void> {
 }
 
 async function conditionsView(c: Ctx): Promise<void> {
+  if (!tour('conditions')) return
   const page = await open(c, '#/conditions')
   await record(c, page, '#/conditions')
   const slider = page.locator('input[type="range"][aria-label="Dose allowance per EVA"]')
@@ -390,6 +401,7 @@ async function conditionsView(c: Ctx): Promise<void> {
 }
 
 async function hudView(c: Ctx): Promise<void> {
+  if (!tour('hud')) return
   const page = await open(c, '#/hud')
   await page.waitForSelector('.hl-hud-row[data-manifest-key], .hl-hud-row[data-source-files]', { timeout: SETTLE_TIMEOUT_MS })
   await settle(page, '#/hud (initial)')

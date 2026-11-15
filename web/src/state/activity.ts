@@ -5,6 +5,11 @@
 //             function it registered (synchronously, before the new one starts).
 //   storm     a setting the replay honours (mission.conditions.storm), never a player.
 //   editing   noteEdit(): a plan edit (pad drag, proposed change) stops the running player.
+//   planning-edit  PORT I2: the Plan view's route / pad edits (state/planningActivity.ts watches the
+//             planning store: every real edit = noteEdit('planning-edit')). A drag (route panel list,
+//             map handle) is an edit session: beginEdit() stops the running player when it starts;
+//             a player started DURING the session never ends it (the drag goes on untouched) and is
+//             not stopped by that session's own drop (the viewer started it after the drag began).
 //   mode      a mode switch (ui.mode changes from one mode to another) stops the running player.
 //   job       one compute job per viewer (beginJob/endJob). While it runs no player starts (its
 //             partial result is not replayable); changing its inputs asks first (confirmInputChange).
@@ -12,7 +17,7 @@
 // Controls read enabled/reason from controlState(kind) (reason = copy key under activity.*, shown as
 // the tooltip of the disabled control). Small and dependency-light (signals + ui only): the mission
 // clock is wired in activityClock.ts, so the shell can import this without the config YAML.
-// <html data-activity="none|intro|replay|flythrough" data-job="none|<id>"> mirrors the state for tests
+// <html data-activity="none|intro|replay|flythrough" data-job="none|<id>" data-editing="none|planning-edit"> mirrors the state for tests
 // and review.
 import { t, type CopyKey } from '../ui/copy'
 import { computed, signal, type ReadSignal } from './signal'
@@ -32,7 +37,12 @@ const OK: Verdict = { ok: true }
 interface Running {
   kind: Player
   stop: () => void
+  /** started while an edit session (drag) was open: that session's drop does not stop it */
+  duringEdit: boolean
 }
+/** PORT I2: activity owners besides the players. */
+export type EditActivity = 'planning-edit'
+export type StopCause = Player | 'edit' | EditActivity | 'mode' | 'job' | 'stop'
 interface Job {
   id: string
   cancel?: () => void
@@ -41,9 +51,12 @@ interface Job {
 const current = signal<Player | null>(null)
 const job = signal<Job | null>(null)
 let running: Running | null = null
+/** open edit sessions (drags), by owner id; and whether one ended in this task (its drop may follow) */
+const sessions = signal<ReadonlyMap<string, EditActivity>>(new Map())
+let sessionGrace = false
 
 /** Who stopped the last player (tests, review): the player that took over, 'edit', 'mode', 'job', 'stop'. */
-export const lastStop = signal<{ kind: Player; by: Player | 'edit' | 'mode' | 'job' | 'stop' } | null>(null)
+export const lastStop = signal<{ kind: Player; by: StopCause } | null>(null)
 
 export const activity = {
   /** the player running now; null = none */
@@ -51,6 +64,8 @@ export const activity = {
   /** the compute job of this viewer; null = none */
   job: computed(() => job.value?.id ?? null),
   jobActive: computed(() => job.value !== null),
+  /** PORT I2: an edit session (drag) is open; null = none */
+  editing: computed<EditActivity | null>(() => (sessions.value.size ? 'planning-edit' : null)),
 } as const
 
 function mirror(): void {
@@ -58,6 +73,7 @@ function mirror(): void {
   if (!d) return
   d.activity = current.peek() ?? 'none'
   d.job = job.peek()?.id ?? 'none'
+  d.editing = sessions.peek().size ? 'planning-edit' : 'none'
 }
 
 /**
@@ -113,7 +129,7 @@ export function start(kind: Player, stop: () => void): Verdict {
   const v = canStart(kind)
   if (!v.ok) return v
   if (running && running.stop !== stop) stopRunning(kind)
-  running = { kind, stop }
+  running = { kind, stop, duringEdit: sessions.peek().size > 0 || sessionGrace }
   current.value = kind
   mirror()
   return OK
@@ -128,13 +144,51 @@ export function end(kind: Player, stop?: () => void): void {
 }
 
 /** Stop whatever plays (or only `kind`). */
-export function stop(kind?: Player, by: 'edit' | 'mode' | 'job' | 'stop' = 'stop'): void {
+export function stop(kind?: Player, by: Exclude<StopCause, Player> = 'stop'): void {
   if (running && (!kind || running.kind === kind)) stopRunning(by)
 }
 
-/** A plan edit began (pad drag, proposed change, route edit): editing stops the running player. */
-export function noteEdit(): void {
-  stop(undefined, 'edit')
+/**
+ * A plan edit began or was made (pad drag, proposed change, route edit): editing stops the running
+ * player. `by` = 'planning-edit' for the Plan view's planning store (state/planningActivity.ts). A
+ * player the viewer started during an open edit session (a drag) is left playing by that session's
+ * drop and by edits while it is open.
+ */
+export function noteEdit(by: 'edit' | EditActivity = 'edit'): void {
+  if (running?.duringEdit && (sessions.peek().size > 0 || sessionGrace)) return
+  stop(undefined, by)
+}
+
+/**
+ * PORT I2: an edit session (a drag in the route panel list or of a map handle) opens under `id`.
+ * Editing stops the running player, now. Players may start while it is open; they never end it.
+ * Returns the end function (same as endEdit(id)).
+ */
+export function beginEdit(id: string, kind: EditActivity = 'planning-edit'): () => void {
+  if (!sessions.peek().has(id)) {
+    noteEdit(kind)
+    const m = new Map(sessions.peek())
+    m.set(id, kind)
+    sessions.value = m
+    mirror()
+  }
+  return () => endEdit(id)
+}
+
+/** The edit session `id` ended (drop, cancel). Its drop may land in the same task: a grace of one microtask. */
+export function endEdit(id: string): void {
+  if (!sessions.peek().has(id)) return
+  const m = new Map(sessions.peek())
+  m.delete(id)
+  sessions.value = m
+  if (!m.size) {
+    sessionGrace = true
+    queueMicrotask(() => {
+      sessionGrace = false
+      if (running && !sessions.peek().size) running.duringEdit = false
+    })
+  }
+  mirror()
 }
 
 // ---- mode switch ---------------------------------------------------------------------------------
@@ -203,6 +257,8 @@ export function resetActivity(): void {
   current.value = null
   job.value = null
   lastStop.value = null
+  sessions.value = new Map()
+  sessionGrace = false
   confirmFn = defaultConfirm
   lastMode = ui.mode.peek()
   mirror()

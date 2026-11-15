@@ -6,7 +6,7 @@
 // I3: the EVA start (start / setStart) moves t_dark and the exported start instant; null = clock.json.
 import { effect, signal, type ReadSignal } from '../../../state/signal'
 import { saveMissionText } from '../../../ui/cards/simslot'
-import type { EvaClock } from '../../../mission/marstime'
+import type { EvaClock } from '../../../ui/route-panel/settings/marstime'
 import type { PlanRoute, RouteStop } from '../model'
 import type { RouteStore } from '../store'
 import { browserCore, isDefaultStart, padFields } from './adapter'

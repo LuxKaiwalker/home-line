@@ -1,0 +1,19 @@
+/* PORT U3: Route panel settings (EVA start, storm, boundary). Tokens only (DESIGN §9). */
+.rp-settings { display: grid; gap: var(--space-3); }
+.rp-set-title { margin: 0; font-size: var(--font-size-label); font-weight: var(--font-weight-label); line-height: var(--line-height-label); color: var(--color-text); }
+.rp-start-grid { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(0, 0.8fr) minmax(0, 0.9fr); gap: var(--space-1); margin: var(--space-2) 0; }
+.rp-start-grid label { display: flex; flex-direction: column; gap: var(--space-0); font-size: var(--font-size-small); color: var(--color-text-muted); min-width: 0; }
+.rp-start-grid input { background: var(--color-bg); color: var(--color-text); border: 1px solid var(--color-card-border); border-radius: var(--radius-input); padding: var(--space-1); font-family: inherit; font-size: var(--font-size-body); min-width: 0; width: 100%; box-sizing: border-box; color-scheme: dark; }
+.rp-start-grid input:focus-visible { outline: var(--line-focus-ring) solid var(--color-select); outline-offset: 1px; }
+.rp-est { display: grid; gap: var(--space-0); }
+.rp-row { display: flex; justify-content: space-between; gap: var(--space-2); font-size: var(--font-size-body); }
+.rp-row span { color: var(--color-text-muted); }
+.rp-row b { font-variant-numeric: tabular-nums; text-align: right; }
+.rp-bad { color: var(--color-limit); }
+.rp-notice { border-left: var(--line-thread) solid var(--color-text-muted); background: var(--color-sidebar); padding: var(--space-1) var(--space-2); font-size: var(--font-size-body); margin: var(--space-2) 0; }
+.rp-start-foot { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--space-1) var(--space-2); margin-top: var(--space-2); font-size: var(--font-size-small); }
+.rp-muted, .rp-hint { color: var(--color-text-muted); }
+.rp-hint { margin: var(--space-1) 0 0; font-size: var(--font-size-small); line-height: var(--line-height-small); }
+.rp-custom-start { color: var(--color-caution); font-weight: var(--font-weight-label); }
+.rp-reset { background: none; border: 1px solid var(--color-card-border); border-radius: var(--radius-chip); color: var(--color-text); padding: var(--space-1) var(--space-2); font-family: inherit; font-size: var(--font-size-small); cursor: pointer; }
+.rp-reset:focus-visible { outline: var(--line-focus-ring) solid var(--color-select); outline-offset: 1px; }

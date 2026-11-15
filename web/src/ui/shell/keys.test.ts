@@ -25,15 +25,13 @@ describe('shortcutFor (§4.4 table)', () => {
     [{ key: '[' }, { action: 'history', step: -1 }],
     [{ key: ']' }, { action: 'history', step: 1 }],
     [{ key: 'p' }, { action: 'mode', mode: 'plan' }],
-    [{ key: 'y' }, { action: 'mode', mode: 'fly' }],
-    [{ key: 'r' }, { action: 'mode', mode: 'report' }],
-    [{ key: 'e' }, { action: 'mode', mode: 'evidence' }],
+    [{ key: 's' }, { action: 'mode', mode: 'science' }],
     [{ key: 't' }, { action: 'toggle3d' }],
     [{ key: '?', shiftKey: true }, { action: 'help' }],
   ])('%o -> %o', (e, want) => expect(shortcutFor(e)).toEqual(want))
 
   it('ignores browser shortcuts and unmapped keys', () => {
-    for (const e of [{ key: 'r', ctrlKey: true }, { key: 'p', altKey: true }, { key: '6' }, { key: 'x' }, { key: 'P', shiftKey: true }, { key: 'Tab' }]) expect(shortcutFor(e)).toBeNull()
+    for (const e of [{ key: 'r', ctrlKey: true }, { key: 'p', altKey: true }, { key: '6' }, { key: 'x' }, { key: 'r' }, { key: 'e' } /* REPORT and EVIDENCE are hidden: no key */, { key: 'y' } /* FLY hidden, D145 */, { key: 'P', shiftKey: true }, { key: 'Tab' }]) expect(shortcutFor(e)).toBeNull()
   })
 
   it('never fires while typing; Escape still does', () => {
@@ -89,11 +87,15 @@ describe('runShortcut', () => {
     ui.view.value = '2d'
   })
 
-  it('P/Y/R/E go to the mode, back to the last place visited in it', () => {
+  it('P/S/Y/R/E go to the mode, back to the last place visited in it', () => {
+    applyRoute({ name: 'console' }, '#/?route=WzIsInJhbmsyIl0') // a shared Plan route (PORT I3: the Mission tab is gone)
     applyRoute({ name: 'station', id: 'S4' }, '#/station/S4')
+    expect(ui.mode.value).toBe('science') // station detail pages live under Science stations
     applyRoute({ name: 'about' }, '#/evidence/about')
     expect(ui.mode.value).toBe('evidence')
     expect(run({ action: 'mode', mode: 'plan' })).toBe(true)
+    expect(nav).toHaveBeenLastCalledWith('#/?route=WzIsInJhbmsyIl0')
+    run({ action: 'mode', mode: 'science' })
     expect(nav).toHaveBeenLastCalledWith('#/station/S4')
     run({ action: 'mode', mode: 'evidence' })
     expect(nav).toHaveBeenLastCalledWith('#/evidence/about')

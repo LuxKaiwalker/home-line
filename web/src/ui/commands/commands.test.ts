@@ -84,14 +84,14 @@ describe('registration', () => {
     const ids = commands.value.map((c) => c.id)
     expect(new Set(ids).size).toBe(ids.length)
     const expected = [
-      'mode.plan', 'mode.fly', 'mode.report', 'mode.evidence', 'view.toggle3d', 'view.focusMode', 'timeline.playPause', 'timeline.back', 'timeline.forward',
+      'mode.plan', 'mode.science', 'view.toggle3d', 'view.focusMode', 'timeline.playPause', 'timeline.back', 'timeline.forward',
       'camera.overhead', 'camera.isometric', 'camera.low', 'camera.focus', 'camera.follow', 'selection.back', 'selection.forward', 'app.help',
       ...OVERLAYS.map((o) => `map.layer.${o.id}`), 'map.layers.reset', 'map.exaggeration.more', 'map.exaggeration.less', 'map.exaggeration.reset',
       'story.storm', 'edit.undo', 'edit.redo', 'story.intro', 'view.fullscreen',
-    ] // prettier-ignore
+    ] // prettier-ignore (D145: the Fly tab is hidden, so no mode.fly; camera.follow stays for Plan's Flythrough)
     expect([...ids].sort()).toEqual([...expected].sort())
     // never registered by S2: waypoint-owned or no callable outside live/edit-route code
-    for (const id of ['route.open', 'route.compute', 'plan.exportJson', 'sim.send', 'plans.open', 'plan.copyPermalink', 'plan.official', 'escape', 'search']) expect(ids).not.toContain(id)
+    for (const id of ['mode.fly', 'route.open', 'route.compute', 'plan.exportJson', 'sim.send', 'plans.open', 'plan.copyPermalink', 'plan.official', 'escape', 'search']) expect(ids).not.toContain(id)
     const items = commandItems()
     for (const q of ['l', 'la', 'lay', 'laye', 'layer', '3', '3d', 'undo', 'storm', 'camera low', 'full', 'intro', 'ridge', 'exag']) rank(items, q, (i) => (i.label ? t(i.label) : i.name))
     for (const s of spies) expect(s).not.toHaveBeenCalled()
@@ -119,7 +119,7 @@ describe('registration', () => {
     const covered = new Set(commands.value.flatMap((c) => (c.shortcut ? [c.shortcut.action] : [])))
     for (const l of keyboard) expect(covered, l).toContain(ACTION[l])
     // and the keys each command shows are keys of its HELP_ROWS row
-    for (const c of commands.value) if (c.shortcut) for (const k of keysForAction(c.shortcut)) expect(HELP_ROWS.some((r) => r.keys.some((x) => k.endsWith(x) || (/^\d$/.test(k) && x.includes('5')))), `${c.id} ${k}`).toBe(true)
+    for (const c of commands.value) if (c.shortcut) for (const k of keysForAction(c.shortcut)) expect(HELP_ROWS.some((r) => r.keys.some((x) => k.endsWith(x) || (/^\d$/.test(k) && /^1–\d$/.test(x) && Number(k) <= Number(x.slice(2))))), `${c.id} ${k}`).toBe(true)
   })
 })
 
@@ -147,7 +147,9 @@ describe('shell commands run the keys.ts action', () => {
 
   it('mode navigates; 2D/3D, help and focus mode flip the shell state', () => {
     install()
-    expect(runCommand('mode.evidence', 'palette')).toBe(true)
+    expect(runCommand('mode.science', 'palette')).toBe(true) // D145: FLY is hidden, no mode.fly
+    expect(nav).toHaveBeenCalledTimes(1)
+    expect(runCommand('mode.fly', 'palette')).toBe(false)
     expect(nav).toHaveBeenCalledTimes(1)
     runCommand('view.toggle3d', 'palette')
     expect(ui.view.value).toBe('3d')
@@ -236,7 +238,8 @@ describe('app commands call the store functions', () => {
 describe('keys.ts adapter', () => {
   it('keysForAction reads HELP_ROWS', () => {
     expect(keysForAction({ action: 'mode', mode: 'plan' })).toEqual(['P'])
-    expect(keysForAction({ action: 'mode', mode: 'evidence' })).toEqual(['E'])
+    expect(keysForAction({ action: 'mode', mode: 'science' })).toEqual(['S'])
+    expect(keysForAction({ action: 'mode', mode: 'fly' })).toEqual([]) // D145: FLY hidden, no Y key
     expect(keysForAction({ action: 'toggle3d' })).toEqual(['T'])
     expect(keysForAction({ action: 'search' })).toEqual(['Ctrl+K', '/'])
     expect(keysForAction({ action: 'undo' })).toEqual(['Ctrl+Z'])
@@ -246,6 +249,7 @@ describe('keys.ts adapter', () => {
     expect(keysForAction({ action: 'scrub', minutes: -1 })).toEqual(['←'])
     expect(keysForAction({ action: 'scrub', minutes: 10 })).toEqual(['Shift+→'])
     expect(keysForAction({ action: 'camera', preset: 3 })).toEqual(['3'])
+    expect(HELP_ROWS.find((r) => r.label === 'shortcuts.cameraPresets')?.keys).toEqual(['1–5']) // 5 = follow crew (Plan's Flythrough)
     expect(keysForAction({ action: 'playPause' })).toEqual(['Space'])
     expect(keysForAction({ action: 'help' })).toEqual(['?'])
     expect(keysForAction({ action: 'focusMode' })).toEqual(['F'])

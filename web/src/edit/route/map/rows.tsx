@@ -116,7 +116,7 @@ export function AddPointButton({ ctl }: { ctl: RouteController }) {
         {adding ? W.addCancel : W.add}
       </button>
       <span class="hl-route__note" role="status" id="hl-route-why-add">
-        {adding ? W.addArmed : (why ?? fill(W.addHint, { n: ROUTE_LIMITS.maxFreePoints }))}
+        {adding ? W.addArmed : (why ?? fill(W.addHint, { n: ROUTE_LIMITS.maxStops }))}
       </span>
     </div>
   )

@@ -10,7 +10,7 @@
 // sidebar); focus moves into the card and back to the opener. The body is the sidebar's own
 // SelectionPanel (lazy cards chunk): numbers, trust chips and links are unchanged.
 // Pure helpers (cardIdFor, cardTitle, anchorLngLat, cardRoom) are unit-tested in selectionCard.test.ts.
-import type { ComponentChildren } from 'preact'
+import type { ComponentChildren, ComponentType } from 'preact'
 import { useEffect, useRef, useState } from 'preact/hooks'
 import type { Loader } from '../../data/loader'
 import { locate, type FocusSources } from '../../map/camera/focus'
@@ -21,6 +21,7 @@ import { CardSkeleton } from '../components'
 import { Icon } from '../components/Icon'
 import { t } from '../copy'
 import { closeContainer, layout, openContainer, registerContainer } from '../layout'
+import { openRoutePanel } from '../route-panel/panelState'
 import { TOKENS } from '../tokens'
 import type { CardData, CellLookup } from './data'
 import './selectionCard.css'
@@ -261,11 +262,28 @@ export function SummaryCardBody({ L }: { L: Loader }) {
 type Panel = (p: { L: Loader; cell?: CellLookup }) => ComponentChildren
 
 /** J1d: "Add to route" on a station card: the Mission Planer with ?add=<id> (it appends the station). */
+/** PORT I1 (R3): R3's "Add to route" button (edit/route/map/addToRoute, lazy chunk: §7b), loaded once. */
+type AddButton = ComponentType<{ station: string; onAdded?: (station: string) => void }>
+let addButton: AddButton | null = null
+
 export function StationAddToRoute({ id }: { id: string }) {
+  // one click appends the station to the Plan route (one undo step) and opens the Route panel; "In your
+  // route" once it is in (R3). Until the chunk is in, the same button, disabled.
+  const [Btn, setBtn] = useState<AddButton | null>(() => addButton)
+  useEffect(() => {
+    if (Btn) return
+    let live = true
+    void import('../../edit/route/map/addToRoute').then((m) => {
+      addButton = m.AddToRouteButton as AddButton
+      if (live) setBtn(() => addButton)
+    })
+    return () => void (live = false)
+  }, [])
+  if (Btn) return <Btn station={id} onAdded={() => openRoutePanel()} />
   return (
-    <a class="hl-btn hl-btn--secondary plan-card__add" href={href({ name: 'mission', add: id })} title={t('cards.station.addToRouteTip')} data-add-to-route={id}>
+    <button type="button" class="hl-btn hl-btn--secondary plan-card__add" disabled data-add-to-route={id}>
       <Icon name="plus" /> {t('cards.station.addToRoute')}
-    </a>
+    </button>
   )
 }
 

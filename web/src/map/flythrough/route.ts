@@ -13,6 +13,7 @@ import { CHASE, FLYTHROUGH, FOLLOW_TABLE_STEP_MIN, FOLLOW_TURN_DEG_PER_MIN } fro
 import { routeLine } from '../route'
 import type { LonLat } from '../../hud/types'
 import { angleDiff, chasePose, SmoothPath, type CameraPose, type Metric } from './path'
+import type { UserFlight } from './userRoute'
 
 export interface FlightPath {
   scenario: string
@@ -99,9 +100,18 @@ export function flightPath(plan: Plan, metric: Metric, scenario: string): Flight
   }
 }
 
-/** The plan scenario's flight path; null when it has no route or timeline (only published ones do). */
-export async function loadFlightPath(): Promise<FlightPath | null> {
+/**
+ * The plan scenario's flight path; null when it has no route or timeline (only published ones do).
+ * PORT I2: `mine` = the user's route (userRoute.ts userFlight) flown instead of the official one.
+ */
+export async function loadFlightPath(mine?: UserFlight | null): Promise<FlightPath | null> {
   const L = data()
+  if (mine) {
+    const fix = await L.optional(() => L.fieldsIndex())
+    if (!fix) return null
+    const metric = gridMetric(fix as unknown as { bounds: number[]; width: number; height: number; res_m: number })
+    return flightPath(new Plan(mine.route, mine.timeline, metric), metric, 'mine')
+  }
   const idx = await L.scenarios()
   const sc = resolvePlanScenario(idx)
   const [route, timeline, fix] = await Promise.all([L.optional(() => L.route(sc.id)), L.optional(() => L.timeline(sc.id)), L.optional(() => L.fieldsIndex())])
