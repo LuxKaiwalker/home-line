@@ -50,8 +50,11 @@ function Page({ children }: { children: ComponentChildren }) {
   return <div class="page live-plan-page">{children}</div>
 }
 
-/** Not found, offline or broken answers: a message, never a crash. */
-export function PlanProblem({ load }: { load: Exclude<PlanLoad, { state: 'ok' }> }) {
+/**
+ * Not found, offline or broken answers: a message, never a crash. With `plans`, "My plans" follows,
+ * so saved plans stay listed and exportable while the live server is unreachable.
+ */
+export function PlanProblem({ load, plans }: { load: Exclude<PlanLoad, { state: 'ok' }>; plans?: MyPlansProps }) {
   return (
     <Page>
       <h1>Plan {load.hash}</h1>
@@ -69,6 +72,7 @@ export function PlanProblem({ load }: { load: Exclude<PlanLoad, { state: 'ok' }>
         </p>
       )}
       <PlanTag hash={load.hash} origin={null} />
+      {plans && <MyPlans {...plans} />}
     </Page>
   )
 }

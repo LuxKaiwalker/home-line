@@ -8,13 +8,13 @@ import { resolve } from 'node:path'
 import { Fragment, type VNode } from 'preact'
 import { describe, expect, it } from 'vitest'
 import { createApiClient } from '../client'
-import { TITLE_MAX_CHARS } from '../config'
+import { OFFLINE_LABEL, TITLE_MAX_CHARS } from '../config'
 import { createMockFetch } from '../mock/fetch'
 import { PLAN_INPUTS_OFFICIAL, RUN_RECORD_LIVE } from '../mock/fixtures'
 import { mockFinishedTree } from '../mock/result'
 import { checkRunRecord, loadPlan, recordRoute, type PlanLoad } from '../plan'
 import { checkPlanInputsText, exportPlanInputs } from '../planio'
-import { ImportPage, PlanPage, ProvenancePage } from '../planview'
+import { ImportPage, PlanPage, PlanProblem, ProvenancePage } from '../planview'
 import { mockLiveLoader } from '../result'
 import { textOf, toHtml } from '../testing/html'
 import type { PlanInputs, RunRecord } from '../types'
@@ -272,6 +272,30 @@ describe('"My plans" view', () => {
     expect(with_).toContain('My plans')
     expect(with_).toContain(NOTE_UNAVAILABLE)
     expect(textOf(<ImportPage state={{ kind: 'idle' }} onFile={() => {}} />)).not.toContain('My plans')
+  })
+})
+
+describe('live server unreachable (published site, D97)', () => {
+  it('a saved plan whose permalink cannot load (offline, not found): the message, then "My plans" with a working export', async () => {
+    const store = createPlansStore(fresh(), clock)
+    store.save({ hash: H1, inputs: withRoute(ROUTE, 'Saved before the server went down') })
+    const down = createApiClient({
+      base: 'http://api.test',
+      fetch: async () => {
+        throw new TypeError('Failed to fetch')
+      },
+    })
+    const load = await loadPlan(down, H1)
+    expect(load.state).toBe('offline')
+    const page = <PlanProblem load={load as Exclude<PlanLoad, { state: 'ok' }>} plans={propsOf(store)} />
+    const text = textOf(page)
+    expect(text).toContain(OFFLINE_LABEL)
+    expect(text).toContain('Saved before the server went down')
+    const ex = byClass(page, 'live-plan-export')[0]
+    const back = checkPlanInputsText(decodeURIComponent(String(ex.href).replace(/^data:application\/json;charset=utf-8,/, '')))
+    expect(back.ok && back.inputs.route).toEqual(ROUTE)
+    // and with no storage either: still a page, with the note
+    expect(textOf(<PlanProblem load={load as Exclude<PlanLoad, { state: 'ok' }>} plans={propsOf(createPlansStore(() => throwing))} />)).toContain(NOTE_UNAVAILABLE)
   })
 })
 

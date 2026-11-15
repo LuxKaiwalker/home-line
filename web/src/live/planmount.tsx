@@ -163,8 +163,9 @@ export function mountPlanRoute(app: HTMLElement, opts: PlanRouteOptions): Cleanu
       return
     }
     if (offline) {
-      rerender = undefined
-      render(<PlanProblem load={{ state: 'offline', hash: route.hash, message: 'the health check says the live server is offline' }} />, box)
+      const load = { state: 'offline', hash: route.hash, message: 'the health check says the live server is offline' } as const
+      rerender = () => render(<PlanProblem load={load} plans={plansProps()} />, box)
+      rerender()
       return
     }
     rerender = () => render(<PlanLoading hash={route.hash} origin={records.get(route.hash) ?? null} />, box)
@@ -172,8 +173,8 @@ export function mountPlanRoute(app: HTMLElement, opts: PlanRouteOptions): Cleanu
     const load = await getLoad(route.hash)
     if (my !== seq) return
     if (load.state !== 'ok') {
-      rerender = undefined
-      render(<PlanProblem load={load} />, box)
+      rerender = () => render(<PlanProblem load={load} plans={plansProps()} />, box)
+      rerender()
       return
     }
     if (route.view === 'provenance') {
