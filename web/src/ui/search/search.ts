@@ -8,7 +8,7 @@ import type { Loader } from '../../data/loader'
 import type { ShortcutAction } from '../shell/keys'
 import { refFromLabel } from '../../state/selectionAdapter'
 import { refKey, type SelectionRef } from '../../state/selection'
-import { MODES } from '../../state/ui'
+import { SHOWN_MODES } from '../../state/ui'
 import type { ChipKind, IconName } from '../components'
 import type { CopyKey } from '../copy'
 
@@ -96,7 +96,7 @@ export function commandItems(): SearchItem[] {
   const modeKey: Record<string, string> = { plan: 'P', fly: 'Y', report: 'R', evidence: 'E' }
   const modeIcon: Record<string, IconName> = { plan: 'map', fly: 'compass', report: 'file-text', evidence: 'shield-check' }
   return [
-    ...MODES.map(
+    ...SHOWN_MODES.map(
       (m): SearchItem => ({ id: `cmd:mode:${m}`, group: 'commands', code: '', name: m, label: `modes.${m}.label`, icon: modeIcon[m], priority: 20, command: { action: 'mode', mode: m }, keys: [modeKey[m]] }),
     ),
     { id: 'cmd:toggle3d', group: 'commands', code: '', name: '2D 3D', label: 'shortcuts.toggle3d', icon: 'rotate-3d', priority: 20, command: { action: 'toggle3d' }, keys: ['T'] },

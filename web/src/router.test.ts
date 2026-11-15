@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { canonicalHref, href, isLegacy, legacyParam, NAV_ITEMS, parseRoute, redirectFor, type Route } from './router'
+import { canonicalHref, href, landingFor, LANDING_HASH, isLegacy, legacyParam, NAV_ITEMS, parseRoute, redirectFor, type Route } from './router'
 
 describe('hash router (SPEC F17 routes; mount slot for WS7)', () => {
   it.each([
@@ -29,7 +29,7 @@ describe('hash router (SPEC F17 routes; mount slot for WS7)', () => {
   })
 
   it('the nav lists every page and slot', () => {
-    expect(NAV_ITEMS.map((n) => n.route.name)).toEqual(['console', 'mission', 'trade', 'conditions', 'cuff', 'hud', 'scorecard', 'about'])
+    expect(NAV_ITEMS.map((n) => n.route.name)).toEqual(['console', 'mission', 'trade', 'cuff', 'scorecard', 'about'])
   })
 })
 
@@ -135,3 +135,15 @@ describe('?legacy switch (DESIGN U0, kit rule 10)', () => {
     expect(isLegacy(param, parseRoute(`#/${name === 'console' ? '' : name}`))).toBe(want)
   })
 })
+
+describe('landing page (user, 2026-11-15)', () => {
+  it('a bare address opens the Mission Planer; #/ stays the Plan page', () => {
+    expect(LANDING_HASH).toBe('#/mission')
+    expect(landingFor('')).toBe('#/mission')
+    expect(landingFor('#')).toBe('#/mission')
+    expect(landingFor('#/')).toBeNull()
+    expect(parseRoute('#/')).toEqual({ name: 'console' })
+    expect(parseRoute(LANDING_HASH)).toEqual({ name: 'mission' })
+  })
+})
+

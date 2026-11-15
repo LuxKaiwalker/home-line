@@ -90,6 +90,12 @@ export function parseRoute(hash: string): Route {
   return { name: 'notfound', path }
 }
 
+/** Landing page: the address with no route (the bare site URL) opens the Mission Planer (user,
+ *  2026-11-15). `#/` stays the Plan page, so every existing Plan link still works. */
+export const LANDING_HASH = '#/mission'
+/** Where a bare address (no hash, or just "#") lands; null for any other hash. */
+export const landingFor = (hash: string): string | null => (hash === '' || hash === '#' ? LANDING_HASH : null)
+
 /** Unlinked dev page (WS16 M1 field-shader spike): never in NAV_ITEMS; main.ts lazy-loads it. */
 export const isSpikeHash = (hash: string): boolean => /^#?\/spike\/?(\?|$)/.test(hash)
 
@@ -165,14 +171,12 @@ export function isLegacy(param: string | null, route: Route): boolean {
   return v.split(',').some((n) => n.trim() === route.name.toLowerCase())
 }
 
-/** Top navigation, in display order. The hud slot is listed but owned by WS7. */
+/** Top navigation (legacy layout), in display order. FLY views (hud, conditions) are left out: FLY is hidden (state/ui HIDDEN_MODES). */
 export const NAV_ITEMS: { route: Route; label: string }[] = [
   { route: { name: 'console' }, label: 'Plan' },
   { route: { name: 'mission' }, label: 'Mission Planer' },
   { route: { name: 'trade' }, label: 'Trade' },
-  { route: { name: 'conditions' }, label: 'Conditions' },
   { route: { name: 'cuff' }, label: 'Cuff card' },
-  { route: { name: 'hud' }, label: 'HUD' },
   { route: { name: 'scorecard' }, label: 'Scorecard' },
   { route: { name: 'about' }, label: 'About' },
 ]

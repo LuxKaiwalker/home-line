@@ -7,6 +7,11 @@ import { signal } from './signal'
 
 export type Mode = 'plan' | 'fly' | 'report' | 'evidence'
 export const MODES: readonly Mode[] = ['plan', 'fly', 'report', 'evidence']
+/** Modes left out of this build's interface (no tab, key, command or nav link); their routes still
+ *  work by URL and the code stays, so a mode comes back by taking it out of this set. FLY: user, 2026-11-15. */
+export const HIDDEN_MODES: ReadonlySet<Mode> = new Set<Mode>(['fly'])
+/** The modes the interface offers, in display order. */
+export const SHOWN_MODES: readonly Mode[] = MODES.filter((m) => !HIDDEN_MODES.has(m))
 export type FieldMode = 'bands' | 'margin'
 
 /**

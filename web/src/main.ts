@@ -9,7 +9,7 @@ import './ui/components/components.css'
 import './ui/shell/shell.css'
 import { DATA_MODE, IS_DEV } from './env'
 import { clearUnbacked, onUnbackedChange, unbackedNumbers } from './prov/store'
-import { isSpikeHash, isStyleguideHash, parseRoute, redirectFor, type Route } from './router'
+import { isSpikeHash, isStyleguideHash, landingFor, parseRoute, redirectFor, type Route } from './router'
 import { applyRoute } from './ui/shell/store'
 import { buildLegacyFrame, buildShellFrame, frameKindFor, type Frame, type FrameKind } from './ui/shell/frame'
 import type { ShellHandle } from './ui/shell/Shell'
@@ -75,6 +75,9 @@ async function render(): Promise<void> {
   const seq = ++renderSeq
   const userNav = !first
   first = false
+  // A bare address opens the landing page (router LANDING_HASH); story/capture links keep their own start.
+  const landing = /[?&](capture|demo)=/.test(location.search + location.hash) ? null : landingFor(location.hash)
+  if (landing) history.replaceState(history.state, '', landing)
   const spike = isSpikeHash(location.hash)
   const styleguide = !spike && isStyleguideHash(location.hash)
   const internal = spike || styleguide
