@@ -38,6 +38,7 @@ import { buildTrack, legProfile, missionMargin } from '../mission/margin'
 import { buildMission, downloadJson, finalizeMission, originLabel } from '../mission/export'
 import { tx } from '../mission/richCopy'
 import { t } from '../ui/copy'
+import { detect, inMarvisViewer, sendMission } from '../marvis/bridge'
 import { ensureManifest } from './common'
 import type { View } from './types'
 
@@ -106,6 +107,18 @@ function MissionPanel({ mmap, handlers, mapsEl, layersEl, initial }: { mmap: Mis
   const [storm, setStorm] = useState(false)
   /** EVA start instant (UTC ms); default = WS4's simulated EVA (D31); not stored (D97) */
   const [startMs, setStartMs] = useState(DEFAULT_START_MS)
+  /** MARVIS hand-over: 'api' = served by the game (POST /marvis/api/mission), 'viewer' = in the game's planner window (it catches the download) */
+  const [sim, setSim] = useState<'api' | 'viewer' | null>(inMarvisViewer() ? 'viewer' : null)
+  const [sending, setSending] = useState(false)
+  const [sendMsg, setSendMsg] = useState<{ ok: boolean; text: string } | null>(null)
+  useEffect(() => {
+    let alive = true
+    void detect().then((yes) => alive && yes && setSim('api'))
+    return () => {
+      alive = false
+    }
+  }, [])
+  useEffect(() => setSendMsg(null), [wps, storm, startMs])
 
   // Load once per pad (J1d: mission/data.ts caches each (pad, scenario)).
   useEffect(() => {
@@ -393,8 +406,9 @@ function MissionPanel({ mmap, handlers, mapsEl, layersEl, initial }: { mmap: Mis
     return missionMargin(track, { tDarkMin, rad: d.rad, storm })
   }, [d, legs, wps, storm, tDarkMin])
 
-  const exportMission = async () => {
-    if (!d || !wps.length || routingN > 0) return // J1h: only with every leg routed
+  /** mission.json of the plan on screen (contracts/bundle/mission.schema.json); null without waypoints or while a leg routes */
+  const missionDoc = async () => {
+    if (!d || !wps.length || routingN > 0) return null // J1h: only with every leg routed
     const w = d.tHome.width
     const elevAt = (lon: number, lat: number) => {
       const p = d.tHome.pixelOf(lon, lat)
@@ -423,8 +437,41 @@ function MissionPanel({ mmap, handlers, mapsEl, layersEl, initial }: { mmap: Mis
       label: CONFIG.simulatedLabel,
       dummy: DATA_MODE === 'dummy',
     }, { customStart })
-    const fin = await finalizeMission(doc)
-    downloadJson(fin, `mission_${fin.mission_id}.json`)
+    return finalizeMission(doc)
+  }
+
+  const exportMission = async () => {
+    const fin = await missionDoc()
+    if (fin) downloadJson(fin, `mission_${fin.mission_id}.json`)
+  }
+
+  /**
+   * Send to MARVIS: served by the game, POST the mission to its API; in the game's planner window (also
+   * on the live site), download it, which the window hands to the game. Either way MARVIS hides the
+   * planner and starts the EVA. In a plain browser it is saved as a file for MARVIS's Missions tab (G map) or F5.
+   */
+  const sendToMarvis = async () => {
+    setSending(true)
+    setSendMsg(null)
+    try {
+      const fin = await missionDoc()
+      if (!fin) return
+      if (sim === 'api') {
+        const r = await sendMission(fin)
+        setSendMsg(r.ok ? { ok: true, text: 'Sent: MARVIS starts the EVA.' } : { ok: false, text: `MARVIS did not start the EVA: ${r.error ?? 'no reason given'}` })
+      } else {
+        downloadJson(fin, `mission_${fin.mission_id}.json`)
+        setSendMsg(
+          sim === 'viewer'
+            ? { ok: true, text: 'Sent: MARVIS starts the EVA.' }
+            : { ok: true, text: `Not opened from MARVIS, so the mission was saved as mission_${fin.mission_id}.json. In MARVIS load it from the Missions tab of the map (G) or with F5.` },
+        )
+      }
+    } catch (e) {
+      setSendMsg({ ok: false, text: `Could not build the mission: ${e instanceof Error ? e.message : String(e)}` })
+    } finally {
+      setSending(false)
+    }
   }
 
   // Draw.
@@ -510,6 +557,21 @@ function MissionPanel({ mmap, handlers, mapsEl, layersEl, initial }: { mmap: Mis
       </section>
 
       <section class="mp-card mp-export">
+        <button
+          type="button"
+          class="mp-send"
+          disabled={!wps.length || routingN > 0 || sending}
+          aria-busy={sending}
+          onClick={() => void sendToMarvis()}
+          title={wps.length ? 'Send this plan to the MARVIS simulator and walk it there' : 'Add a waypoint first'}
+        >
+          {sending ? 'Sending…' : 'Send to MARVIS'}
+        </button>
+        {sendMsg && (
+          <p class={sendMsg.ok ? 'mp-send-msg' : 'mp-send-msg mp-send-err'} role={sendMsg.ok ? 'status' : 'alert'}>
+            {sendMsg.text}
+          </p>
+        )}
         <button type="button" disabled={!wps.length || routingN > 0} onClick={() => void exportMission()} title={routingN > 0 ? t('mission.export.routingTitle') : t('mission.export.buttonTitle')}>
           {t('mission.export.button')}
         </button>
