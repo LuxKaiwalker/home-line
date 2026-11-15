@@ -10,6 +10,7 @@ import type { MapPort } from './mapPort'
 import { createPadTool, type PadTool, type PadToolOptions } from './padtool'
 import type { LiveState } from './health'
 import { PadToolPanel } from './view'
+import { editRouteHosted, setEditRouteCrew } from '../ui/shell/editroute'
 
 export interface MountPadToolOptions extends Omit<PadToolOptions, 'client' | 'port' | 'jobInputs'> {
   client: ApiClient
@@ -26,11 +27,19 @@ export function mountPadTool(panel: Element, port: MapPort, opts: MountPadToolOp
   const tool = createPadTool({ client, port, ...rest, ...(crew ? { jobInputs: () => crew.jobInputs() } : {}) })
   const engineHref = `${client.root}/engine/version`
   let ready = false
+  // L3 (D111): with the Edit-route drawer mounted (console map, live build, route editing on), the crew
+  // panel goes into it as the "Crew" section; otherwise it stays next to the pad tool, as before
+  const inDrawer = crew !== null && editRouteHosted()
   const draw = () => {
     if (!ready) return
+    if (inDrawer) {
+      const state = crew.state
+      const inputs = crew.jobInputs() // {} = default crew; {crew} = changed fields; null = a field is not a number
+      setEditRouteCrew({ summary: inputs && inputs.crew === undefined ? 'default' : 'changed', render: () => <CrewPanel state={state} actions={crew} engineHref={engineHref} /> })
+    }
     render(
       <>
-        {crew ? <CrewPanel state={crew.state} actions={crew} engineHref={engineHref} /> : null}
+        {crew && !inDrawer ? <CrewPanel state={crew.state} actions={crew} engineHref={engineHref} /> : null}
         <PadToolPanel state={tool.state} actions={tool} engineHref={engineHref} computeBlocked={crew ? crewBlockedText(crew.state) : null} />
       </>,
       panel,
@@ -55,6 +64,7 @@ export function mountPadTool(panel: Element, port: MapPort, opts: MountPadToolOp
       offCrew()
       tool.dispose()
       crew?.dispose()
+      if (inDrawer) setEditRouteCrew(undefined)
       render(null, panel)
     },
   }

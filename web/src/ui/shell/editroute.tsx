@@ -11,12 +11,11 @@
 //   views/console.tsx      mounts the host inside the console map (mountEditRoute), live builds only
 //
 // Loaded only through the VITE_LIVE dynamic import in views/console.tsx (and the live chunks), so
-// the static build does not contain it. Layout store ids (L5 selector contract): edit-route (Drawer),
+// the static build does not contain it. It imports nothing from src/live/ (isolation.test.ts): the
+// "My plans" store and list come in through mountEditRoute (MyPlansDeps), from the guarded import. Layout store ids (L5 selector contract): edit-route (Drawer),
 // crew and my-plans (Collapsible inside it).
-import { render } from 'preact'
+import { render, type ComponentType } from 'preact'
 import { useState } from 'preact/hooks'
-import { createPlansStore, type PlansResult, type PlansStore } from '../../live/plans/store'
-import { MyPlans } from '../../live/plans/view'
 import { signal, useSignalValue } from '../../state/signal'
 import { Button } from '../components'
 import { Collapsible, Drawer, useLayoutInsets, useOpener } from '../layout'
@@ -93,18 +92,28 @@ function EditRouteSimSlot() {
   return null
 }
 
-/** "My plans" list (live/plans/view.tsx MyPlans, unchanged) on this browser's plan store. */
-function MyPlansSection({ store }: { store: PlansStore }) {
+type PlansResult = { ok: true } | { ok: false; error: string }
+/** "My plans" from src/live/plans (passed in: this file may not import src/live/). */
+export interface MyPlansDeps<Snap = unknown> {
+  /** live/plans/store.ts createPlansStore() (this browser's storage) */
+  store: { list(): Snap; rename(id: string, title: string): PlansResult; remove(id: string): PlansResult }
+  /** live/plans/view.tsx MyPlans, rendered unchanged */
+  View: ComponentType<{ snap: Snap; error: string | null; onSave: (hash: string) => void; onRename: (id: string, title: string) => void; onRemove: (id: string) => void }>
+}
+
+/** The "My plans" list on the plan store; redrawn after each action (as planmount.tsx does). */
+function MyPlansSection<Snap>({ deps: { store, View } }: { deps: MyPlansDeps<Snap> }) {
   const [error, setError] = useState<string | null>(null)
   const [, redraw] = useState(0)
   const act = (r: PlansResult) => {
     setError(r.ok ? null : r.error)
     redraw((n) => n + 1)
   }
-  return <MyPlans snap={store.list()} error={error} onSave={() => {}} onRename={(id, title) => act(store.rename(id, title))} onRemove={(id) => act(store.remove(id))} />
+  // saving happens on the plan page (#/plan/{hash}); the list here opens, renames, exports and deletes
+  return <View snap={store.list()} error={error} onSave={() => {}} onRename={(id, title) => act(store.rename(id, title))} onRemove={(id) => act(store.remove(id))} />
 }
 
-export function EditRouteHost({ plans }: { plans: PlansStore }) {
+export function EditRouteHost<Snap>({ plans }: { plans: MyPlansDeps<Snap> }) {
   const route = useSignalValue(routeRender)
   const crew = useSignalValue(crewSlot)
   const { bottom } = useLayoutInsets()
@@ -129,7 +138,7 @@ export function EditRouteHost({ plans }: { plans: PlansStore }) {
           </Collapsible>
         ) : null}
         <Collapsible id={MY_PLANS_ID} title={MY_PLANS_SECTION_TITLE}>
-          <MyPlansSection store={plans} />
+          <MyPlansSection deps={plans} />
         </Collapsible>
       </Drawer>
     </>
@@ -139,18 +148,19 @@ export function EditRouteHost({ plans }: { plans: PlansStore }) {
 export interface MountEditRouteOptions {
   /** D116: VITE_ROUTE_EDIT (default ROUTE_EDIT_ENABLED); false mounts nothing. */
   enabled?: boolean
-  /** "My plans" store (default: this browser's storage, createPlansStore()). */
-  plans?: PlansStore
 }
 
 /** Mount the host inside the map container `mapEl` (position: relative); returns cleanup. */
-export function mountEditRoute(mapEl: Element, o: MountEditRouteOptions = {}): () => void {
+export function mountEditRoute<Snap>(mapEl: Element, plans: MyPlansDeps<Snap>, o: MountEditRouteOptions = {}): () => void {
   if (!(o.enabled ?? ROUTE_EDIT_ENABLED)) return () => {}
   const el = mapEl.appendChild(document.createElement('div'))
-  el.className = 'hl-editroute'
+  el.setAttribute('class', 'hl-editroute')
   hosts++
-  render(<EditRouteHost plans={o.plans ?? createPlansStore()} />, el)
+  render(<EditRouteHost plans={plans} />, el)
+  let done = false
   return () => {
+    if (done) return
+    done = true
     hosts--
     render(null, el)
     el.remove()
