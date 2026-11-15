@@ -154,7 +154,11 @@ describe('component stylesheets use only passing pairs', () => {
       .filter((r) => r.color && r.background && r.color !== r.background)
       // Inactive controls are exempt (WCAG 1.4.3): the allow-list's textFaint rule.
       .filter((r) => !r.sel.split(',').every((s) => /:disabled|\[disabled\]|\[aria-disabled/.test(s)))
-      .filter((r) => exception(r.color!, r.background!, 'text') || contrastRatio(C[r.color!], C[r.background!]) < MIN_RATIO.text)
+      .filter((r) => {
+        // A translucent background (the label pill) is checked at both composites that bound it (§3.1 basemap).
+        const bgs: Surface[] = r.background === 'labelPill' ? ['pillOverWhite', 'pillOverBlack'] : [r.background as Surface]
+        return bgs.some((bg) => exception(r.color!, bg, 'text') || contrastRatio(C[r.color!], SURFACE_HEX[bg]) < MIN_RATIO.text)
+      })
       .map((r) => `${r.file}: ${r.sel} (${r.color} on ${r.background})`)
     expect(bad).toEqual([])
   })
