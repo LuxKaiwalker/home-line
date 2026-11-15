@@ -218,7 +218,7 @@ describe('pad tool: full plan with staged results', () => {
       expect(s.plan.result!.errors).toEqual([])
       const t = textOf(<PadToolPanel state={s} actions={tool} engineHref={ENGINE_HREF} />)
       expect(t).toContain(LIVE_LABEL)
-      expect(t).toMatch(/Running stage|Queued/)
+      expect(t).toMatch(/Running: |Queued/) // WP13: the shared JobProgress wording
       expect(t).not.toContain('not shown')
     }
     const first = textOf(<PadToolPanel state={partial[0]} actions={tool} engineHref={ENGINE_HREF} />)
