@@ -20,7 +20,7 @@ import { resetSelection, select, selection } from '../state/selection'
 import { CLICK_SLOP_PX, type DragFields } from './drag'
 import { buildCatalog } from './options'
 import { createRoverDrag, type RoverDrag } from './rover'
-import { arrowKeyHandler, wireRoverMarker, type RoverMarker } from './roverMap'
+import { arrowKeyHandler, padCodes, wireRoverMarker, type RoverMarker } from './roverMap'
 import { createPlanEditStore, type PlanEditStore } from './store'
 
 const PUB = resolve(REPO, 'web/public/data')
@@ -378,5 +378,13 @@ describe('keyboard flow unchanged', () => {
     expect(key('ArrowLeft')).toBe(true)
     expect(store.draft.value).toBeNull() // back at the committed pad
     expect(store.past.value).toHaveLength(0)
+  })
+})
+
+describe('L7b: the readout names pads as the map does (labels.json codes)', () => {
+  it('maps every precomputed pad id to its label pill code (PAD, P2 … P5)', () => {
+    const codes = padCodes(labels, 'rank1')
+    expect(Object.fromEntries(codes)).toEqual({ rank1: 'PAD', rank2: 'P2', rank3: 'P3', rank4: 'P4', pad_default: 'P5' })
+    expect(padCodes([{ kind: 'station', code: 'S1', ref: 'stations.json#S1' }], 'rank1').size).toBe(0)
   })
 })

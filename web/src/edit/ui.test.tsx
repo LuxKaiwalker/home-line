@@ -16,7 +16,8 @@ import type { DragFields, SpotValues } from './drag'
 import { buildCatalog } from './options'
 import { createRoverDrag } from './rover'
 import { createPlanEditStore } from './store'
-import { DASH, DeltaStrip, DragReadout, factRows, validityText } from './ui'
+import { liveStatus } from '../state/live'
+import { DASH, deltaNote, DeltaStrip, DragReadout, factRows, refusedText, snapText, validityText } from './ui'
 
 const PUB = resolve(__dirname, '../../public/data')
 const json = (p: string) => JSON.parse(readFileSync(resolve(PUB, p), 'utf8'))
@@ -43,24 +44,72 @@ afterEach(() => act(() => render(null, root as unknown as Element)))
 describe('drag readout (while dragging)', () => {
   const v: SpotValues = { lon: 137.39, lat: -4.78, validity: 'invalid', failed: ['steep', 'outside'], state: 'assessed', slopeDeg: 7.31, maxSlopeDeg: 9.2, elevationM: null }
 
-  it('shows validity (copy), elevation "—" and the slope lookup; feasible EVAs and reachable are "computing…" ghosts', () => {
-    mount(<DragReadout values={v} target={pads.options[1]} />)
+  it('shows validity (copy), elevation "—" and the slope lookup; feasible EVAs and reachable name the pad they show on release (L7b: no never-resolving "computing…")', () => {
+    mount(<DragReadout values={v} target={pads.options[1]} status="off" />)
     const s = text(root)
     expect(s).toContain(t('cards.pad.invalidSpot', { reason: `${t('cards.pad.invalidSteep')}, ${t('cards.pad.invalidOutside')}` }))
     const slope = all(root, (n) => n.getAttribute('data-source') === 'field' && hasClass(n, 'num'))
     expect(slope).toHaveLength(1)
     expect(text(slope[0])).toBe('7.3°')
-    const ghosts = byClass(root, 'hl-edit-ghost')
-    expect(ghosts).toHaveLength(2)
-    for (const g of ghosts) {
-      expect(text(g)).toContain(t('edit.computing'))
-      expect(text(g)).not.toMatch(/\d/) // never a number while dragging
-      expect(g.getAttribute('data-trust')).toBe('live')
+    expect(byClass(root, 'hl-edit-ghost')).toHaveLength(0)
+    expect(s).not.toContain(t('edit.computing'))
+    const pending = byClass(root, 'hl-edit-pending')
+    expect(pending).toHaveLength(2)
+    for (const g of pending) {
+      // never a planning value while dragging: only the pad name and "on release"
+      expect(byClass(g, 'num')).toHaveLength(0)
+      const value = byClass(g, 'hl-readout__value')[0]
+      expect(text(value)).toBe(t('edit.onRelease', { pad_name: pads.options[1].label }))
+      expect(value.getAttribute('title')).toBe(t('edit.onReleaseTip', { pad_name: pads.options[1].label }))
     }
     const elev = all(root, (n) => hasClass(n, 'hl-readout') && n.getAttribute('data-state') === 'unknown')
     expect(text(elev[0])).toContain(DASH)
     expect(s).toContain(t('edit.snapStatic'))
     expect(s).toContain(pads.options[1].label)
+  })
+
+  it('no snap target: the pending rows show "—" and the snap line says the rover goes back', () => {
+    mount(<DragReadout values={v} target={null} status="ready" />)
+    for (const g of byClass(root, 'hl-edit-pending')) expect(text(byClass(g, 'hl-readout__value')[0])).toBe(DASH)
+    expect(text(byClass(root, 'hl-edit-drag__snap')[0])).toBe(t('edit.noSnap'))
+  })
+
+  it('L7b (T2): the snap line is true to the live-planner status (seam state/live.ts)', () => {
+    expect(snapText('off')).toBe('edit.snapStatic')
+    expect(snapText('offline')).toBe('edit.snapStatic')
+    expect(snapText('checking')).toBe('edit.snapWaiting')
+    expect(snapText('warming')).toBe('edit.snapWaiting')
+    expect(snapText('ready')).toBe('edit.snapLive')
+    expect(t('edit.snapLive')).toMatch(/^Release to snap to a parking option · for a custom spot, click the map/)
+    expect(t('edit.snapWaiting')).not.toMatch(/offline/i)
+    // default: the seam signal
+    liveStatus.value = 'ready'
+    try {
+      mount(<DragReadout values={v} target={pads.options[1]} name={() => 'P2'} />)
+      const snap = text(byClass(root, 'hl-edit-drag__snap')[0])
+      expect(snap).toBe(`${t('edit.snapLive')} · P2`)
+      expect(text(root)).not.toContain(t('edit.snapStatic'))
+      expect(byClass(root, 'hl-edit-drag')[0].getAttribute('data-live')).toBe('ready')
+      act(() => void (liveStatus.value = 'offline'))
+      expect(text(byClass(root, 'hl-edit-drag__snap')[0])).toBe(`${t('edit.snapStatic')} · P2`)
+    } finally {
+      liveStatus.value = 'off'
+    }
+  })
+
+  it('L7b (T2): a refused nearest pad is named with the reason from the spot check', () => {
+    mount(<DragReadout values={{ ...v, validity: 'valid', failed: [] }} target={pads.options[3]} name={(id) => (id === 'pad_default' ? 'P5' : 'P4')} refused={{ id: 'pad_default', failed: ['steep', 'unknown'], maxSlopeDeg: 9.61 }} status="off" />)
+    const line = byClass(root, 'hl-edit-drag__refused')[0]
+    expect(line.getAttribute('data-refused')).toBe('pad_default')
+    expect(text(line)).toBe('P5 is not a valid rover pad: slope up to 9.6° on the 20 × 20 m block (limit 5°), terrain not assessed on the 20 × 20 m block')
+    expect(line.getAttribute('data-file')).toBe('fields/shared/slope.png')
+    expect(refusedText('P5', ['steep'])).toBe('P5 is not a valid rover pad: slope over 5° on the 20 × 20 m block') // no slope value: no number invented
+    expect(refusedText('P5', ['outside'])).toBe(`P5 is not a valid rover pad: ${t('cards.pad.invalidOutside')}`)
+  })
+
+  it('no refused pad: no refusal line', () => {
+    mount(<DragReadout values={v} target={pads.options[1]} status="off" />)
+    expect(byClass(root, 'hl-edit-drag__refused')).toHaveLength(0)
   })
 
   it('validity copy: valid / invalid with reasons / unknown "—"', () => {
@@ -106,6 +155,25 @@ describe('delta strip (on release)', () => {
     expect(store.committed.value.plan.pad).toBe('rank4')
     expect(store.draft.value).toBeNull()
     expect(byClass(root, 'hl-edit-delta')).toHaveLength(0)
+  })
+
+  it('L7b (T2): with the live planner ready the note no longer says it is offline; it points to the custom-spot gesture', () => {
+    expect(deltaNote('ready')).toBe('edit.liveCustomSpot')
+    expect(deltaNote('warming')).toBe('edit.parkingWaiting')
+    expect(deltaNote('offline')).toBe('edit.snapStatic')
+    expect(deltaNote('off')).toBe('edit.snapStatic')
+    const store = createPlanEditStore({ catalog })
+    const rd = createRoverDrag(store, fields)
+    rd.cycle(1)
+    liveStatus.value = 'ready'
+    try {
+      mount(<DeltaStrip store={store} rover={rd} pads={pads} />)
+      const s = text(byClass(root, 'hl-edit-delta')[0])
+      expect(s).toContain(t('edit.liveCustomSpot'))
+      expect(s).not.toContain(t('edit.snapStatic'))
+    } finally {
+      liveStatus.value = 'off'
+    }
   })
 
   it('Discard leaves the committed plan', () => {
