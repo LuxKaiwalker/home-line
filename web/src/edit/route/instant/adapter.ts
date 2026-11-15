@@ -1,10 +1,14 @@
 // I1b: the ONE file between the Edit-route panel and I1a's browser compute core (edit/route/browser/:
-// loadBrowserRouteData, computeBrowserRoute, buildBrowserMission). Everything else in instant/ codes
+// loadBrowserRouteData, computeBrowserRoute, buildBrowserMission; I3: withEvaStart, clockAt). Everything else in instant/ codes
 // against types.ts.
 import { loadBrowserRouteData, type BrowserRouteData } from '../browser/data'
 import { buildBrowserMission, computeBrowserRoute, type BrowserRouteResult } from '../browser/compute'
+import { clockAt, sunSiteOf, withEvaStart } from '../browser/start'
 import type { RouteStop } from '../model'
 import type { EstimateCore, EstimateResult } from './types'
+
+/** I3: the start picker's constants (instant/ imports I1a only through this file) */
+export { CUSTOM_START_LABEL, DEFAULT_START_MS, isDefaultStart } from '../browser/start'
 
 /** Official-pad fields of the published data (I2 adds the picker pads' fields here). */
 export const OFFICIAL_FIELDS = 'fields/index.json'
@@ -45,4 +49,8 @@ export const browserCore: EstimateCore = {
   load: () => loadBrowserRouteData(),
   compute: (data, pad, stops: readonly RouteStop[]) => fromBrowser(computeBrowserRoute(data as BrowserRouteData, pad, stops)),
   mission: (result, ctx) => buildBrowserMission(result.raw as BrowserRouteResult, { data: ctx.data as BrowserRouteData }),
+  // I3: the EVA start picker (browser/start.ts): t_dark, eva_start_utc, LMST and sol at the chosen instant
+  atStart: (data, startMs) => withEvaStart(data as BrowserRouteData, startMs),
+  clockAt: (data, startMs) => clockAt(data as BrowserRouteData, startMs),
+  sunSite: (data) => sunSiteOf(data as BrowserRouteData),
 }

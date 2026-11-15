@@ -98,3 +98,33 @@
 /* WP12 (L6 W-4, L-05): reasons and the offline note */
 .hl-route__why { color: var(--color-text-muted); }
 .hl-route-offline { margin: 0; color: var(--color-text-muted); font-size: var(--font-size-small); line-height: var(--line-height-small); }
+
+/* I3: EVA start card (instant/start.tsx, ported from the Mission Planer picker) */
+.hl-route__start { display: grid; gap: var(--space-2); }
+.hl-route__start.is-custom { padding-left: var(--space-2); border-left: var(--line-focus-ring) dashed var(--color-text-muted); }
+.hl-route__start-grid { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(0, 0.8fr) minmax(0, 0.9fr); gap: var(--space-1); }
+.hl-route__start-grid label { display: flex; flex-direction: column; gap: var(--space-0); min-width: 0; font-size: var(--font-size-small); color: var(--color-text-muted); }
+.hl-route__start-grid input {
+  min-width: 0; width: 100%; box-sizing: border-box;
+  padding: var(--space-1);
+  border: 1px solid var(--color-card-border);
+  border-radius: var(--radius-input);
+  background: var(--color-card);
+  color: var(--color-text);
+  font: inherit; color-scheme: dark;
+}
+.hl-route__start-grid input:focus-visible { outline: var(--line-focus-ring) solid var(--color-select); }
+.hl-route__start-rows { display: grid; gap: var(--space-0); margin: 0; }
+.hl-route__start-rows > div { display: flex; justify-content: space-between; gap: var(--space-2); }
+.hl-route__start-rows dt { color: var(--color-text-muted); }
+.hl-route__start-rows dd { margin: 0; text-align: right; }
+.hl-route__start .is-bad { color: var(--color-limit); }
+.hl-route__start-foot { display: flex; justify-content: space-between; align-items: center; gap: var(--space-2); }
+.hl-route__start-reset {
+  padding: var(--space-1) var(--space-2);
+  border: 1px solid var(--color-card-border);
+  border-radius: var(--radius-input);
+  background: transparent; color: var(--color-text); font: inherit; cursor: pointer;
+}
+.hl-route__start-reset:focus-visible { outline: var(--line-focus-ring) solid var(--color-select); }
+@media (max-width: 420px) { .hl-route__start-grid { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } .hl-route__start-grid label:first-child { grid-column: 1 / -1; } }
