@@ -35,6 +35,7 @@ from server.engine import jobs, version, warmup  # noqa: E402
 from server.engine.jobs import JobContext, JobType  # noqa: E402
 from server.tests.test_jobs import (  # noqa: E402
     IDENT,
+    app_cfg,
     cfg_override,
     finished,
     inputs,
@@ -110,7 +111,7 @@ def live(workers: int, timeout_s: float = WAIT_S):
     runner = jobs.JobRunner.from_config(
         cfg_override(workers=workers, queue_max_waiting=4, job_timeout_s=timeout_s),
         job_types={"plan": PROBE}, initializer=warmup.worker_init)
-    app = create_app(warmup=lambda: None, preload=None, jobs=runner)
+    app = create_app(warmup=lambda: None, preload=None, jobs=runner, cfg=app_cfg())
     app.dependency_overrides[identity_provider] = lambda: (lambda: IDENT)
     with TestClient(app) as c:
         c.runner = runner

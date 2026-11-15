@@ -32,7 +32,7 @@ from server.engine import defaults as engine_defaults
 from server.engine import version as engine_version
 from server.engine.jobs import JobRunner
 from server.engine.warmup import EngineState, preload_server_data, warm_engine, worker_init
-from server.settings import settings
+from server.settings import BackendConfig, settings
 
 
 def heavy_jobs() -> str:
@@ -84,12 +84,14 @@ def start_up(warmup: Callable[[], object],
 def create_app(warmup: Callable[[], object] = warm_engine,
                jobs: JobRunner | None = None,
                preload: Callable[[], object] | None = preload_server_data,
-               initializer: Callable[[], object] | None = worker_init) -> FastAPI:
+               initializer: Callable[[], object] | None = worker_init,
+               cfg: BackendConfig | None = None) -> FastAPI:
     """The API app; ``warmup`` is injectable so tests need not wait for the Numba compiler,
     ``preload`` (run after it, before /health turns warm) so tests can count server data loads,
     and ``jobs`` so tests can run the runner with test job types and small limits (default: the
-    config's compute limits, the registered job types and ``initializer`` in every worker)."""
-    cfg = settings()
+    config's compute limits, the registered job types and ``initializer`` in every worker).
+    ``cfg`` (default: settings()) lets tests run the per-address limits with other values."""
+    cfg = cfg or settings()
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):

@@ -101,6 +101,8 @@ class Window(_Strict):
 
 class Limits(_Strict):
     guest_heavy_jobs: Window
+    # new heavy jobs one address may have queued or running at once (D115); assumed
+    guest_concurrent_heavy_jobs: int = Field(ge=1)
     user_heavy_jobs: Window
     telemetry_posts_per_s: float = Field(gt=0)
     upload_max_bytes: int = Field(ge=1)

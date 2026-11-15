@@ -33,7 +33,9 @@ from server.engine.testjobs import TEST_JOB  # noqa: E402
 from server.settings import settings  # noqa: E402
 from server.tests.test_jobs import (  # noqa: E402
     IDENT,
+    MANY_AT_ONCE,
     TIMEOUT_S,
+    app_cfg,
     assert_valid,
     cfg_override,
     finished,
@@ -57,12 +59,14 @@ def server_data(tmp_path, monkeypatch):
 
 
 @contextmanager
-def app_clients(*clients, workers: int = 2, queue: int = 20, timeout_s: float = TIMEOUT_S):
-    """One app (test job type, injected identity); one TestClient per client address."""
+def app_clients(*clients, workers: int = 2, queue: int = 20, timeout_s: float = TIMEOUT_S,
+                concurrent: int = MANY_AT_ONCE):
+    """One app (test job type, injected identity); one TestClient per client address.
+    ``concurrent``: limits.guest_concurrent_heavy_jobs of the app (test_jobs.app_cfg)."""
     runner = jobs.JobRunner.from_config(
         cfg_override(workers=workers, queue_max_waiting=queue, job_timeout_s=timeout_s),
         job_types={"plan": TEST_JOB})
-    app = create_app(warmup=lambda: None, jobs=runner)
+    app = create_app(warmup=lambda: None, jobs=runner, cfg=app_cfg(concurrent))
     app.dependency_overrides[identity_provider] = lambda: (lambda: IDENT)
     with TestClient(app, client=clients[0]) as first:
         first.runner = runner
