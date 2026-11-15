@@ -25,8 +25,10 @@ export const SLOPE_CLASSES: SlopeClass[] = [
   { maxDeg: Infinity, label: `≥ ${CITED.nogoOptimisticDeg.value}° no-go`, rgb: [140, 30, 90], source: CITED.nogoOptimisticDeg.source },
 ]
 
-/** Overlay opacity (0..255) of a known cell. */
-export const SLOPE_ALPHA = 170
+/** Alpha (0..255) baked into a known cell; the see-through amount is the layer opacity below. */
+export const SLOPE_ALPHA = 255
+/** Default layer opacity (0..1), adjustable in the Layers panel, so the map stays visible below. */
+export const SLOPE_OPACITY = 0.4
 
 export function slopeClassOf(deg: number): number {
   for (let i = 0; i < SLOPE_CLASSES.length; i++) if (deg < SLOPE_CLASSES[i].maxDeg) return i

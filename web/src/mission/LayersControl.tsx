@@ -12,7 +12,7 @@ import type { FieldsIndex as HudFieldsIndex } from '../hud/types'
 import { loadCuriosity, loadStopImages, RAW_IMAGE_PAGE, type Bounds, type DriveEnd, type RawImage } from './curiosity'
 import type { MissionMap, Overlay } from './missionMap'
 import type { LonLat } from './plan'
-import { renderSlope, SLOPE_CLASSES } from './slope'
+import { renderSlope, SLOPE_CLASSES, SLOPE_OPACITY } from './slope'
 
 async function rgbaToUrl(rgba: Uint8ClampedArray, w: number, h: number): Promise<string> {
   const canvas = document.createElement('canvas')
@@ -31,6 +31,7 @@ export function LayersControl({ mmap, bounds }: { mmap: MissionMap; bounds: Boun
   const [st, setSt] = useState<Record<Overlay, Status>>({ slope: 'off', curiosity: 'off' })
   const [err, setErr] = useState<Partial<Record<Overlay, string>>>({})
   const [slopeFile, setSlopeFile] = useState<string | null>(null)
+  const [opacity, setOpacity] = useState(SLOPE_OPACITY)
   const [nStops, setNStops] = useState<{ n: number; first: number; last: number } | null>(null)
   const loaded = useRef<Partial<Record<Overlay, boolean>>>({})
   const stops = useRef<DriveEnd[]>([])
@@ -118,6 +119,23 @@ export function LayersControl({ mmap, bounds }: { mmap: MissionMap; bounds: Boun
                   </li>
                 ))}
               </ul>
+              <label class="mp-layers-opacity">
+                <span>Opacity</span>
+                <input
+                  type="range"
+                  min={10}
+                  max={100}
+                  step={5}
+                  value={Math.round(opacity * 100)}
+                  aria-label="Slope layer opacity"
+                  onInput={(e) => {
+                    const v = Number((e.target as HTMLInputElement).value) / 100
+                    setOpacity(v)
+                    void mmap.setSlopeOpacity(v)
+                  }}
+                />
+                <span>{Math.round(opacity * 100)}%</span>
+              </label>
               <span class="mp-layers-note">
                 WS1 cell slope, <code>{slopeFile}</code>; edges from <code>config/site.yaml</code>. Unknown ground is left clear.
               </span>

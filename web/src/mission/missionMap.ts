@@ -12,6 +12,7 @@ import { blankStyle } from '../map/consoleMap'
 import { MarsScaleControl } from '../map/scale'
 import { THEME } from '../theme'
 import type { BoundaryOption, LonLat } from './plan'
+import { SLOPE_OPACITY } from './slope'
 
 setWorkerUrl(workerUrl)
 
@@ -39,6 +40,7 @@ export class MissionMap {
   private reliefUrl: string | null = null
   private mapType: MapType = 'satellite'
   private slopeUrl: string | null = null
+  private slopeOpacity = SLOPE_OPACITY
   private stopClick: ((i: number) => void) | null = null
   private readonly h: MissionMapHandlers
 
@@ -128,7 +130,7 @@ export class MissionMap {
     if (this.slopeUrl) URL.revokeObjectURL(this.slopeUrl)
     this.slopeUrl = url
     m.addSource('slope', { type: 'image', url, coordinates: corners })
-    m.addLayer({ id: 'slope', type: 'raster', source: 'slope', layout: { visibility: 'none' }, paint: { 'raster-fade-duration': 0, 'raster-resampling': 'nearest' } }, 'band-fill')
+    m.addLayer({ id: 'slope', type: 'raster', source: 'slope', layout: { visibility: 'none' }, paint: { 'raster-fade-duration': 0, 'raster-resampling': 'nearest', 'raster-opacity': this.slopeOpacity } }, 'band-fill')
   }
 
   /** Curiosity's traverse (lines) and drive ends (points; a click calls onStop with the index). */
@@ -143,6 +145,13 @@ export class MissionMap {
       type: 'FeatureCollection',
       features: stops.map((s, i) => ({ type: 'Feature', properties: { i, sol: s.sol }, geometry: { type: 'Point', coordinates: [s.lon, s.lat] } })),
     })
+  }
+
+  /** Slope overlay opacity, 0..1. */
+  async setSlopeOpacity(v: number): Promise<void> {
+    await this.ready
+    this.slopeOpacity = v
+    if (this.map.getLayer('slope')) this.map.setPaintProperty('slope', 'raster-opacity', v)
   }
 
   async setOverlay(o: Overlay, on: boolean): Promise<void> {

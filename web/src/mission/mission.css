@@ -104,3 +104,9 @@
 @media (max-width: 760px) {
   .mp-layers { width: 180px; }
 }
+.mp-layers-opacity { display: flex; align-items: center; gap: 6px; margin-left: 20px; color: var(--muted); font-size: 11px; }
+.mp-layers-opacity input { flex: 1; min-width: 0; accent-color: var(--accent); }
+.mp-layers-opacity span:last-child { width: 32px; text-align: right; font-variant-numeric: tabular-nums; }
+/* keep the slider row and long file names inside the 230 px panel */
+.mp-layers-body { grid-template-columns: minmax(0, 1fr); }
+.mp-layers-note code { overflow-wrap: anywhere; }
