@@ -12,8 +12,11 @@ export const FIELD_LAYER = {
   amberMin: 10, // = config/hud.yaml margin_amber_min (margin mode, task 3)
   o2RateLMin: 1.35, // D24/D45 (margin mode, task 3)
   flatSpeedMs: 0.98, // D25 (collapse, task 4)
+  flatRadiusM: { 30: 1764, 60: 3528 } as Record<number, number>, // D25: flat circle = flat_speed x budget (collapse k = 0)
   hatchPx: 6, // period of the screen-space unknown hatch (and of the optimistic dash, see shader)
 } as const
+/** config/design.yaml `collapse` (DESIGN U3, §3.4): 3 s, ease-in-out, once per trigger. */
+export const COLLAPSE = { durationS: 3, easing: 'ease-in-out' } as const
 // =================================================================================================
 
 /** Variant order of the three t_home textures (u_variant index, DESIGN §6.4). */

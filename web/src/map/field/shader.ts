@@ -45,8 +45,21 @@ uniform float u_t, u_o2Left, u_reserve, u_o2Tasks, u_o2Rate, u_tDark, u_tauDose,
 uniform float u_amber;     // min (hud.yaml margin_amber_min)
 uniform vec3 u_caution, u_limit;
 uniform vec2 u_opacity;    // tokens overlayOpacity min, max
+// ---- collapse (M4, DESIGN U3; CPU mirror: collapseMath.ts collapseT / collapseBandClass) ----
+uniform float u_k;         // 0 flat circle .. 1 real field (exact M2/M3 picture)
+uniform float u_kFrom;     // reduced motion: picture cross-faded from
+uniform float u_xfade;     // weight of the u_k picture (1 = no cross-fade)
+uniform vec2 u_pad;        // pad, grid metres (x east of W edge, y south of N edge)
+uniform float u_cell;      // m per field px (fields/index.json res_m)
+uniform float u_flatSpeed; // m/s (D25)
+uniform float u_hasPad;    // 0: no pad / res_m -> no collapse (T = T_home)
 in vec2 v_uv;
 out vec4 o;
+
+// Per-fragment values shared by shade() (set once in main, before any branch).
+float g_to, g_tn, g_tc, g_oh, g_flat;
+vec2 g_sO, g_sN, g_sC, g_sH, g_sFlat, g_q;
+bool g_inside, g_unknown;
 
 float decode(sampler2D s, ivec2 p, out bool known) {
   vec4 c = texelFetch(s, p, 0);
@@ -83,49 +96,45 @@ float edge(float t, vec2 sg) {
   float d = abs(t - u_budget) / w; // device px from the contour
   return clamp(u_lineHalfPx * u_dpr + 0.5 - d, 0.0, 1.0);
 }
-void main() {
-  // Derivatives first (uniform control flow): grid px per device px, smooth everywhere.
-  vec2 gp = v_uv * u_size;
-  vec2 jx = dFdx(gp);
-  vec2 jy = dFdy(gp);
-  vec2 gO, gN, gC;
-  float to = field(u_t0, v_uv, gO);
-  float tn = field(u_t1, v_uv, gN);
-  float tc = field(u_t2, v_uv, gC);
-  vec2 sO = screenGrad(gO, jx, jy);
-  vec2 sN = screenGrad(gN, jx, jy);
-  vec2 sC = screenGrad(gC, jx, jy);
-  bool inside = all(greaterThanEqual(v_uv, vec2(0.0))) && all(lessThanEqual(v_uv, vec2(1.0)));
-
-  vec2 suv = u_stateXf.xy + v_uv * u_stateXf.zw;
-  ivec2 sp = clamp(ivec2(floor(suv * u_stateSize)), ivec2(0), ivec2(u_stateSize) - 1);
-  bool stateIn = all(greaterThanEqual(suv, vec2(0.0))) && all(lessThan(suv, vec2(1.0)));
-  float code = floor(texelFetch(u_state, sp, 0).r * 255.0 + 0.5);
-  bool unknownTerrain = u_hasState > 0.5 && (!stateIn || code > 1.5);
-
-  vec2 q = gl_FragCoord.xy / u_dpr; // CSS px
+// T at collapse k with its screen gradient (contract §3.1): mix(flat, T_home, k), exact at k = 0 and
+// k = 1; no T_home value (-1) counts as infinite time: flat / (1 - k), gone at k = 1.
+float blendT(float th, vec2 sth, float k, out vec2 sg) {
+  if (k >= 1.0 || u_hasPad < 0.5) { sg = sth; return th; }
+  if (k <= 0.0) { sg = g_sFlat; return g_flat; }
+  if (th < 0.0) { float w = 1.0 / (1.0 - k); sg = g_sFlat * w; return g_flat * w; }
+  sg = g_sFlat + (sth - g_sFlat) * k;
+  return g_flat + (th - g_flat) * k;
+}
+// Dash mask along a contour (tangent from its screen-space gradient), period u_hatchPx.
+float dashMask(vec2 sg) {
+  vec2 tang = normalize(vec2(-sg.y, sg.x) + 1e-9);
+  return step(mod(dot(g_q, tang), u_hatchPx), 0.5 * u_hatchPx);
+}
+// The picture at collapse k, premultiplied.
+vec4 shade(float k) {
+  if (!g_inside) return vec4(0.0);
+  bool collapsing = u_hasPad > 0.5 && k < 1.0;
+  vec4 hatch = vec4(0.0);
+  if (g_unknown && u_showHatch > 0.5) {
+    // grey diagonal hatch in screen space (never a warning colour)
+    float h = mod(g_q.x + g_q.y, u_hatchPx);
+    float line = 1.0 - smoothstep(1.0, 2.0, h);
+    hatch = vec4(u_unknown * u_opacity.y * line, u_opacity.y * line);
+  }
+  if (g_unknown && !collapsing) return hatch;
   vec4 col = vec4(0.0);
-  if (!inside) {
-    col = vec4(0.0);
-  } else if (unknownTerrain) {
-    if (u_showHatch > 0.5) {
-      // grey diagonal hatch in screen space (never a warning colour)
-      float h = mod(q.x + q.y, u_hatchPx);
-      float line = 1.0 - smoothstep(1.0, 2.0, h);
-      col = vec4(u_unknown, u_opacity.y * line);
-    }
-  } else if (u_mode > 0.5) {
+  if (u_mode > 0.5) {
     if (u_showBands > 0.5 && u_hasO2 > 0.5) {
-      // T(x) of the selected variant (u_k collapse: task 4) and O2_home(x), both manual bilinear
-      float T = to; vec2 sT = sO;
-      if (u_variant > 0.5) { T = tn; sT = sN; }
-      if (u_variant > 1.5) { T = tc; sT = sC; }
-      vec2 gH;
-      float oh = fieldS(u_o2, v_uv, u_o2Scale, gH);
-      if (T >= 0.0 && oh >= 0.0) {
+      // T(x) of the selected variant, collapsed by k, and O2_home(x), both manual bilinear
+      float th = g_to; vec2 sth = g_sO;
+      if (u_variant > 0.5) { th = g_tn; sth = g_sN; }
+      if (u_variant > 1.5) { th = g_tc; sth = g_sC; }
+      if (th >= 0.0 && g_oh >= 0.0) {
+        vec2 sT;
+        float T = blendT(th, sth, k, sT);
         // WS2 margin(): terms in the order O2, daylight, dose, EVA duration; ties -> first
-        float m = (u_o2Left - u_o2Tasks - u_reserve - oh) / u_o2Rate;
-        vec2 sm = -screenGrad(gH, jx, jy) / u_o2Rate;
+        float m = (u_o2Left - u_o2Tasks - u_reserve - g_oh) / u_o2Rate;
+        vec2 sm = -g_sH / u_o2Rate;
         float d = u_tDark - u_t - T;
         if (d < m) { m = d; sm = -sT; }
         d = u_tauDose - T;
@@ -143,21 +152,60 @@ void main() {
       }
     }
   } else if (u_showBands > 0.5) {
+    vec2 sO, sN, sC;
+    float to = blendT(g_to, g_sO, k, sO);
+    float tn = blendT(g_tn, g_sN, k, sN);
+    float tc = blendT(g_tc, g_sC, k, sC);
     float a = 0.0;
     if (to >= 0.0 && to <= u_budget) a = u_opacity.x;
     if (tn >= 0.0 && tn <= u_budget) a = 0.5 * (u_opacity.x + u_opacity.y);
     if (tc >= 0.0 && tc <= u_budget) a = u_opacity.y;
     col = vec4(u_safe, a);
-    // optimistic edge: dashed along the contour (tangent from the screen-space gradient)
-    vec2 tang = normalize(vec2(-sO.y, sO.x) + 1e-9);
-    float s = dot(q, tang);
-    float dashOn = step(mod(s, u_hatchPx), 0.5 * u_hatchPx);
-    float cov = edge(to, sO) * dashOn;
-    cov = max(cov, edge(tn, sN)); // nominal edge: solid
-    if (u_variant > 1.5) cov = max(cov, edge(tc, sC)); // conservative edge only when selected
+    // optimistic edge dashed; nominal (and selected conservative) solid. During the collapse the
+    // solid edges start dashed: k = 0 is NASA's dashed flat circle (DESIGN U3).
+    float solid = collapsing ? mix(dashMask(sN), 1.0, max(k, 0.0)) : 1.0;
+    float cov = edge(to, sO) * dashMask(sO);
+    cov = max(cov, edge(tn, sN) * solid);
+    if (u_variant > 1.5) cov = max(cov, edge(tc, sC) * (collapsing ? mix(dashMask(sC), 1.0, max(k, 0.0)) : 1.0));
     col = mix(col, vec4(u_safe, 1.0), cov);
   }
-  o = vec4(col.rgb * col.a, col.a); // premultiplied
+  vec4 pm = vec4(col.rgb * col.a, col.a); // premultiplied
+  // unknown terrain while collapsing: NASA's flat world first, the hatch fades in with k
+  if (g_unknown) pm = mix(pm, hatch, clamp(k, 0.0, 1.0));
+  return pm;
+}
+void main() {
+  // Derivatives first (uniform control flow): grid px per device px, smooth everywhere.
+  vec2 gp = v_uv * u_size;
+  vec2 jx = dFdx(gp);
+  vec2 jy = dFdy(gp);
+  vec2 gO, gN, gC, gH;
+  g_to = field(u_t0, v_uv, gO);
+  g_tn = field(u_t1, v_uv, gN);
+  g_tc = field(u_t2, v_uv, gC);
+  g_oh = fieldS(u_o2, v_uv, u_o2Scale, gH);
+  g_sO = screenGrad(gO, jx, jy);
+  g_sN = screenGrad(gN, jx, jy);
+  g_sC = screenGrad(gC, jx, jy);
+  g_sH = screenGrad(gH, jx, jy);
+  // flat walk time (D25): grid-metre distance from the pad / speed, and its analytic gradient
+  vec2 dm = gp * u_cell - u_pad;
+  float dist = length(dm);
+  g_flat = dist / u_flatSpeed / 60.0;
+  g_sFlat = screenGrad(u_cell * dm / max(dist, 1e-6) / (u_flatSpeed * 60.0), jx, jy);
+  g_inside = all(greaterThanEqual(v_uv, vec2(0.0))) && all(lessThanEqual(v_uv, vec2(1.0)));
+
+  vec2 suv = u_stateXf.xy + v_uv * u_stateXf.zw;
+  ivec2 sp = clamp(ivec2(floor(suv * u_stateSize)), ivec2(0), ivec2(u_stateSize) - 1);
+  bool stateIn = all(greaterThanEqual(suv, vec2(0.0))) && all(lessThan(suv, vec2(1.0)));
+  float code = floor(texelFetch(u_state, sp, 0).r * 255.0 + 0.5);
+  g_unknown = u_hasState > 0.5 && (!stateIn || code > 1.5);
+  g_q = gl_FragCoord.xy / u_dpr; // CSS px
+
+  vec4 c = shade(u_k);
+  // reduced motion (DESIGN §3.4): cross-fade two end pictures, never an intermediate k
+  if (u_xfade < 1.0) c = mix(shade(u_kFrom), c, u_xfade);
+  o = c;
 }`
 
 export interface FieldTextureData {
@@ -181,6 +229,8 @@ export interface BandsUniforms {
   lineHalfPx: number
   colors: { safe: [number, number, number]; unknown: [number, number, number] }
   opacity: [number, number]
+  /** Collapse (M4): k, cross-fade source and weight, pad (grid m), cell (m), flat speed (m/s); null = no collapse (k = 1). */
+  collapse: { k: number; kFrom: number; xfade: number; pad: [number, number]; cell: number; flatSpeed: number } | null
   /** Margin mode (M3); null = bands mode. Terms left out arrive as VERY_LARGE (margin.ts shaderScalars). */
   margin: {
     t: number
@@ -313,6 +363,14 @@ export class BandsProgram {
     gl.uniform3fv(this.u('u_safe'), un.colors.safe)
     gl.uniform3fv(this.u('u_unknown'), un.colors.unknown)
     gl.uniform2f(this.u('u_opacity'), un.opacity[0], un.opacity[1])
+    const cl = un.collapse
+    gl.uniform1f(this.u('u_hasPad'), cl ? 1 : 0)
+    gl.uniform1f(this.u('u_k'), cl ? cl.k : 1)
+    gl.uniform1f(this.u('u_kFrom'), cl ? cl.kFrom : 1)
+    gl.uniform1f(this.u('u_xfade'), cl ? cl.xfade : 1)
+    gl.uniform2f(this.u('u_pad'), cl ? cl.pad[0] : 0, cl ? cl.pad[1] : 0)
+    gl.uniform1f(this.u('u_cell'), cl ? cl.cell : 1)
+    gl.uniform1f(this.u('u_flatSpeed'), cl ? cl.flatSpeed : 1)
     const mg = un.margin
     gl.uniform1f(this.u('u_mode'), mg ? 1 : 0)
     gl.uniform1f(this.u('u_hasO2'), td.o2 ? 1 : 0)

@@ -66,6 +66,8 @@ export interface BandsParams {
   showHatch: boolean
   /** Margin mode inputs at the clock minute (M3); null = bands mode. */
   margin: MarginInputs | null
+  /** Collapse (M4): k, cross-fade pair and the pad in grid metres; null = the real field (k = 1). */
+  collapse: { k: number; kFrom: number; xfade: number; pad: [number, number] } | null
 }
 
 export interface FieldLayerHandle {
@@ -81,6 +83,7 @@ export interface FieldLayerHandle {
  */
 export function addFieldLayer(map: MlMap, fd: FieldData, initial: BandsParams, beforeId: string | undefined, onError: (e: unknown) => void): FieldLayerHandle {
   let mesh = gridMesh(fd.bounds)
+  let cell = fd.resM
   let pending: FieldData | null = fd
   let prog: BandsProgram | null = null
   let failed = false
@@ -110,6 +113,7 @@ export function addFieldLayer(map: MlMap, fd: FieldData, initial: BandsParams, b
       try {
         if (pending) {
           prog.setTextures(textureData(pending))
+          cell = pending.resM
           mesh = gridMesh(pending.bounds)
           prog.setVertices(mesh.verts)
           pending = null
@@ -125,6 +129,7 @@ export function addFieldLayer(map: MlMap, fd: FieldData, initial: BandsParams, b
           lineHalfPx: tokens.line.fieldEdgePx / 2,
           colors: { safe: hexToRgb01(c.safe), unknown: hexToRgb01(c.unknown) },
           opacity: [tokens.overlayOpacity.min, tokens.overlayOpacity.max],
+          collapse: params.collapse && cell !== null ? { ...params.collapse, cell, flatSpeed: FIELD_LAYER.flatSpeedMs } : null,
           margin: params.margin
             ? { ...shaderScalars(params.margin), amber: FIELD_LAYER.amberMin, caution: hexToRgb01(c.caution), limit: hexToRgb01(c.limit) }
             : null,

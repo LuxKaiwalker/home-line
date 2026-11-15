@@ -10,6 +10,26 @@ export { loadFieldData } from './load'
 export { BINDING_LABEL, marginAt, marginClass, resolveMarginInputs, type Binding, type FieldClass, type MarginInputs } from './margin'
 export { driveMargin, fieldModeQuery, loadFlownPlan, type MarginState } from './drive'
 export { zeroEdgeLabels, type EdgeLabel } from './edgeLabels'
+export {
+  collapseBandClass,
+  collapseFade,
+  collapseFrame,
+  collapseHeadline,
+  collapseQuery,
+  collapseT,
+  COLLAPSE_MS,
+  currentCollapse,
+  easeInOut,
+  flatMinutes,
+  flatRadiusM,
+  padGridMetres,
+  playCollapse,
+  resetCollapse,
+  setCollapse,
+  type CollapseFrame,
+  type CollapseHeadline,
+  type PlayOptions,
+} from './collapse'
 
 export const loadFieldLayer = () => import('./layer')
 
