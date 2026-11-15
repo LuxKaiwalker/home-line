@@ -1,4 +1,4 @@
-// MARVIS web app entry point (WS5 owns web/ except src/hud and src/nav, the HUD's navigation helpers).
+// HOMELINE web app entry point (WS5 owns web/ except src/hud and src/nav, the HUD's navigation helpers).
 // WS15 task 4 (A4): the app shell (DESIGN U0, §4) hosts every existing view unchanged in main.outlet.
 // ?legacy=1 (or ?legacy=<route name>, in the page query or the hash query) renders the old layout;
 // #/styleguide and #/spike (internal pages) also keep the old frame.

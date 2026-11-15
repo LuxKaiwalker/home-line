@@ -56,11 +56,11 @@
     },
     {
       "id": "icons-homeline-marks",
-      "name": "MARVIS custom marks (pad, station, scored site, user point, turn-back, tripwire, fix, thread home, rover, crew)",
+      "name": "HOMELINE custom marks (pad, station, scored site, user point, turn-back, tripwire, fix, thread home, rover, crew)",
       "kind": "icons",
-      "licence": "Original drawings made for MARVIS; Apache License 2.0 (repository LICENSE)",
+      "licence": "Original drawings made for HOMELINE; Apache License 2.0 (repository LICENSE)",
       "spdx": "Apache-2.0",
-      "copyright": "MARVIS team, 2026",
+      "copyright": "HOMELINE team, 2026",
       "source": "web/src/ui/icons/custom/*.svg",
       "files": [
         "web/src/ui/icons/custom/*.svg",

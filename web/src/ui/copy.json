@@ -12,7 +12,7 @@
   },
 
   "nav": {
-    "wordmark": "MARVIS",
+    "wordmark": "HOMELINE",
     "modesMenu": "Modes",
     "share": "Share",
     "liveIndicator": "Live",
@@ -810,7 +810,7 @@
       "turnBack": "Turn-back"
     },
     "permalinkHint": "Scan to open this plan",
-    "printFooter": "MARVIS · Space Apps project · simulated EVA over real terrain and data"
+    "printFooter": "HOMELINE · Space Apps project · simulated EVA over real terrain and data"
   },
 
   "evidence": {
