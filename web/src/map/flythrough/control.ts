@@ -12,6 +12,9 @@ import { getRouteResults, subscribeRouteResults } from '../../state/routeResults
 import { flyMine, userFlight } from './userRoute'
 import './flythrough.css'
 
+/** PORT FX: the "Your route" fly toggle is off until the HUD says "Official plan values" over it. */
+const FLY_MINE_TOGGLE = false
+
 export class FlythroughControl implements IControl {
   private el: HTMLDivElement | null = null
   private stops: (() => void)[] = []
@@ -50,7 +53,9 @@ export class FlythroughControl implements IControl {
     })
     const mineFlight = () => userFlight(getRouteResults(), planning.doc.peek().route, planning.doc.peek().padId)
     const syncMine = () => {
-      const has = mineFlight() !== null
+      // PORT FX (team lead 22:20): the toggle stays hidden until the HUD can label its numbers as the
+      // official plan's over the user's route; the code is kept, only never unhidden
+      const has = FLY_MINE_TOGGLE && mineFlight() !== null
       mine.hidden = !has
       mine.setAttribute('aria-pressed', String(has && flyMine.peek()))
     }

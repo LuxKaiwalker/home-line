@@ -7,7 +7,9 @@
 .hl-r3-editing .maplibregl-canvas { cursor: crosshair; }
 
 .hl-r3-handle {
-  position: relative;
+  /* no `position` here: the handle IS the maplibre marker element, whose .maplibregl-marker
+     { position: absolute } must win (a later `position: relative` put it in flow as a full-width bar).
+     The absolute marker is already the containing block of the remove button. */
   display: grid;
   place-items: center;
   min-width: var(--space-5);

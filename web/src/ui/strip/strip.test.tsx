@@ -155,6 +155,13 @@ describe('DrawerSummary', () => {
     expect(byClass(root, 'num')).toHaveLength(0)
     expect(text()).toBe('route')
   })
+  // PORT FX: the fallback chain is the official pad's route; never shown under another planning pad
+  it('hides the official route chain when the planning pad is not the official one', () => {
+    const store = createPlanningStore()
+    store.setPad('rank3')
+    draw(<DrawerSummary strip={null} store={store} fallback={<span>Pad → S7 → S6</span>} />)
+    expect(text()).not.toContain('Pad → S7')
+  })
 })
 
 describe('installStrip', () => {

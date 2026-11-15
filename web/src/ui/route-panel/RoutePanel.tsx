@@ -54,7 +54,7 @@ export function RoutePanel({ store = planning, loader }: RoutePanelProps) {
       id={ROUTE_PANEL_ID}
       title={t('route.panel.title')}
       closeLabel={t('route.panel.close')}
-      class={collapsed ? 'hl-rp hl-rp--collapsed' : 'hl-rp'}
+      class={collapsed ? 'hl-ui hl-rp hl-rp--collapsed' : 'hl-ui hl-rp'}
       actions={
         <IconButton
           icon={collapsed ? 'chevron-down' : 'chevron-up'}

@@ -118,7 +118,7 @@ export function PadCard({ map, store = planning }: { map: CardMap; store?: Plann
   const load = useCardNumbers(info)
   if (!info) return null
   return (
-    <MarkerCard id={PAD_CARD_ID} title={info.label} at={{ lngLat: [info.lon, info.lat], map }} class="plan-card hl-padcard-card">
+    <MarkerCard id={PAD_CARD_ID} title={info.label} at={{ lngLat: [info.lon, info.lat], map }} class="hl-ui plan-card hl-padcard-card">
       <PadCardBody info={info} load={load} active={active === info.id} onPlan={() => store.setPad(info.id)} />
     </MarkerCard>
   )

@@ -47,15 +47,18 @@ export function DrawerSummary({ fallback, strip, store }: DrawerSummaryProps) {
   const s = strip === undefined ? published : strip
   const env = !s?.pad && planPad !== OFFICIAL_PAD_ID ? peekPadEnv(planPad) : undefined
   const items = reachItems(s, env)
+  // PORT FX (team lead 22:20): the route chain (fallback) is the official pad's; under any other
+  // planning pad it would be wrong data, so it is hidden there
+  const chain = planPad === OFFICIAL_PAD_ID ? fallback : null
   return (
     <span class="hl-dsum">
       <ReachLine items={items} />
-      {items.length > 0 && (
+      {items.length > 0 && chain !== null && (
         <span class="hl-ctx__sep" aria-hidden="true">
           ·
         </span>
       )}
-      {fallback}
+      {chain}
     </span>
   )
 }
