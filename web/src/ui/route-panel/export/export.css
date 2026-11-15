@@ -43,3 +43,50 @@
   border-radius: var(--radius-input);
   padding: var(--space-1) var(--space-2);
 }
+/* PORT F17 (user 23:40): "Send to MARVIS" big and yellow. Full width, 48 px, heading-size bold text,
+   filled with the select (yellow) token and dark bg-token text (contrast tested in tests/a11y).
+   Hover = light ring, active = light fill, focus-visible = the shared select ring pushed out further
+   so it reads against the yellow fill, disabled = the shared muted look. Download stays secondary. */
+.hl-route-export .hl-route-export__actions .hl-btn.hl-btn--primary[data-export-action='marvis'] {
+  flex: 1 1 100%;
+  width: 100%;
+  min-height: var(--space-7);
+  padding: var(--space-2) var(--space-4);
+  font-size: var(--font-size-heading);
+  line-height: var(--line-height-heading);
+  font-weight: var(--font-weight-heading);
+  color: var(--color-bg);
+  background: var(--color-select);
+  border: 1px solid var(--color-select);
+}
+.hl-route-export .hl-route-export__actions .hl-btn.hl-btn--primary[data-export-action='marvis'] .icon {
+  width: var(--space-5);
+  height: var(--space-5);
+}
+.hl-route-export .hl-route-export__actions .hl-btn.hl-btn--primary[data-export-action='marvis']:hover:not(:disabled):not([aria-busy='true']),
+.hl-route-export .hl-route-export__actions .hl-btn.hl-btn--primary[data-export-action='marvis'][data-force='hover'] {
+  background: var(--color-select);
+  border-color: var(--color-light);
+  box-shadow: 0 0 0 var(--line-focus-ring) var(--color-light);
+}
+.hl-route-export .hl-route-export__actions .hl-btn.hl-btn--primary[data-export-action='marvis']:active:not(:disabled):not([aria-busy='true']),
+.hl-route-export .hl-route-export__actions .hl-btn.hl-btn--primary[data-export-action='marvis'][data-force='active'] {
+  color: var(--color-bg);
+  background: var(--color-light);
+  border-color: var(--color-light);
+}
+.hl-route-export .hl-route-export__actions .hl-btn.hl-btn--primary[data-export-action='marvis']:focus-visible,
+.hl-route-export .hl-route-export__actions .hl-btn.hl-btn--primary[data-export-action='marvis'][data-force='focus'] {
+  outline: var(--line-focus-ring) solid var(--color-select);
+  outline-offset: var(--space-1);
+}
+.hl-route-export .hl-route-export__actions .hl-btn.hl-btn--primary[data-export-action='marvis']:disabled {
+  cursor: not-allowed;
+  color: var(--color-text-faint);
+  background: var(--color-sidebar);
+  border-color: var(--color-card-border);
+  box-shadow: none;
+}
+.hl-route-export .hl-route-export__actions .hl-btn.hl-btn--primary[data-export-action='marvis']:disabled .icon {
+  color: var(--color-text-faint);
+}
