@@ -25,7 +25,10 @@
   background: var(--color-select);
   color: var(--color-bg);
 }
-.maplibregl-ctrl-group .hl-terrain-seg button:focus-visible { outline: 1px solid var(--color-select); }
+.maplibregl-ctrl-group .hl-terrain-seg button:focus-visible {
+  outline: var(--line-focus-ring) solid var(--color-select);
+  outline-offset: var(--line-focus-ring);
+}
 .hl-terrain-exag {
   display: flex;
   align-items: center;

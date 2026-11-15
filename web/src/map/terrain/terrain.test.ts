@@ -299,12 +299,12 @@ describe('config/design.yaml and copy.json cross-check (when present on this bra
   it.skipIf(!existsSync(yml))('TERRAIN equals config/design.yaml', () => {
     const d = parse(readFileSync(yml, 'utf8')) as {
       scale: { elevation_factor: number }
-      exaggeration: { min: number; max: number; default: number }
+      exaggeration: { min: number; max: number; default: number; step: number }
       camera: { presets: { isometric: { pitch: number }; low: { pitch: number } } }
       performance: { fps_3d_min: number }
     }
     expect(TERRAIN.elevationFactor).toBe(d.scale.elevation_factor)
-    expect({ ...TERRAIN.exaggeration }).toEqual(d.exaggeration)
+    expect({ ...TERRAIN.exaggeration, step: TERRAIN.exaggerationStep }).toEqual(d.exaggeration)
     expect(TERRAIN.pitch3d).toBe(d.camera.presets.isometric.pitch)
     expect(TERRAIN.maxPitch3d).toBe(d.camera.presets.low.pitch)
     expect(TERRAIN.fps3dMin).toBe(d.performance.fps_3d_min)
