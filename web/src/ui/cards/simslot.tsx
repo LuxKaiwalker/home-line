@@ -202,10 +202,24 @@ export function officialMissionUrls(src: OfficialMissionSource | null): string[]
   return [...new Set(all.filter((u): u is string => !!u))]
 }
 
-/** Ref of the official slot's body: simslot-export.tsx renders the checked control into it. */
+/**
+ * Ref of the official slot's body: simslot-export.tsx renders the checked control into it. A new ref
+ * function per render makes preact call the old one with null and the new one with the element; the
+ * control is unmounted only when no new ref took the element over (the slot really went away).
+ */
 function officialRef(apiFirst: boolean): (el: Element | null) => void {
+  let mine: (Element & { __hlSimRefs?: number }) | null = null
   return (el) => {
-    if (el) void import('./simslot-export').then((m) => m.mountOfficialMission(el, apiFirst))
+    if (el) {
+      const box = (mine = el as Element & { __hlSimRefs?: number })
+      box.__hlSimRefs = (box.__hlSimRefs ?? 0) + 1
+      void import('./simslot-export').then((m) => m.mountOfficialMission(box, apiFirst))
+    } else if (mine) {
+      const box = mine
+      const n = box.__hlSimRefs
+      mine = null
+      setTimeout(() => box.__hlSimRefs === n && void import('./simslot-export').then((m) => m.unmountOfficialMission(box)), 0)
+    }
   }
 }
 

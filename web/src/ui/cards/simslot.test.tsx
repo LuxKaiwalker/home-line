@@ -210,6 +210,7 @@ describe("VITE_SIM_EXPORT=official (D116): the official plan only, static file, 
   })
 
   it('ignores the API copy the live layer registers, and lists no live result files', async () => {
+    await new Promise((r) => setTimeout(r, 20)) // earlier tests' slots finish unmounting
     const apiFetch = vi.fn(async () => new Response(MISSION, { status: 200 }))
     setOfficialMissionSource({ url: 'http://api.test/api/v1/results/0ff1c1a10ff1c1a1/mission.json', fetch: apiFetch })
     vi.stubGlobal('fetch', vi.fn(async () => new Response(MISSION, { status: 200 })))
@@ -320,6 +321,9 @@ async function bundleOfSlot(flag: string | undefined): Promise<string> {
     },
   })
   const res = Array.isArray(out) ? out[0] : out
-  const chunk = (res as { output: { type: string; code?: string }[] }).output.find((o) => o.type === 'chunk')
-  return chunk?.code ?? ''
+  // every chunk: with the flag on, the slot's lazily loaded control (simslot-export.tsx) is a second chunk
+  return (res as { output: { type: string; code?: string }[] }).output
+    .filter((o) => o.type === 'chunk')
+    .map((o) => o.code ?? '')
+    .join('\n')
 }

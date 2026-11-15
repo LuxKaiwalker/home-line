@@ -126,3 +126,11 @@ export function mountOfficialMission(el: Element, apiFirst: boolean): void {
   box[MOUNTED] = true
   render(<SendToSimulator origin="precomputed" mode={apiFirst ? 'all' : 'official'} framed={false} />, el)
 }
+
+/** The official slot went away: unmount its control (drops its subscription and pending check). */
+export function unmountOfficialMission(el: Element): void {
+  const box = el as Element & { [MOUNTED]?: boolean }
+  if (!box[MOUNTED]) return
+  render(null, el)
+  box[MOUNTED] = false
+}

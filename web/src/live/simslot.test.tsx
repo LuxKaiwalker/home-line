@@ -203,23 +203,22 @@ describe('the slot: states and harness hooks', () => {
 })
 
 describe('download: fetch -> Blob -> object URL (SIM-1), data-state', () => {
-  /** Stub the browser bits saveMissionText uses; returns what was saved. */
+  /** Stub the browser bits saveMissionText uses (object URLs, a[download].click); returns what was saved. */
   function stubSave() {
     const saved: { name: string; size: number; revoked: boolean }[] = []
     const urls = new Map<string, { name: string; size: number; revoked: boolean }>()
-    vi.stubGlobal('URL', Object.assign(Object.create(URL), {
-      createObjectURL: (b: Blob) => {
-        const id = `blob:test/${urls.size}`
-        urls.set(id, { name: '', size: b.size, revoked: false })
-        return id
-      },
-      revokeObjectURL: (id: string) => void (urls.get(id)!.revoked = true),
-    }))
+    vi.spyOn(URL, 'createObjectURL').mockImplementation((b) => {
+      const id = `blob:test/${urls.size}`
+      urls.set(id, { name: '', size: (b as Blob).size, revoked: false })
+      return id
+    })
+    vi.spyOn(URL, 'revokeObjectURL').mockImplementation((id) => void (urls.get(id)!.revoked = true))
     const a = { href: '', download: '', click: () => saved.push({ ...urls.get(a.href)!, name: a.download }), remove: () => {} }
     vi.stubGlobal('document', { createElement: () => a, body: { appendChild: () => {} } })
     return { saved, urls }
   }
   afterEach(() => {
+    vi.restoreAllMocks()
     vi.unstubAllGlobals()
     vi.useRealTimers()
   })
@@ -247,7 +246,9 @@ describe('download: fetch -> Blob -> object URL (SIM-1), data-state', () => {
     expect(await downloadMission(`${base(LIVE_HASH)}/mission.json`, null, () => fetch)).toEqual({ state: 'unavailable', reason: null })
     expect(await downloadMission('/a', null, () => async () => json(503, ''))).toEqual({ state: 'unavailable', reason: 'HTTP 503' })
     expect(await downloadMission('/a', null, () => () => Promise.reject(new TypeError('Failed to fetch')))).toEqual({ state: 'unavailable', reason: 'Failed to fetch' })
-    vi.stubGlobal('URL', { createObjectURL: () => { throw new Error('no blob URLs') } })
+    vi.spyOn(URL, 'createObjectURL').mockImplementation(() => {
+      throw new Error('no blob URLs')
+    })
     expect(await downloadMission('/a', MISSION_TEXT)).toEqual({ state: 'unavailable', reason: 'no blob URLs' })
   })
 
