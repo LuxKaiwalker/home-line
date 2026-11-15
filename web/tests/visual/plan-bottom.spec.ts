@@ -2,7 +2,7 @@
  * Plan bottom drawer (L2b, D111; L0 rows 4 and 5) in a real browser, both viewports of the visual config.
  * Not a screenshot test.
  *   - Collapsed: one line along the bottom map edge with the route summary and the slim scrubber.
- *   - Expanded: at most 40 % of the map height; tab "Plan table" (route legs + stations tables, trust
+ *   - Expanded: at most 40 % of the map height; tab "Timeline" first and default (F7), tab "Plan table" (route legs + stations tables, trust
  *     chips, no unbacked number) and tab "Timeline" (the timeline dock body).
  *   - RR1 issue 1: with a selection open, the timeline track keeps its width (≥ the 360 px sidebar
  *     token; it was crushed to about 90 px) and no side panel covers the drawer.
@@ -48,6 +48,10 @@ test('expanded: ≤ 40 % of the map; plan table and timeline tabs', async ({ pag
   const map = await box(page, '.console-map')
   await page.locator(GRIP).click()
   await expect(page.locator(GRIP)).toHaveAttribute('aria-expanded', 'true')
+  // F7: the replay (timeline) is the leftmost tab and the default; the plan table comes next
+  await expect(page.locator('#hl-lay-plan-bottom-tab-timeline + #hl-lay-plan-bottom-tab-plan-table')).toHaveCount(1)
+  await expect(tab(page, 'timeline')).toHaveAttribute('aria-selected', 'true')
+  await tab(page, 'plan-table').click()
   await expect(tab(page, 'plan-table')).toHaveAttribute('aria-selected', 'true')
   const body = page.locator('#hl-lay-plan-bottom')
   await expect(body.locator('.route-legs')).toBeVisible({ timeout: 30_000 })

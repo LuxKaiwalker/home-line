@@ -1,8 +1,9 @@
 // Plan bottom drawer (package L2b, D111; L0 mapping rows 4 and 5). Mount points only: one BottomDrawer
-// 'plan-bottom' along the bottom map edge, in the L2-shell slot `.plan-layout__bottom`, with two tabs:
+// 'plan-bottom' along the bottom map edge, in the L2-shell slot `.plan-layout__bottom`, with two tabs
+// (F7: timeline first and the default when no tab is remembered; "Compare plans" stays after the tabs):
+//   timeline     the timeline dock body (ui/timeline/install.tsx installTimelineDock → dockContent)
 //   plan-table   the console's planned route and stations table (and the sections that explain them:
 //                headline, parking options, rover pad, siting), moved out of the old side panel
-//   timeline     the timeline dock body (ui/timeline/install.tsx installTimelineDock → dockContent)
 // Collapsed it is one line: the plan summary (the route at a glance, from the same files) and the slim
 // timeline scrubber (play, scrub, EVA time). Expanded at most 40 % of the map (L1, layout.css).
 // While mounted the Plan map view hosts the timeline ('timeline' in shell.hosted), so the shell dock
@@ -108,7 +109,7 @@ function PlanBottom({ ctx }: { ctx: PlanMountCtx }) {
       label={t('planBottom.label')}
       expandLabel={t('planBottom.expand')}
       collapseLabel={t('planBottom.collapse')}
-      defaultTab={TAB_TABLE}
+      defaultTab={TAB_TIMELINE}
       // D142: "Compare plans" opens the trade table (#/trade); Back returns to Plan with the same pad and
       // route (the planning state is in the address, #/?route=…, views/planPort.tsx)
       actions={
@@ -116,7 +117,9 @@ function PlanBottom({ ctx }: { ctx: PlanMountCtx }) {
           {t('planBottom.comparePlans')}
         </a>
       }
+      // F7 (user 22:51): the replay (timeline) is the leftmost tab and the default; arrow keys follow this order
       tabs={[
+        { id: TAB_TIMELINE, label: t('planBottom.timeline'), render: () => <TimelineTab /> },
         {
           id: TAB_TABLE,
           label: t('planBottom.planTable'),
@@ -128,7 +131,6 @@ function PlanBottom({ ctx }: { ctx: PlanMountCtx }) {
             </div>
           ),
         },
-        { id: TAB_TIMELINE, label: t('planBottom.timeline'), render: () => <TimelineTab /> },
       ]}
       collapsed={() => (
         <span class="plan-bottom__line">
