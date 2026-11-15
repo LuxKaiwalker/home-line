@@ -11,14 +11,15 @@
 //                          button and the drawer stay with the API down; the offline note
 //                          (RouteOfflineNote, registerEditRouteNote) then sits inside the drawer and says
 //                          only the server's Compute plan is unavailable
-//   live/padmount.tsx      puts the crew panel into the drawer (setEditRouteCrew) while a host is mounted
+//   live/padmount.tsx      puts the crew panel (setEditRouteCrew) and, L3c, the pad tool (setEditRoutePad,
+//                          collapsed "Custom pad" section) into the drawer while a host is mounted
 //   views/console.tsx      mounts the host inside the console map (mountEditRoute), live builds only
 //
 // Loaded only through the VITE_LIVE dynamic import in views/console.tsx (and the live chunks), so
 // the static build does not contain it. It imports nothing from src/live/ (isolation.test.ts): the
 // D116 gate (live/config.ts ROUTE_EDIT_ENABLED) and the "My plans" store and list come in through
 // mountEditRoute, from the guarded import in views/console.tsx. Layout store ids (L5 selector
-// contract): edit-route (Drawer), crew and my-plans (Collapsible inside it).
+// contract): edit-route (Drawer), custom-pad, crew and my-plans (Collapsible inside it).
 import { render, type ComponentType } from 'preact'
 import { useState } from 'preact/hooks'
 import { signal, useSignalValue, type ReadSignal } from '../../state/signal'
@@ -29,10 +30,12 @@ import type { RailSection, Render } from './store'
 import './editroute.css'
 
 export const EDIT_ROUTE_ID = 'edit-route'
+export const CUSTOM_PAD_ID = 'custom-pad'
 export const CREW_ID = 'crew'
 export const MY_PLANS_ID = 'my-plans'
 export const EDIT_ROUTE_TITLE = 'Edit route'
 export const MY_PLANS_SECTION_TITLE = 'My plans'
+export const CUSTOM_PAD_TITLE = 'Custom pad'
 
 /** The route panel (R5); undefined = not loaded (I1b: registered with the API up or down). */
 const routeRender = signal<Render | undefined>(undefined)
@@ -42,6 +45,8 @@ export interface CrewSlot {
   render: Render
 }
 const crewSlot = signal<CrewSlot | undefined>(undefined)
+/** The pad tool (F24, live/view.tsx PadToolPanel) as rendered by live/padmount.tsx (L3c). */
+const padSlot = signal<Render | undefined>(undefined)
 let hosts = 0
 
 /**
@@ -64,6 +69,11 @@ export const editRouteHosted = (): boolean => hosts > 0
 /** The crew panel into the drawer (undefined removes it). */
 export function setEditRouteCrew(c: CrewSlot | undefined): void {
   crewSlot.value = c
+}
+
+/** L3c: the pad tool into the drawer as the collapsed "Custom pad" section (undefined removes it). */
+export function setEditRoutePad(r: Render | undefined): void {
+  padSlot.value = r
 }
 
 /** "Edit route" at the map edge: opens and closes the drawer (aria-expanded / aria-controls). */
@@ -134,6 +144,7 @@ function MyPlansSection<Snap>({ deps: { store, View } }: { deps: MyPlansDeps<Sna
 export function EditRouteHost<Snap>({ plans, simMode = 'off' }: { plans: MyPlansDeps<Snap>; simMode?: SimMode }) {
   const route = useSignalValue(routeRender)
   const crew = useSignalValue(crewSlot)
+  const pad = useSignalValue(padSlot)
   const { bottom } = useLayoutInsets()
   const edgeStyle = { marginBottom: `${bottom}px` }
   if (!route)
@@ -151,6 +162,11 @@ export function EditRouteHost<Snap>({ plans, simMode = 'off' }: { plans: MyPlans
         <EditRouteOfflineNoteSlot />
         {route()}
         <EditRouteSimSlot mode={simMode} />
+        {pad ? (
+          <Collapsible id={CUSTOM_PAD_ID} title={CUSTOM_PAD_TITLE}>
+            {pad()}
+          </Collapsible>
+        ) : null}
         {crew ? (
           <Collapsible id={CREW_ID} title={`Crew: ${crew.summary}`} hint="Edit">
             {crew.render()}

@@ -2,6 +2,8 @@
 // by the map through a MapPort. Lazy like the rest of src/live (loaded only behind VITE_LIVE). The
 // one-line wiring in the console view is WS5/C's:
 //   m.mountPadTool(panelSlot, m.consoleMapPort(cmap, restoreStaticScenario))
+// L3 / L3c (D111): with the Edit-route drawer mounted, the crew panel and the pad tool render into it
+// instead (setEditRouteCrew / setEditRoutePad, collapsed "Crew" and "Custom pad" sections).
 import { render } from 'preact'
 import type { ApiClient } from './client'
 import { createCrew, type CrewModel } from './crew'
@@ -10,7 +12,7 @@ import type { MapPort } from './mapPort'
 import { createPadTool, type PadTool, type PadToolOptions } from './padtool'
 import type { LiveState } from './health'
 import { PadToolPanel, type RouteLinkView } from './view'
-import { editRouteHosted, setEditRouteCrew } from '../ui/shell/editroute'
+import { editRouteHosted, setEditRouteCrew, setEditRoutePad } from '../ui/shell/editroute'
 import { officialPart } from '../state/official'
 
 /** WP12 (L6 W-1): the Edit-route panel as the card sees it (index.ts bridges it to the route mount). */
@@ -39,7 +41,11 @@ export function mountPadTool(panel: Element, port: MapPort, opts: MountPadToolOp
   let ready = false
   // L3 (D111): with the Edit-route drawer mounted (console map, live build, route editing on), the crew
   // panel goes into it as the "Crew" section; otherwise it stays next to the pad tool, as before
-  const inDrawer = crew !== null && editRouteHosted()
+  const hosted = editRouteHosted()
+  const inDrawer = crew !== null && hosted
+  // L3c: the pad tool goes into the same drawer as the collapsed "Custom pad" section; otherwise it
+  // stays in the panel element, as before (mount only: same panel, same props)
+  const padInDrawer = hosted
   const draw = () => {
     if (!ready) return
     if (inDrawer) {
@@ -47,16 +53,20 @@ export function mountPadTool(panel: Element, port: MapPort, opts: MountPadToolOp
       const inputs = crew.jobInputs() // {} = default crew; {crew} = changed fields; null = a field is not a number
       setEditRouteCrew({ summary: inputs && inputs.crew === undefined ? 'default' : 'changed', render: () => <CrewPanel state={state} actions={crew} engineHref={engineHref} /> })
     }
+    const padPanel = (
+      <PadToolPanel
+        state={tool.state}
+        actions={tool}
+        engineHref={engineHref}
+        computeBlocked={crew ? crewBlockedText(crew.state) : null}
+        route={route ? { status: route.status(), compute: () => route.compute() } : undefined}
+      />
+    )
+    if (padInDrawer) setEditRoutePad(() => padPanel)
     render(
       <>
         {crew && !inDrawer ? <CrewPanel state={crew.state} actions={crew} engineHref={engineHref} /> : null}
-        <PadToolPanel
-          state={tool.state}
-          actions={tool}
-          engineHref={engineHref}
-          computeBlocked={crew ? crewBlockedText(crew.state) : null}
-          route={route ? { status: route.status(), compute: () => route.compute() } : undefined}
-        />
+        {padInDrawer ? null : padPanel}
       </>,
       panel,
     )
@@ -88,6 +98,7 @@ export function mountPadTool(panel: Element, port: MapPort, opts: MountPadToolOp
       tool.dispose()
       crew?.dispose()
       if (inDrawer) setEditRouteCrew(undefined)
+      if (padInDrawer) setEditRoutePad(undefined)
       render(null, panel)
     },
   }

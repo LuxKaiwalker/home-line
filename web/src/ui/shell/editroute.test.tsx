@@ -4,7 +4,8 @@
 //    controls on); unregistering (offline) removes both and leaves the empty edge slot;
 //  - the drawer holds the route panel, the crew Collapsible ("Crew: default", hint "Edit") and the
 //    "My plans" Collapsible with the list rendered by the passed view, on the passed store;
-//  - layout store ids: edit-route, crew, my-plans (DOM ids hl-lay-<id>, openers aria-controls them).
+//  - L3c: the pad tool is the collapsed "Custom pad" Collapsible, before the crew section;
+//  - layout store ids: edit-route, custom-pad, crew, my-plans (DOM ids hl-lay-<id>, openers aria-controls them).
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { render } from 'preact'
@@ -14,7 +15,7 @@ import { ui } from '../../state/ui'
 import { t } from '../copy'
 import { bindLayoutStorage, resetLayout } from '../layout'
 import { all, byClass, installDom, one, type FakeDocument, type FakeNode } from '../testing/dom'
-import { editRouteHosted, mountEditRoute, registerEditRoute, registerEditRouteNote, setEditRouteCrew, type MyPlansDeps } from './editroute'
+import { CUSTOM_PAD_ID, editRouteHosted, mountEditRoute, registerEditRoute, registerEditRouteNote, setEditRouteCrew, setEditRoutePad, type MyPlansDeps } from './editroute'
 
 let doc: FakeDocument
 let mapEl: FakeNode
@@ -73,6 +74,7 @@ afterEach(() => {
   act(() => {
     for (const f of offs.reverse()) f()
     setEditRouteCrew(undefined)
+    setEditRoutePad(undefined)
   })
   offs = []
   render(null, mapEl as unknown as Element)
@@ -159,6 +161,30 @@ describe('Edit-route host (live builds, route editing on)', () => {
     expect(byClass(one(byId('hl-lay-crew')), 'fake-crew')).toHaveLength(1)
     act(() => setEditRouteCrew({ summary: 'changed', render: () => <p class="fake-crew">crew</p> }))
     expect(one(openerOf('crew')).textContent).toContain('Crew: changed')
+  })
+
+  it('L3c: the pad tool is a collapsed "Custom pad" Collapsible inside the drawer, before Crew; undefined removes it', () => {
+    mount()
+    registerRoute()
+    expect(openerOf(CUSTOM_PAD_ID)).toHaveLength(0)
+    act(() => {
+      setEditRouteCrew({ summary: 'default', render: () => <p class="fake-crew">crew</p> })
+      setEditRoutePad(() => <p class="fake-pad">pad tool</p>)
+    })
+    const padBtn = one(openerOf(CUSTOM_PAD_ID), 'Custom pad section button')
+    expect(padBtn.textContent).toContain('Custom pad')
+    expect(padBtn.getAttribute('aria-expanded')).toBe('false') // collapsed by default
+    expect(hidden(one(byId(`hl-lay-${CUSTOM_PAD_ID}`)))).toBe(true)
+    const drawer = one(byId('hl-lay-edit-route'))
+    expect(drawer.contains(padBtn)).toBe(true)
+    expect(byClass(one(byId(`hl-lay-${CUSTOM_PAD_ID}`)), 'fake-pad')).toHaveLength(1)
+    const order = all(drawer, (n) => n.localName === 'button' && /^hl-lay-(custom-pad|crew|my-plans)$/.test(n.getAttribute('aria-controls') ?? '')).map((n) => n.getAttribute('aria-controls'))
+    expect(order).toEqual(['hl-lay-custom-pad', 'hl-lay-crew', 'hl-lay-my-plans'])
+    click(padBtn)
+    expect(one(openerOf(CUSTOM_PAD_ID)).getAttribute('aria-expanded')).toBe('true')
+    expect(hidden(one(byId(`hl-lay-${CUSTOM_PAD_ID}`)))).toBe(false)
+    act(() => setEditRoutePad(undefined))
+    expect(openerOf(CUSTOM_PAD_ID)).toHaveLength(0)
   })
 
   it('"Send to simulator" (S1) sits in the drawer next to the route panel when VITE_SIM_EXPORT is on; off: none', () => {
