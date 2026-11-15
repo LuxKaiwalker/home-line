@@ -1,0 +1,32 @@
+/* PORT R4: route labels and numbered stops on the Plan map (tokens only). */
+.hl-r4-label {
+  padding: 0 var(--space-1);
+  border-radius: var(--radius-pill);
+  background: var(--color-label-pill);
+  color: var(--color-safe);
+  font-family: var(--font-text);
+  font-size: var(--font-size-label);
+  line-height: var(--line-height-label);
+  font-weight: var(--font-weight-label);
+  white-space: nowrap;
+  pointer-events: none;
+}
+.hl-r4-stop {
+  display: grid;
+  place-items: center;
+  min-width: var(--space-5);
+  height: var(--space-5);
+  padding: 0 var(--space-1);
+  border: var(--line-thread) solid var(--color-text);
+  border-radius: var(--radius-chip);
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-family: var(--font-mono);
+  font-size: var(--font-size-label);
+  line-height: var(--line-height-label);
+  font-weight: var(--font-weight-label);
+  pointer-events: none;
+}
+.hl-r4-stop[data-state='infeasible'] { border-color: var(--color-limit); color: var(--color-limit); }
+.hl-r4-legend { display: grid; gap: var(--space-2); }
+.hl-r4-legend__row { display: grid; gap: var(--space-1); }
