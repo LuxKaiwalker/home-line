@@ -63,6 +63,7 @@ export const S = {
   ctxPad: '.hl-ctx__padname',
   ctxWhat: '.hl-ctx__what', // "Official plan" | "Your route"
   ctxPlanRoute: '.hl-ctx__plan', // "Plan a route" (hidden until I1 calls setPlanRouteAction)
+  ctxEditRoute: '.hl-ctx__edit', // "Edit route": the same opener while a route of your own is shown (I5)
   ctxBad: '.hl-ctx__bad',
   // Route panel [U1]
   panel: '#hl-lay-route-panel',
@@ -114,17 +115,33 @@ export async function marvisUnreachable(page: Page): Promise<void> {
   await page.route('**/marvis/api/**', (r) => r.fulfill({ status: 503, body: '' }))
 }
 
-/** The Route panel, open (via the context bar's "Plan a route" when it is closed). */
+/** The Route panel, open (via the context bar's "Plan a route", or "Edit route" with a route of your own, when it is closed). */
 export async function openRoutePanel(page: Page): Promise<Locator> {
   const panel = page.locator(S.panel)
-  if (!(await panel.isVisible())) await page.locator(S.ctxPlanRoute).click()
+  if (!(await panel.isVisible())) await page.locator(`${S.ctxPlanRoute}, ${S.ctxEditRoute}`).click()
   await expect(panel).toBeVisible()
   return panel
 }
 
-/** Stop labels in list order (U2). */
+/** Station names as the list shows them (config/stations.yaml `name`; U2 shows a station's name when it has one). */
+export function stationNames(): Map<string, string> {
+  const yaml = readFileSync(resolve(__dirname, '../../../config/stations.yaml'), 'utf8')
+  const out = new Map<string, string>()
+  for (const m of yaml.matchAll(/^\s*- id: (\S+)\s*\n\s+name: "([^"]+)"/gm)) out.set(m[2], m[1])
+  return out
+}
+
+/** Stop labels in list order (U2), station names mapped back to their ids (S1, …), W1… as shown. */
 export async function stopLabels(page: Page): Promise<string[]> {
-  return page.locator(`${S.stopRows} ${S.stopLabel}`).allInnerTexts()
+  const byName = stationNames()
+  return (await page.locator(`${S.stopRows} ${S.stopLabel}`).allInnerTexts()).map((l) => byName.get(l.trim()) ?? l)
+}
+
+/** The Plan bottom drawer (plan table + timeline), expanded. */
+export async function openBottomDrawer(page: Page): Promise<void> {
+  const grip = page.locator(`button[aria-controls="${S.bottom.slice(1)}"]`) // the drawer's grip (ui/layout/BottomDrawer)
+  if ((await grip.getAttribute('aria-expanded')) === 'false') await grip.click()
+  await expect(grip).toHaveAttribute('aria-expanded', 'true')
 }
 
 /** Wait until the route results are final (U1 estimates card; needs the data-status hook). */

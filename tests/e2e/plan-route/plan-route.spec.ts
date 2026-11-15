@@ -16,6 +16,7 @@ import {
   emptySpot,
   legacyPlanParam,
   marvisUnreachable,
+  openBottomDrawer,
   OFFICIAL_PAD_ID,
   openPlan,
   openRoutePanel,
@@ -63,7 +64,7 @@ test.describe('smoke', () => {
 test.describe('pad switch', () => {
   // TODO(I1): installPads() (map/pads) in views/console.tsx -> pad markers [data-pad-mark] + the pad card;
   // installRoutePanel(); ui/strip context bar in the 'context-bar' slot.
-  test.fixme('marker card "Plan from here" swaps the pad environment and the context bar names the pad', async ({ page }) => {
+  test('marker card "Plan from here" swaps the pad environment and the context bar names the pad', async ({ page }) => {
     const errors = pageErrors(page)
     await openPlan(page)
     await expect(page.locator(S.ctxPad)).toHaveText(padLabel(OFFICIAL_PAD_ID))
@@ -84,6 +85,7 @@ test.describe('pad switch', () => {
     expect(errors).toEqual([])
   })
 
+  // TODO(I1): I2's installPlanningActivity in mountPlanPort (requests-I1.md "I5" 1); fails at the Undo press until then.
   test.fixme('the Route panel pad picker switches the pad (one undo step)', async ({ page }) => {
     await openPlan(page)
     await openRoutePanel(page)
@@ -103,7 +105,7 @@ test.describe('pad switch', () => {
 test.describe('add stops', () => {
   // TODO(I1): station card hosts R3's <AddToRouteButton station=…> ([data-add-to-route]); R3 install() +
   // setEditing(panel open); R4 install() ('mine' stop markers); U2 list section registered.
-  test.fixme('station card "Add to route" appends the station, routed from the pad', async ({ page }) => {
+  test('station card "Add to route" appends the station, routed from the pad', async ({ page }) => {
     await openPlan(page)
     await openRoutePanel(page)
     await stationMarker(page, 'S7').click()
@@ -118,7 +120,7 @@ test.describe('add stops', () => {
     await expect(page.locator(S.ctxWhat)).toHaveText('Your route')
   })
 
-  test.fixme('a map click adds a free waypoint (W1) while the Route panel is open', async ({ page }) => {
+  test('a map click adds a free waypoint (W1) while the Route panel is open', async ({ page }) => {
     await openPlan(page)
     await openRoutePanel(page)
     const spot = await emptySpot(page)
@@ -128,7 +130,7 @@ test.describe('add stops', () => {
     await routeReady(page)
   })
 
-  test.fixme('a map click with the Route panel closed adds nothing', async ({ page }) => {
+  test('a map click with the Route panel closed adds nothing', async ({ page }) => {
     await openPlan(page)
     const spot = await emptySpot(page)
     await page.mouse.click(spot.x, spot.y)
@@ -138,6 +140,7 @@ test.describe('add stops', () => {
 
 test.describe('drag a point', () => {
   // TODO(I1): R3 install() + setEditing; handles are DOM markers (.hl-r3-handle[data-r3-stop]).
+  // TODO(I1): I2's installPlanningActivity (requests-I1.md "I5" 1); the drag itself passes, the Undo press fails until then.
   test.fixme('dragging a waypoint moves it, re-routes, and is one undo step', async ({ page }) => {
     await openPlan(page)
     await openRoutePanel(page)
@@ -164,13 +167,14 @@ test.describe('infeasible leg', () => {
   // TODO(Q1, wave 2): pin "Leg 5 (S6 → S1)" once the worker's fast mode is confirmed to give the same leg.
   const order = ['S2', 'S8', 'S7', 'S6', 'S1', 'S4'].map((id) => station(id))
 
-  test.fixme('an infeasible leg is red on the map, flagged in the list and called out in the panel', async ({ page }) => {
+  test('an infeasible leg is red on the map, flagged in the list and called out in the panel', async ({ page }) => {
     await openPlan(page, routeHash('rank2', order))
     await openRoutePanel(page)
     await routeReady(page, 60_000)
     const callout = page.locator(S.infeasibleCallout)
     await expect(callout).toBeVisible()
-    await expect(callout).toHaveAttribute('role', 'alert')
+    // I4: the alert region stays mounted (announced reliably); the callout is its content
+    await expect(page.locator(`[role="alert"] > ${S.infeasibleCallout}`)).toBeVisible()
     await expect(callout).toContainText(/Leg \d+ \(.+ → .+\) cannot be walked/)
     // red on the map: R4 paints the leg in the limit colour (r4-mine-bad, canvas) and marks its stop
     await expect(page.locator(S.mineStopBad).first()).toBeVisible()
@@ -181,7 +185,7 @@ test.describe('infeasible leg', () => {
 
 test.describe('export', () => {
   // TODO(I1): U4 export section registered in the Route panel (registerRoutePanelSection('export')).
-  test.fixme('MARVIS unreachable: the button downloads homeline-mission-<hash8>.json of the route', async ({ page }) => {
+  test('MARVIS unreachable: the button downloads homeline-mission-<hash8>.json of the route', async ({ page }) => {
     await marvisUnreachable(page)
     await openPlan(page, routeHash(PICKER_PAD, [station('S1'), station('S7')]))
     await openRoutePanel(page)
@@ -196,10 +200,10 @@ test.describe('export', () => {
     const doc = JSON.parse(readFileSync((await dl.path())!, 'utf8'))
     expect(doc.kind).toBe('homeline_mission')
     expect(doc.waypoints).toHaveLength(2) // TODO(Q1, wave 2): station ids per waypoint once U4's mapping is final
-    await expect(box.locator('[role="status"]')).toContainText(dl.suggestedFilename())
+    await expect(box.locator('[role="status"][data-live="export"]')).toContainText(dl.suggestedFilename())
   })
 
-  test.fixme('no route: the download is the official plan of the pad', async ({ page }) => {
+  test('no route: the download is the official plan of the pad', async ({ page }) => {
     await marvisUnreachable(page)
     await openPlan(page)
     await openRoutePanel(page)
@@ -216,7 +220,7 @@ test.describe('share link', () => {
   const link = () => routeHash('rank3', [station('S7'), point(at.S6.lon + 0.002, at.S6.lat), station('S1')])
 
   // TODO(I1): router applies #/?route= (U4 planLink) on load + URL sync; U2 list; U1 pad picker.
-  test.fixme('#/?route= restores the pad and the route', async ({ page }) => {
+  test('#/?route= restores the pad and the route', async ({ page }) => {
     await openPlan(page, link())
     await openRoutePanel(page)
     await expect(page.locator(S.padRadio('rank3'))).toHaveAttribute('aria-checked', 'true')
@@ -225,7 +229,7 @@ test.describe('share link', () => {
     expect(new URL(page.url()).hash).toBe(link()) // canonical: the link stays as it is
   })
 
-  test.fixme('the copied share link reopens the same plan in a new page', async ({ page, context }) => {
+  test('the copied share link reopens the same plan in a new page', async ({ page, context }) => {
     await context.grantPermissions(['clipboard-read', 'clipboard-write'])
     await openPlan(page, link())
     await openRoutePanel(page)
@@ -243,9 +247,9 @@ test.describe('share link', () => {
     expect(await stopLabels(again)).toEqual(['S7', 'W1', 'S1'])
   })
 
-  test.fixme('an unreadable link says so and loads nothing', async ({ page }) => {
+  test('an unreadable link says so and loads nothing', async ({ page }) => {
     await openPlan(page, '#/?route=not-a-plan!!')
-    await expect(page.getByText('This link could not be read, so nothing was loaded.')).toBeVisible()
+    await expect(page.getByText('This link could not be read, so nothing was loaded.').filter({ visible: true })).toBeVisible()
     await openRoutePanel(page)
     expect(await stopLabels(page)).toEqual([])
   })
@@ -253,7 +257,7 @@ test.describe('share link', () => {
 
 test.describe('legacy redirect', () => {
   // TODO(I1/I3): router.ts hook -> legacyRedirect(hash) + history.replaceState, then the #/?route= apply.
-  test.fixme('#/mission?plan=<v1> redirects to the Plan page with the same stops', async ({ page }) => {
+  test('#/mission?plan=<v1> redirects to the Plan page with the same stops', async ({ page }) => {
     await openPlan(page, `#/mission?plan=${legacyPlanParam(['S1', 'S7'])}`)
     await expect.poll(() => new URL(page.url()).hash).toMatch(/^#\/\?route=/)
     await expect(page.locator(S.modeTab)).toHaveText(/Plan/)
@@ -262,13 +266,14 @@ test.describe('legacy redirect', () => {
     expect(await stopLabels(page)).toEqual(['S1', 'S7'])
   })
 
-  test.fixme('#/mission?add=S4 redirects to Plan with S4 in the route', async ({ page }) => {
+  test('#/mission?add=S4 redirects to Plan with S4 in the route', async ({ page }) => {
     await openPlan(page, '#/mission?add=S4')
     await expect.poll(() => new URL(page.url()).hash).toMatch(/^#\/\?route=/)
     await openRoutePanel(page)
     expect(await stopLabels(page)).toEqual(['S4'])
   })
 
+  // TODO(I1): I2's installPlanningActivity (requests-I1.md "I5" 1) for the Undo press.
   test.fixme('#/?route=…&add=S4 appends S4 to the linked route (one undo step)', async ({ page }) => {
     await openPlan(page, `${routeHash(OFFICIAL_PAD_ID, [station('S1')])}&add=S4`)
     await openRoutePanel(page)
@@ -294,7 +299,7 @@ test.describe('undo', () => {
     await expect.poll(() => stopLabels(page)).toEqual(['S1'])
   })
 
-  test.fixme('a link load is not an undo step', async ({ page }) => {
+  test('a link load is not an undo step', async ({ page }) => {
     await openPlan(page, routeHash(OFFICIAL_PAD_ID, [station('S1')]))
     await openRoutePanel(page)
     await page.keyboard.press(UNDO)
@@ -318,9 +323,10 @@ test.describe('compare plans (D142)', () => {
   })
 
   // TODO(I1): bottom drawer link "Compare plans" (data-testid="plan-compare-plans", href "#/trade").
-  test.fixme('bottom drawer "Compare plans" opens #/trade; Back keeps the pad and the route', async ({ page }) => {
+  test('bottom drawer "Compare plans" opens #/trade; Back keeps the pad and the route', async ({ page }) => {
     const link = routeHash(PICKER_PAD, [station('S1'), station('S7')])
     await openPlan(page, link)
+    await openBottomDrawer(page) // the drawer's actions (Compare plans) show while it is open
     const compare = page.locator(S.comparePlans)
     await expect(compare).toHaveText(/Compare plans/)
     await expect(compare).toHaveAttribute('href', '#/trade')
