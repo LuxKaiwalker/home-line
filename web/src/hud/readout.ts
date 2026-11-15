@@ -1,16 +1,43 @@
 // One HUD frame: every number the panel shows, from the position object (F19), field lookups
 // and the plan. Lookups and arithmetic on looked-up values only (brief WS7 "Don't").
 //
-// Definitions (assumption A-WS7-3, see STATUS.md):
-//   headroom H(t)  = timeline margin_min + t_home_min, interpolated in t (WS2's margin terms)
-//   margin         = H(t) - T_home at the position (worst case within sigma)
-//   turn-back in   = margin (standing still, H falls one minute per minute); its binding term is
-//                    the timeline row's margin_binding, incl. "EVA duration" (D28, contract v1.1.3)
+// Margin (D89, X2): the exact margin function, the same one the field draws (map/field/margin.ts,
+// M3's port of WS2 physio_core.margin), with the same inputs as the field at the position and minute:
+//   margin, binding = marginAt(resolveMarginInputs(t), T_home, O2_home)   (worst case within sigma)
+//   inputs: O2 left and task O2 from the timeline at t, the D39 dose leash tau(t) (rad.json storm
+//   series placed at t*; after the storm tripwire the dose budget left, as M12's tauOverride),
+//   clock.json t_dark, the crew EVA length, the O2 reserve and rate (mission-state defaults).
+//   After the return (crew back at the pad; playback / drift, not a dragged spot) the margin and its
+//   binding are held at their value at arrival and no alarm fires (user decision, X2).
+//   turn-back in = margin (standing still, the clock terms fall one minute per minute).
+// Without margin inputs in the context (ctx.margin unset: dummy tree, callers with their own context)
+// the old reading stays (assumption A-WS7-3): margin = H(t) - T_home, H = timeline margin_min +
+// t_home_min interpolated in t; binding = the timeline row in force (D28, contract v1.1.3).
+import { DoseTiming, marginAt, PlanTimeline, resolveMarginInputs, type RadStorm, type TimelineRow } from '../map/field/margin'
 import { evaluateAlarm, marginBand, type Alarm } from './alarms'
 import { vSafeAt, type HudConfig } from './config'
 import type { FieldGrid } from './fields'
 import type { Plan } from './plan'
-import type { Binding, HudPosition, LonLat, PolygonFC } from './types'
+import type { Binding, HudPosition, LonLat, PolygonFC, Rad } from './types'
+
+/** Inputs of the exact margin function (D89) that the plan and the HUD position do not carry. */
+export interface HudMarginInputs {
+  /** the flown plan's timeline: O2 left, task O2 still to do, t* (map/field/margin.ts) */
+  timeline: PlanTimeline
+  /** D39 dose leash tau(t) (rad.json storm series placed at t*); null = dose term left out */
+  dose: DoseTiming | null
+  dAllowMgy: number // mission.budgets.doseAllowMgy (conditions.yaml leash.d_allow_mgy)
+  reserveL: number // mission.budgets.o2ReserveL (D24)
+  tDarkMin: number | null // conditions/clock.json eva.t_dark_min; null = daylight term left out
+  tEvaMin: number // crew.yaml eva_h x 60
+}
+
+/** Build the margin inputs as map/field/drive.ts does for the field (same files, same rules). */
+export function hudMarginInputs(plan: Plan, rad: Rad | null, tDarkMin: number | null | undefined, cfg: HudConfig, budgets: { reserveL: number; dAllowMgy: number }): HudMarginInputs {
+  const timeline = new PlanTimeline(plan.events as unknown as TimelineRow[])
+  const dose = rad && timeline.tStarMin !== null ? DoseTiming.fromRad(rad as unknown as RadStorm, timeline.tStarMin) : null
+  return { timeline, dose, dAllowMgy: budgets.dAllowMgy, reserveL: budgets.reserveL, tDarkMin: typeof tDarkMin === 'number' ? tDarkMin : null, tEvaMin: cfg.evaMin }
+}
 
 export interface HudFields {
   tHome: FieldGrid // nominal T_home of the active scenario
@@ -31,6 +58,8 @@ export interface HudContext {
   partner?: PolygonFC | null
   /** storm switch: tripwire state on the EVA clock and tau_dose; absent = never fires */
   radiation?: { tripwireFired: boolean; tauDoseMin: number | null }
+  /** inputs of the exact margin function (D89); absent = the timeline headroom reading (A-WS7-3) */
+  margin?: HudMarginInputs
 }
 
 export interface Readout {
@@ -51,8 +80,10 @@ export interface Readout {
   nextStation: { station: string; etaMin: number } | null
   band: 'green' | 'amber' | 'red' | 'unknown'
   alarm: Alarm | null
-  /** binding term of the timeline row in force (undefined = timeline has none) */
+  /** binding term of the margin (exact function; else the timeline row in force; undefined = timeline has none) */
   binding: Binding | undefined
+  /** how the margin was computed: 'exact' (D89), 'held' (after the return, value at arrival), 'timeline' (A-WS7-3) */
+  marginSource: 'exact' | 'held' | 'timeline'
   /** during a station dwell: WS2's turn_back row for that station (latest leave, binding; D28) */
   latestLeave: { station: string; t_min: number; binding: Binding } | null
 }
@@ -111,14 +142,25 @@ export function computeReadout(pos: HudPosition, ctx: HudContext): Readout {
     tHome = worst?.tHome?.valueAt(lon, lat) ?? null
     o2Need = worst?.o2Home?.valueAt(lon, lat) ?? null
   }
-  const H = plan.headroomAt(pos.t_eva_min)
-  const margin = H !== null && tHome !== null ? H - tHome : null
+  const exact = ctx.margin ? exactMargin(ctx, ctx.margin, pos, tHome, o2Need) : null
+  let margin: number | null
+  let binding: Binding | undefined
+  if (exact) {
+    margin = exact.margin
+    binding = exact.binding
+  } else {
+    const H = plan.headroomAt(pos.t_eva_min)
+    margin = H !== null && tHome !== null ? H - tHome : null
+    binding = plan.bindingAt(pos.t_eva_min)
+  }
+  const held = exact?.held === true
   const crosses = circleCrossesHomeline(fields.tHome, lon, lat, pos.sigma_m, ctx.budgetMin)
   const outside = ctx.partner ? !insidePolygons(ctx.partner, lon, lat) : null
   const slope = fields.slope?.valueAt(lon, lat) ?? null
   const next = plan.nextArrival(pos.t_eva_min)
   const rad = ctx.radiation ?? { tripwireFired: false, tauDoseMin: null }
-  const alarm = evaluateAlarm(
+  // back at the pad (held): no alarm (user decision, X2)
+  const alarm = held ? null : evaluateAlarm(
     { marginMin: margin, tripwireFired: rad.tripwireFired, tHomeMin: tHome, tauDoseMin: rad.tauDoseMin, circleCrossesHomeline: crosses, outsidePartner: outside },
     cfg.marginAmberMin,
   )
@@ -140,9 +182,38 @@ export function computeReadout(pos: HudPosition, ctx: HudContext): Readout {
     nextStation: next ? { station: next.station, etaMin: next.t_min - pos.t_eva_min } : null,
     band: marginBand(margin, cfg.marginAmberMin),
     alarm,
-    binding: plan.bindingAt(pos.t_eva_min),
+    binding,
+    marginSource: exact ? (held ? 'held' : 'exact') : 'timeline',
     latestLeave: latestLeaveAt(plan, pos),
   }
+}
+
+/** EVA minute the crew is back at the pad (end of the last walk leg); null = no route. */
+function returnMin(plan: Plan): number | null {
+  return plan.legs.length ? plan.legs[plan.legs.length - 1].t1 : null
+}
+
+/**
+ * The exact margin (D89) at the position: map/field/margin.ts marginAt with the field's inputs at t.
+ * null = no O2 figure in the timeline (then the caller keeps the timeline reading). After the
+ * return (not for a dragged spot) the clock is held at the arrival minute: the storm budget left is
+ * taken back to that minute along hud/storm.ts's countdown (one minute per minute after the tripwire,
+ * which fires at t* <= the return).
+ */
+function exactMargin(ctx: HudContext, m: HudMarginInputs, pos: HudPosition, tHome: number | null, o2Home: number | null): { margin: number | null; binding: Binding; held: boolean } | null {
+  const tRet = returnMin(ctx.plan)
+  const held = tRet !== null && pos.source !== 'drag' && pos.t_eva_min > tRet
+  const t = held ? (tRet as number) : pos.t_eva_min
+  const rad = ctx.radiation
+  const tauOverride = rad?.tripwireFired && rad.tauDoseMin !== null ? rad.tauDoseMin + (pos.t_eva_min - t) : undefined
+  const inp = resolveMarginInputs(
+    { t, tDark: m.tDarkMin ?? undefined, tauDose: tauOverride, tEva: m.tEvaMin, o2Left: undefined, reserve: m.reserveL },
+    { timeline: m.timeline, dose: m.dose, dAllowMgy: m.dAllowMgy },
+  )
+  if (!inp) return null
+  if (tHome === null || o2Home === null) return { margin: null, binding: null, held }
+  const r = marginAt(inp, tHome, o2Home)
+  return { margin: r.margin, binding: r.binding, held }
 }
 
 /** The dwell station's turn_back row (playback / drift on the route only; not for a dragged spot). */

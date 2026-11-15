@@ -32,12 +32,19 @@ export function readoutSources(r: Readout, k: KeyContext): Record<PanelRow, RowS
   const file = (...files: string[]): RowSource => ({ keys: [], files })
   const timeline = file(`timeline_${scenario}.json`)
   const tHome = field(`${scenario}/t_home${worst}`)
+  const o2Home = field(`${scenario}/o2_home${worst}`)
+  // exact margin function (X2, D89): also O2_home, the D39 dose leash (rad.json storm series placed
+  // at t*) and clock.json t_dark; the timeline reading (A-WS7-3) cites the timeline and T_home only
+  const exact = r.marginSource !== 'timeline'
+  const marginSrc = exact
+    ? join(timeline, tHome, o2Home, { keys: [`route.${scenario}.dose.t_star_min`, 'clock.eva.t_dark_min'], files: ['conditions/rad.json', 'conditions/clock.json'] })
+    : join(timeline, tHome)
   return {
     tHome: consScenario ? join(tHome, field(`${consScenario}/t_home`)) : tHome,
-    margin: join(timeline, tHome),
-    o2: join(timeline, field(`${scenario}/o2_home${worst}`)),
-    binding: timeline,
-    turn: join(timeline, tHome),
+    margin: marginSrc,
+    o2: join(timeline, o2Home),
+    binding: exact ? marginSrc : timeline,
+    turn: marginSrc,
     rover: join(field(`${scenario}/home_bearing`), file(k.padFromFile ? 'pad.json' : `route_${scenario}.geojson`)),
     next: join(timeline, file('stations.json')),
     slope: { keys: ['fields.slope.sha256'], files: ['fields/shared/slope.png', 'config/crew.yaml'] },
