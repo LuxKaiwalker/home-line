@@ -93,6 +93,12 @@ export const HELP_ROWS: readonly HelpRow[] = [
   { keys: ['P', 'Y', 'R', 'E'], label: 'shortcuts.modes', ready: true },
   { keys: ['T'], label: 'shortcuts.toggle3d', ready: true },
   { keys: ['?'], label: 'shortcuts.help', ready: true },
+  // I1 mouse model (map/input): left button interacts, right button moves the map
+  { keys: ['Left click'], label: 'shortcuts.mouseSelect', ready: true },
+  { keys: ['Right drag'], label: 'shortcuts.mousePan', ready: true },
+  { keys: ['Ctrl / Shift + right drag', 'Middle drag'], label: 'shortcuts.mouseRotate', ready: true },
+  { keys: ['Wheel'], label: 'shortcuts.mouseZoom', ready: true },
+  { keys: ['Touch'], label: 'shortcuts.touch', ready: true },
 ]
 
 /** Views that handle a key themselves: the shell leaves it to them (the HUD's Space toggles the same clock). */

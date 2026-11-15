@@ -1,9 +1,9 @@
 // Drag the rover on the planning map (WS18 task 2, U15 flagship; static mode). Loaded lazily by
 // ConsoleMap in the shell frame only (the legacy frame stays as it was).
 //
-//   pointer   the rover marker is draggable; while dragging, a readout under it shows exact field
-//             lookups at the dragged cell (validity, elevation "—", slope) and ghost rows
-//             ("computing…"); on release it snaps to the nearest valid precomputed pad
+//   pointer   the rover marker is draggable (left button only, I1); while dragging, a readout under
+//             it shows exact field lookups at the dragged cell (validity, elevation "—", slope) and
+//             ghost rows ("computing…"); on release it snaps to the nearest valid precomputed pad
 //   map       on release the console shows that pad's precomputed homeline (mission.plan written
 //             without an undo step) and the previous homeline fades out over it (reduced motion: no
 //             fade); Escape / Discard puts the committed plan back, Enter / Keep commits (H1 undo step)
@@ -89,6 +89,8 @@ export interface RoverWire {
   place(): void
   frame?: (cb: () => void) => number
   cancelFrame?: (id: number) => void
+  /** where the release of a right / middle press is heard (default window) */
+  win?: Pick<EventTarget, 'addEventListener' | 'removeEventListener'> | null
 }
 
 /** Where the rover rests when it is not being dragged: a released draft's pad, else the committed pad. */
@@ -191,6 +193,25 @@ export function wireRoverMarker(m: RoverMarker, w: RoverWire): () => void {
     e.stopPropagation()
     pick()
   })
+  // I1: the rover moves with the LEFT button only. A right / middle press on it belongs to the map
+  // (pan, rotate / tilt: map/input); MapLibre's marker drag takes any button, so it is off until release.
+  const win = w.win !== undefined ? w.win : typeof window === 'undefined' ? null : window
+  let release: (() => void) | null = null
+  const onPress = (e: Event): void => {
+    const p = e as PointerEvent
+    if (p.pointerType === 'touch' || p.button === 0 || release) return
+    m.setDraggable(false)
+    const back = (): void => {
+      win?.removeEventListener('pointerup', back)
+      win?.removeEventListener('pointercancel', back)
+      release = null
+      m.setDraggable(true)
+    }
+    release = back
+    win?.addEventListener('pointerup', back)
+    win?.addEventListener('pointercancel', back)
+  }
+  el.addEventListener('pointerdown', onPress)
   el.addEventListener('keydown', (e) => {
     if (e.key === ' ' || (e.key === 'Enter' && !store.draft.peek())) {
       e.preventDefault()
@@ -207,6 +228,8 @@ export function wireRoverMarker(m: RoverMarker, w: RoverWire): () => void {
     sync()
     if (raf) cancelFrame(raf)
     raf = 0
+    el.removeEventListener('pointerdown', onPress)
+    release?.()
   }
 }
 
