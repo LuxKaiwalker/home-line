@@ -121,4 +121,5 @@ On every PR: `ruff` + `pytest` (all KATs), `tsc --noEmit` + `vite build`, schema
 - WS9 brief — Navigation → `briefs/WS9.md`
 - WS10 brief — Visual odometry → `briefs/WS10.md`
 - Morning runbook — Sat 14 Nov, 08:15–11:00 → `docs/morning-runbook.md`
+- HOMELINE waypoint block — proposal and implementation plan (D97) → `docs/waypoints.md`
 - [Pre-H0 build log (deprecated, reference only)](https://app.notion.com/p/418961bcb611814c9d64fd95e66e6d2d)
