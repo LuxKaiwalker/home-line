@@ -22,6 +22,7 @@ import { collapseFade, collapseHeadline, collapseQuery, padGridMetres, playColla
 import { CollapseHeadlineOverlay, CollapseToggle } from './field/collapseUi'
 import { MapFurniture, MARKER_LAYERS, ROUTE_LAYERS } from './furniture'
 import { LabelLayer, loadLabels } from './labels/layer'
+import { TerrainController } from './terrain'
 import { activeField, BINDING_LABEL, driveMargin, FIELD_TRUST, fieldModeQuery, fieldRequested, loadFieldData, loadFieldLayer, setActiveField, VARIANT_OF, webgl2Available, zeroEdgeLabels, type FieldData, type MarginState } from './field'
 
 /** The GPU field layer handle (field/layer.ts, loaded lazily). */
@@ -117,6 +118,8 @@ export class ConsoleMap {
   private lastStations: { stations: Station[]; scenarioId: string } | null = null
   private lastPad: Parameters<ConsoleMap['setPad']>[0] | null = null
   private lastPadOptions: Parameters<ConsoleMap['setPadOptions']> | null = null
+  // WS16 task 8 (M8): U1 terrain; the 3D code loads only when ui.view turns '3d'
+  private terrain: TerrainController | null = null
 
   constructor(container: HTMLElement, onStation: (id: string) => void) {
     this.onStation = onStation
@@ -130,6 +133,7 @@ export class ConsoleMap {
       bounds: [f.west, f.south, f.east, f.north],
       fitBoundsOptions: { padding: 40 },
       attributionControl: false,
+      // 2D until ui.view is '3d': TerrainController (terrain/index.ts) lifts maxPitch and rotation then
       maxPitch: 0,
       dragRotate: false,
       renderWorldCopies: false,
@@ -196,6 +200,7 @@ export class ConsoleMap {
       paint: { 'circle-radius': 4, 'circle-color': THEME.mapBackground, 'circle-stroke-color': THEME.station, 'circle-stroke-width': 2 },
     })
     this.furniture = new MapFurniture(m)
+    this.terrain = new TerrainController(m, 'iso-fill') // relief shading above the basemap, under everything else
     this.furniture.setRouteVisible(this.visible.route)
     this.applyFilters()
     this.applyVisibility()
@@ -282,6 +287,7 @@ export class ConsoleMap {
         const h = mod.addFieldLayer(this.map, fd, { budget: this.budget, variant, showBands: this.visible.bands, showHatch: this.visible.unknown, margin: null, collapse: null }, 'iso-lines', (e) => this.fieldError(e))
         if (this.fieldFailed) return h.remove()
         this.fieldLayer = h
+        this.terrain?.attachField(h) // drape on the terrain while 3D is on
       } else this.fieldLayer.setData(fd)
       this.fieldLayer.update({ variant, budget: this.budget })
       this.showField(fd)
@@ -339,6 +345,7 @@ export class ConsoleMap {
     console.warn('GPU field layer unavailable; showing the polygon bands:', e)
     this.fieldLayer?.remove()
     this.fieldLayer = null
+    this.terrain?.attachField(null)
     this.showField(null)
   }
 
@@ -612,6 +619,7 @@ export class ConsoleMap {
   }
 
   destroy(): void {
+    this.terrain?.destroy()
     this.labels?.destroy()
     this.furniture?.destroy()
     this.stopCollapse?.()

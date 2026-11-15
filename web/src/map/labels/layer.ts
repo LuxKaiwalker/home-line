@@ -73,6 +73,10 @@ export class LabelLayer {
     layers.add(this)
     map.on('move', this.onMove)
     map.on('resize', this.onMove)
+    // 3D (M8): the points sit on the terrain (map.project uses its elevation), so a terrain change or
+    // an exaggeration change moves them without a camera move; the pitch drives the leader lines
+    map.on('terrain', this.onMove)
+    map.on('idle', this.onMove)
     const c = map.getContainer()
     c.setAttribute(LABELS_TRUST.attr, LABELS_TRUST.chip)
     c.setAttribute(LABELS_TRUST.sourceAttr, LABELS_TRUST.source)
@@ -184,6 +188,8 @@ export class LabelLayer {
     cancelAnimationFrame(this.raf)
     this.map.off('move', this.onMove)
     this.map.off('resize', this.onMove)
+    this.map.off('terrain', this.onMove)
+    this.map.off('idle', this.onMove)
     for (const e of this.entries.values()) e.marker.remove()
     this.entries.clear()
     layers.delete(this)
