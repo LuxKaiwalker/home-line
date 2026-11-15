@@ -19,9 +19,10 @@ import { ui } from '../../state/ui'
 import { t } from '../copy'
 import { byRole, installDom, type FakeNode } from '../testing/dom'
 import { buildTimelineModel, type TimelineFileRow } from '../timeline/model'
-import { buildExpandedIndex, expandedIndexStarted, resetExpandedIndex, scheduleIndexBuild } from './index/lazy'
+import { SearchButton } from './button'
+import { buildExpandedIndex, expandedIndexBuilds, expandedIndexStarted } from './index/lazy'
 import { actions, areaItems, eventItems, glossaryItems, legItems, legsFromRoute, reportItems, scenarioItems, type Translate } from './index/sources'
-import { Palette, runItem } from './palette'
+import { Palette, resetSearchIndex, runItem, searchIndex } from './palette'
 import { rank, type SearchItem } from './search'
 
 const tr: Translate = (k, v) => t(k, v)
@@ -112,6 +113,10 @@ describe('expanded index: groups from fixture data', () => {
     expect(top(all, 'storm scenario')[0]).toBe('scn:storm')
     expect(top(all, 'nominal')[0]).toBe('scn:nom_104')
     expect(top(all, 'conservative scenario')[0]).toBe('scn:con_104')
+    // no id badge (the id carries the suit mass, spec rule 2); the id still finds the row
+    for (const s of scenarioItems(SCN, tr)) expect(s.code, s.id).toBe('')
+    expect(top(all, 'nom')[0]).toBe('scn:nom_104')
+    expect(top(all, 'con_104')[0]).toBe('scn:con_104')
   })
 
   it('report and evidence sections; glossary terms with their definition', () => {
@@ -127,9 +132,9 @@ describe('expanded index: groups from fixture data', () => {
     expect(glossaryItems(tr).find((i) => i.id === 'glossary:homeline')!.hint).toBeUndefined()
   })
 
-  it('rows carry names, codes and kinds only: no measured number in a name, hint or keyword', () => {
+  it('rows carry names, codes and kinds only: no measured number in a shown name or hint', () => {
     for (const i of fixtureIndex()) {
-      const shown = [label(i), i.hint ? t(i.hint) : '', i.keywords ?? '']
+      const shown = [label(i), i.hint ? t(i.hint) : '']
       // station codes (S7) inside a leg name are codes, like the badge; anything else digit-free
       for (const s of shown) expect(s.replace(/\bS\d+\b/g, ''), i.id).not.toMatch(/\d/)
       expect(i.group).toBeTruthy()
@@ -222,25 +227,51 @@ describe('lazy build (spec rule 5, L12)', () => {
     expect(expandedIndexStarted()).toBe(false)
   })
 
-  it('the idle build waits for the intro to start, then runs in an idle callback', async () => {
-    resetExpandedIndex()
+  it('top-bar button: mounted before the intro builds nothing; after the intro + idle it builds once; opening reuses it', async () => {
+    resetSearchIndex()
     ui.introSeen.value = false
     const fetcher = vi.fn(async (_p: string): Promise<string | null> => null)
     const L = createLoader(fetcher, 'real')
     const idle: (() => void)[] = []
-    const win = { setTimeout: vi.fn(), requestIdleCallback: vi.fn((cb: () => void) => idle.push(cb)) }
-    const stop = scheduleIndexBuild(() => L, win as never)
+    const win = {
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      setTimeout: vi.fn(),
+      requestIdleCallback: vi.fn((cb: () => void) => idle.push(cb)),
+    }
+    const { container: root } = installDom()
+    act(() => render(<SearchButton win={win as never} palette={{ loader: L }} />, root as unknown as Element))
     expect(win.requestIdleCallback).not.toHaveBeenCalled()
-    expect(expandedIndexStarted()).toBe(false)
+    expect(win.setTimeout).not.toHaveBeenCalled()
+    expect(expandedIndexBuilds()).toBe(0)
     ui.introSeen.value = true // the intro started (story/attach.ts)
     expect(win.requestIdleCallback).toHaveBeenCalledTimes(1)
-    expect(expandedIndexStarted()).toBe(false)
+    expect(expandedIndexBuilds()).toBe(0) // waits for the idle callback
     expect(fetcher).not.toHaveBeenCalled()
     idle[0]()
-    expect(expandedIndexStarted()).toBe(true)
-    stop()
+    await vi.waitFor(() => expect(expandedIndexBuilds()).toBe(1))
     ui.introSeen.value = false
-    resetExpandedIndex()
+    ui.introSeen.value = true // a second intro does not schedule again
+    expect(win.requestIdleCallback).toHaveBeenCalledTimes(1)
+    const items = await searchIndex(L) // what the palette does on open
+    expect(items.some((i) => i.group === 'areas')).toBe(true)
+    expect(expandedIndexBuilds()).toBe(1)
+    act(() => render(null, root as unknown as Element))
+    ui.introSeen.value = false
+    resetSearchIndex()
+  })
+
+  it('unmounting the button before the intro cancels the idle build', () => {
+    resetSearchIndex()
+    ui.introSeen.value = false
+    const win = { addEventListener: vi.fn(), removeEventListener: vi.fn(), setTimeout: vi.fn(), requestIdleCallback: vi.fn() }
+    const { container: root } = installDom()
+    act(() => render(<SearchButton win={win as never} palette={{ loader: createLoader(async () => null, 'real') }} />, root as unknown as Element))
+    act(() => render(null, root as unknown as Element))
+    ui.introSeen.value = true
+    expect(win.requestIdleCallback).not.toHaveBeenCalled()
+    expect(expandedIndexBuilds()).toBe(0)
+    ui.introSeen.value = false
   })
 })
 

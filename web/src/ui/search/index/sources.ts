@@ -135,11 +135,11 @@ export function scenarioItems(scenarios: readonly PlanScenario[], tr: Translate)
   const out: SearchItem[] = scenarios.map((s): SearchItem => ({
     id: `scn:${s.id}`,
     group: 'scenarios',
-    code: s.id,
+    code: '', // the id carries the suit mass, a number without provenance (spec rule 2): searchable, not shown
     name: VARIANT_KEY[s.variant] ? tr(VARIANT_KEY[s.variant]) : s.variant,
     icon: 'gauge',
     priority: 15,
-    keywords: kw,
+    keywords: `${kw} ${s.id}`,
     run: (env) => {
       toMap(env)
       actions.chooseScenario({ id: s.id, variant: s.variant, suit_kg: s.suit_kg })

@@ -1,13 +1,10 @@
 // Lazy build of the expanded index (spec rule 5, planning-UI L12): never during the loading screen or
 // the intro. Nothing happens at import. The palette builds it on first open (palette.tsx searchIndex);
-// `scheduleIndexBuild` adds the idle build once the intro has started (ui.introSeen turns true when the
-// intro begins, story/attach.ts) — the shell's first-load code must call it to opt in (see PR notes).
+// the top-bar button adds the idle build after the intro has started (index/idle.ts, scheduleIndexBuild).
 // Every read goes through the one loader and only names files the app already fetches (scenarios
 // index, the official route, the dock's timeline, rad.json and clock.json), so a later read is a cache hit.
 import type { Loader } from '../../../data/loader'
 import { missionClock } from '../../../state/mission'
-import { effect } from '../../../state/signal'
-import { ui } from '../../../state/ui'
 import type { Rad } from '../../../hud/types'
 import { t } from '../../copy'
 import { buildTimelineModel, type TimelineFileRow } from '../../timeline/model'
@@ -41,26 +38,13 @@ export async function buildExpandedIndex(L: Loader): Promise<SearchItem[]> {
 }
 
 let cached: Promise<SearchItem[]> | null = null
+let builds = 0
 /** The expanded items, built once per page load (first caller wins: palette open or idle build). */
 export function expandedIndex(L: Loader): Promise<SearchItem[]> {
-  return (cached ??= buildExpandedIndex(L).catch(() => []))
+  return (cached ??= (builds++, buildExpandedIndex(L).catch(() => [])))
 }
+/** Tests: how many times the index was built since the last reset. */
+export const expandedIndexBuilds = (): number => builds
 export const expandedIndexStarted = (): boolean => cached !== null
 /** Tests: forget the built index. */
-export const resetExpandedIndex = (): void => void (cached = null)
-
-type IdleWin = Pick<Window, 'setTimeout'> & { requestIdleCallback?: (cb: () => void, o?: { timeout: number }) => number }
-
-/** Opt-in idle build: after the intro has started, in an idle callback (never before). Returns a stop. */
-export function scheduleIndexBuild(L: () => Loader, win: IdleWin | undefined = typeof window === 'undefined' ? undefined : window): () => void {
-  if (!win) return () => undefined
-  let done = false
-  const stop = effect(() => {
-    if (done || !ui.introSeen.value) return
-    done = true
-    const run = () => void expandedIndex(L())
-    if (typeof win.requestIdleCallback === 'function') win.requestIdleCallback(run, { timeout: 10_000 })
-    else win.setTimeout(run, 2_000)
-  })
-  return stop
-}
+export const resetExpandedIndex = (): void => void ((cached = null), (builds = 0))
