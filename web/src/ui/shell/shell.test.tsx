@@ -32,6 +32,7 @@ beforeEach(() => {
   ;({ document: doc } = installDom())
   shell.sidebarOpen.value = false
   shell.focusMode.value = false
+  shell.railSheet.value = false
   ui.panels.leftRail.value = TOKENS.layout.leftRail
   ui.panels.timeline.value = TOKENS.layout.timeline
 })
@@ -159,6 +160,37 @@ describe('shell frame and islands', () => {
     fire(dockBtn, 'click')
     expect(ui.panels.timeline.value).toBe(TOKENS.layout.timelineCollapsed)
     expect(root().style['--hl-dock-h']).toBe(`${TOKENS.layout.timelineCollapsed}px`)
+  })
+
+  it('tablet (768–1279, A7b): rail = 56 px icon column, its toggle opens a sheet without touching the desktop size; navigation closes it', () => {
+    act(() => void (shell.breakpoint.value = breakpointFor(1024)))
+    let off = () => {}
+    act(() => void (off = registerRailSection({ id: 'layers', modes: ['plan'], title: 'nav.rail.layers', icon: 'layers', render: () => <p class="probe">x</p> })))
+    expect(root().getAttribute('data-bp')).toBe('tablet')
+    expect(ui.panels.leftRail.value).toBe(TOKENS.layout.leftRail) // desktop preference: open
+    expect(root().getAttribute('data-rail')).toBe('collapsed')
+    expect(byClass(root(), 'hl-rail__view').map((a) => a.getAttribute('aria-label'))).toEqual([t('modes.plan.label'), t('nav.views.trade')])
+    expect(byClass(root(), 'hl-rail__title')).toHaveLength(0)
+    expect(byClass(root(), 'probe')).toHaveLength(0)
+    expect(one(byClass(root(), 'hl-rail__body')).hasAttribute('hidden')).toBe(false)
+    const toggle = one(byClass(root(), 'hl-rail__toggle'))
+    expect(toggle.getAttribute('aria-expanded')).toBe('false')
+    expect(toggle.getAttribute('aria-label')).toBe(t('nav.rail.expand'))
+    fire(toggle, 'click')
+    expect(shell.railSheet.value).toBe(true)
+    expect(root().getAttribute('data-rail')).toBe('open')
+    expect(ui.panels.leftRail.value).toBe(TOKENS.layout.leftRail)
+    expect(text(one(byClass(root(), 'hl-rail__title')))).toBe(t('modes.plan.label'))
+    expect(byClass(root(), 'probe')).toHaveLength(1)
+    expect(one(byClass(root(), 'hl-rail__toggle')).getAttribute('aria-expanded')).toBe('true')
+    act(() => void applyRoute({ name: 'trade' }, '#/trade'))
+    expect(shell.railSheet.value).toBe(false)
+    expect(root().getAttribute('data-rail')).toBe('collapsed')
+    // back on desktop the rail is the 320 px column again
+    act(() => void (shell.breakpoint.value = breakpointFor(1440)))
+    expect(root().getAttribute('data-rail')).toBe('open')
+    expect(byClass(root(), 'hl-rail__title')).toHaveLength(1)
+    act(() => off())
   })
 
   it('sidebar: closed until opened (§4.3 opens on selection), empty-state card, A5 content slot', () => {

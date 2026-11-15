@@ -93,9 +93,9 @@
 .hl-rail__view:hover { color: var(--color-text); background: var(--color-card); }
 .hl-rail__view.is-active { color: var(--color-text); background: var(--color-card); }
 .hl-rail__section { border-top: 1px solid var(--color-card-border); padding-top: var(--space-3); margin-top: var(--space-3); }
-.hl-shell[data-bp=desktop][data-rail=collapsed] .hl-rail { padding: var(--space-3) var(--space-2); align-items: center; }
-.hl-shell[data-bp=desktop][data-rail=collapsed] .hl-rail__head { justify-content: center; }
-.hl-shell[data-bp=desktop][data-rail=collapsed] .hl-rail__view { justify-content: center; }
+.hl-shell:not([data-bp=phone])[data-rail=collapsed] .hl-rail { padding: var(--space-3) var(--space-2); align-items: center; }
+.hl-shell:not([data-bp=phone])[data-rail=collapsed] .hl-rail__head { justify-content: center; }
+.hl-shell:not([data-bp=phone])[data-rail=collapsed] .hl-rail__view { justify-content: center; }
 
 /* ---------- right sidebar (360, opens on selection) ---------- */
 .hl-sidebar {
@@ -116,6 +116,11 @@
   transition: height var(--motion-panel-min) ease-out;
 }
 .hl-shell[data-dock=none] .hl-dock { display: none; }
+/* The descent intro (story/story.css, M10) hides the chrome (opacity 0, pointer-events none) while it
+   plays, and any input skips it. The dock keeps taking the pointer, so a click on Play both skips the
+   intro (story's window listener) and plays; with pointer-events none the click was swallowed by the
+   shell body and Play needed a second click (headless: Playwright waited until the intro ended, A7b). */
+html[data-story-chrome='hide'] .hl-shell .hl-dock, html[data-story-chrome='hide'] .hl-shell .hl-dock .hl-ui { pointer-events: auto; }
 .hl-dock__head { display: flex; align-items: center; gap: var(--space-2); flex: none; }
 .hl-dock__body { flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; }
 .hl-dock__placeholder { margin: 0; color: var(--color-text-muted); }
@@ -124,19 +129,32 @@
 .hl-shell[data-focus=on] .hl-rail, .hl-shell[data-focus=on] .hl-sidebar, .hl-shell[data-focus=on] .hl-dock { display: none; }
 .hl-focusexit { position: absolute; top: calc(var(--layout-top-bar) + var(--space-2)); right: var(--space-3); z-index: 30; }
 
-/* ---------- tablet (768–1279): rail and sidebar become bottom sheets, dock 96 ---------- */
+/* ---------- tablet (768–1279): the map stays the main surface (A7b) ----------
+   Rail: a 56 px icon column; its toggle opens the full rail as a sheet over the map (left, full body
+   height). Sidebar: an overlay on the right of the map (it shares the main grid cell, so it never covers
+   the rail or the dock); portrait tablets get the §4.3 half-height bottom sheet instead. Dock 96. */
 .hl-shell[data-bp=tablet] .hl-shell__body {
-  grid-template-columns: minmax(0, 1fr);
-  grid-template-rows: minmax(0, 1fr) auto auto;
-  grid-template-areas: "main" "rail" "dock";
+  grid-template-columns: var(--layout-left-rail-collapsed) minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr) auto;
+  grid-template-areas: "rail main" "rail dock";
 }
-.hl-shell[data-bp=tablet] .hl-rail {
-  width: auto; max-height: 40vh; border-right: 0; border-top: 1px solid var(--color-card-border); padding: var(--space-2) var(--space-3);
+.hl-shell[data-bp=tablet] .hl-rail { width: var(--layout-left-rail-collapsed); }
+.hl-shell[data-bp=tablet][data-rail=open] .hl-rail {
+  position: absolute; top: 0; bottom: 0; left: 0; z-index: 20; width: var(--layout-left-rail);
+  box-shadow: 0 0 24px var(--color-bg);
 }
-.hl-shell[data-bp=tablet] .hl-rail__body { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-3); }
-.hl-shell[data-bp=tablet] .hl-rail__views { flex-direction: row; flex-wrap: wrap; }
 .hl-shell[data-bp=tablet][data-dock=open] .hl-dock { height: calc(var(--layout-timeline) - var(--space-5)); }
-.hl-shell[data-bp=tablet] .hl-sidebar, .hl-shell[data-bp=phone] .hl-sidebar {
+.hl-shell[data-bp=tablet] .hl-sidebar {
+  grid-area: main; justify-self: end; position: relative; z-index: 20; width: min(var(--layout-sidebar), 100%);
+  box-shadow: 0 0 24px var(--color-bg);
+}
+@media (orientation: portrait) {
+  .hl-shell[data-bp=tablet] .hl-sidebar {
+    justify-self: stretch; align-self: end; width: auto; height: 50%;
+    border-left: 0; border-top: 1px solid var(--color-card-border);
+  }
+}
+.hl-shell[data-bp=phone] .hl-sidebar {
   position: absolute; left: 0; right: 0; bottom: 0; height: 50%; width: auto; z-index: 20;
   border-left: 0; border-top: 1px solid var(--color-card-border);
 }
