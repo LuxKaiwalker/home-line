@@ -13,7 +13,8 @@ Known answers, on the synthetic world (pipeline/engine/synthetic.py via parity_h
   run_record.schema.json (origin computed_live, label labels.live, canonical inputs, stages with
   timings) and lists every file;
 - a re-submit of the same inputs attaches to the running job;
-- an empty exporter registry adds nothing; a registered test exporter's file is listed in
+- an empty exporter registry adds nothing (the registry holds "mission", D110); a registered
+  test exporter's file is listed in
   manifest.json with its kind and served by GET /results/{hash}/<file>;
 - inputs other than the pad are refused as unsupported (job error), never ignored; inputs out
   of the config ranges give range flags, never clamping;
@@ -168,11 +169,14 @@ def test_result_tree_validates(inprocess):
     assert sorted(e["id"] for e in index["scenarios"]) == ["con_104", "nom_104", "opt_104"]
     manifest = json.loads((pub / "manifest.json").read_text())
     assert manifest["dummy"] is False
-    assert all(not k.startswith("export.") for k in manifest)  # empty registry: nothing added
+    # the registry holds only "mission" (D110, server/tests/test_mission_export.py)
+    assert [k for k in manifest if k.startswith("export.")] == ["export.mission.mission.json"]
 
 
 def test_empty_registry_adds_nothing(tmp_path):
-    assert exporters.EXPORTERS == {}
+    assert sorted(exporters.EXPORTERS) == ["mission"]  # D110: mission.json only
+    assert exporters.run_exporters(tmp_path, "c" * 40, "2026-11-15T00:00:00Z", {}) == {}
+    # the registered exporters write nothing into a tree that is not a plan job's
     assert exporters.run_exporters(tmp_path, "c" * 40, "2026-11-15T00:00:00Z") == {}
     assert list(tmp_path.iterdir()) == []
 
