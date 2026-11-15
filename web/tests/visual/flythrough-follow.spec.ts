@@ -40,12 +40,13 @@ async function frameStats(page: Page, png: Buffer): Promise<{ mean: number; blac
 test.describe('L10 flythrough chase camera', () => {
   test('capture: route legs and the crew marker are drawn, the crew is in frame, the frame is not black', async ({ page }, info) => {
     test.skip(info.project.name !== '1024x768', 'one size is enough: the capture steps are slow in software GL')
-    test.setTimeout(300_000)
+    test.setTimeout(240_000)
     await page.goto('/?capture=flythrough#/')
     await page.waitForFunction(() => !!(window as unknown as { __capture?: unknown }).__capture, undefined, { timeout: 60_000 })
     await page.evaluate(() => (window as unknown as { __capture: { ready: Promise<void> } }).__capture.ready)
-    // t = 10 s and 40 s of the storyboard: the crew walks out (EVA min 40) and is on the way back (min 160)
-    for (const frame of [600, 2400]) {
+    // t = 10 s of the storyboard: the crew walks out (EVA min 40). One frame: a capture step waits for
+    // every tile in software GL (tens of seconds); the dry run (notes/L10.md) samples the whole flight.
+    for (const frame of [600]) {
       await page.evaluate((n) => (window as unknown as { __capture: { seek(n: number): Promise<unknown> } }).__capture.seek(n), frame)
       const p = (await page.evaluate(() => (window as unknown as { __capture: { probe(): unknown } }).__capture.probe())) as Probe
       expect(p.layers['route-done']).toBe('visible')

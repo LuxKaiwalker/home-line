@@ -6,7 +6,7 @@ import { Marker } from 'maplibre-gl'
 import { data } from '../../data/loader'
 import type { RouteFC, Station } from '../../data/types'
 import { dataUrl } from '../../env'
-import { loadField, type FieldGrid } from '../../hud/fields'
+import { fieldGrid, loadField, type FieldGrid } from '../../hud/fields'
 import { Plan } from '../../hud/plan'
 import { parseClockSun, type ClockFile } from '../../hud/sun'
 import type { LonLat, TimelineEvent } from '../../hud/types'
@@ -14,6 +14,7 @@ import { loadPointer } from '../../hud/wayhome'
 import { effect, mission, ui } from '../../state'
 import { TOKENS } from '../../ui/tokens'
 import { CompassControl } from '../compass'
+import type { Metric } from '../flythrough/path'
 import { fieldAt, FIELD_TRUST } from '../field'
 import { MARKERS_TRUST, pulseFrame, stationFeatures, type MarkerStation } from '../markers'
 import { CursorReadout, readoutValues } from '../readout'
@@ -22,6 +23,12 @@ import { dashPattern, setThreadSources, threadColor, threadPath, threadTooltip, 
 import './furniture.css'
 
 const EMPTY: GeoJSON.FeatureCollection = { type: 'FeatureCollection', features: [] }
+
+/** Metres per degree of the field grid (fields/index.json): the slope FieldGrid's metric, without the PNG. */
+function gridMetric(ix: { bounds: number[]; width: number; height: number; res_m: number }): Metric {
+  const [w, s, e, n] = ix.bounds
+  return { mPerDegLon: (ix.width * ix.res_m) / (e - w), mPerDegLat: (ix.height * ix.res_m) / (n - s) }
+}
 /** Half length of a turn-back tick across the route, m. */
 const TICK_HALF_M = 15
 /** Station ring radius and pulse growth, px. */
@@ -64,6 +71,8 @@ export class MapFurniture {
   private pulseWas = false
   private paused = false
   private crewKey = ''
+  /** L10: field grid metric from fields/index.json (= the slope grid's), set before the PNG fields load */
+  private metric: Metric | null = null
   private pausedRenderAt = -Infinity
   private readonly stops: (() => void)[] = []
 
@@ -138,6 +147,12 @@ export class MapFurniture {
     const L = data()
     try {
       const [idx, pad] = await Promise.all([L.fieldsIndex(), L.optional(() => L.pad())])
+      if (seq !== this.planSeq) return
+      // L10: the plan (crew marker, legs) needs only the grid metric, the same numbers as the slope
+      // grid's (FieldGrid: width × res_m / span); it no longer waits for the PNG fields to decode
+      this.metric = idx.fields.slope ? gridMetric(fieldGrid(idx, 'slope')) : null
+      await this.syncPlan()
+      if (seq !== this.planSeq) return
       const key = `${scenarioId}/pointer`
       const [pointer, slope] = await Promise.all([
         idx.fields[key] ? loadPointer(idx, key, (p) => dataUrl(p)) : Promise.resolve(null),
@@ -181,9 +196,10 @@ export class MapFurniture {
     if (r && this.scenario) {
       const own = await L.optional(() => L.route(this.scenario!))
       const tl = own === r ? await L.optional(() => L.timeline(this.scenario!)) : null
-      if (tl && this.slope) {
+      const metric = this.slope ?? this.metric
+      if (tl && metric) {
         try {
-          plan = new Plan(r as never, tl as unknown as TimelineEvent[], this.slope)
+          plan = new Plan(r as never, tl as unknown as TimelineEvent[], metric)
         } catch (e) {
           console.warn('route timing unavailable:', e)
         }
@@ -191,7 +207,8 @@ export class MapFurniture {
     }
     if (r !== this.routeData) return
     this.plan = plan
-    this.line = plan ? routeLine(plan) : r && this.slope ? routeLineFromFC(r as never, this.slope) : null
+    const lineMetric = this.slope ?? this.metric
+    this.line = plan ? routeLine(plan) : r && lineMetric ? routeLineFromFC(r as never, lineMetric) : null
     this.ticks = plan ? turnBackTicks(plan, TICK_HALF_M) : []
     this.renderRoute()
     this.renderStations()
