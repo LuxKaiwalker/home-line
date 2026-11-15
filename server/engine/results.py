@@ -247,6 +247,7 @@ def _precomputed_run_record(h: str, identity: EngineIdentity, root: Path) -> byt
         "stages": [],
         "files": tree_files(root),
         "range_flags": [],
+        "route_mode": "auto",  # D97: the official plan is the engine's own route (F9)
         "infeasible": None,
         "error": None,
         "dummy": False,
