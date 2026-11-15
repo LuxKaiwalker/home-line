@@ -130,8 +130,8 @@ describe('hand-written types match openapi.yaml', () => {
     expect(validate({ type: 'plan', inputs: { ...PLAN_INPUTS_OFFICIAL, pad: 'x' } }, req)).not.toEqual([])
     expect(validate({ type: 'plan' }, req)).not.toEqual([])
   })
-  it('contract version is 1.1.0 (additive bump, D71 default)', () => {
-    expect((openapi as { info: { version: string } }).info.version).toBe('1.1.0')
+  it('contract version is 1.2.0 (additive bump: route, D97)', () => {
+    expect((openapi as { info: { version: string } }).info.version).toBe('1.2.0')
   })
 })
 

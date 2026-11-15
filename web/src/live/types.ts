@@ -1,4 +1,4 @@
-// Hand-written types for the parts of contracts/backend/openapi.yaml (v1.0.1, frozen) the live
+// Hand-written types for the parts of contracts/backend/openapi.yaml (v1.2.0) the live
 // client uses. contract.test.ts checks every key map and enum below against the schema, so a
 // contract change that these types miss fails the tests.
 
@@ -18,6 +18,8 @@ export interface ApiErrorBody {
   detail?: unknown
   retry_after_s?: number | null
   allowed?: Record<string, unknown> | null
+  /** v1.2.0 (D97): index into inputs.route.stops of the stop a route 422 names; null = whole route. */
+  stop?: number | null
 }
 
 export const JOB_TYPES = ['plan', 'siting', 'replan'] as const
@@ -134,7 +136,7 @@ export const JOB_KEYS: KeyMap<Job> = {
   stages_done: 'required', queue_position: 'optional', result_url: 'optional', attached: 'optional', error: 'optional',
   retry_after_s: 'optional',
 }
-export const ERROR_KEYS: KeyMap<ApiErrorBody> = { error: 'required', detail: 'optional', retry_after_s: 'optional', allowed: 'optional' }
+export const ERROR_KEYS: KeyMap<ApiErrorBody> = { error: 'required', detail: 'optional', retry_after_s: 'optional', allowed: 'optional', stop: 'optional' }
 export const JOB_REQUEST_KEYS: KeyMap<JobRequest> = { type: 'required', inputs: 'required', replan: 'optional' }
 export const PAD_CHECK_KEYS: KeyMap<PadCheck> = { valid: 'required', reason: 'required', detail: 'optional', nearest_valid: 'optional' }
 export const PAD_SCREEN_KEYS: KeyMap<PadScreen> = { pad: 'required', stations: 'required', feasible_evas: 'required', best_route: 'optional', label: 'required' }
@@ -168,10 +170,23 @@ export interface RunRecord {
   stages: { name: string; started_utc?: string; seconds: number; files?: string[] }[]
   files: { path: string; sha256: string; bytes: number; contract?: string | null }[]
   range_flags?: { key: string; value?: number; note: string }[]
+  /** v1.2.0 (D97): inputs.route.mode; absent in older records. */
+  route_mode?: RouteMode
+  /** v1.2.0 (D97): the answer for the route as given; absent in older records. */
+  feasibility?: Feasibility
   infeasible?: { leg: number; from: string; to: string; margin_min?: number; binding: string } | null
   error?: string | null
   dummy: boolean
 }
+
+/** plan_inputs route.mode (v1.2.0, D97); a missing route = auto. */
+export type RouteMode = 'auto' | 'ordered'
+/** plan_inputs route.stops[i]: a station of stations.json or a free point (named W1, W2, ... in order). */
+export type RouteStop = { station: string } | { lon: number; lat: number; label?: string }
+/** run_record.feasibility (v1.2.0, D97): leg 0 = pad -> stops[0], len(stops) = last stop -> pad. */
+export type Feasibility =
+  | { feasible: true }
+  | { feasible: false; leg: number; from: string; to: string; limit: 'O2' | 'daylight' | 'dose' | 'EVA duration'; shortfall_min: number; legs_planned?: number }
 
 /** One run-record range flag (F26): an input outside its config range, flagged and never clamped. */
 export type RangeFlag = NonNullable<RunRecord['range_flags']>[number]
@@ -179,5 +194,5 @@ export type RangeFlag = NonNullable<RunRecord['range_flags']>[number]
 export const RUN_RECORD_KEYS: KeyMap<RunRecord> = {
   contract_version: 'required', hash: 'required', origin: 'required', label: 'required', inputs: 'required', engine: 'required',
   terrain_hash: 'required', status: 'required', started_utc: 'required', finished_utc: 'optional', stages: 'required', files: 'required',
-  range_flags: 'optional', infeasible: 'optional', error: 'optional', dummy: 'required',
+  range_flags: 'optional', route_mode: 'optional', feasibility: 'optional', infeasible: 'optional', error: 'optional', dummy: 'required',
 }

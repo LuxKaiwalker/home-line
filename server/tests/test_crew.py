@@ -9,9 +9,7 @@
   plan runs; the run record validates and lists the flag;
 - a value outside the plan_inputs schema gives 422 (no job);
 - a suit mass other than the default has no build_plan path: refused (job error), never ignored;
-- the station-field cache: the first job with a crew computes the fields through
-  padpick.station_fields, the second job with the same crew (another pad) reads them from
-  $HL_SERVER_DATA/cache/station_fields/{crew hash}/; another crew gets another hash.
+- a custom-crew job computes and caches no crew station fields (D84: build_plan cannot use them).
 """
 
 from __future__ import annotations
@@ -27,7 +25,7 @@ pytest.importorskip("httpx")
 import rasterio  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
 
-from pipeline.engine import padpick, provenance  # noqa: E402
+from pipeline.engine import provenance  # noqa: E402
 from pipeline.engine.config import load  # noqa: E402
 from server.engine import crew as crew_mod  # noqa: E402
 from server.engine import jobs, plan_job, results  # noqa: E402
@@ -133,7 +131,9 @@ def test_build_plan_call_default_unchanged_custom_gets_crew(world, tmp_path, mon
     _build(world, with_crew(doc, HEAVY), tmp_path / "c")
     a, b, c = calls
     assert a["crew"] is None and b["crew"] is None
-    assert c["crew"] == {**crew_mod._crew_values(None), **HEAVY}
+    from pipeline.engine.physio import crew_values
+
+    assert c["crew"] == {**crew_values(None), **HEAVY}
     for kw in (b, c):
         assert {k: v for k, v in kw.items() if k not in ("out_dir", "public_dir", "manifest_dir",
                                                          "crew")} == \
@@ -190,62 +190,17 @@ def test_heavier_carried_mass_never_increases_reach(server_data, tmp_path):
     assert plan_job.range_flags(with_crew(doc, crews[-1]))[0]["key"] == "crew.tools_kg"
 
 
-# ---------------------------------------------------------------- station-field cache ----
-def test_station_field_cache_hit_on_second_job(server_data, tmp_path, monkeypatch):
-    import shutil
-
-    shutil.rmtree(crew_mod.cache_root(), ignore_errors=True)
-    calls = []
-    real = padpick.station_fields
-
-    def counting(*a, **kw):
-        calls.append((a[1]["id"], a[2], kw.get("crew")))
-        return real(*a, **kw)
-
-    monkeypatch.setattr(padpick, "station_fields", counting)
+# ---------------------------------------------------------- no station-field cache (D84) ----
+def test_custom_crew_job_runs_without_station_field_cache(server_data, tmp_path):
+    """D84: build_plan takes no precomputed station fields, so a custom-crew job neither
+    computes nor caches crew station fields ($HL_SERVER_DATA/cache/station_fields/)."""
     crew = {"body_mass_kg": 85.0, "vo2max_ml_kg_min": 40.0}
-    doc1 = with_crew(custom_inputs(server_data / "terrain", east_m=-30.0), crew)
-    doc2 = with_crew(custom_inputs(server_data / "terrain", east_m=-60.0), crew)
-    stations = json.loads((server_data / "terrain" / "stations.json").read_text())
-    sid = load("variants")["scenarios"]["default"]
-    ov = crew_mod.overrides(doc1)
-
-    _job(server_data, doc1, tmp_path / "j1")
-    assert sorted(c[0] for c in calls) == sorted(s["id"] for s in stations)
-    assert all(c[1] == sid and c[2] == ov for c in calls)
-    key = crew_mod.crew_hash(ov)
-    d = crew_mod.entry_dir(key, sid)
-    for s in stations:
-        meta = json.loads((d / f"{s['id']}.json").read_text())
-        assert meta["crew_hash"] == key and meta["scenario"] == sid
-        assert meta.get("no_access") or (d / meta["forward"]).is_file()
-    assert any((d / f"{s['id']}.forward.npy").is_file() for s in stations)  # not all no-access
-    mtimes = {p.name: p.stat().st_mtime_ns for p in d.iterdir()}
-
-    calls.clear()
-    _job(server_data, doc2, tmp_path / "j2")  # another pad, same crew
-    assert calls == []  # every station field came from the cache
-    assert {p.name: p.stat().st_mtime_ns for p in d.iterdir()} == mtimes
-
-    # what the cache returns is padpick.station_fields' pair (float32 minutes)
-    from pipeline.engine.graph import load_ws1_grid
-
-    grid = load_ws1_grid(server_data / "terrain")
-    for s in stations:
-        r = crew_mod.station_fields(grid, s, sid, ov)
-        assert r.hit and r.crew_hash == key
-        if r.no_access is None:
-            fwd, rev = real(grid, s, sid, None, crew=ov)
-            assert np.array_equal(np.asarray(r.forward), fwd.t_min.astype(np.float32))
-            assert np.array_equal(np.asarray(r.reverse), rev.t_min.astype(np.float32))
-            assert r.access_rc == tuple(int(v) for v in fwd.seeds[0])
-    assert calls == []  # the reads above were cache hits
-
-    # the default crew computes nothing (the server data's fields are its own)
-    calls.clear()
-    _job(server_data, custom_inputs(server_data / "terrain", east_m=-90.0), tmp_path / "j3")
-    assert calls == []
-    assert sorted(p.name for p in crew_mod.cache_root().iterdir()) == [key]
+    doc = with_crew(custom_inputs(server_data / "terrain", east_m=-30.0), crew)
+    _, pub = _job(server_data, doc, tmp_path / "j1")
+    index = json.loads((pub / "scenarios" / "index.json").read_text())
+    assert sorted(e["id"] for e in index["scenarios"]) == ["con_104", "nom_104", "opt_104"]
+    assert not (server_data / "cache" / "station_fields").exists()
+    assert not hasattr(crew_mod, "ensure_station_fields")
 
 
 # ----------------------------------------------------------------- through the API ----

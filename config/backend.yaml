@@ -4,7 +4,7 @@
 # Defaults that already live in another config file are referenced as "<file>.<key>" (`*_ref`),
 # never copied. This file is NOT part of the result hash (docs/backend.md "Result hash"): changing a
 # limit must not invalidate computed plans.
-contract_version: "1.1.0"          # contracts/backend/ family
+contract_version: "1.2.0"          # contracts/backend/ family (v1.2.0: route, D97)
 
 api:
   prefix: /api/v1
@@ -66,6 +66,11 @@ ranges:                            # F26 (crew) and F25 (route); inputs outside 
   user_points_max: 3                                         # access radius: D27 (stations.yaml), not repeated
   anchored_flag_note: "outside the anchored range (ICES-2026-127, IST-2)"
 
+route:                             # D97 waypoint block: plan_inputs route (ordered stops); enforced by the server (422 naming the stop)
+  max_stops: 8                     # assumed: true (D97): stations + free points in one route
+  max_free_points: 4               # assumed: true (D97): each free point costs ~40 s per scenario variant (station fields)
+  min_stop_spacing_m: 50           # assumed: true (D97): = the D27 access radius; closer stops (or a stop and the pad) are refused
+
 pads:                              # F24: validity = the D21 rule
   rule_ref: site.siting            # max_slope_deg, siting block size, flat disc inside the grid
 
@@ -109,4 +114,5 @@ gates_local:                       # D50: backend starts Sat evening, gates shif
   freeze_ref: event.gates_local.freeze
 
 assumed: [limits.title_max_chars, limits.notes_max_chars, ranges.start_lmst_h, ranges.reserve_min,
-          sessions.message_max_chars, limits.proxy_max_body_bytes, compute.job_timeout_s]
+          sessions.message_max_chars, limits.proxy_max_body_bytes, compute.job_timeout_s,
+          route.max_stops, route.max_free_points, route.min_stop_spacing_m]

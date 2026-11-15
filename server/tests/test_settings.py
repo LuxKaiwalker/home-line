@@ -87,13 +87,31 @@ def test_assumed_list_known_answer():
     c = st.load()
     assert c.assumed == ["limits.title_max_chars", "limits.notes_max_chars",
                          "ranges.start_lmst_h", "ranges.reserve_min", "sessions.message_max_chars",
-                         "limits.proxy_max_body_bytes", "compute.job_timeout_s"]
+                         "limits.proxy_max_body_bytes", "compute.job_timeout_s",
+                         "route.max_stops", "route.max_free_points", "route.min_stop_spacing_m"]
     for path in c.assumed:
         node = c
         for part in path.split("."):
             node = getattr(node, part)  # raises if the entry no longer resolves
         if isinstance(node, st.Range):
             assert node.assumed is True, path
+
+
+def test_route_limits_known_answer():
+    """D97: route limits 8 stops, 4 free points, 50 m spacing (= the D27 access radius), assumed."""
+    c = st.load()
+    assert (c.route.max_stops, c.route.max_free_points, c.route.min_stop_spacing_m) == (8, 4, 50)
+    variants = yaml.safe_load((st.CONFIG_DIR / "variants.yaml").read_text())
+    # = the D27 access radius
+    assert c.route.min_stop_spacing_m == variants["route"]["access_radius_m"]
+    route_keys = {"route.max_stops", "route.max_free_points", "route.min_stop_spacing_m"}
+    assert route_keys <= set(c.assumed)
+
+
+def test_route_free_points_above_stops_refused(cfg_copy):
+    edit_backend(cfg_copy, lambda d: d["route"].update(max_free_points=9))
+    with pytest.raises(ValueError):
+        st.load(cfg_copy)
 
 
 def test_refs_resolve_to_other_config_files():
