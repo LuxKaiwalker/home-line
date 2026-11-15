@@ -2,7 +2,6 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import { installMapExtensions, registerEditHandlers, resetMapExtensions, type MapExtensionContext, type MapPointer } from '../../../map/extensions'
 import { MapSelection, type SelectMap } from '../../../map/select'
-import { consoleMapPort, type ConsoleMapLike } from '../../../live/mapPort'
 import { resetSelection, selection } from '../../../state/selection'
 import { createPlanningStore } from '../../../state/planning'
 import { createPlanEditor } from './planEdit'
@@ -194,7 +193,7 @@ describe('F11: map click and drop pick the ground under the pointer (2D and 3D)'
     off()
   })
 
-  it('R3 consumes the click: MapSelection opens no card and the live pad tool drops no pad', () => {
+  it('R3 consumes the click: MapSelection opens no card (live/mapPort.f11.test.ts: no live pad either)', () => {
     const store = createPlanningStore()
     const ed = createPlanEditor({ store, pad: () => PAD, noticeMs: 0 })
     ed.setEditing(true)
@@ -216,11 +215,9 @@ describe('F11: map click and drop pick the ground under the pointer (2D and 3D)'
       getPaintProperty: () => undefined,
       setPaintProperty() {},
     }
-    // the app's order (consoleMap.ts): extensions, then MapSelection, then the live port
+    // the app's order (consoleMap.ts): extensions, then MapSelection
     const host = installMapExtensions({ map, beforeId: () => undefined, marker: () => ({}), inShell: true } as unknown as MapExtensionContext)
     const ms = new MapSelection(map as unknown as SelectMap, () => ({ labels: [], stations: [], pad: PAD, route: null }) as never)
-    const pads: unknown[] = []
-    const offLive = consoleMapPort({ map } as unknown as ConsoleMapLike).onClick((p) => pads.push(p))
     const click = (target: unknown) => {
       const originalEvent = { button: 0, target, defaultPrevented: false, preventDefault() { originalEvent.defaultPrevented = true } }
       for (const fn of handlers.get('click') ?? []) fn({ point: { x: 5, y: 5 }, lngLat: { lng: 137.41, lat: PAD.lat }, originalEvent })
@@ -229,13 +226,10 @@ describe('F11: map click and drop pick the ground under the pointer (2D and 3D)'
     click(ground)
     expect(store.doc.peek().route.stops).toHaveLength(1) // R3 added the point
     expect(selection.selected.peek()).toBeNull() // no "Terrain spot" card
-    expect(pads).toHaveLength(0) // no live pad dot
-    // editing off: the same click is MapSelection's (terrain cell card) and the live tool's again
+    // editing off: the same click is MapSelection's again (terrain cell card)
     ed.setEditing(false)
     click(ground)
     expect(selection.selected.peek()).not.toBeNull()
-    expect(pads).toHaveLength(1)
-    offLive()
     ms.destroy()
     host.destroy()
   })
