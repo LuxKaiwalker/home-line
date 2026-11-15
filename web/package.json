@@ -17,7 +17,10 @@
     "test:visual": "playwright test",
     "bundle:budget": "node ../tools/bundle_budget.ts",
     "test:a11y:static": "vitest run -c tests/a11y/vitest.config.ts",
-    "test:a11y-perf": "playwright test -c tests/a11y/playwright.config.ts"
+    "test:a11y-perf": "playwright test -c tests/a11y/playwright.config.ts",
+    "build:planning": "node tests/e2e/build.mjs",
+    "test:planning": "playwright test -c tests/e2e/playwright.config.ts",
+    "test:planning:unit": "vitest run -c tests/e2e/vitest.config.ts"
   },
   "devDependencies": {
     "@types/geojson": "^7946.0.16",
