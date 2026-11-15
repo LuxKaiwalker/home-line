@@ -5,7 +5,7 @@
 
   "modes": {
     "plan": { "label": "Plan", "question": "Where can we go and still get home?" },
-    "science": { "label": "Science stations", "question": "Why these spots, and what is there to find?" },
+    "science": { "label": "Science", "question": "Why these spots, and what is there to find?" },
     "fly": { "label": "Fly", "question": "What will it be like, minute by minute?" },
     "report": { "label": "Report", "question": "Is this plan safe, and what does it cost?" },
     "evidence": { "label": "Evidence", "question": "Why believe it?" }
@@ -900,7 +900,7 @@
     },
     "storageTitle": "Stored in this browser",
     "privacy": "No accounts, logins or cookies. Saved plans, and which panels and view you left open, stay in this browser; nothing else uses browser storage.",
-    "curiosity": "The Mission Planer's Curiosity layer is off by default; turning it on loads the rover's drives and pictures from mars.nasa.gov, so it contacts NASA's site."
+    "curiosity": "The Plan map's Curiosity layer is off by default; turning it on loads the rover's drives and pictures from mars.nasa.gov, so it contacts NASA's site."
   },
 
   "a11y": {
@@ -1092,12 +1092,123 @@
   "route": {
     "pads": { "official": "Official pad", "loading": "Loading pad {pad}…", "planFromHere": "Plan from here" },
     "strip": { "official": "Official", "pad": "Pad {pad}" },
-    "panel": { "title": "Route", "open": "Plan a route", "fast": "Fast route · may not be the fastest" },
+    "panel": {
+      "title": "Route",
+      "open": "Plan a route",
+      "fast": "Fast route · may not be the fastest",
+      "close": "Close the route panel",
+      "collapse": "Collapse the route panel",
+      "expand": "Expand the route panel",
+      "empty": "Click the map or a station to add a stop",
+      "sections": { "list": "Stops", "settings": "EVA settings", "export": "Export and share" },
+      "pads": {
+        "label": "Start pad",
+        "loading": "Loading pad {pad}…",
+        "error": "Pad {pad} could not be loaded. Try again, or pick another pad.",
+        "indexLoading": "Loading the pads…",
+        "indexError": "The pad list could not be loaded: the official pad stays in use.",
+        "noFields": "No walk-home fields for this pad: it shows its official plan only",
+        "note": "The official pad and the next pads of the pad ranking, each with its own precomputed plan."
+      },
+      "estimates": {
+        "title": "Estimates",
+        "estimate": "Estimate",
+        "estimateTitle": "Computed in this browser from the pad's walk-home fields; not a checked plan",
+        "total": "Total time",
+        "margin": "Margin",
+        "marginTitle": "The engine's four-term margin (O₂, daylight, dose, EVA duration) at the tightest point of the route, as the route core gives it",
+        "o2": "O₂ on the legs",
+        "o2Title": "Sum of the O₂ the route core gives per leg",
+        "minutes": "{v} min",
+        "litres": "{v} L",
+        "unknown": "–",
+        "idle": "Estimates follow once the route is computed.",
+        "computing": "Computing the route…",
+        "partial": "{done} of {n} legs in; the rest follow…",
+        "error": "The route could not be computed: {error}",
+        "infeasible": "Leg {n} ({from} → {to}) cannot be walked: {reason}",
+        "infeasibleBare": "Leg {n} ({from} → {to}) cannot be walked",
+        "pad": "pad",
+        "reasons": { "unreachable": "not reachable on foot", "budget": "over the budget", "slope": "too steep" },
+        "reachTitle": "Reach of this pad",
+        "reach": "{budget}-min reach",
+        "reachNone": "No precomputed reach for this pad",
+        "reachLoading": "Loading the reach of this pad…"
+      }
+    },
     "list": { "empty": "Click the map to add a point, or add a station from its card." },
-    "settings": { "storm": "Include storm in the margin" },
-    "export": { "marvis": "Send to MARVIS", "download": "Download mission.json" },
-    "map": { "official": "Official route for this pad", "mine": "Your route" },
-    "layers": { "slope": { "title": "Slope" }, "curiosity": { "title": "Curiosity route and photos" } },
+    "settings": { "storm": "Include solar storm replay ({date}) in the margin" },
+    "export": {
+      "marvis": "Send to MARVIS",
+      "download": "Download mission.json",
+      "busy": "Preparing mission.json…",
+      "what": { "route": "Your route · Estimate", "official": "No route yet: the official plan of this pad" },
+      "result": {
+        "sent": "Sent: MARVIS starts the EVA.",
+        "refused": "MARVIS did not start the EVA: {reason}",
+        "saved": "Saved as {file}. In MARVIS, load it from the Missions tab of the map.",
+        "fallback": "Download mission.json instead"
+      },
+      "errors": {
+        "route": "The route cannot be exported yet: {reason}",
+        "pad": "This pad has no routing fields, so its route cannot be exported.",
+        "official": "The official plan of this pad could not be loaded: {reason}",
+        "generic": "Could not build mission.json: {reason}"
+      },
+      "share": { "button": "Copy share link", "copied": "Link copied", "select": "Copy this link:", "label": "Share link" },
+      "link": { "invalid": "This link could not be read, so nothing was loaded. Your plan is unchanged." }
+    },
+    "map": {
+      "official": "Official route for this pad",
+      "mine": "Your route",
+      "computing": "Still computing",
+      "infeasible": "Not feasible from here on",
+      "legend": "Routes",
+      "stop": "Stop {n}: {name}",
+      "stopInfeasible": "Stop {n}: {name} · not reachable in time"
+    },
+    "layers": {
+      "slope": { "title": "Slope" },
+      "curiosity": {
+        "title": "Curiosity route and photos",
+        "live": "live NASA data",
+        "what": "Curiosity's real drives inside this map. Click a drive end for the pictures the rover took there.",
+        "privacy": "Off by default. Turning it on loads the rover's drives and raw images from mars.nasa.gov, so your browser contacts NASA's site.",
+        "loading": "Loading Curiosity's drives from NASA…",
+        "stops": "{n} drive ends, sols {first}–{last}. Source: NASA/JPL-Caltech MMGIS.",
+        "none": "No Curiosity drive end inside this map.",
+        "unavailable": "NASA's data is unavailable right now ({reason}). The rest of the map works as before.",
+        "retry": "Try again",
+        "reasons": {
+          "timeout": "no answer in time",
+          "network": "the site could not be reached",
+          "server": "NASA's server reported an error",
+          "http": "the request was refused",
+          "format": "the answer was not in the expected format"
+        },
+        "card": {
+          "title": "Curiosity drive end {rmc} · sol {sol}",
+          "meta": "This drive {distance} · odometer {odometer} · {lat}°, {lon}°E",
+          "sol": "sol {sol}",
+          "sols": "sols {first}–{last}",
+          "loading": "Loading pictures from NASA…",
+          "unavailable": "The pictures are unavailable right now ({reason}).",
+          "mastcam": "Mastcam (colour)",
+          "navcam": "Navcam",
+          "count": "{n} pictures",
+          "navcamRule": "Frames tagged with this stop's site and drive: the rover had not moved.",
+          "mastcamRule": "NASA's data gives Mastcam frames no position, so they are matched by {sols}. Frames from sol {sol} may predate the drive.",
+          "noneAtStop": "None at this stop.",
+          "noneOn": "None on {sols}.",
+          "showAll": "Show all {n}",
+          "imageTitle": "{instrument} · sol {sol} · {taken}",
+          "imageAlt": "{camera} raw image ({instrument}), sol {sol}, taken {taken}",
+          "truncated": "Long stay or many frames: only the first sols and pages were searched.",
+          "credit": "Raw images, NASA/JPL-Caltech/MSSS ·",
+          "archive": "raw-image archive"
+        }
+      }
+    },
     "basemaps": { "title": "Maps" }
   }
 }

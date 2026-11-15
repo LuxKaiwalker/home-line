@@ -10,8 +10,7 @@ import { isOpen, resetLayout } from '../../../ui/layout'
 import { all, byClass, byTag, installDom, type FakeNode } from '../../../ui/testing/dom'
 import { color } from '../../../ui/tokens'
 import { StopPhotos } from './Card'
-import { ct } from './copy'
-import ownCopy from './copy.L1b.json'
+import { t } from '../../../ui/copy'
 import { install } from './install'
 import { CURIOSITY_LAYERS, CURIOSITY_SOURCES } from './layer'
 import { MSL_TRAVERSE_URL, MSL_WAYPOINTS_URL, NASA_HOST, RAW_IMAGE_API, resetNasaCache, type Bounds, type DriveEnd } from './nasa'
@@ -96,8 +95,8 @@ describe('off by default: zero requests', () => {
     expect(m.data.get(CURIOSITY_SOURCES.stops)).toEqual({ type: 'FeatureCollection', features: [] })
     // the toggle is off; "live NASA data" and the privacy note naming mars.nasa.gov sit next to it
     expect(toggle().getAttribute('aria-checked')).toBe('false')
-    expect(root.textContent).toContain(ct('curiosity.live'))
-    expect(ct('curiosity.live')).toBe('live NASA data')
+    expect(root.textContent).toContain(t('route.layers.curiosity.live'))
+    expect(t('route.layers.curiosity.live')).toBe('live NASA data')
     expect(byClass(root, 'hl-curiosity__privacy')[0].textContent).toContain(NASA_HOST)
     host.destroy()
     off()
@@ -125,14 +124,14 @@ describe('turned on', () => {
     const host = installMapExtensions(m.ctx)
     renderControl()
     act(() => void toggle().dispatch('click', {}))
-    expect(root.textContent).toContain(ct('curiosity.loading'))
+    expect(root.textContent).toContain(t('route.layers.curiosity.loading'))
     await flush()
     expect(fetchMock.mock.calls.map((c) => c[0]).sort()).toEqual([MSL_TRAVERSE_URL, MSL_WAYPOINTS_URL].sort())
     expect(curiosityStatus.peek().kind).toBe('ready')
     for (const id of Object.values(CURIOSITY_LAYERS)) expect(m.vis(id)).toBe('visible')
     expect((m.data.get(CURIOSITY_SOURCES.stops) as { features: unknown[] }).features).toHaveLength(2) // sol 10 is outside
     expect(m.layers.get(CURIOSITY_LAYERS.stops)!.paint['circle-color']).toBe(color('live'))
-    expect(root.textContent).toContain(ct('curiosity.stops', { n: 2, first: 4190, last: 4200 }))
+    expect(root.textContent).toContain(t('route.layers.curiosity.stops', { n: 2, first: 4190, last: 4200 }))
     // off and on again: hidden, then shown from memory (no new request)
     act(() => void toggle().dispatch('click', {}))
     expect(m.vis(CURIOSITY_LAYERS.stops)).toBe('none')
@@ -193,7 +192,7 @@ describe('card in the map container', () => {
     await flush()
     const card = byClass(mapEl, 'hl-curiosity-card')
     expect(card).toHaveLength(1)
-    expect(card[0].textContent).toContain(ct('curiosity.card.title', { rmc: '107_2484', sol: 4200 }))
+    expect(card[0].textContent).toContain(t('route.layers.curiosity.card.title', { rmc: '107_2484', sol: 4200 }))
     expect(card[0].getAttribute('role')).toBe('dialog')
     host.destroy()
     expect(byClass(mapEl, 'hl-curiosity-host')).toHaveLength(0)
@@ -213,7 +212,7 @@ describe('unavailable', () => {
     act(() => void toggle().dispatch('click', {}))
     await flush()
     expect(curiosityStatus.peek()).toEqual({ kind: 'unavailable', reason: 'network' })
-    expect(root.textContent).toContain(ct('curiosity.unavailable', { reason: ct('curiosity.reasons.network') }))
+    expect(root.textContent).toContain(t('route.layers.curiosity.unavailable', { reason: t('route.layers.curiosity.reasons.network') }))
     for (const id of Object.values(CURIOSITY_LAYERS)) expect(m.vis(id)).toBe('none')
     const calls = fetchMock.mock.calls.length
     fetchMock.mockImplementation(async (u: string) => (u === MSL_WAYPOINTS_URL ? ok(WAYPOINTS) : ok(TRAVERSE)))
@@ -231,7 +230,7 @@ describe('unavailable', () => {
     const stop: DriveEnd = { rmc: '107_2484', sol: 4200, site: 107, drive: 2484, lon: 137.4, lat: -4.78, distM: 12, totalM: 34000 }
     act(() => render(<StopPhotos stop={stop} next={null} />, root as unknown as Element))
     await flush()
-    expect(root.textContent).toContain(ct('curiosity.card.unavailable', { reason: ct('curiosity.reasons.server') }))
+    expect(root.textContent).toContain(t('route.layers.curiosity.card.unavailable', { reason: t('route.layers.curiosity.reasons.server') }))
   })
 })
 
@@ -247,7 +246,7 @@ describe('the drive-end card', () => {
       return ok({ items, more: false })
     })
     act(() => render(<StopPhotos stop={stop} next={next} />, root as unknown as Element))
-    expect(root.textContent).toContain(ct('curiosity.card.loading'))
+    expect(root.textContent).toContain(t('route.layers.curiosity.card.loading'))
     await flush()
     expect(fetchMock.mock.calls.every((c) => String(c[0]).startsWith(RAW_IMAGE_API))).toBe(true)
     expect(fetchMock).toHaveBeenCalledTimes(3) // parked 4200, 4201 + next drive sol 4202
@@ -255,36 +254,23 @@ describe('the drive-end card', () => {
     const mast = sections.find((s) => s.getAttribute('data-camera') === 'mastcam')!
     const nav = sections.find((s) => s.getAttribute('data-camera') === 'navcam')!
     expect(mast.textContent).toContain('may predate the drive')
-    expect(mast.textContent).toContain(ct('curiosity.card.mastcamRule', { sols: ct('curiosity.card.sols', { first: 4200, last: 4201 }), sol: 4200 }))
+    expect(mast.textContent).toContain(t('route.layers.curiosity.card.mastcamRule', { sols: t('route.layers.curiosity.card.sols', { first: 4200, last: 4201 }), sol: 4200 }))
     const imgs = byTag(root, 'img')
     expect(imgs).toHaveLength(2) // m9 is on the next drive's sol: not this stop's Mastcam
     for (const img of imgs) expect(img.getAttribute('loading')).toBe('lazy')
     const mImg = byTag(mast, 'img')[0]
-    expect(mImg.getAttribute('alt')).toBe(ct('curiosity.card.imageAlt', { camera: ct('curiosity.card.mastcam'), instrument: 'MAST_LEFT', sol: 4200, taken: '2024-05-30 12:34:56 UTC' }))
+    expect(mImg.getAttribute('alt')).toBe(t('route.layers.curiosity.card.imageAlt', { camera: t('route.layers.curiosity.card.mastcam'), instrument: 'MAST_LEFT', sol: 4200, taken: '2024-05-30 12:34:56 UTC' }))
     expect(byTag(nav, 'img')[0].getAttribute('alt')).toContain('Navcam')
-    expect(root.textContent).toContain(ct('curiosity.live'))
+    expect(root.textContent).toContain(t('route.layers.curiosity.live'))
     // links open NASA's full image in a new tab without a referrer leak
     const a = all(root, (n) => n.localName === 'a' && n.getAttribute('target') === '_blank')
     expect(a.every((n) => (n.getAttribute('rel') ?? '').includes('noopener'))).toBe(true)
   })
 })
 
-describe('copy.L1b.json follows the copy.json rules', () => {
-  const PH = /\{[a-z][a-z0-9_]*\}/g
-  const strings: [string, string][] = []
-  const walk = (n: unknown, p: string) => (typeof n === 'string' ? strings.push([p, n]) : Object.entries(n as object).forEach(([k, v]) => walk(v, p ? `${p}.${k}` : k)))
-  walk(ownCopy, '')
-  it('no digits outside placeholders, no emoji, no "waypoint", non-empty and trimmed', () => {
-    for (const [p, s] of strings) {
-      expect(/\p{Nd}/u.test(s.replace(PH, '')), p).toBe(false)
-      expect(/\p{Extended_Pictographic}/u.test(s), p).toBe(false)
-      expect(/waypoint/i.test(s), p).toBe(false)
-      expect(s.trim(), p).toBe(s)
-      expect(s.length, p).toBeGreaterThan(0)
-    }
-  })
+describe('copy (route.layers.curiosity in ui/copy.json)', () => {
   it('keeps the seed title (route.layers.curiosity.title) and the honesty label', () => {
-    expect(ct('curiosity.title')).toBe('Curiosity route and photos')
-    expect(ct('curiosity.privacy')).toContain('mars.nasa.gov')
+    expect(t('route.layers.curiosity.title')).toBe('Curiosity route and photos')
+    expect(t('route.layers.curiosity.privacy')).toContain('mars.nasa.gov')
   })
 })

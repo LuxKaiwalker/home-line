@@ -11,6 +11,8 @@
   white-space: nowrap;
   pointer-events: none;
 }
+/* above the stop's number badge (translate leaves the marker's own transform alone) */
+.hl-r4-label--infeasible { color: var(--color-limit); translate: 0 calc(-1 * var(--space-5)); }
 .hl-r4-stop {
   display: grid;
   place-items: center;

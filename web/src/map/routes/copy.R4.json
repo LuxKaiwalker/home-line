@@ -1,9 +1,0 @@
-{
-  "official": "Official route for this pad",
-  "mine": "Your route",
-  "computing": "Still computing",
-  "infeasible": "Not feasible from here on",
-  "legend": "Routes",
-  "stop": "Stop {n}: {name}",
-  "stopInfeasible": "Stop {n}: {name} · not reachable in time"
-}

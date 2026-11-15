@@ -49,7 +49,7 @@ describe('/about: what is fetched live (D86)', () => {
     vi.stubEnv('VITE_LIVE', '')
     const t = await render()
     expect(t).toContain('Stored in this browser')
-    expect(t).toContain("The Mission Planer's Curiosity layer is off by default; turning it on loads the rover's drives and pictures from mars.nasa.gov")
+    expect(t).toContain("The Plan map's Curiosity layer is off by default; turning it on loads the rover's drives and pictures from mars.nasa.gov")
     // and it is off by default in the code (PORT I3: the Mission Planer's Layers control is gone; its Curiosity
     // layer is L1b's map/overlays/curiosity): registered off, its state starts off, and only the toggle loads it
     const { readFileSync } = await import('node:fs')

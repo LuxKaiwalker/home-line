@@ -4,18 +4,16 @@
 //    legs still computing as a dashed ghost; refined legs swap silently (setData only)
 //  - toggles from planning view (toggleView) and the host's setVisible; legend entry + switches
 //  - stacking in the 'route' slot; layers added once; an 8-stop update ≤ 16 ms
-import { readFileSync } from 'node:fs'
-import { resolve } from 'node:path'
 import { render } from 'preact'
 import { act } from 'preact/test-utils'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { createMockPadService } from '../../pads/mock'
 import { setPadService } from '../../pads'
 import { createPlanningStore, makeStop, type PlanStop } from '../../state/planning'
+import { t } from '../../ui/copy'
 import { TOKENS } from '../../ui/tokens'
 import { byClass, installDom, type FakeNode } from '../../ui/testing/dom'
 import { installMapExtensions, mapControlsIn, resetMapExtensions, type MapExtensionContext } from '../extensions'
-import copyR4 from './copy.R4.json'
 import { captureKeys, labelAt, mineView, officialLines } from './features'
 import { install, mineRouteLayer, officialRouteLayer, RouteLegend } from './index'
 import { MINE_LAYERS, MINE_SOURCE, OFFICIAL_LAYER, OFFICIAL_SOURCE, type ResultsSource } from './layers'
@@ -259,9 +257,12 @@ describe('mine layer', () => {
     expect(feats(MINE_SOURCE)[1].properties).toMatchObject({ state: 'ok', refined: true })
     expect(counts.addLayer).toBe(MINE_LAYERS.length)
     // numbered stops
-    const shown = markers.filter((m) => m.added)
+    const shown = markers.filter((m) => m.added && m.el.getAttribute('class') === 'hl-r4-stop')
     expect(shown.map((m) => m.el.textContent)).toEqual(['1', '2'])
     expect(shown[1].el.getAttribute('title')).toBe('Stop 2: W1')
+    // PORT I4 a11y: the infeasible leg also has words on the map, not only the limit colour
+    const bad = markers.filter((m) => m.added && m.el.getAttribute('data-route') === 'mine-infeasible')
+    expect(bad.map((m) => m.el.textContent)).toEqual(['Not feasible from here on'])
   })
 
   it('editing the route re-renders from the store (ghost for the new leg) without re-adding layers', () => {
@@ -284,7 +285,7 @@ describe('mine layer', () => {
     expect(markers.some((m) => m.added)).toBe(false)
     store.toggleView('showMine', true)
     expect(vis.get('r4-mine-ok')).toBe('visible')
-    expect(markers.filter((m) => m.added)).toHaveLength(2)
+    expect(markers.filter((m) => m.added)).toHaveLength(3) // two stop numbers + the infeasible label
     handle.setVisible(false)
     expect(vis.get('r4-mine-ok')).toBe('none')
     expect(markers.some((m) => m.added)).toBe(false)
@@ -442,10 +443,8 @@ describe('install + legend', () => {
     act(() => render(null, container as unknown as Element))
   })
 
-  it('copy: the seed strings of route.map, no digits outside placeholders', () => {
-    const seed = JSON.parse(readFileSync(resolve(__dirname, '../../ui/copy.json'), 'utf8')).route.map
-    expect(copyR4.official).toBe(seed.official)
-    expect(copyR4.mine).toBe(seed.mine)
-    for (const v of Object.values(copyR4)) expect(v.replace(/\{[a-z_]+\}/g, '')).not.toMatch(/\d/)
+  it('copy: the team lead labels for the two routes (route.map, I4)', () => {
+    expect(t('route.map.official')).toBe('Official route for this pad')
+    expect(t('route.map.mine')).toBe('Your route')
   })
 })

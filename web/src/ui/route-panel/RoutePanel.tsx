@@ -17,7 +17,6 @@ import { IconButton } from '../components'
 import { t } from '../copy'
 import { Drawer, domId } from '../layout'
 import type { Loader } from '../../data/loader'
-import { tr } from './copy'
 import { RouteEstimates } from './Estimates'
 import { PadPicker } from './PadPicker'
 import { ROUTE_PANEL_ID, routePanelCollapsed, routePanelOpen, setRoutePanelCollapsed } from './panelState'
@@ -31,7 +30,7 @@ function SectionRegion({ name, store }: { name: RoutePanelSectionName; store: Pl
   const C = useRoutePanelSection(name)
   if (!C) return null
   return (
-    <section class="hl-rp__card hl-rp__slot" aria-label={tr(`panel.sections.${name}`)} data-route-section={name}>
+    <section class="hl-rp__card hl-rp__slot" aria-label={t(`route.panel.sections.${name}`)} data-route-section={name}>
       <C store={store} />
     </section>
   )
@@ -52,11 +51,12 @@ export function RoutePanel({ store = planning, loader }: RoutePanelProps) {
     <Drawer
       id={ROUTE_PANEL_ID}
       title={t('route.panel.title')}
+      closeLabel={t('route.panel.close')}
       class={collapsed ? 'hl-rp hl-rp--collapsed' : 'hl-rp'}
       actions={
         <IconButton
           icon={collapsed ? 'chevron-down' : 'chevron-up'}
-          label={collapsed ? tr('panel.expand') : tr('panel.collapse')}
+          label={collapsed ? t('route.panel.expand') : t('route.panel.collapse')}
           aria-expanded={collapsed ? 'false' : 'true'}
           aria-controls={BODY_ID}
           class="hl-rp__collapse"
@@ -68,9 +68,9 @@ export function RoutePanel({ store = planning, loader }: RoutePanelProps) {
         <PadPicker store={store} />
         <section class="hl-rp__card" aria-labelledby={estId} data-estimates-card>
           <h3 id={estId} class="hl-rp__h">
-            {tr('panel.estimates.title')}
+            {t('route.panel.estimates.title')}
           </h3>
-          {hasRoute ? <RouteEstimates store={store} /> : <p class="hl-rp__empty" data-empty>{tr('panel.empty')}</p>}
+          {hasRoute ? <RouteEstimates store={store} /> : <p class="hl-rp__empty" data-empty>{t('route.panel.empty')}</p>}
           {/* backed numbers only while open: the closed drawer stays mounted (hidden), and the value
               snapshot must not see the strip's reach keys a second time while the panel is closed */}
           {open && <PadReach store={store} loader={loader} />}

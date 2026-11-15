@@ -15,7 +15,7 @@ import { OFFICIAL_PAD_ID, planning, selectPad, usePlanning, type PlanningStore }
 import { useSignalValue } from '../../state/signal'
 import { headline60 } from '../../views/decisions'
 import { TrustChip } from '../components'
-import { tr } from './copy'
+import { t } from '../copy'
 
 export interface ReachRow {
   budget: number
@@ -53,7 +53,7 @@ export function ReachRows({ rows }: { rows: readonly ReachRow[] }) {
     <div class="hl-rp__est" data-reach>
       {rows.map((r) => (
         <div class="hl-rp__row" key={r.k}>
-          <span>{tr('panel.estimates.reach', { budget: r.budget })}</span>
+          <span>{t('route.panel.estimates.reach', { budget: r.budget })}</span>
           <b>
             <Num v={r.v} units="%" file={r.file} k={r.k} />
             <TrustChip kind="modelled" prov={{ key: r.k, file: r.file, value: r.v }} align="end" />
@@ -94,13 +94,13 @@ export function PadReach({ store = planning, loader = data() }: { store?: Planni
     else if (st?.state === 'error') rows = []
   }
   return (
-    <section class="hl-rp__sub" aria-label={tr('panel.estimates.reachTitle')}>
+    <section class="hl-rp__sub" aria-label={t('route.panel.estimates.reachTitle')}>
       {rows === null ? (
-        <p class="hl-rp__caption">{tr('panel.estimates.reachLoading')}</p>
+        <p class="hl-rp__caption">{t('route.panel.estimates.reachLoading')}</p>
       ) : rows.length ? (
         <ReachRows rows={rows} />
       ) : (
-        <p class="hl-rp__caption">{tr('panel.estimates.reachNone')}</p>
+        <p class="hl-rp__caption">{t('route.panel.estimates.reachNone')}</p>
       )}
     </section>
   )

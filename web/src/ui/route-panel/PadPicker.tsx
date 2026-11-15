@@ -7,7 +7,6 @@ import { listPads, loadPadEnv, loadPadIndex, padLoadState, type PadInfo } from '
 import { planning, selectPad, usePlanning, type PlanningStore } from '../../state/planning'
 import { useSignalValue } from '../../state/signal'
 import { t } from '../copy'
-import { tr } from './copy'
 
 type IndexState = 'loading' | 'ready' | 'error'
 
@@ -46,26 +45,37 @@ export function PadPicker({ store = planning }: { store?: PlanningStore }) {
     loadPadEnv(p.id).catch(() => {})
   }
 
+  // ARIA radio group: one tab stop (the checked pad), arrow keys move the choice over the pads that can
+  // be picked (PORT I4 a11y)
+  const pickable = pads.filter((p) => p.hasRoutingFields || p.id === padId)
+  const onKey = (e: KeyboardEvent) => {
+    const step = e.key === 'ArrowRight' || e.key === 'ArrowDown' ? 1 : e.key === 'ArrowLeft' || e.key === 'ArrowUp' ? -1 : 0
+    const edge = e.key === 'Home' ? 0 : e.key === 'End' ? pickable.length - 1 : -1
+    if (!step && edge < 0) return
+    e.preventDefault()
+    const i = pickable.findIndex((p) => p.id === padId)
+    const next = pickable[edge >= 0 ? edge : (i + step + pickable.length) % pickable.length]
+    if (!next) return
+    pick(next)
+    const group = e.currentTarget as HTMLElement | null
+    const btn = group?.querySelector?.(`[data-pad="${next.id}"]`) as HTMLElement | null
+    btn?.focus?.()
+  }
+
   const active = pads.find((p) => p.id === padId)
   const st = states[padId]
   const labelId = 'hl-rp-pads-label'
   return (
     <section class="hl-rp__card hl-rp__pads" aria-labelledby={labelId} data-pad-picker>
       <h3 id={labelId} class="hl-rp__h">
-        {tr('panel.pads.label')}
+        {t('route.panel.pads.label')}
       </h3>
-      {index === 'loading' && !pads.length && (
-        <p class="hl-rp__caption" role="status">
-          {tr('panel.pads.indexLoading')}
-        </p>
-      )}
-      {index === 'error' && !pads.length && (
-        <p class="hl-rp__caption" role="status">
-          {tr('panel.pads.indexError')}
-        </p>
-      )}
+      <div role="status" data-live="pad-index">
+        {index === 'loading' && !pads.length && <p class="hl-rp__caption">{t('route.panel.pads.indexLoading')}</p>}
+        {index === 'error' && !pads.length && <p class="hl-rp__caption">{t('route.panel.pads.indexError')}</p>}
+      </div>
       {pads.length > 0 && (
-        <div class="hl-rp__tags" role="radiogroup" aria-labelledby={labelId}>
+        <div class="hl-rp__tags" role="radiogroup" aria-labelledby={labelId} onKeyDown={onKey}>
           {pads.map((p) => {
             const on = p.id === padId
             return (
@@ -75,9 +85,10 @@ export function PadPicker({ store = planning }: { store?: PlanningStore }) {
                 key={p.id}
                 class={on ? 'on' : ''}
                 aria-checked={on ? 'true' : 'false'}
+                tabIndex={on ? 0 : -1}
                 data-pad={p.id}
                 disabled={!p.hasRoutingFields && !on}
-                title={p.hasRoutingFields ? undefined : tr('panel.pads.noFields')}
+                title={p.hasRoutingFields ? undefined : t('route.panel.pads.noFields')}
                 onClick={() => pick(p)}
               >
                 {padName(p)}
@@ -86,17 +97,16 @@ export function PadPicker({ store = planning }: { store?: PlanningStore }) {
           })}
         </div>
       )}
-      {st?.state === 'loading' ? (
-        <p class="hl-rp__caption" role="status" data-pad-loading>
-          {tr('panel.pads.loading', { pad: active ? padName(active) : padId })}
-        </p>
-      ) : st?.state === 'error' ? (
-        <p class="hl-rp__caption hl-rp__bad" role="status">
-          {tr('panel.pads.error', { pad: active ? padName(active) : padId })}
-        </p>
-      ) : (
-        pads.length > 0 && <p class="hl-rp__caption">{tr('panel.pads.note')}</p>
-      )}
+      <div role="status" data-live="pad-load">
+        {st?.state === 'loading' ? (
+          <p class="hl-rp__caption" data-pad-loading>
+            {t('route.panel.pads.loading', { pad: active ? padName(active) : padId })}
+          </p>
+        ) : st?.state === 'error' ? (
+          <p class="hl-rp__caption hl-rp__bad">{t('route.panel.pads.error', { pad: active ? padName(active) : padId })}</p>
+        ) : null}
+      </div>
+      {st?.state !== 'loading' && st?.state !== 'error' && pads.length > 0 && <p class="hl-rp__caption">{t('route.panel.pads.note')}</p>}
     </section>
   )
 }

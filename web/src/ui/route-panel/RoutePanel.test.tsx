@@ -19,7 +19,7 @@ import { PlanSlot } from '../../views/planPortSlots'
 import type { ConsoleMap } from '../../map/consoleMap'
 import { all, installDom, one, type FakeDocument, type FakeNode } from '../testing/dom'
 import { bindLayoutStorage, installLayoutKeys, resetLayout } from '../layout'
-import { legEnds, legsO2, marginTone } from './Estimates'
+import { legEnds, legsO2, marginTone, marginToneText } from './Estimates'
 import { closeRoutePanel, isRoutePanelOpen, openRoutePanel, routePanelCollapsed, routePanelOpen, setRoutePanelCollapsed } from './panelState'
 import { officialReach, padReach } from './Reach'
 import { MOCK_ROUTE_RESULTS, publishRouteResults, resetRouteResults } from './results'
@@ -97,7 +97,7 @@ describe('Route panel: render with mocks', () => {
     expect(d.getAttribute('role')).toBe('dialog')
     expect(text(one(attr('id', d.getAttribute('aria-labelledby')!)))).toBe('Route')
     btn('Collapse the route panel')
-    btn('Close')
+    btn('Close the route panel')
     const radios = all(root, (n) => n.getAttribute('role') === 'radio')
     expect(radios.map(text)).toEqual(['Official pad', 'P2', 'P3', 'P4'])
     expect(radios[0].getAttribute('aria-checked')).toBe('true')
@@ -114,6 +114,24 @@ describe('Route panel: render with mocks', () => {
     expect(attr('data-reach')).toHaveLength(0)
     // no sub-package registered: no slot regions
     expect(attr('data-route-section')).toHaveLength(0)
+  })
+
+  it('PORT I4 a11y: the pad radio group is one tab stop and arrow keys move the choice; status regions stay mounted', async () => {
+    openRoutePanel()
+    mount(<RoutePanel store={store} loader={loader} />)
+    await flush()
+    const tabStops = () => all(root, (n) => n.getAttribute('role') === 'radio').map((n) => n.getAttribute('tabindex') ?? n.getAttribute('tabIndex') ?? String((n as unknown as { tabIndex?: number }).tabIndex))
+    expect(tabStops()).toEqual(['0', '-1', '-1', '-1'])
+    const group = one(all(root, (n) => n.getAttribute('role') === 'radiogroup'))
+    act(() => void group.dispatch('keydown', { key: 'ArrowRight' }))
+    expect(store.state.peek().padId).toBe('rank2')
+    expect(tabStops()).toEqual(['-1', '0', '-1', '-1'])
+    act(() => void group.dispatch('keydown', { key: 'ArrowLeft' }))
+    act(() => void group.dispatch('keydown', { key: 'ArrowLeft' }))
+    expect(store.state.peek().padId).toBe('rank4') // wraps
+    expect(attr('data-live', 'pad-load')[0].getAttribute('role')).toBe('status')
+    expect(marginToneText(marginTone(-1))).toBe('Margin below zero')
+    expect(marginToneText(marginTone(1e6))).toBeNull()
   })
 
   it('officialReach / padReach use the headline strip keys and files', () => {
@@ -150,7 +168,7 @@ describe('Route panel: open, close, Esc, collapse', () => {
     expect(routePanelOpen.peek()).toBe(true)
     expect(isRoutePanelOpen()).toBe(true)
     expect(hidden(drawer())).toBe(false)
-    expect(doc.activeElement?.getAttribute('aria-label')).toBe('Close')
+    expect(doc.activeElement?.getAttribute('aria-label')).toBe('Close the route panel')
 
     win.key('Escape')
     expect(routePanelOpen.peek()).toBe(false)

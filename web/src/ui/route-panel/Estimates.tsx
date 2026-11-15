@@ -7,10 +7,9 @@ import type { ComponentChildren } from 'preact'
 import { CONFIG } from '../../config'
 import { planning, selectPad, selectStops, stopLabels, usePlanning, type PlanStop, type PlanningStore } from '../../state/planning'
 import { t } from '../copy'
-import { tr } from './copy'
 import { useRouteResults, type LegResult, type RouteResults } from './results'
 
-const fmt = (v: number | null, key: 'minutes' | 'litres'): string => (v === null || !Number.isFinite(v) ? tr('panel.estimates.unknown') : tr(`panel.estimates.${key}`, { v: v.toFixed(1) }))
+const fmt = (v: number | null, key: 'minutes' | 'litres'): string => (v === null || !Number.isFinite(v) ? t('route.panel.estimates.unknown') : t(`route.panel.estimates.${key}`, { v: v.toFixed(1) }))
 
 /** Margin colour (DESIGN §3.1: green / orange / red = margin states); unknown stays neutral. */
 export function marginTone(v: number | null): 'safe' | 'caution' | 'limit' | null {
@@ -30,25 +29,38 @@ export function legEnds(leg: LegResult, stops: readonly PlanStop[]): { from: str
   const labels = stopLabels(stops)
   const name = (id: string) => {
     const i = stops.findIndex((s) => s.id === id)
-    return i >= 0 ? labels[i] : tr('panel.estimates.pad')
+    return i >= 0 ? labels[i] : t('route.panel.estimates.pad')
   }
   return { from: name(leg.fromStopId), to: name(leg.toStopId) }
 }
 
 const reasonText = (r: string | undefined): string | null => {
   if (!r) return null
-  return r === 'unreachable' || r === 'budget' || r === 'slope' ? tr(`panel.estimates.reasons.${r}`) : r
+  return r === 'unreachable' || r === 'budget' || r === 'slope' ? t(`route.panel.estimates.reasons.${r}`) : r
 }
 
-function Row({ k, v, tone, title }: { k: string; v: string; tone?: string | null; title?: string }) {
+/** The words for a margin tone, so the colour is never the only cue (PORT I4 a11y). */
+export function marginToneText(tone: ReturnType<typeof marginTone>): string | null {
+  if (tone === 'limit') return t('margin.limit')
+  if (tone === 'caution') return t('margin.caution', { amber_min: CONFIG.marginAmberMin })
+  return null
+}
+
+function Row({ k, v, tone, title }: { k: string; v: string; tone?: ReturnType<typeof marginTone>; title?: string }) {
+  const toneText = marginToneText(tone ?? null)
   return (
     <div class={`hl-rp__row${tone ? ` hl-rp__row--${tone}` : ''}`} title={title}>
       <span>{k}</span>
       <b>
         {v}
-        <span class="hl-rp__estlabel" title={tr('panel.estimates.estimateTitle')}>
-          {tr('panel.estimates.estimate')}
+        <span class="hl-rp__estlabel" title={t('route.panel.estimates.estimateTitle')}>
+          {t('route.panel.estimates.estimate')}
         </span>
+        {toneText && (
+          <span class="hl-rp__tone" data-margin-tone={tone}>
+            {toneText}
+          </span>
+        )}
       </b>
     </div>
   )
@@ -56,10 +68,10 @@ function Row({ k, v, tone, title }: { k: string; v: string; tone?: string | null
 
 /** Status line for the current results (null = ready, nothing to say). */
 function statusLine(r: RouteResults, stale: boolean, nLegs: number): ComponentChildren {
-  if (r.status === 'error') return tr('panel.estimates.error', { error: r.error ?? '' })
-  if (r.status === 'idle') return tr('panel.estimates.idle')
-  if (stale || r.status === 'computing') return tr('panel.estimates.computing')
-  if (r.status === 'partial') return tr('panel.estimates.partial', { done: r.legs.length, n: Math.max(nLegs, r.legs.length) })
+  if (r.status === 'error') return t('route.panel.estimates.error', { error: r.error ?? '' })
+  if (r.status === 'idle') return t('route.panel.estimates.idle')
+  if (stale || r.status === 'computing') return t('route.panel.estimates.computing')
+  if (r.status === 'partial') return t('route.panel.estimates.partial', { done: r.legs.length, n: Math.max(nLegs, r.legs.length) })
   return null
 }
 
@@ -73,26 +85,31 @@ export function EstimatesBody({ results: r, stops, padId }: { results: RouteResu
   const why = bad ? reasonText(bad.reason) : null
   return (
     <>
-      {status && (
-        <p class="hl-rp__notice" role="status" data-status={stale ? 'computing' : r.status}>
-          {status}
-        </p>
-      )}
+      {/* live regions stay mounted (an inserted region is often not announced); only their text changes */}
+      <div role="status" data-live="route-status">
+        {status && (
+          <p class="hl-rp__notice" data-status={stale ? 'computing' : r.status}>
+            {status}
+          </p>
+        )}
+      </div>
       {shown?.fastRoute && (
         <p class="hl-rp__caption" data-fast-route>
           {t('route.panel.fast')}
         </p>
       )}
-      {bad && ends && (
-        <p class="hl-rp__notice hl-rp__notice--bad" role="alert" data-infeasible-leg={bad.index}>
-          {why ? tr('panel.estimates.infeasible', { n: bad.index + 1, from: ends.from, to: ends.to, reason: why }) : tr('panel.estimates.infeasibleBare', { n: bad.index + 1, from: ends.from, to: ends.to })}
-        </p>
-      )}
+      <div role="alert" data-live="route-infeasible">
+        {bad && ends && (
+          <p class="hl-rp__notice hl-rp__notice--bad" data-infeasible-leg={bad.index}>
+            {why ? t('route.panel.estimates.infeasible', { n: bad.index + 1, from: ends.from, to: ends.to, reason: why }) : t('route.panel.estimates.infeasibleBare', { n: bad.index + 1, from: ends.from, to: ends.to })}
+          </p>
+        )}
+      </div>
       {/* PORT I1 (Q1): data-status / data-pad let the e2e wait for "ready" instead of sleeping */}
       <div class="hl-rp__est" data-estimates data-status={r.status} data-pad={r.padId}>
-        <Row k={tr('panel.estimates.total')} v={fmt(shown?.totalMinutes ?? null, 'minutes')} />
-        <Row k={tr('panel.estimates.margin')} v={fmt(shown?.marginMin ?? null, 'minutes')} tone={marginTone(shown?.marginMin ?? null)} title={tr('panel.estimates.marginTitle')} />
-        <Row k={tr('panel.estimates.o2')} v={fmt(shown ? legsO2(shown.legs) : null, 'litres')} title={tr('panel.estimates.o2Title')} />
+        <Row k={t('route.panel.estimates.total')} v={fmt(shown?.totalMinutes ?? null, 'minutes')} />
+        <Row k={t('route.panel.estimates.margin')} v={fmt(shown?.marginMin ?? null, 'minutes')} tone={marginTone(shown?.marginMin ?? null)} title={t('route.panel.estimates.marginTitle')} />
+        <Row k={t('route.panel.estimates.o2')} v={fmt(shown ? legsO2(shown.legs) : null, 'litres')} title={t('route.panel.estimates.o2Title')} />
       </div>
     </>
   )

@@ -14,14 +14,12 @@
 import type { GeoJSONSource } from 'maplibre-gl'
 import { padService as appPadService, type PadId, type PadService } from '../../pads'
 import { planning, type PlanningStore, type PlanStop } from '../../state/planning'
-import { copyFrom } from '../../ui/copy'
+import { t } from '../../ui/copy'
 import { TOKENS } from '../../ui/tokens'
 import type { MapExtensionContext, RouteLayerHandle, RouteLayerSpec } from '../extensions'
-import copyR4 from './copy.R4.json'
 import { captureKeys, EMPTY_FC, labelAt, mineView, officialLines, type LonLat, type StopMark } from './features'
 import { getRouteResults, subscribeRouteResults, type LegResult, type RouteResults } from '../../state/routeResults'
 
-export const tr = copyFrom(copyR4)
 
 export const OFFICIAL_SOURCE = 'r4-official'
 export const OFFICIAL_LAYER = 'r4-official-line'
@@ -126,7 +124,7 @@ export function officialRouteLayer(deps: RouteLayerDeps = {}): RouteLayerSpec {
       const el = doc.createElement('div')
       el.setAttribute('class', 'hl-r4-label hl-r4-label--official')
       el.setAttribute('data-route', 'official')
-      setText(doc, el, tr('official'))
+      setText(doc, el, t('route.map.official'))
       let label: Marker | null = null
       let anchor: LonLat | null = null
       let hostOn = true
@@ -230,6 +228,28 @@ export function mineRouteLayer(deps: RouteLayerDeps = {}): RouteLayerSpec {
       let res = results.get()
       let keys: Map<LegResult, string> = captureKeys(res, stops, padId)
       const pool: { el: HTMLElement; marker: Marker; at: LonLat | null; text: string; state: string; shown: boolean }[] = []
+      // PORT I4 a11y: the infeasible part is not told by colour alone: a text label at the middle of the
+      // first infeasible leg ("Not feasible from here on", the legend's words)
+      const badEl = doc.createElement('div')
+      badEl.setAttribute('class', 'hl-r4-label hl-r4-label--infeasible')
+      badEl.setAttribute('data-route', 'mine-infeasible')
+      setText(doc, badEl, t('route.map.infeasible'))
+      let bad: { marker: Marker; at: LonLat } | null = null
+      const syncBad = (fc: ReturnType<typeof mineView>['fc'], on: boolean) => {
+        const leg = on ? fc.features.find((f) => f.properties.state === 'infeasible' && f.geometry.coordinates.length > 0) : undefined
+        if (!leg) {
+          bad?.marker.remove()
+          bad = null
+          return
+        }
+        const cs = leg.geometry.coordinates
+        const at = cs[Math.floor((cs.length - 1) / 2)] as LonLat
+        if (bad && bad.at[0] === at[0] && bad.at[1] === at[1]) return
+        const marker = bad?.marker ?? ctx.marker(badEl)
+        marker.setLngLat(at)
+        if (!bad) marker.addTo(m)
+        bad = { marker, at }
+      }
 
       const visible = () => hostOn && viewOn
       const syncMarks = (marks: StopMark[]) => {
@@ -250,7 +270,7 @@ export function mineRouteLayer(deps: RouteLayerDeps = {}): RouteLayerSpec {
             setText(doc, p.el, text)
           }
           const state = s.infeasible ? 'infeasible' : 'ok'
-          const title = tr(s.infeasible ? 'stopInfeasible' : 'stop', { n: s.n, name: s.label })
+          const title = t(s.infeasible ? 'route.map.stopInfeasible' : 'route.map.stop', { n: s.n, name: s.label })
           if (p.state !== state + title) {
             p.state = state + title
             p.el.setAttribute('data-state', state)
@@ -272,6 +292,7 @@ export function mineRouteLayer(deps: RouteLayerDeps = {}): RouteLayerSpec {
         const v = mineView({ stops, padId, pad: padPos(pads(), padId), results: res, keys, stationAt: deps.stationAt, stationName: deps.stationName })
         setData(ctx, MINE_SOURCE, v.fc)
         syncMarks(v.stops)
+        syncBad(v.fc, visible())
       }
       const frame = frameRunner(deps.schedule ?? defaultSchedule, render)
 
@@ -307,6 +328,8 @@ export function mineRouteLayer(deps: RouteLayerDeps = {}): RouteLayerSpec {
           offRes()
           offView()
           for (const p of pool.splice(0)) p.marker.remove()
+          bad?.marker.remove()
+          bad = null
           removeAll(ctx, MINE_LAYERS, MINE_SOURCE)
         },
       }

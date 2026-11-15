@@ -11,10 +11,8 @@
 // reload adds nothing); a plain #/?route= link stays as it is (other hash params survive).
 import { signal, type ReadSignal } from '../../../state/signal'
 import { encodeRouteParam, legacyRedirect, parsePlanningHash, planning, planningHref, type PlanningDoc, type PlanningStore } from '../../../state/planning'
-import { copyFrom } from '../../copy'
-import own from './copy.export.json'
+import { t } from '../../copy'
 
-const c = copyFrom(own)
 
 export type PlanLinkResolution =
   /** not a Plan / Mission hash, or a Plan hash with nothing to load */
@@ -92,7 +90,7 @@ export function applyPlanLink(hash: string, store: PlanningStore = planning, io:
     res = resolvePlanLink(res.to)
   }
   if (invalid || res.kind === 'invalid') {
-    io.notify({ kind: 'error', text: c('link.invalid') })
+    io.notify({ kind: 'error', text: t('route.export.link.invalid') })
     io.replaceHash(planningHref(store.doc.peek()))
     return 'invalid'
   }

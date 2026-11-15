@@ -10,8 +10,7 @@ import { planning, usePlanning, type PlanningDoc, type PlanningStore } from '../
 import { useSignalValue } from '../../../state/signal'
 import { saveMissionText } from '../../cards/simslot'
 import { Banner, Button } from '../../components'
-import { copyFrom } from '../../copy'
-import own from './copy.export.json'
+import { t } from '../../copy'
 import { ExportError, type ExportCore } from './core'
 import { BRIDGE, createMarvisTarget, type MarvisDeps } from './marvis'
 import { buildExportPayload, type ExportPayload } from './payload'
@@ -19,7 +18,6 @@ import { clearPlanLinkNotice, planLinkNotice } from './planLink'
 import { copyText, shareUrl, type ClipboardLike } from './share'
 import './export.css'
 
-const c = copyFrom(own)
 
 export interface ExportSectionProps {
   store?: PlanningStore
@@ -39,12 +37,12 @@ type Msg = { ok: boolean; text: string; fallback?: boolean }
 /** The user-facing text of an export failure. */
 export function exportErrorText(e: unknown): string {
   if (e instanceof ExportError) {
-    if (e.code === 'pad') return c('errors.pad')
-    if (e.code === 'route') return c('errors.route', { reason: e.reason || e.message })
-    if (e.code === 'official') return c('errors.official', { reason: e.reason || e.message })
-    return c('errors.generic', { reason: e.reason || e.message })
+    if (e.code === 'pad') return t('route.export.errors.pad')
+    if (e.code === 'route') return t('route.export.errors.route', { reason: e.reason || e.message })
+    if (e.code === 'official') return t('route.export.errors.official', { reason: e.reason || e.message })
+    return t('route.export.errors.generic', { reason: e.reason || e.message })
   }
-  return c('errors.generic', { reason: e instanceof Error ? e.message : String(e) })
+  return t('route.export.errors.generic', { reason: e instanceof Error ? e.message : String(e) })
 }
 
 export function ExportSection({ store = planning, core, marvis = BRIDGE, save = saveMissionText, clipboard, now, loc }: ExportSectionProps) {
@@ -80,10 +78,10 @@ export function ExportSection({ store = planning, core, marvis = BRIDGE, save = 
       const p = await buildExportPayload(doc, core, now)
       if (!forceDownload && target === 'api') {
         const r = await marvis.send(p.doc)
-        setMsg(r.ok ? { ok: true, text: c('result.sent') } : { ok: false, text: c('result.refused', { reason: r.error ?? '' }), fallback: true })
+        setMsg(r.ok ? { ok: true, text: t('route.export.result.sent') } : { ok: false, text: t('route.export.result.refused', { reason: r.error ?? '' }), fallback: true })
       } else {
         const name = download(p)
-        setMsg({ ok: true, text: !forceDownload && target === 'viewer' ? c('result.sent') : c('result.saved', { file: name }) })
+        setMsg({ ok: true, text: !forceDownload && target === 'viewer' ? t('route.export.result.sent') : t('route.export.result.saved', { file: name }) })
       }
     } catch (e) {
       setMsg({ ok: false, text: exportErrorText(e) })
@@ -102,37 +100,41 @@ export function ExportSection({ store = planning, core, marvis = BRIDGE, save = 
       {notice && (
         <Banner kind={notice.kind === 'error' ? 'caution' : 'info'} title={notice.text} onDismiss={clearPlanLinkNotice} />
       )}
-      <p class="hl-route-export__what">{hasRoute ? c('what.route') : c('what.official')}</p>
+      <p class="hl-route-export__what">{hasRoute ? t('route.export.what.route') : t('route.export.what.official')}</p>
       <Button variant="primary" icon={toMarvis ? 'external-link' : 'download'} busy={busy} onClick={() => void run()} data-export-action={toMarvis ? 'marvis' : 'download'}>
-        {busy ? c('busy') : toMarvis ? c('marvis') : c('download')}
+        {busy ? t('route.export.busy') : toMarvis ? t('route.export.marvis') : t('route.export.download')}
       </Button>
-      {msg && (
-        <p class="hl-route-export__status" role="status" data-ok={msg.ok ? 'true' : 'false'}>
-          {msg.text}
-        </p>
-      )}
+      <div role="status" data-live="export">
+        {msg && (
+          <p class="hl-route-export__status" data-ok={msg.ok ? 'true' : 'false'}>
+            {msg.text}
+          </p>
+        )}
+      </div>
       {msg?.fallback && (
         <Button variant="ghost" icon="download" onClick={() => void run(true)} data-export-action="download-fallback">
-          {c('result.fallback')}
+          {t('route.export.result.fallback')}
         </Button>
       )}
       <div class="hl-route-export__share">
         <Button variant="secondary" icon="link" onClick={() => void copyShare()} data-export-action="share">
-          {c('share.button')}
+          {t('route.export.share.button')}
         </Button>
-        {share?.state === 'copied' && (
-          <span class="hl-route-export__status" role="status" data-share="copied">
-            {c('share.copied')}
-          </span>
-        )}
+        <span role="status" data-live="share">
+          {share?.state === 'copied' && (
+            <span class="hl-route-export__status" data-share="copied">
+              {t('route.export.share.copied')}
+            </span>
+          )}
+        </span>
         {share?.state === 'select' && (
           <label class="hl-route-export__link">
-            <span>{c('share.select')}</span>
+            <span>{t('route.export.share.select')}</span>
             <input
               type="text"
               readOnly
               value={share.url}
-              aria-label={c('share.label')}
+              aria-label={t('route.export.share.label')}
               data-share="select"
               ref={(el) => {
                 if (el && typeof el.select === 'function') el.select()
