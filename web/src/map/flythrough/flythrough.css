@@ -31,3 +31,5 @@
   outline: var(--line-focus-ring) solid var(--color-select);
   outline-offset: calc(-1 * var(--line-focus-ring));
 }
+/* L2c (D111): the icon shows only in the Plan map-edge tools (views/planLayers.css) */
+.hl-fly-btn .hl-ctrl-icon { display: none; }
