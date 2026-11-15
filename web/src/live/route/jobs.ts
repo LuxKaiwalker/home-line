@@ -41,7 +41,7 @@ const msg = (e: unknown) => (e instanceof Error ? e.message : String(e))
 export function failureOf(e: unknown, fallbackCode: string): RouteFailure {
   if (e instanceof ApiError) {
     const detail = typeof e.detail === 'string' ? e.detail : e.detail ? JSON.stringify(e.detail) : ''
-    return { status: e.status, code: e.code, message: detail || e.message, stop: e.status === 422 ? errorStop({ stop: (e as ApiError & { stop?: unknown }).stop, detail: e.detail }) : null, retryAfterS: e.retryAfterS }
+    return { status: e.status, code: e.code, message: detail || e.message, stop: e.status === 422 ? errorStop({ stop: e.stop, detail: e.detail }) : null, retryAfterS: e.retryAfterS }
   }
   return { status: 0, code: fallbackCode, message: msg(e), stop: null, retryAfterS: null }
 }
