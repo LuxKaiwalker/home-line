@@ -40,6 +40,9 @@ export function parseRoute(hash: string): Route {
 /** Unlinked dev page (WS16 M1 field-shader spike): never in NAV_ITEMS; main.ts lazy-loads it. */
 export const isSpikeHash = (hash: string): boolean => /^#?\/spike\/?(\?|$)/.test(hash)
 
+/** Unlinked dev page (WS15 A2 style guide, DESIGN U0): never in NAV_ITEMS; main.ts lazy-loads it. */
+export const isStyleguideHash = (hash: string): boolean => /^#?\/styleguide\/?(\?|$)/.test(hash)
+
 export function href(route: Route): string {
   switch (route.name) {
     case 'console':
