@@ -1,23 +1,31 @@
-// PORT W0a: pad environment service API (owner after W0a: P1). The functions delegate to the active
-// service; P1 replaces `stubService` with the real one (cache, prefetch). Tests: setPadService(createMockPadService()).
-import { signal } from '../state/signal'
-import type { LoadPadOptions, PadEnv, PadId, PadInfo, PadLoadState, PadService } from './types'
+// Pad environment service API (W0a; P1: the real service, pads/service.ts + pads/load.ts). The functions
+// delegate to the active service. Tests: setPadService(createMockPadService()) from pads/mock.ts.
+import { subscribePlanning } from '../state/planning'
+import { padCopy } from './load'
+import { createPadService, type RealPadService } from './service'
+import type { LoadPadOptions, PadEnv, PadId, PadInfo, PadLoadState, PadService, PlanProducts } from './types'
 
 export * from './types'
 
-const notImplemented = (what: string) => new Error(`pads: ${what} not implemented yet (P1)`)
-
-/** Until P1 lands: an empty list, and loads reject (callers keep the official plan as today). */
-const stubService: PadService = {
-  loadPadIndex: () => Promise.reject(notImplemented('loadPadIndex')),
-  listPads: () => [],
-  loadPadEnv: () => Promise.reject(notImplemented('loadPadEnv')),
-  peekPadEnv: () => undefined,
-  prefetchPads: () => {},
-  loadState: signal<Readonly<Record<PadId, PadLoadState>>>({}),
+/** A plan edit within this long counts as "editing": the idle prefetch waits (never during an edit). */
+export const EDIT_QUIET_MS = 1500
+let lastEdit = -Infinity
+let watching = false
+const clock = () => (typeof performance !== 'undefined' ? performance.now() : Date.now())
+/** true while the viewer edits the plan (a planning doc change in the last EDIT_QUIET_MS) */
+export function editingNow(): boolean {
+  if (!watching) {
+    watching = true
+    subscribePlanning((s) => s.route, () => void (lastEdit = clock()))
+    subscribePlanning((s) => s.padId, () => void (lastEdit = clock()))
+  }
+  return clock() - lastEdit < EDIT_QUIET_MS
 }
 
-let service: PadService = stubService
+/** The app's service (P1): LRU cache, dedupe, abort, idle prefetch, load states. */
+const realService: RealPadService = createPadService({ busy: editingNow })
+
+let service: PadService = realService
 
 /** Swap the service (tests, P1's real one). Returns a restore function. */
 export function setPadService(s: PadService): () => void {
@@ -33,3 +41,22 @@ export const loadPadEnv = (padId: PadId, opts?: LoadPadOptions): Promise<PadEnv>
 export const peekPadEnv = (padId: PadId): PadEnv | undefined => service.peekPadEnv(padId)
 export const prefetchPads = (ids: readonly PadId[]): void => service.prefetchPads(ids)
 export const padLoadState = () => service.loadState
+
+/**
+ * Plan products of any pad, also one without routing fields (pad_default: loadPadEnv rejects it with
+ * PadError 'no-routing-fields'). Other services (mocks): through loadPadEnv.
+ */
+export function loadPadPlanProducts(padId: PadId): Promise<PlanProducts> {
+  const s = service as Partial<RealPadService>
+  return typeof s.planProductsOf === 'function' ? s.planProductsOf(padId) : service.loadPadEnv(padId).then((e) => e.planProducts())
+}
+
+/** The status line of a pad: "Loading pad P3…" while it loads, the error line after a failure, else null. */
+export function padStatusText(info: Pick<PadInfo, 'label'>, s: PadLoadState | undefined): string | null {
+  if (s?.state === 'loading') return padCopy('loading', { pad: info.label })
+  if (s?.state === 'error') return padCopy('error', { pad: info.label })
+  return null
+}
+
+export { createPadService, type PadServiceDeps, type RealPadService } from './service'
+export { isAbortError, PadError, padCopy } from './load'

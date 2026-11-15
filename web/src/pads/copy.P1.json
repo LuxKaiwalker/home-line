@@ -1,0 +1,8 @@
+{
+  "official": "Official pad",
+  "pickerLabel": "P{rank}",
+  "defaultPad": "Default pad",
+  "loading": "Loading pad {pad}…",
+  "error": "Pad {pad} could not be loaded. The map keeps the current pad.",
+  "noFields": "No walk-home fields for {pad}: its plan can be shown, a route cannot start here."
+}
