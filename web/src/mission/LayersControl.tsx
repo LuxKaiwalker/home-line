@@ -13,6 +13,8 @@ import { loadCuriosity, loadStopImages, RAW_IMAGE_PAGE, type Bounds, type DriveE
 import type { MissionMap, Overlay } from './missionMap'
 import type { LonLat } from './plan'
 import { renderSlope, SLOPE_CLASSES, SLOPE_OPACITY } from './slope'
+import { tx } from './richCopy'
+import { t } from '../ui/copy'
 
 async function rgbaToUrl(rgba: Uint8ClampedArray, w: number, h: number): Promise<string> {
   const canvas = document.createElement('canvas')
@@ -20,7 +22,7 @@ async function rgbaToUrl(rgba: Uint8ClampedArray, w: number, h: number): Promise
   canvas.height = h
   canvas.getContext('2d')!.putImageData(new ImageData(new Uint8ClampedArray(rgba), w, h), 0, 0)
   const blob = await new Promise<Blob | null>((res) => canvas.toBlob(res, 'image/png'))
-  if (!blob) throw new Error('could not encode the slope image')
+  if (!blob) throw new Error(t('mission.layers.encodeError'))
   return URL.createObjectURL(blob)
 }
 
@@ -42,7 +44,7 @@ export function LayersControl({ mmap, bounds }: { mmap: MissionMap; bounds: Boun
     if (o === 'slope') {
       const fi = (await data().fieldsIndex()) as unknown as HudFieldsIndex
       const key = Object.keys(fi.fields).find((k) => k === 'slope' || k.endsWith('/slope'))
-      if (!key) throw new Error('fields/index.json has no slope field')
+      if (!key) throw new Error(t('mission.layers.noSlopeField'))
       const g = await loadField(fi, key, dataUrl)
       const url = await rgbaToUrl(renderSlope(g.data.counts, g.data.known, g.data.scale), g.width, g.height)
       const corners: [LonLat, LonLat, LonLat, LonLat] = [
@@ -96,18 +98,18 @@ export function LayersControl({ mmap, bounds }: { mmap: MissionMap; bounds: Boun
     <label class="mp-layer" title={title}>
       <input type="checkbox" checked={st[o] === 'on' || st[o] === 'loading'} disabled={st[o] === 'loading'} onChange={(e) => void toggle(o, (e.target as HTMLInputElement).checked)} />
       {label}
-      {st[o] === 'loading' && <span class="muted"> loading…</span>}
+      {st[o] === 'loading' && <span class="muted"> {t('mission.layers.loading')}</span>}
     </label>
   )
 
   return (
     <div class="mp-layers">
       <button type="button" class="mp-layers-head" aria-expanded={open} onClick={() => setOpen((x) => !x)}>
-        Layers {open ? '▾' : '▸'}
+        {t('mission.layers.head')} {open ? t('mission.layers.openIcon') : t('mission.layers.closedIcon')}
       </button>
       {open && (
         <div class="mp-layers-body">
-          {row('slope', 'Slope', 'Ground slope in classes from config/site.yaml (pad-flat, walkable, beyond tested, no-go)')}
+          {row('slope', t('mission.layers.slope'), t('mission.layers.slopeTitle'))}
           {err.slope && <span class="mp-bad mp-layers-note">{err.slope}</span>}
           {st.slope === 'on' && (
             <>
@@ -120,14 +122,14 @@ export function LayersControl({ mmap, bounds }: { mmap: MissionMap; bounds: Boun
                 ))}
               </ul>
               <label class="mp-layers-opacity">
-                <span>Opacity</span>
+                <span>{t('mission.layers.opacity')}</span>
                 <input
                   type="range"
                   min={10}
                   max={100}
                   step={5}
                   value={Math.round(opacity * 100)}
-                  aria-label="Slope layer opacity"
+                  aria-label={t('mission.layers.opacityLabel')}
                   onInput={(e) => {
                     const v = Number((e.target as HTMLInputElement).value) / 100
                     setOpacity(v)
@@ -137,21 +139,15 @@ export function LayersControl({ mmap, bounds }: { mmap: MissionMap; bounds: Boun
                 <span>{Math.round(opacity * 100)}%</span>
               </label>
               <span class="mp-layers-note">
-                WS1 cell slope, <code>{slopeFile}</code>; edges from <code>config/site.yaml</code>. Unknown ground is left clear.
+                {tx('mission.layers.slopeNote', { file: <code>{slopeFile}</code>, site: <code>config/site.yaml</code> })}
               </span>
             </>
           )}
-          {row('curiosity', 'Curiosity route + photos', "Curiosity's real drives inside this map, live from NASA. Click a yellow drive end for its pictures")}
-          {err.curiosity && <span class="mp-bad mp-layers-note">Could not reach NASA: {err.curiosity}</span>}
+          {row('curiosity', t('mission.layers.curiosity'), t('mission.layers.curiosityTitle'))}
+          {err.curiosity && <span class="mp-bad mp-layers-note">{t('mission.layers.curiosityError', { error: err.curiosity })}</span>}
           {st.curiosity === 'on' && nStops && (
             <span class="mp-layers-note">
-              {nStops.n ? (
-                <>
-                  {nStops.n} drive ends, sols {nStops.first}–{nStops.last}. Click a yellow dot for its pictures. Live: NASA/JPL-Caltech MMGIS.
-                </>
-              ) : (
-                'No Curiosity drive end inside this map.'
-              )}
+              {nStops.n ? t('mission.layers.curiosityStops', { n: nStops.n, first: nStops.first, last: nStops.last }) : t('mission.layers.curiosityNone')}
             </span>
           )}
         </div>
@@ -175,17 +171,19 @@ function StopPhotos({ stop, next }: { stop: DriveEnd; next: DriveEnd | null }) {
     return () => ac.abort()
   }, [stop.rmc])
 
-  const solTxt = res ? (res.sols.length > 1 ? `sols ${res.sols[0]}–${res.sols[res.sols.length - 1]}` : `sol ${res.sols[0]}`) : `sol ${stop.sol}`
+  const solTxt = res
+    ? res.sols.length > 1
+      ? t('mission.photos.sols', { first: res.sols[0], last: res.sols[res.sols.length - 1] })
+      : t('mission.photos.sol', { sol: res.sols[0] })
+    : t('mission.photos.sol', { sol: stop.sol })
   return (
     <div class="mp-photos">
-      <b>
-        Curiosity drive end {stop.rmc} · sol {stop.sol}
-      </b>
+      <b>{t('mission.photos.title', { rmc: stop.rmc, sol: stop.sol })}</b>
       <div class="muted">
-        This drive {fmtM(stop.distM)} · odometer {fmtM(stop.totalM)} · {stop.lat.toFixed(5)}°, {stop.lon.toFixed(5)}°E
+        {t('mission.photos.meta', { distance: fmtM(stop.distM), odometer: fmtM(stop.totalM), lat: stop.lat.toFixed(5), lon: stop.lon.toFixed(5) })}
       </div>
-      {err && <p class="mp-bad">Could not load the pictures: {err}</p>}
-      {!res && !err && <p class="muted">Loading pictures from NASA…</p>}
+      {err && <p class="mp-bad">{t('mission.photos.loadError', { error: err })}</p>}
+      {!res && !err && <p class="muted">{t('mission.photos.loading')}</p>}
       {res &&
         (['mastcam', 'navcam'] as const).map((cam) => {
           const list = res.images.filter((i) => i.camera === cam)
@@ -193,22 +191,22 @@ function StopPhotos({ stop, next }: { stop: DriveEnd; next: DriveEnd | null }) {
           return (
             <section key={cam}>
               <h4>
-                {cam === 'mastcam' ? 'Mastcam (colour)' : 'Navcam'} <span class="muted">({list.length})</span>
+                {cam === 'mastcam' ? t('mission.photos.mastcam') : t('mission.photos.navcam')} <span class="muted">{t('mission.waypoints.count', { n: list.length })}</span>
               </h4>
               {list.length === 0 ? (
-                <p class="muted">None {cam === 'navcam' ? 'at this stop' : `on ${solTxt}`}.</p>
+                <p class="muted">{cam === 'navcam' ? t('mission.photos.noneAtStop') : t('mission.photos.noneOn', { sols: solTxt })}</p>
               ) : (
                 <div class="mp-photo-grid">
                   {shown.map((i) => (
-                    <a key={i.id} href={i.url} target="_blank" rel="noopener noreferrer" title={`${i.instrument} · sol ${i.sol} · ${i.takenUtc.replace('.000Z', 'Z')}`}>
-                      <img src={i.url} loading="lazy" alt={`${i.instrument} sol ${i.sol}`} />
+                    <a key={i.id} href={i.url} target="_blank" rel="noopener noreferrer" title={t('mission.photos.imageTitle', { instrument: i.instrument, sol: i.sol, taken: i.takenUtc.replace('.000Z', 'Z') })}>
+                      <img src={i.url} loading="lazy" alt={t('mission.photos.imageAlt', { instrument: i.instrument, sol: i.sol })} />
                     </a>
                   ))}
                 </div>
               )}
               {list.length > SHOW && !more[cam] && (
                 <button type="button" class="mp-clear" onClick={() => setMore((m) => ({ ...m, [cam]: true }))}>
-                  Show all {list.length}
+                  {t('mission.photos.showAll', { n: list.length })}
                 </button>
               )}
             </section>
@@ -216,10 +214,10 @@ function StopPhotos({ stop, next }: { stop: DriveEnd; next: DriveEnd | null }) {
         })}
       {res && (
         <p class="mp-maps-note">
-          Navcam: frames with this stop's site/drive. Mastcam has no position in NASA's data, so it is matched by {solTxt} (frames from before the drive on sol {stop.sol} can be
-          included).{res.truncated ? ' Long stay or many frames: only the first sols/pages were searched.' : ''} Raw images, NASA/JPL-Caltech/MSSS ·{' '}
+          {t('mission.photos.note', { sols: solTxt, sol: stop.sol })}
+          {res.truncated ? ` ${t('mission.photos.truncated')}` : ''} {t('mission.photos.credit')}{' '}
           <a href={RAW_IMAGE_PAGE} target="_blank" rel="noopener noreferrer">
-            raw-image archive
+            {t('mission.photos.archive')}
           </a>
         </p>
       )}
