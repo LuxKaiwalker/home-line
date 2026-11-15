@@ -6,8 +6,8 @@ Known answers (written before the routes):
 - /api/openapi.json is contracts/backend/openapi.yaml (the contract), so every openapi path appears;
 - every relative $ref and externalValue of the contract resolves under /api/ (the backend schemas
   and examples), and nothing else of the repo is served there;
-- every route the app implements under the API prefix is an openapi path (the admin kill-switch
-  control is the one route outside the frozen contract: O3 note);
+- every route the app implements under the API prefix is an openapi path, with no exception (the
+  admin kill-switch control POST /admin/heavy-jobs joined the contract in v1.1.0, S1e);
 - FastAPI's own generated description stays off (/openapi.json, /docs: 404).
 """
 
@@ -32,7 +32,6 @@ DOCS = settings().api.docs_path
 BASE = posixpath.dirname(DOCS)  # /api
 SPEC_URL = f"{BASE}/openapi.json"
 PREFIX = settings().api.prefix
-OUTSIDE_CONTRACT = {("POST", "/admin/heavy-jobs")}  # team-only kill-switch control (O3)
 
 
 @pytest.fixture(scope="module")
@@ -71,7 +70,7 @@ def test_openapi_json_is_the_committed_contract_with_every_path(client):
     assert r.status_code == 200 and r.headers["content-type"].startswith("application/json")
     doc = r.json()
     assert doc == json.loads(json.dumps(OPENAPI))  # YAML 1.2 load: "on"/"off" stay strings
-    assert doc["info"]["version"] == "1.0.1"
+    assert doc["info"]["version"] == OPENAPI["info"]["version"] == settings().contract_version
     assert set(doc["paths"]) == set(OPENAPI["paths"])
     for path in OPENAPI["paths"]:
         assert path in doc["paths"]
@@ -119,11 +118,11 @@ def test_every_implemented_route_is_an_openapi_path(client):
         if path.startswith(PREFIX + "/"):
             implemented |= {(m, shape(path[len(PREFIX):])) for m in methods}
     assert ("POST", "/plans/import") in implemented and ("GET", "/admin/status") in implemented
+    assert ("POST", "/admin/heavy-jobs") in implemented
     contract = {shape(p): ops for p, ops in OPENAPI["paths"].items()}
-    for method, path in sorted(implemented - OUTSIDE_CONTRACT):
+    for method, path in sorted(implemented):
         assert path in contract, path
         assert method.lower() in contract[path], (method, path)
-    assert OUTSIDE_CONTRACT <= implemented
 
 
 def test_fastapi_generated_description_stays_off(client):

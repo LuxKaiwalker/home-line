@@ -1,13 +1,13 @@
 openapi: 3.1.0
 info:
   title: HOMELINE live API
-  version: 1.0.1
+  version: 1.1.0
   description: |
     Optional live layer of HOMELINE (F23-F36, D40, D48). The static app works without it.
     Every live result carries the label "Computed live · not part of the validated scorecard".
     Auth: G = guest (no security), U = Supabase login (Bearer JWT), K = session key (X-HL-Key
     header), T = team token (X-HL-Team header). Limits, ranges and timeouts come from
-    config/backend.yaml. Backend contract family v1.0.1 (contracts/backend/, frozen at P0, D50).
+    config/backend.yaml. Backend contract family v1.1.0 (contracts/backend/, frozen at P0, D50).
     Source: backend spec §5 (docs/backend.md).
   license: {name: Apache-2.0, identifier: Apache-2.0}
 servers:
@@ -376,6 +376,7 @@ paths:
       tags: [plans]
       operationId: importPlan
       summary: Validate an uploaded plan_inputs.json (size cap limits.upload_max_bytes) and return its hash (G)
+      description: "503 (v1.1.0): no engine identity, error server_data_missing or engine_identity_unavailable, as POST /jobs."
       requestBody:
         required: true
         content: {application/json: {schema: {$ref: "#/components/schemas/PlanInputs"}}}
@@ -383,6 +384,7 @@ paths:
         "200": {description: ok, content: {application/json: {schema: {$ref: "#/components/schemas/ImportResult"}}}}
         "413": {$ref: "#/components/responses/Error"}
         "422": {$ref: "#/components/responses/Error"}
+        "503": {$ref: "#/components/responses/Error"}
   /plans:
     get:
       tags: [plans]
@@ -588,3 +590,23 @@ paths:
       responses:
         "200": {description: ok, content: {application/json: {schema: {$ref: "#/components/schemas/AdminStatus"}}}}
         "403": {$ref: "#/components/responses/Error"}
+  /admin/heavy-jobs:
+    post:
+      tags: [ops]
+      operationId: setHeavyJobs
+      summary: Kill-switch control; "off" refuses new heavy jobs, "on" accepts them again; answers the resulting status (T, v1.1.0)
+      security: [{teamToken: []}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [heavy_jobs]
+              additionalProperties: false
+              properties:
+                heavy_jobs: {enum: ["on", "off"]}
+      responses:
+        "200": {description: "ok: the resulting status", content: {application/json: {schema: {$ref: "#/components/schemas/AdminStatus"}}}}
+        "403": {$ref: "#/components/responses/Error"}
+        "422": {$ref: "#/components/responses/Error"}

@@ -4,7 +4,7 @@
 # Defaults that already live in another config file are referenced as "<file>.<key>" (`*_ref`),
 # never copied. This file is NOT part of the result hash (docs/backend.md "Result hash"): changing a
 # limit must not invalidate computed plans.
-contract_version: "1.0.1"          # contracts/backend/ family
+contract_version: "1.1.0"          # contracts/backend/ family
 
 api:
   prefix: /api/v1
@@ -109,4 +109,4 @@ gates_local:                       # D50: backend starts Sat evening, gates shif
   freeze_ref: event.gates_local.freeze
 
 assumed: [limits.title_max_chars, limits.notes_max_chars, ranges.start_lmst_h, ranges.reserve_min,
-          sessions.message_max_chars]
+          sessions.message_max_chars, limits.proxy_max_body_bytes]

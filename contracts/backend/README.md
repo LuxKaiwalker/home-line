@@ -1,4 +1,4 @@
-# Backend contracts (F23–F36) — v1.0.1
+# Backend contracts (F23–F36) — v1.1.0
 
 **Frozen 2026-11-14 at backend gate P0 (D50).** Owner C. Versioned on its own, like the simulator
 bundle family (`contracts/bundle/`, v1.0.0); the web contracts in `contracts/` keep their 1.1.x line.
@@ -66,6 +66,11 @@ uv run --no-sync --with openapi-spec-validator pytest tests/test_backend_contrac
 
 ## Changes
 
+- 1.1.0 (2026-11-15, D71 overnight default: additive minor bump): additive: POST /admin/heavy-jobs; 503 on importPlan.
+  `openapi.yaml` gains `POST /admin/heavy-jobs` (`setHeavyJobs`, team token, body
+  `{"heavy_jobs": "on" | "off"}`, 200 AdminStatus, 403/422 Error), as WS12 (O3) implements it, and
+  the 503 Error response (`server_data_missing` / `engine_identity_unavailable`) on `importPlan`.
+  Nothing removed, renamed or made stricter; the JSON schemas are unchanged.
 - 1.0.1 (2026-11-14, decision 9): `openapi.yaml` quotes `"on"`/`"off"` (`heavy_jobs` enums) so
   YAML 1.1 readers such as PyYAML read strings, not booleans. No other change.
 - 1.0.0 (2026-11-14, P0): first version. The state event (`session_state` in the pre-P0 draft) is
