@@ -8,6 +8,7 @@ import siteRaw from '../../../../../config/site.yaml'
 import stationsRaw from '../../../../../config/stations.yaml'
 import { cfg, CONFIG } from '../../../config'
 import { data } from '../../../data/loader'
+import { PADS_INDEX } from '../../../data/pads'
 import type { PadFile, Rad, Station } from '../../../data/types'
 import { dataUrl } from '../../../env'
 import { parseHudConfig } from '../../../hud/config'
@@ -126,6 +127,36 @@ export function fieldsPadOf(padFile: PadFile | null): BrowserPad {
   return { lon: p.lon, lat: p.lat, id: p.id ?? null, elevM: typeof p.elev_m === 'number' ? p.elev_m : null, kind: official ? 'official' : 'custom', source: p.source ?? 'pad.json' }
 }
 
+/**
+ * I2b: the fields/index.json keys of a pad's T_home / O2_home / pointer fields. The official pad (null)
+ * has the scenario's own keys; a picker pad (pads index id rank2..rank4, I2) has `pads/{pad}/{scenario}/...`.
+ */
+export function fieldKeys(pad: string | null, scenario: string): { tHome: string; o2Home: string; pointer: string } {
+  const pre = pad === null ? `${scenario}/` : `pads/${pad}/${scenario}/`
+  return { tHome: `${pre}t_home`, o2Home: `${pre}o2_home`, pointer: `${pre}pointer` }
+}
+
+/** A row of scenarios/pads/index.json, as far as the picker pad needs it. */
+export interface PadIndexRow {
+  id: string
+  lon: number
+  lat: number
+  elev_m?: number | null
+  rank?: number | null
+}
+
+/** I2b: a picker pad (scenarios/pads/index.json row) as the home of its own fields (I2). */
+export function pickerPadOf(row: PadIndexRow): BrowserPad {
+  return {
+    lon: row.lon,
+    lat: row.lat,
+    id: row.id,
+    elevM: typeof row.elev_m === 'number' ? row.elev_m : null,
+    kind: 'picker',
+    source: `${PADS_INDEX} ${row.id}${typeof row.rank === 'number' ? ` (D21 rank ${row.rank})` : ''}`,
+  }
+}
+
 /** Assemble the data object from loaded parts (the loader below; tests build it from files). */
 export function makeBrowserRouteData(p: {
   scenario: string
@@ -136,6 +167,8 @@ export function makeBrowserRouteData(p: {
   model: GradeModel
   stations: readonly Station[]
   padFile: PadFile | null
+  /** I2b: the fields' pad when it is not pad.json's (a picker pad's own fields) */
+  fieldsPad?: BrowserPad | null
   rad: Rad | null
   clock: unknown
   files?: Record<string, string | null>
@@ -153,7 +186,7 @@ export function makeBrowserRouteData(p: {
     components: new Map(),
     legCache: new Map(),
     stations: browserStations(p.stations, p.scenario),
-    fieldsPad: fieldsPadOf(p.padFile),
+    fieldsPad: p.fieldsPad ?? fieldsPadOf(p.padFile),
     rad: p.rad,
     tDarkMin: tDarkOf(p.clock),
     evaStartLmst: evaStartLmstOf(p.clock),
@@ -168,27 +201,38 @@ export function makeBrowserRouteData(p: {
 const loaded = new Map<string, Promise<BrowserRouteData>>()
 
 /**
- * Load once per scenario (default: variants.yaml scenarios.default). The T_home grid, heights and
- * router model are WP6's (loadRouteGrid, shared with the ghost route); O2_home, the pointer field,
- * stations, pad and WS4 conditions are fetched here. Everything after this is synchronous.
+ * Load once per (pad, scenario) (default: the official pad's fields, variants.yaml scenarios.default).
+ * `pad` null = the official pad (pad.json, the scenario's own fields); a picker pad id (rank2..rank4 of
+ * scenarios/pads/index.json) = its own fields (I2: `pads/{pad}/{scenario}/...`, nom_104 only). The T_home
+ * grid, heights and router model are WP6's (loadRouteGrid, shared with the ghost route); O2_home, the
+ * pointer field, stations, pad and WS4 conditions are fetched here. Everything after this is synchronous.
  */
-export function loadBrowserRouteData(scenario: string = CONFIG.defaultScenario): Promise<BrowserRouteData> {
-  let p = loaded.get(scenario)
+export function loadBrowserRouteData(scenario: string = CONFIG.defaultScenario, pad: string | null = null): Promise<BrowserRouteData> {
+  const cacheKey = JSON.stringify([pad, scenario])
+  let p = loaded.get(cacheKey)
   if (!p) {
     p = (async () => {
       const L = data()
       const fi = (await L.fieldsIndex()) as unknown as HudFieldsIndex
-      const oKey = `${scenario}/o2_home`
-      const pKey = `${scenario}/pointer`
-      const [rg, o2Home, pointer, stations, padFile, rad, clock] = await Promise.all([
-        loadRouteGrid(scenario),
+      const keys = fieldKeys(pad, scenario)
+      const oKey = keys.o2Home
+      const pKey = keys.pointer
+      const [rg, o2Home, pointer, stations, padFile, rad, clock, pads] = await Promise.all([
+        loadRouteGrid(scenario, pad),
         fi.fields[oKey] ? loadField(fi, oKey, dataUrl) : Promise.resolve(null),
         fi.fields[pKey]?.stencil ? L.optional(() => loadPointer(fi, pKey, dataUrl)) : Promise.resolve(null),
         L.stations(),
         L.optional(() => L.pad()),
         L.optional(() => L.rad()),
         L.optional(() => L.clock()),
+        pad === null ? Promise.resolve(null) : L.json<{ pads: PadIndexRow[] }>(PADS_INDEX),
       ])
+      let fieldsPad: BrowserPad | null = null
+      if (pad !== null) {
+        const row = pads?.pads.find((r) => r.id === pad)
+        if (!row) throw new Error(`${PADS_INDEX} has no pad ${pad}`)
+        fieldsPad = pickerPadOf(row)
+      }
       return makeBrowserRouteData({
         scenario,
         tHome: rg.tHome,
@@ -198,10 +242,11 @@ export function loadBrowserRouteData(scenario: string = CONFIG.defaultScenario):
         model: rg.model,
         stations,
         padFile,
+        fieldsPad,
         rad,
         clock,
         files: {
-          tHome: fi.fields[`${scenario}/t_home`]?.file ?? null,
+          tHome: fi.fields[keys.tHome]?.file ?? null,
           o2Home: fi.fields[oKey]?.file ?? null,
           pointer: pointer ? fi.fields[pKey].file : null,
           elevation: 'fp3d/far.f32.gz',
@@ -209,8 +254,8 @@ export function loadBrowserRouteData(scenario: string = CONFIG.defaultScenario):
         elevationResM: 8,
       })
     })()
-    p.catch(() => loaded.delete(scenario))
-    loaded.set(scenario, p)
+    p.catch(() => loaded.delete(cacheKey))
+    loaded.set(cacheKey, p)
   }
   return p
 }

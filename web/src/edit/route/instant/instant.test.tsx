@@ -12,8 +12,9 @@ import { createRouteController, type RouteJobs } from '../controller'
 import type { RouteStop, StationGeo } from '../model'
 import { createRouteStore } from '../store'
 import { all, byClass, installDom, type FakeNode } from '../../../ui/testing/dom'
-import { padFields } from './adapter'
-import { createRouteEstimate, hash8 } from './estimate'
+import { FIELD_PADS, fieldsPadId, padFields } from './adapter'
+import { createRouteEstimate, ESTIMATE_TEXT, hash8 } from './estimate'
+import { padPickOptions } from './padpick'
 import { ESTIMATE_LABEL, type EstimateCore, type EstimateResult } from './types'
 import { EstimateView, INSTANT_TEXT } from './view'
 
@@ -85,10 +86,59 @@ async function ready(s: ReturnType<typeof setup>) {
 }
 
 describe('instant browser estimate (I1b)', () => {
-  it('padFields: the official pad has the published fields, any other pad none yet (I2 seam)', () => {
+  it('padFields (I2b): the official pad and P2–P4 have browser fields; any other pad (custom spot, pad_default) none', () => {
     expect(padFields(catalog.officialPadId, catalog.officialPadId)).toBe('fields/index.json')
-    expect(padFields('rank2', catalog.officialPadId)).toBeNull()
+    expect(padFields('rank2', catalog.officialPadId)).toBe('fields/index.json#pads/rank2')
+    expect(padFields('rank3', catalog.officialPadId)).toBe('fields/index.json#pads/rank3')
+    expect(padFields('rank4', catalog.officialPadId)).toBe('fields/index.json#pads/rank4')
+    expect(padFields('pad_default', catalog.officialPadId)).toBeNull()
     expect(padFields(null, catalog.officialPadId)).toBeNull()
+    expect(fieldsPadId('fields/index.json')).toBeNull()
+    expect(fieldsPadId('fields/index.json#pads/rank3')).toBe('rank3')
+    // every pad with fields is a pads-index picker pad whose three fields are in fields/index.json (I2)
+    const fi = json('fields/index.json') as { fields: Record<string, unknown> }
+    for (const id of FIELD_PADS) {
+      expect(catalog.pads.find((p) => p.id === id)?.picker, id).toBe(true)
+      for (const f of ['t_home', 'o2_home', 'pointer']) expect(fi.fields[`pads/${id}/${catalog.padScenario}/${f}`], `${id} ${f}`).toBeTruthy()
+    }
+    expect(padPickOptions(catalog)).toEqual([
+      { id: catalog.officialPadId, label: 'Official pad' },
+      { id: 'rank2', label: 'P2' },
+      { id: 'rank3', label: 'P3' },
+      { id: 'rank4', label: 'P4' },
+    ])
+  })
+
+  it('switching pad recomputes on that pad\'s fields (loaded once each); a custom spot gives the reason', async () => {
+    let pad: string | { lon: number; lat: number } = catalog.officialPadId
+    const store = createRouteStore({ catalog, identity: ID, plan: () => ({ scenario: catalog.defaultScenario, budgetMin: catalog.bandBudgetsMin[0], pad, dwell: {} }) })
+    const ctl = createRouteController({ store, jobs, stations, pad: () => PAD })
+    const { core, calls } = stubCore()
+    const f = manualRaf()
+    const padOf = () => {
+      const p = store.step.peek().inputs.pad
+      return { lon: p.lon, lat: p.lat }
+    }
+    const est = createRouteEstimate({ store, pad: padOf, core, raf: f.raf })
+    const s = { f } as ReturnType<typeof setup>
+    ctl.toggle('S4', true)
+    await ready(s)
+    expect(core.load).toHaveBeenLastCalledWith('fields/index.json')
+    for (const id of ['rank2', 'rank3', catalog.officialPadId, 'rank2']) {
+      pad = id
+      store.planChanged()
+      await ready(s)
+      expect(est.state.peek().kind, id).toBe('ready')
+      const row = catalog.pads.find((p) => p.id === id)!
+      expect(calls.at(-1)!.pad).toEqual({ lon: row.lon, lat: row.lat })
+    }
+    expect((core.load as ReturnType<typeof vi.fn>).mock.calls.map((c) => c[0])).toEqual(['fields/index.json', 'fields/index.json#pads/rank2', 'fields/index.json#pads/rank3'])
+    pad = { lon: 137.39, lat: -4.79 }
+    store.planChanged()
+    await ready(s)
+    expect(est.state.peek()).toEqual({ kind: 'unavailable', reason: ESTIMATE_TEXT.unavailablePad })
+    expect(ESTIMATE_TEXT.unavailablePad).toContain('the browser estimate needs one of the four pads')
+    est.dispose()
   })
 
   it('every edit recomputes once per animation frame, in the user order (never reordered), no server call', async () => {

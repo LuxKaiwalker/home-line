@@ -219,7 +219,7 @@ export function padTool(panel: Element, port: MapPort, client: ApiClient = liveC
       onLiveState,
       cmap,
       ...loader,
-      pad: { pad: () => validSpot(tool.state), subscribe: (fn) => onSpot(tool, fn) },
+      pad: { pad: () => validSpot(tool.state), subscribe: (fn) => onSpot(tool, fn), clear: () => tool.clear() },
       crew: crew ? { jobInputs: () => crew.jobInputs(), blocked: () => crewBlockedText(crew.state), subscribe: (fn) => crew.subscribe(() => fn()) } : null,
       // S1 (D110): "Send to simulator" in the route result box (done and infeasible results only)
       resultSlot: SIM_EXPORT_ENABLED ? (c) => routeSimSlot(client, c.result.hash, (c.stage?.data as StageResult | undefined)?.manifest ?? null) : null,

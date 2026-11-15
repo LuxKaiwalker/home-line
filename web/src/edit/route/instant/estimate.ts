@@ -31,7 +31,7 @@ export interface RouteEstimateOptions {
 }
 
 export const ESTIMATE_TEXT = {
-  unavailablePad: 'The instant estimate runs on the official rover pad only (for now).',
+  unavailablePad: 'Instant estimate unavailable: the browser estimate needs one of the four pads (Official pad, P2, P3, P4).',
   unavailableCore: 'Instant estimate unavailable: {why}',
 }
 
