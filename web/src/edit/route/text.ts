@@ -66,7 +66,7 @@ export const STOP_PROBLEM_TEXT: Record<StopProblem, string> = {
   unassessed: 'no assessed terrain here',
   notWalkable: 'too steep to walk (20°)',
   unreachable: 'no way home from the rover pad',
-  spacing: 'closer than {m} m to the stop before',
+  spacing: 'closer than {m} m to another stop or the rover pad',
   tooMany: 'more than {n} stops',
 }
 
