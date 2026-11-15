@@ -13,6 +13,7 @@ import { ApiError, type ApiClient } from './client'
 import { HASH_HEX_CHARS } from './config'
 import { startJob, type JobOptions, type JobOutcome } from './jobs'
 import { checkPlanInputsFile, type FileLike } from './planio'
+import { routeOf, type RouteSpec } from './plans/route'
 import { liveLoader } from './result'
 import { validateRunRecord } from './schemacheck'
 import { loadStage, type LoaderFor, type StageResult } from './stage'
@@ -61,6 +62,18 @@ export interface LoadPlanOptions {
   onRecord?: (record: RunRecord) => void
 }
 
+// --- route in the run record (D97, contracts v1.2.0) ---
+
+/** Contract errors of a run record (run_record.schema.json v1.2.0: route_mode, feasibility, inputs.route). [] = valid. */
+export const checkRunRecord = (record: unknown): string[] => validateRunRecord(record)
+
+/** The route a result was computed with: the record's route_mode, else its inputs' route (missing = auto). */
+export function recordRoute(record: RunRecord): RouteSpec {
+  const r = routeOf(record.inputs)
+  const mode = record.route_mode
+  return mode && mode !== r.mode ? { ...r, mode } : r
+}
+
 const msg = (e: unknown) => (e instanceof Error ? e.message : String(e))
 
 /** Run record + result tree of `hash`. Never rejects: unknown, offline and broken answers are states. */
@@ -74,7 +87,7 @@ export async function loadPlan(client: ApiClient, hash: string, opts: LoadPlanOp
     if (e instanceof ApiError && e.transient) return { state: 'offline', hash, message: msg(e) }
     return { state: 'error', hash, message: msg(e) }
   }
-  const errs = validateRunRecord(record)
+  const errs = checkRunRecord(record)
   if (errs.length) return { state: 'error', hash, message: `run record fails run_record.schema.json: ${errs.slice(0, 3).join('; ')}` }
   if (record.hash !== hash) return { state: 'error', hash, message: `run record is for ${record.hash}, not ${hash}` }
   opts.onRecord?.(record)

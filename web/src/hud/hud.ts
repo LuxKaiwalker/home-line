@@ -6,11 +6,12 @@
 //   const hud = await mountHud(container, { dataUrl, config })   // config = parseHudConfig(...)
 //   hud.destroy()
 //
-// WS8 reuses the pieces: loadHudData() -> HudData, then each frame computeReadout(pos, data.ctx)
-// and createHudPanel(el, cfg).update(readout, pos, extras).
+// The pieces are exported separately (hud/index.ts): loadHudData() -> HudData, then each frame
+// computeReadout(pos, data.ctx) and createHudPanel(el, cfg).update(readout, pos, extras).
+// (WS8's first-person 3D view used to reuse them; it was removed in D99.)
 import './hud.css'
 import { PlaybackClock, type ClockDriver } from './clock'
-import { missionClock } from '../state/mission'
+import { mission, missionClock } from '../state/mission'
 import type { HudConfig } from './config'
 import { driftPosition, planFixes, type Fix } from './drift'
 import { decodeRGBA, FieldGrid, loadField, loadFieldRGBA } from './fields'
@@ -22,7 +23,7 @@ import type { Fix as NavFix } from '../nav/types'
 import { createHudPanel, fmtEva, type HudPanel } from './panel'
 import { Plan } from './plan'
 import { readoutSources } from './provenance'
-import { playbackPosition, type HudContext, type HudFields } from './readout'
+import { hudMarginInputs, playbackPosition, type HudContext, type HudFields } from './readout'
 import { radiationInput, routeTHomeSeries, stormReplay, stormState, type StormReplay } from './storm'
 import { parseClockSun, sunAt, sunRowText, sunSources, type ClockFile, type SunData } from './sun'
 import type { Bounds, FieldsIndex, HudPosition, LonLat, PadFile, PolygonFC, Rad, RouteFC, ScenariosIndex, Station, TimelineEvent } from './types'
@@ -139,7 +140,10 @@ export async function loadHudData(opts: MountHudOptions): Promise<HudData> {
   const padLL: LonLat | undefined = padFile ? [padFile.pad.lon, padFile.pad.lat] : undefined
   const plan = new Plan(route, timeline, tHome!, padLL)
   const pad: LonLat = padLL ?? plan.start
-  const ctx: HudContext = { cfg: config, fields, plan, budgetMin: opts.budgetMin ?? config.walkbackBudgetsMin[0], pad, partner }
+  // the exact margin function's inputs (D89): the field's files and mission-state defaults
+  const budgets = { reserveL: mission.budgets.o2ReserveL.peek(), dAllowMgy: mission.budgets.doseAllowMgy.peek() }
+  const margin = hudMarginInputs(plan, rad, clockFile?.eva?.t_dark_min, config, budgets)
+  const ctx: HudContext = { cfg: config, fields, plan, budgetMin: opts.budgetMin ?? config.walkbackBudgetsMin[0], pad, partner, margin }
   return {
     ctx, index, scenario: sc, consScenario: tHomeCons && cons ? cons.id : null, stations: stations ?? [], rad, dummy,
     pointer, cellstate, padFromFile: !!padFile, partnerFile, fixes: planFixes(plan, config), nav,

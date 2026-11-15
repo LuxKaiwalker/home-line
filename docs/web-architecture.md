@@ -5,20 +5,25 @@ Describes the real code in `web/` at `main` = `e580f65` (2026-11-14). Paths in D
 *planned* layout; this file is what exists. Facts were read from the source and from
 `web/node_modules` after `npm ci`; nothing here is from memory.
 
+**Since then (design branch, R1):** the first-person 3D view (`/hud3d`, `web/src/fp3d/`) was removed
+by D99 and the `/nav` add-on view by D98. The sections below keep the snapshot and say at each place
+what is gone. The 3D *map* (MapLibre terrain, 2D/3D toggle, flythrough) is a different thing and stays.
+
 ## 1. Versions (installed, `web/node_modules/*/package.json`, lockfile `web/package-lock.json`)
 
 | Package | Range in `web/package.json` | Installed | Kind |
 | --- | --- | --- | --- |
 | `maplibre-gl` | `^6.18.0` | **6.18.0** | runtime |
 | `@maplibre/maplibre-gl-style-spec` | (dep of maplibre-gl) | 26.7.0 | runtime (types for style JSON) |
-| `three` | `^0.187.0` | **0.187.0** | runtime (only in the lazy `/hud3d` chunk) |
 | `preact` | `^11.2.0` | **11.2.0** | runtime (`preact` + `preact/hooks`; JSX via `jsxImportSource: preact`) |
 | `vite` | `^8.3.6` | 8.3.8 | dev |
 | `vitest` | `^5.1.0` | 5.1.0 | dev |
 | `typescript` | `~7.0.2` | 7.0.2 | dev |
-| `@types/three` | `^0.187.0` | 0.187.0 | dev |
 | `yaml` | `^2.9.1` | 2.9.1 | dev (build-time YAML parsing only) |
 | `@types/geojson`, `@types/node` | | | dev |
+
+`three` and `@types/three` (0.187.0) were removed in R1c: since D99 nothing imports them; they
+were only in the lazy `/hud3d` chunk.
 
 **No signals or store library.** `@preact/signals` is not installed; no zustand / nanostores /
 redux / mobx / jotai. State today (see §4.5) is Preact `useState` inside views, plain module-level
@@ -55,6 +60,11 @@ No Playwright, no icon set, no fonts are installed yet (body font is `system-ui`
 | `#/nav` | `nav` | slot → `nav/index.ts` `mount` | slot (WS9, optional add-on banner, D19) |
 | anything else | `notfound` | inline in `views/index.ts` | |
 
+**Removed views (D98, D99).** The `hud3d` and `nav` routes no longer exist. `router.ts`
+`REMOVED_PATHS` maps the old paths to a live view and the shell redirects: `#/hud3d` and `#/fly/3d`
+go to `#/fly/hud`; `#/nav` and `#/evidence/nav` go to `#/evidence/scorecard` (`?legacy` is kept).
+`views/slot.ts` now globs only `hud/`, and `state/ui.ts` `ROUTE_MODE` has no `hud3d`/`nav` keys.
+
 **View contract** (`views/types.ts`): `type View = (el, route) => void | cleanup | Promise<…>`.
 `views/page.tsx` `preactView(make)` awaits `ensureManifest()` then `render(make(route), host)`;
 cleanup is `render(null, host)`. `views/slot.ts` `slotView(name)`: `import.meta.glob` of
@@ -89,6 +99,7 @@ Folders
 | `hud/` (WS7) | `index.ts` slot `mount` + public API re-exports (reused by fp3d); `hud.ts` `mountHud`/`loadHudData` (rAF loop); `clock.ts` `PlaybackClock`; `plan.ts` plan(t) from route + timeline; `readout.ts` `computeReadout` (margin etc.); `alarms.ts`; `panel.ts` helmet DOM panel; `map.ts` **Canvas 2D** minimap (not MapLibre); `fields.ts` field PNG decoder; `drift.ts` F19 circle; `storm.ts` D39 storm replay; `sun.ts`; `wayhome.ts` pointer field; `navhud.ts`; `provenance.ts` panel row sources; `config.ts` (`parseHudConfig` from hud/crew/conditions YAML); `types.ts`; `hud.css` |
 | `fp3d/` (WS8) | `index.ts` slot `mount` (checks WebGL2 via `fallback.ts`, then `await import('./view')` = Three.js); `view.ts` Three.js scene (580 lines); pure modules `terrain.ts`, `format.ts` (fp3d index + `.f32.gz` chunks), `path.ts` (camera on rails), `ring.ts` (horizon ring), `skyline.ts`, `sun.ts`, `look.ts` (sky/haze shaders), `geo.ts` (eqc from PROJ string), `fps.ts`, `config.ts`, `hudOverlay.ts` (lazy, reuses WS7 panel); `check/*.mjs` headless-Chromium probes (CDP, no npm dep) |
 | `nav/` (WS9, optional) | `index.ts` slot; `page.tsx`; `navmap.ts` (MapLibre); `chart.tsx`; `load.ts`, `series.ts`, `navstate.ts`, `fixclass.ts` (RG PNG decode), `geom.ts`, `config.ts`, `theme.ts`, `types.ts`, `nav.css` |
+| `fp3d/`, `nav/` since D98/D99 | `fp3d/` is deleted except `testdata/skyline_check.dummy.json` (pytest `test_fp3d_export.py` checks it; the fp3d *data* export in `pipeline/export/` and `make fp3d` stay). `nav/` keeps only the pure modules the 2D HUD imports: `config.ts`, `load.ts`, `types.ts`, `geom.ts`, `series.ts`, `navstate.ts` (and their tests); the page, map, chart, theme, CSS and `fixclass.ts` are gone |
 | `live/` (WS13, do not edit) | `client.ts` typed API client, `health.ts`, `jobs.ts`, `result.ts` (live result = `createLoader(browserFetcher(mode, base))`), `config.ts` (`VITE_LIVE`, `VITE_API_BASE`, `VITE_LIVE_MOCK`), `mock/`, `live.css`. **Not yet wired into `main.ts`** (only a commented `import('./live')` line in `live/index.ts`) |
 
 Not present yet: `src/ui/` (tokens.css/tokens.json), `src/state/`, `src/edit/`, `src/story/`,
@@ -144,12 +155,20 @@ pointer, cellstate, rad/clock. A `requestAnimationFrame` loop (`hud.ts` ~l.393) 
 redraws the Canvas 2D minimap (`hud/map.ts`). fp3d reuses the same exports
 (`loadHudData`, `computeReadout`, `createHudPanel`, `PlaybackClock`) in `fp3d/hudOverlay.ts`.
 
+**Since D99** `fp3d/hudOverlay.ts` is gone and the 2D HUD is the only consumer of these exports. The
+position-uncertain alarm (alarm 3) lives in the HUD: `hud/alarms.ts` (alarm texts and
+`evaluateAlarm`, F19 circle variant "POSITION UNCERTAIN: HEAD TOWARD ROVER"), `hud/drift.ts` (the F19
+drift circle) and `hud/navhud.ts` (optional F21 ellipse variant, `NAV_ALARM3_TEXT`), which uses the
+pure helpers kept in `nav/` (`geom.ts`, `navstate.ts`, `series.ts`, `types.ts`; `hud.ts` loads them
+through `nav/load.ts` and `nav/config.ts`).
+
 ### 4.4 Clock, playback, current plan
 
 - Clock: `hud/clock.ts` `PlaybackClock { t (EVA min), speed, playing, speeds, tMax }` with
   `play/pause/toggle/setSpeed/seek/tick(dtMs)`; speeds and default from `config/hud.yaml`
   (`playback_speeds [1,30,60,300]`, `default_speed 60`). One instance per mounted HUD / 3D view;
-  `/nav` has its own playback in `nav/page.tsx`. Nothing is shared between routes.
+  `/nav` has its own playback in `nav/page.tsx`. Nothing is shared between routes. (Since D98/D99 the
+  3D view and `nav/page.tsx` are gone; the HUD is the only `PlaybackClock` user here.)
 - Current plan: **no global**. The console holds `scenarioId`, `budget`, `visible`, pad selection
   etc. in `useState` inside `ConsolePanel` (`views/console.tsx` l.67–86); the HUD picks
   `scenarios/index.json` `default`. Switching routes loses the console's choices (no URL state
@@ -177,6 +196,9 @@ redraws the Canvas 2D minimap (`hud/map.ts`). fp3d reuses the same exports
 - Three.js: `fp3d/index.ts` checks `hasWebGL2()` (`fp3d/fallback.ts`, no Three.js) and only then
   `await import('./view')`; `hudOverlay` is a second dynamic import. Low fps or no WebGL2 →
   2D HUD fallback.
+- **Since D99** there is no Three.js code path: `fp3d/` is deleted, the Three.js chunk is no longer
+  built, and `tests/perf/lazy.spec.ts` checks that no route loads fp3d or Three.js. Since D98
+  MapLibre is loaded by the map views only (no `/nav` map).
 - `src/live/` is never imported by the shell today.
 
 ## 5. Console map (`map/consoleMap.ts`) as built
@@ -278,7 +300,8 @@ tiles, add self-hosted glyphs for symbol labels, apply the ×1.876 Mars exaggera
 - `npm test` = `vitest run`; config in `web/vite.config.ts` (`test.include src/**/*.test.ts(x)`,
   `environment: 'node'`, no jsdom). 49 test files, colocated (`*.test.ts` next to the module).
   Local run on this branch: **48 files passed, 1 skipped; 583 tests passed, 13 skipped (3.6 s)**.
-  fp3d browser checks (`fp3d/check/*.mjs`) are manual, not in CI.
+  fp3d browser checks (`fp3d/check/*.mjs`) are manual, not in CI. (Removed with `fp3d/` by D99,
+  together with the `make fp3d-check` target that ran them.)
 - `npm run build` = `tsc && vite build`; `typecheck` = `tsc --noEmit`. Vite plugins:
   `homeline-yaml` (YAML → JSON module at build time), `homeline-prune-data`;
   `server.fs.allow ['..']` (config/ and contracts/ one level up); `chunkSizeWarningLimit 1200`.
@@ -318,6 +341,9 @@ Sizes raw / gzip (kB):
 | `common-*.js` (Preact + shared view helpers) | 15.57 | 6.56 | Preact views |
 | `station-*.js`, `conditions-*.js`, `crew-*.js` (config YAML) | 12.81, 12.30, 11.81 | 4.22, 4.28, 5.46 | per route |
 | others (`trade`, `cuff`, `about`, `decisions`, `DecisionNotes`, `load`, `validation`, small helpers) | 0.6–6.1 each | 0.3–2.6 each | per route |
+
+Since D98/D99 the `view-*`, `fp3d-*`, `hudOverlay-*` and `nav-*` chunks are no longer built
+(R1: dist JS+CSS 2,950,937 B → 2,355,348 B); the rows above are the snapshot.
 
 First load of `/` (shell + console + MapLibre + loader + common, gzip, without the worker and data)
 ≈ 360 kB. DESIGN §5.4's "≤ 150 kB over today" is measured against these numbers.
