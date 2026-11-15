@@ -291,6 +291,36 @@ def test_auto_route_on_the_official_pad_attaches_to_the_precomputed_tree(server_
         assert c.app.state.jobs.jobs_started == 0
 
 
+# ------------------------------------------------------------------ the scenario set (W1) ----
+DEFAULT_SUIT = ["opt_104", "nom_104", "con_104"]
+
+
+def test_an_ordered_route_runs_the_default_suits_three_variants():
+    """W1 finding (D81, D97): only the AUTO plan on the official pad with the default crew is the
+    official 9-variant plan (precomputed); any ordered route is a custom plan: three variants."""
+    from server.tests import parity_harness as H
+
+    off = official_inputs()
+    assert len(H.scenario_ids()) == 9
+    assert plan_job.scenario_set(off) == H.scenario_ids()
+    assert plan_job.scenario_set({**off, "route": {"mode": "auto"}}) == H.scenario_ids()
+    assert plan_job.scenario_set({**off, "route": {"mode": "auto", "stops": []}}) == \
+        H.scenario_ids()
+    # the official pad, the default crew, an ordered route: three
+    ordered_off = {**off, "route": {"mode": "ordered", "stops": st("S4", "S1", "S2")}}
+    assert plan_job.is_official_pad(ordered_off)
+    assert plan_job.scenario_set(ordered_off) == DEFAULT_SUIT
+    # a custom pad with an ordered route, or without one: three
+    assert plan_job.scenario_set(doc(st("S4", "S1", "S2"))) == DEFAULT_SUIT
+    assert plan_job.scenario_set(doc(None)) == DEFAULT_SUIT
+    # a custom crew on the official pad (auto): three, as before
+    heavy = {**off, "crew": {**off.get("crew", {}), "body_mass_kg": 95}}
+    assert plan_job.scenario_set(heavy) == DEFAULT_SUIT
+    # the official hash is unchanged and still the auto plan's
+    assert result_hash({**off, "route": {"mode": "auto"}}, IDENT) == official_hash(IDENT)
+    assert result_hash(ordered_off, IDENT) != official_hash(IDENT)
+
+
 # ---------------------------------------------------------------------- the build_plan call ----
 class Recorder:
     def __init__(self, summary=None):
