@@ -89,6 +89,7 @@ def build_plan(
     timing_cb: Callable[[str, float], None] | None = None,
     timing: dict | None = None,
     verbose: bool = True,
+    route: list | None = None,
 ) -> dict:
     """Build every product of one plan; returns the run summary (also written to
     ``out_dir/summary.json``).
@@ -107,7 +108,12 @@ def build_plan(
     manifest_dir: manifest fragments go there instead of the shared manifest (server).
     on_stage(name, files): after each stage. timing_cb(name, seconds): after each stage.
     timing: dict the stage seconds are added to (the batch passes its own, so the summary keeps
-    load_grid and the D21 stages).
+    load_grid and the D21 stages). route (D97): None = the engine picks stations and order
+    (auto); a list of station stops (``"S4"`` or ``{"station": "S4"}``) = an ordered route
+    applied to every route scenario (traverse.plan). Unknown or repeated stations raise
+    traverse.RouteStopError before any work; an infeasible order is a result: the summary
+    gets ``route`` {mode, stops, scenario, feasibility (the default scenario's)} and
+    ``routes.{sid}.feasibility``.
     """
     with provenance.to_dir(manifest_dir):
         return _build(grid, pad_lonlat, list(scenario_ids), settings, Path(out_dir),
@@ -115,12 +121,12 @@ def build_plan(
                       None if terrain_dir is None else Path(terrain_dir), stations_list,
                       stations_missing, ridge, cond or {}, dose_fn, route_scenarios, partner,
                       siting, d21, crew, skipped or {}, rmse, on_stage, timing_cb,
-                      {} if timing is None else timing, verbose)  # fmt: skip
+                      {} if timing is None else timing, verbose, route)  # fmt: skip
 
 
 def _build(grid, pad_lonlat, sids, settings, out, pub, terrain, st_in, missing_in, ridge, cond,
            dose_fn, route_scenarios, partner, siting, d21, crew, skipped, rmse, on_stage,
-           timing_cb, timing, verbose) -> dict:  # fmt: skip
+           timing_cb, timing, verbose, route=None) -> dict:  # fmt: skip
     from . import scenarios as sc
 
     say = print if verbose else (lambda *a, **k: None)
@@ -140,6 +146,9 @@ def _build(grid, pad_lonlat, sids, settings, out, pub, terrain, st_in, missing_i
 
     if st_in is None and terrain is not None and (terrain / "stations.json").exists():
         st_in, missing_in = stations.load_ws1_stations(terrain / "stations.json")
+    if route is not None:  # D97: unknown or repeated stations fail before any work
+        route = list(route)
+        traverse.resolve_route(route, st_in or [])
     if partner and ridge is None and terrain is None:
         raise MissingInput("partner line needs ridge (or terrain_dir/ridge_index.tif)")
     if not partner:
@@ -181,11 +190,14 @@ def _build(grid, pad_lonlat, sids, settings, out, pub, terrain, st_in, missing_i
             continue
         suit = physio.parse_scenario(sid)[1]
         res, no_access = sc.plan_route(grid, pad, sid, fields[sid], st, cond, dose_fn,
-                                       partner_by_suit.get(suit), rmse, crew=crew)  # fmt: skip
+                                       partner_by_suit.get(suit), rmse, crew=crew,
+                                       route=route)  # fmt: skip
         traverse.write(res, sid, pub)
         rst, _ = access.routing_stations(st, sid)
         routes[sid] = sc.route_summary(res, no_access,
                                        {s["id"]: s["access_dist_m"] for s in rst})  # fmt: skip
+        if route is not None:
+            routes[sid]["feasibility"] = res.feasibility
         say(f"route {sid}: {res.order} {res.total_min:.1f} min; terms {res.margin_terms}; "
             f"lowest {routes[sid]['lowest_margin_min']} ({routes[sid]['lowest_margin_binding']})"
             f"; dose {res.dose}; no access cell: {no_access}")
@@ -238,6 +250,9 @@ def _build(grid, pad_lonlat, sids, settings, out, pub, terrain, st_in, missing_i
         "isochrones": iso_info, "siting": siting_info,
         "d21": d21_info,
     }  # fmt: skip
+    if route is not None:  # D97: only an ordered route adds the block (auto stays as it was)
+        summary["route"] = {"mode": "ordered", "stops": route, "scenario": default,
+                            "feasibility": routes.get(default, {}).get("feasibility")}
     if crew:  # F26: only a custom crew adds the block (the batch summary stays as it was)
         summary["crew"] = physio.crew_values(crew)
     summ = out / "summary.json"
