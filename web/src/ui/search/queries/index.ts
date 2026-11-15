@@ -7,15 +7,21 @@ import { useEffect, useMemo, useState } from 'preact/hooks'
 import { useSignalValue } from '../../../state/signal'
 import { commands } from '../../commands/registry'
 import { missionClock, resolvePlanScenario } from '../../../state/mission'
+import { fieldAt } from '../../../map/field/decode'
+import { selection, type SelectionRef } from '../../../state/selection'
+import { buildTimelineModel, type TimelineFileRow } from '../../timeline/model'
+import { coordsPattern } from './coords'
+import { marginPattern } from './margin'
 import { routePattern } from './route'
+import { timeHomePattern } from './timeHome'
 import { timePattern } from './time'
-import type { QueryContext, QueryPattern, QueryRow } from './types'
+import type { QueryContext, QueryHere, QueryPattern, QueryRow } from './types'
 import { withinPattern } from './within'
 
 export type { QueryContext, QueryPattern, QueryRow, QueryRunEnv, RowValue } from './types'
 import { probeRouteDraft } from './routeAdapter'
 
-export const PATTERNS: readonly QueryPattern[] = [timePattern, routePattern, withinPattern]
+export const PATTERNS: readonly QueryPattern[] = [coordsPattern, timePattern, routePattern, withinPattern, timeHomePattern, marginPattern]
 
 /** §2.1 normalisation, applied before every pattern. */
 export function normalizeQuery(input: string): string {
@@ -48,6 +54,19 @@ export function completePrefix(input: string): string | null {
   return null
 }
 
+/** S3b: a selection as a place for `time home here` (cell, station, pad, picked edge); null otherwise. */
+export function hereOf(ref: SelectionRef | null, stations: QueryContext['stations'], pad: QueryContext['pad']): QueryHere | null {
+  if (!ref) return null
+  if (ref.kind === 'cell') return { lon: ref.lon, lat: ref.lat, ref }
+  if (ref.kind === 'station') {
+    const s = stations.find((x) => x.id === ref.id)
+    return s ? { lon: s.lon, lat: s.lat, ref } : null
+  }
+  if (ref.kind === 'pad') return ref.id === pad.id && Number.isFinite(pad.lon) ? { lon: pad.lon, lat: pad.lat, ref } : null
+  if (ref.kind === 'edge' && ref.lon !== undefined && ref.lat !== undefined) return { lon: ref.lon, lat: ref.lat, ref }
+  return null
+}
+
 /** VITE_LIVE on and VITE_ROUTE_EDIT not 0/false (the rule of live/config.ts, read here without importing live/). */
 function routeEditBuild(): boolean {
   const live = import.meta.env.VITE_LIVE
@@ -58,10 +77,19 @@ function routeEditBuild(): boolean {
 /** The query context from the files the app already loads (loader-cached). `live`: liveStatus.reachable. */
 export async function loadQueryContext(L: Loader, live: boolean): Promise<QueryContext> {
   const [stations, idx, pad] = await Promise.all([L.optional(() => L.stations()), L.optional(() => L.scenarios()), L.optional(() => L.pad())])
+  const scenario = idx ? resolvePlanScenario(idx).id : ''
+  // S3b: the current plan's timeline (loader-cached; the dock and the index read the same file)
+  const tl = scenario ? await L.optional(() => L.timeline(scenario)) : null
+  const padAt = { id: pad?.pad.id ?? 'rank1', lon: pad?.pad.lon ?? NaN, lat: pad?.pad.lat ?? NaN }
+  const st = stations ?? []
   return {
-    stations: stations ?? [],
-    scenario: idx ? resolvePlanScenario(idx).id : '',
-    pad: { id: pad?.pad.id ?? 'rank1', lon: pad?.pad.lon ?? NaN, lat: pad?.pad.lat ?? NaN },
+    stations: st,
+    scenario,
+    pad: padAt,
+    fieldAt,
+    timeline: tl ? buildTimelineModel({ scenario, timeline: tl as unknown as TimelineFileRow[], tMax: missionClock.tMax }) : null,
+    hereNow: () => hereOf(selection.selected.peek(), st, padAt),
+    planningRadiusM: CONFIG.planningRadiusM,
     tMaxMin: missionClock.tMax,
     live,
     marsRadiusM: CONFIG.marsRadiusM,

@@ -65,7 +65,7 @@ const rows = (q: string, c = CTX) => runQueries(q, c)
 
 describe('patterns (§2.2)', () => {
   it('PATTERNS are in precedence order and every example parses to its own pattern', () => {
-    expect(PATTERNS.map((p) => p.id)).toEqual(['time', 'route', 'within'])
+    expect(PATTERNS.map((p) => p.id)).toEqual(['coords', 'time', 'route', 'within', 'timeHome', 'marginBelow'])
     for (const p of PATTERNS) for (const ex of p.examples) expect(rows(ex)[0]?.pattern, ex).toBe(p.id)
   })
 

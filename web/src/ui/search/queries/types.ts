@@ -32,13 +32,24 @@ export interface QueryContext {
   marsRadiusM: number
   fieldAt?: (lon: number, lat: number) => FieldSample | null
   timeline?: TimelineModel | null
-  here?: { lon: number; lat: number; ref: SelectionRef } | null
+  here?: QueryHere | null
+  /** S3b: the current selection as a place, read when a query asks for `here` (index.ts reads the selection). */
+  hereNow?: () => QueryHere | null
+  /** S3b: config/site.yaml planning_radius_m (CONFIG.planningRadiusM): planner metres beyond it are disabled. */
+  planningRadiusM?: number
   /** S3a: route editing is part of this build (VITE_LIVE and not VITE_ROUTE_EDIT=0). Default false. */
   routeEdit?: boolean
   /** S3a: whether edit/route/store exports setRouteDraft (WP12); 'unknown' until probed. */
   routeDraft?: 'unknown' | 'ready' | 'missing'
   /** S3a: the registry command `route.open` (WP17) is registered: setRouteDraft needs the Edit-route panel open. */
   routeOpen?: boolean
+}
+
+/** S3b: a selected place for `time home here` (cell, station or pad with its lon/lat). */
+export interface QueryHere {
+  lon: number
+  lat: number
+  ref: SelectionRef
 }
 
 export type RowValue =
