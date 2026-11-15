@@ -32,6 +32,11 @@
 .hl-topbar__modes { display: flex; align-items: stretch; }
 .hl-modes { display: flex; align-items: stretch; gap: var(--space-1); margin: 0; padding: 0; list-style: none; }
 .hl-modes li { display: flex; }
+/* D131: "Plan your route" next to the mode switcher (live builds with route editing on) */
+.hl-topbar__routelink {
+  display: inline-flex; align-items: center; padding: 0 var(--space-3); white-space: nowrap;
+  color: var(--color-text); text-underline-offset: var(--space-1); font-size: var(--font-size-small); line-height: var(--line-height-small); font-weight: var(--font-weight-heading);
+}
 .hl-modes__tab {
   display: inline-flex; align-items: center; gap: var(--space-2); padding: 0 var(--space-3);
   color: var(--color-text-muted); text-decoration: none; text-transform: uppercase;

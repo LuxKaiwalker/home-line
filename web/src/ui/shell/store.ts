@@ -74,6 +74,9 @@ export const shell = {
    *  Add with hostIn(id) from the mount that does it; its cleanup removes it again. */
   hosted: signal<readonly string[]>([]),
   /** Last hash visited per mode, so a mode tab returns to where the user was (e.g. a station). */
+  /** D131: the "Plan your route" header link shows (live builds: editroute.tsx sets it exactly while
+   *  the Edit-route button would show; the static build never does). */
+  routeLink: signal<boolean>(false),
   lastHash: signal<Readonly<Record<Mode, string>>>(Object.fromEntries(MODES.map((m) => [m, canonicalHref(MODE_VIEWS[m][0].route)])) as Record<Mode, string>),
 }
 
@@ -120,12 +123,33 @@ export function applyRoute(route: Route, hash: string): Mode {
   shell.route.value = route
   shell.railSheet.value = false // a rail link was followed (or the route changed): the sheet closes
   ui.mode.value = mode
-  if (route.name !== 'notfound') shell.lastHash.value = { ...shell.lastHash.peek(), [mode]: hash.startsWith('#') ? hash : `#${hash}` }
+  // D131: an open panel (?panel=) is not part of where a mode tab returns to
+  if (route.name !== 'notfound') shell.lastHash.value = { ...shell.lastHash.peek(), [mode]: panelOf(hash) === null ? (hash.startsWith('#') ? hash : `#${hash}`) : withPanel(hash, null) }
   return mode
 }
 
 /** Hash a mode tab or its key leads to: the last place visited in that mode, else its first view. */
 export const modeHash = (m: Mode): string => shell.lastHash.peek()[m]
+
+/** D131: the hash query parameter naming an open panel; `route` = the Edit-route drawer (#/?panel=route). */
+export const PANEL_PARAM = 'panel'
+export const ROUTE_PANEL = 'route'
+/** The "Plan your route" link target: Plan with the Edit-route drawer open. */
+export const PLAN_ROUTE_HASH = `#/?${PANEL_PARAM}=${ROUTE_PANEL}`
+/** The panel named in `hash` (null when none). */
+export function panelOf(hash: string): string | null {
+  const q = hash.replace(/^#/, '').split('?', 2)[1]
+  return q === undefined ? null : new URLSearchParams(q).get(PANEL_PARAM)
+}
+/** `hash` with its panel set to `panel` (null removes it); other query parameters are kept. */
+export function withPanel(hash: string, panel: string | null): string {
+  const [path, q = ''] = hash.replace(/^#/, '').split('?', 2)
+  const params = new URLSearchParams(q)
+  if (panel === null) params.delete(PANEL_PARAM)
+  else params.set(PANEL_PARAM, panel)
+  const qs = params.toString()
+  return `#${path || '/'}${qs ? `?${qs}` : ''}`
+}
 
 // ---------------------------------------------------------------- extension points
 

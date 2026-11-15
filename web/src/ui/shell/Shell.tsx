@@ -25,6 +25,7 @@ import {
   MODE_KEY,
   MODE_VIEWS,
   modeHash,
+  PLAN_ROUTE_HASH,
   railCollapsed,
   railIconOnly,
   railSections,
@@ -84,6 +85,7 @@ export function TopBar() {
   const bp = useSignalValue(shell.breakpoint)
   const sidebarOpen = useSignalValue(shell.sidebarOpen)
   useSignalValue(shell.hosted)
+  const routeLink = useSignalValue(shell.routeLink)
   const [menu, setMenu] = useState(false)
   useEffect(() => setMenu(false), [mode])
   const phone = bp === 'phone'
@@ -109,6 +111,12 @@ export function TopBar() {
           <ModeTabs mode={mode} />
         )}
       </nav>
+      {/* D131: live builds with route editing on: Plan with the Edit-route drawer open */}
+      {routeLink && (
+        <a class="hl-topbar__routelink" href={PLAN_ROUTE_HASH}>
+          {t('nav.planRoute')}
+        </a>
+      )}
       <div class="hl-topbar__plan" id="hl-topbar-plan">
         {/* L2 (D111): the Plan headline strip renders here (views/planStrip.tsx, a portal into this host);
             L7b's Official plan button sits next to it */}

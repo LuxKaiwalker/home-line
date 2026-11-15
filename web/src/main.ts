@@ -10,7 +10,7 @@ import './ui/shell/shell.css'
 import { DATA_MODE, IS_DEV } from './env'
 import { clearUnbacked, onUnbackedChange, unbackedNumbers } from './prov/store'
 import { isSpikeHash, isStyleguideHash, parseRoute, redirectFor, type Route } from './router'
-import { applyRoute } from './ui/shell/store'
+import { applyRoute, withPanel } from './ui/shell/store'
 import { buildLegacyFrame, buildShellFrame, frameKindFor, type Frame, type FrameKind } from './ui/shell/frame'
 import type { ShellHandle } from './ui/shell/Shell'
 import { mountShell } from './ui/shell/Shell'
@@ -88,6 +88,7 @@ async function render(): Promise<void> {
       route = parseRoute(to)
     }
   }
+  shown = withPanel(location.hash, null)
   cleanup?.()
   cleanup = undefined
   clearUnbacked()
@@ -117,7 +118,9 @@ async function render(): Promise<void> {
   }
 }
 
-window.addEventListener('hashchange', () => void render())
+// D131: a hash that only opens or closes a panel (?panel=route) keeps the view; the panel host follows it
+let shown: string | undefined
+window.addEventListener('hashchange', () => void (withPanel(location.hash, null) !== shown && render()))
 // DESIGN U6 (M10): ?capture=<id> / ?demo=1 set up story mode (virtual time, route) before the first render.
 const storyBoot = /[?&](capture|demo)=/.test(location.search + location.hash) ? import('./story/boot').then((m) => m.boot()) : Promise.resolve()
 void storyBoot.catch((e) => console.error(e)).then(() => render())

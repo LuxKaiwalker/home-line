@@ -21,11 +21,11 @@
 // contract): edit-route (Drawer), crew and my-plans (Collapsible inside it).
 import { render, type ComponentType } from 'preact'
 import { useState } from 'preact/hooks'
-import { signal, useSignalValue, type ReadSignal } from '../../state/signal'
+import { effect, signal, useSignalValue, type ReadSignal } from '../../state/signal'
 import { SendToSimulator, type SendToSimulatorProps } from '../cards/simslot-export'
 import { Button } from '../components'
-import { Collapsible, Drawer, useLayoutInsets, useOpener } from '../layout'
-import type { RailSection, Render } from './store'
+import { closeContainer, Collapsible, Drawer, layout, openContainer, useLayoutInsets, useOpener } from '../layout'
+import { panelOf, ROUTE_PANEL, shell, withPanel, type RailSection, type Render } from './store'
 import './editroute.css'
 
 export const EDIT_ROUTE_ID = 'edit-route'
@@ -164,6 +164,54 @@ export function EditRouteHost<Snap>({ plans, simMode = 'off' }: { plans: MyPlans
   )
 }
 
+/**
+ * D131: the drawer's open state in the URL (#/?panel=route; shareable). Opening pushes the entry, so
+ * Back closes the drawer; closing (Esc, ×) goes back over an entry that only added the panel, else
+ * replaces the hash without it. Back/forward and loading the URL open or close the drawer.
+ */
+export function syncEditRouteUrl(win: Window = window): () => void {
+  const { location: loc, history: hist } = win
+  const inUrl = () => panelOf(loc.hash) === ROUTE_PANEL
+  let last = loc.hash
+  let pushed = false // the current entry is the previous one plus ?panel=route
+  let prev: boolean | undefined // the drawer's last seen state (the effect also runs for other containers)
+  const fromUrl = () => {
+    const open = layout.open.peek()[EDIT_ROUTE_ID]
+    if (open === undefined || open === inUrl()) return
+    if (open) closeContainer(EDIT_ROUTE_ID, { restoreFocus: false })
+    else openContainer(EDIT_ROUTE_ID, null)
+  }
+  const onHash = () => {
+    pushed = inUrl() && panelOf(last) !== ROUTE_PANEL && withPanel(last, null) === withPanel(loc.hash, null)
+    last = loc.hash
+    fromUrl()
+  }
+  const stop = effect(() => {
+    const open = layout.open.value[EDIT_ROUTE_ID]
+    if (open === undefined || open === prev) return // not rendered yet, or another container changed
+    const first = prev === undefined
+    prev = open
+    if (first && inUrl() && !open) return void queueMicrotask(fromUrl) // loaded with the URL: open it
+    if (open === inUrl()) return
+    if (open && first) hist.replaceState(hist.state, '', withPanel(loc.hash, ROUTE_PANEL)) // remembered open
+    else if (open) {
+      hist.pushState(hist.state, '', withPanel(loc.hash, ROUTE_PANEL))
+      pushed = true
+    } else if (pushed) {
+      pushed = false
+      hist.back()
+    } else hist.replaceState(hist.state, '', withPanel(loc.hash, null))
+    last = loc.hash
+  })
+  win.addEventListener('hashchange', onHash)
+  return () => {
+    stop()
+    win.removeEventListener('hashchange', onHash)
+  }
+}
+
+let linkEffect: (() => void) | undefined
+
 export interface MountEditRouteOptions {
   /** D116: live/config.ts ROUTE_EDIT_ENABLED (VITE_ROUTE_EDIT); false mounts nothing (no button, no drawer). */
   enabled: boolean
@@ -177,11 +225,15 @@ export function mountEditRoute<Snap>(mapEl: Element, plans: MyPlansDeps<Snap>, o
   const el = mapEl.appendChild(document.createElement('div'))
   el.setAttribute('class', 'hl-editroute')
   hosts++
+  // D131: the header link shows exactly while the Edit-route button would (route editing on, panel registered)
+  linkEffect ??= effect(() => void (shell.routeLink.value = routeRender.value !== undefined))
+  const stopUrl = typeof window !== 'undefined' && window.history ? syncEditRouteUrl(window) : () => {}
   render(<EditRouteHost plans={plans} simMode={o.simMode} />, el)
   let done = false
   return () => {
     if (done) return
     done = true
+    stopUrl()
     hosts--
     render(null, el)
     el.remove()
