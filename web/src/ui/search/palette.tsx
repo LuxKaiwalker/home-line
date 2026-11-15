@@ -13,7 +13,7 @@ import { ui } from '../../state/ui'
 import { Badge, ChipMark, cx, Icon } from '../components'
 import { t } from '../copy'
 import { runShortcut, type ShortcutAction } from '../shell/keys'
-import { isMapMode, modeHash, openSidebar } from '../shell/store'
+import { isMapMode, modeHash, openSidebar, shell } from '../shell/store'
 import { expandedIndex, resetExpandedIndex } from './index/lazy'
 import { commandItems, GROUP_LABEL, loadObjectIndex, rank, type RunEnv, type SearchItem } from './search'
 import './search.css'
@@ -39,7 +39,8 @@ export function runItem(item: SearchItem, env: RunEnv): void {
   if (item.ref) {
     if (!isMapMode(ui.mode.peek() ?? 'plan')) env.navigate(modeHash('plan'))
     select(item.ref, 'search')
-    openSidebar()
+    // L2d (D111): a station the Plan map shows in its own card (shell.hosted 'station') keeps the sidebar shut
+    if (!(item.ref.kind === 'station' && shell.hosted.peek().includes('station'))) openSidebar()
     return
   }
   if (item.command) {
