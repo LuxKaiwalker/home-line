@@ -13,6 +13,7 @@ import hashlib
 import io
 import json
 import math
+import os
 from pathlib import Path
 
 import numpy as np
@@ -35,6 +36,11 @@ MB = 2 ** 20
 DEM_1M = REPO / "data" / "interim" / "terrain" / "dem_1m.tif"
 needs_dem = pytest.mark.skipif(not DEM_1M.exists(),
                                reason="1 m merged DEM not cached (git-ignored, ~/hl-data)")
+# Full re-export (~2 min, ~1 GB RAM): opt-in, run as
+# HL_REGEN_TILES=1 flock /tmp/hl-heavy.lock pytest tests/test_terrain_tiles.py -k regenerated
+needs_regen = pytest.mark.skipif(os.environ.get("HL_REGEN_TILES") != "1",
+                                 reason="heavy re-export; set HL_REGEN_TILES=1 (under flock)")
+CAP = TT["height_step_cap_m"]  # coarsest height step, m of true elevation, per tile set
 
 
 def meta(name: str) -> dict:
@@ -141,7 +147,7 @@ def synth(tmp_path_factory):
              pad["lat"] + half_deg / 3]
     kw = dict(name="terrain", sources=[fine, coarse], zooms=(13, 15), focus_zooms=(16, 16),
               bounds=bounds, focus_bounds=focus, factor=FACTOR, tile_px=TT["tile_px"],
-              budget_bytes=TT["budget_mb"] * MB)
+              budget_bytes=TT["budget_mb"] * MB, max_step_true_m=CAP["terrain"])
     a = T.build(out_dir=d / "a" / "terrain", **kw)
     b = T.build(out_dir=d / "b" / "terrain", **kw)
     return {"dir": d, "a": a, "b": b, "kw": kw, "fine": fine, "coarse": coarse}
@@ -228,6 +234,33 @@ def test_constants_come_from_config():
     assert lc["factor"] == FACTOR
 
 
+def test_height_step_caps_come_from_config():
+    """P2b: the Terrarium step caps live in design.yaml terrain_tiles.height_step_cap_m."""
+    assert T.load_config()["max_step_true_m"] == CAP["terrain"] == 0.1  # brief tolerance (U1)
+    assert RL.load_config()["max_step_true_m"] == CAP["low"]
+    # no hard-coded fallbacks left in the exporters
+    assert not hasattr(T, "MAX_STEP_TRUE_M") and not hasattr(RL, "MAX_STEP_TRUE_M")
+    assert "assumed: true" in next(ln for ln in (REPO / "config" / "design.yaml").read_text()
+                                   .splitlines() if ln.strip().startswith("low:"))
+
+
+def test_run_passes_config_step_cap_to_build(synth, tmp_path):
+    """run() takes the cap from the cfg dict: a budget that needs a coarser step than the cap
+    fails, the same budget with the cap lifted fits."""
+    kw = synth["kw"]
+    cfg = {k: kw[k] for k in ("name", "sources", "zooms", "focus_zooms", "bounds",
+                              "focus_bounds", "factor", "tile_px")}
+    fine_total = synth["a"]["total_bytes"]  # at the finest step that fits 25 MiB
+    cfg["budget_bytes"] = fine_total // 2
+    cfg["max_step_true_m"] = synth["a"]["precision_m"] / FACTOR  # no coarser step allowed
+    with pytest.raises(T.BudgetError):
+        T.run(cfg, tmp_path / "capped", force=True, scripts=[], log=lambda _: None)
+    cfg["max_step_true_m"] = 100.0
+    doc, rebuilt = T.run(cfg, tmp_path / "lifted", force=True, scripts=[], log=lambda _: None)
+    assert rebuilt and doc["precision_m"] > synth["a"]["precision_m"]
+    assert doc["total_bytes"] <= cfg["budget_bytes"]
+
+
 # -------------------------------------------------------------------- committed output: U1
 
 
@@ -253,7 +286,7 @@ def _check_tileset(name: str, budget_mb: float, max_step_true_m: float):
 
 
 def test_terrain_tiles_contract_budget_zooms():
-    m, files = _check_tileset("terrain", TT["budget_mb"], T.MAX_STEP_TRUE_M)
+    m, files = _check_tileset("terrain", TT["budget_mb"], CAP["terrain"])
     z0, z1 = TT["zooms_planning_extent"]
     fz0, fz1 = TT["zooms_focus_area"]
     assert (m["minzoom"], m["maxzoom"]) == (z0, fz1)
@@ -289,7 +322,7 @@ def test_terrain_bounds_cover_planning_extent():
 
 
 def test_terrain_low_contract_budget_zooms():
-    m, _ = _check_tileset("terrain_low", TT["lowzoom_budget_mb"], RL.MAX_STEP_TRUE_M)
+    m, _ = _check_tileset("terrain_low", TT["lowzoom_budget_mb"], CAP["low"])
     assert (m["minzoom"], m["maxzoom"]) == tuple(TT["lowzoom_intro"])
     assert m["focus"] is None
     for z in range(m["minzoom"], m["maxzoom"] + 1):
@@ -344,3 +377,23 @@ def test_png_bytes_deterministic_encoder():
     assert a == b
     assert np.allclose(T.decode_terrarium(np.asarray(Image.open(io.BytesIO(a)))), h,
                        atol=0.5 / 256 + 1e-9)
+
+
+def _digests(root: Path) -> dict[str, str]:
+    """sha256 of tiles.json and every {z}/{x}/{y}.png under ``root`` (relative path -> hex)."""
+    files = [root / "tiles.json"] + [p for p in root.rglob("*.png")
+                                     if len(p.relative_to(root).parts) == 3]
+    return {str(p.relative_to(root)): hashlib.sha256(p.read_bytes()).hexdigest() for p in files}
+
+
+@needs_regen
+@needs_dem
+@pytest.mark.parametrize("mod", [T, RL], ids=["terrain", "terrain_low"])
+def test_regenerated_tiles_byte_identical(mod, tmp_path):
+    """P2b: with the caps read from config, a fresh export equals the published tiles byte for
+    byte (written to a temp dir; web/public/data and the manifest are not touched)."""
+    out = tmp_path / mod.NAME
+    assert mod.main(["--out", str(out), "--force", "--no-record"]) == 0
+    got, want = _digests(out), _digests(PUBLIC / mod.NAME)
+    assert got.keys() == want.keys()
+    assert [k for k in got if got[k] != want[k]] == []

@@ -401,6 +401,12 @@ class JobRunner:
         with self._lock:
             return len(self._waiting)
 
+    @property
+    def initializer(self) -> Callable[[], object] | None:
+        """What every worker runs before it reports ready (also a worker respawned after a
+        timeout or a crash)."""
+        return self._initializer
+
     def processes(self) -> list:
         with self._lock:
             return [s.proc for s in self._slots if s.proc is not None]
