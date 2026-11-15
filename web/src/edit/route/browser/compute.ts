@@ -20,7 +20,7 @@ import { CONFIG } from '../../../config'
 import { distanceM, isStationStop, stopNames, type RouteStop } from '../model'
 import { accessCell, cellOf, lonLatOfCell } from '../map/grid'
 import { legPairs, routeLegs } from '../map/legs'
-import type { Leg } from '../map/router'
+import { CROSSINGS, type Leg } from '../map/router'
 import { ACCESS_RADIUS_M } from '../map/validity'
 import { BUDGET_CONSTANTS, missionBudget, type MissionBudget } from './budget'
 import { ANALYSIS_PROJ, DEFAULT_DWELL_MIN, MARGIN_AMBER_MIN, type BrowserPad, type BrowserRouteData } from './data'
@@ -123,11 +123,87 @@ export function homeAtCell(d: BrowserRouteData, cell: number): { tHomeMin: numbe
   return { tHomeMin: fieldAtCell(d, d.tHome, cell), o2HomeL: fieldAtCell(d, d.o2Home, cell) }
 }
 
-function snapCell(d: BrowserRouteData, lon: number, lat: number): { cell: number | null; code: BrowserStopIssue['code'] | null } {
+// graph.OFFSETS (as map/router.ts): 8 neighbours + 8 knight moves, (drow, dcol), rows grow southwards
+const OFFSETS: [number, number][] = [
+  [-1, 0], [1, 0], [0, -1], [0, 1],
+  [-1, -1], [-1, 1], [1, -1], [1, 1],
+  [-2, -1], [-2, 1], [2, -1], [2, 1],
+  [-1, -2], [-1, 2], [1, -2], [1, 2],
+] // prettier-ignore
+
+/**
+ * Cells the router can reach from `start` with its own move rules (passable ends and crossings, finite
+ * pace at the grade between the two cells; the grade limit is symmetric, so reachability is too).
+ * The browser grid (5 m cells, 8 m heights) has small pockets the engine's 3 m graph does not; a stop
+ * is routed from the nearest cell of the pad's component within the access radius. Cached per pad cell.
+ */
+export function reachableFrom(d: BrowserRouteData, start: number): Uint8Array {
+  const hit = d.components.get(start)
+  if (hit) return hit
+  const { width: W, height: H, passable, elev, resM } = d.grid
+  const seen = new Uint8Array(W * H)
+  const len = OFFSETS.map(([a, b]) => Math.hypot(a, b) * resM)
+  const stack = new Int32Array(W * H)
+  let top = 0
+  if (passable[start]) {
+    seen[start] = 1
+    stack[top++] = start
+  }
+  while (top > 0) {
+    const i = stack[--top]
+    const r = Math.floor(i / W)
+    const c = i - r * W
+    for (let k = 0; k < 16; k++) {
+      const r2 = r + OFFSETS[k][0]
+      const c2 = c + OFFSETS[k][1]
+      if (r2 < 0 || c2 < 0 || r2 >= H || c2 >= W) continue
+      const j = r2 * W + c2
+      if (seen[j] || !passable[j]) continue
+      let ok = true
+      for (const [xi, xj] of CROSSINGS[k]) if (!passable[(r + xi) * W + (c + xj)]) ok = false
+      if (!ok || d.model.lookup(Math.atan((elev[j] - elev[i]) / len[k])).pace === Infinity) continue
+      seen[j] = 1
+      stack[top++] = j
+    }
+  }
+  d.components.set(start, seen)
+  return seen
+}
+
+/** Nearest cell of `comp` within radiusM of `cell` (own cell first), or null. */
+function nearestIn(d: BrowserRouteData, comp: Uint8Array, cell: number, radiusM: number): number | null {
+  if (comp[cell]) return cell
+  const { width: W, height: H, resM } = d.grid
+  const R = Math.floor(radiusM / resM)
+  const r0 = Math.floor(cell / W)
+  const c0 = cell - r0 * W
+  let best: number | null = null
+  let bestD = Infinity
+  for (let dr = -R; dr <= R; dr++) {
+    const r = r0 + dr
+    if (r < 0 || r >= H) continue
+    for (let dc = -R; dc <= R; dc++) {
+      const c = c0 + dc
+      if (c < 0 || c >= W) continue
+      const q = dr * dr + dc * dc
+      if (q > R * R || q >= bestD) continue
+      if (comp[r * W + c]) {
+        best = r * W + c
+        bestD = q
+      }
+    }
+  }
+  return best
+}
+
+function snapCell(d: BrowserRouteData, lon: number, lat: number, comp: Uint8Array | null): { cell: number | null; code: BrowserStopIssue['code'] | null } {
   const own = cellOf(d.tHome, lon, lat)
   if (own === null) return { cell: null, code: 'route_point_outside_grid' }
   const c = accessCell(d.grid, own, ACCESS_RADIUS_M)
-  return c === null ? { cell: null, code: 'route_point_not_walkable' } : { cell: c, code: null }
+  if (c === null) return { cell: null, code: 'route_point_not_walkable' }
+  if (!comp) return { cell: c, code: null }
+  const inComp = nearestIn(d, comp, own, ACCESS_RADIUS_M)
+  return inComp === null ? { cell: null, code: 'route_point_unreachable' } : { cell: inComp, code: null }
 }
 
 /** One leg's vertices for the latest-departure check (physio_core.latest_departure_terms inputs). */
@@ -181,14 +257,15 @@ export function computeBrowserRoute(d: BrowserRouteData, padLonLat: LonLat | { l
     return st ? { lon: st.lon, lat: st.lat } : null
   })
   const dwellMin = stops.map((s) => (isStationStop(s) ? (d.stations.find((x) => x.id === s.station)?.dwellMin ?? DEFAULT_DWELL_MIN) : DEFAULT_DWELL_MIN))
-  const padSnap = snapCell(d, pad.lon, pad.lat)
+  const padSnap = snapCell(d, pad.lon, pad.lat, null)
   if (padSnap.code) issues.push({ index: -1, code: padSnap.code })
+  const comp = padSnap.cell === null ? null : reachableFrom(d, padSnap.cell)
   const cells = positions.map((p, i) => {
     if (!p) {
       issues.push({ index: i, code: 'route_station_unknown' })
       return null
     }
-    const s = snapCell(d, p.lon, p.lat)
+    const s = snapCell(d, p.lon, p.lat, comp)
     if (s.code) issues.push({ index: i, code: s.code })
     return s.cell
   })

@@ -18,6 +18,7 @@ import hudRaw from '../../../../../config/hud.yaml'
 import crewRaw from '../../../../../config/crew.yaml'
 import conditionsRaw from '../../../../../config/conditions.yaml'
 import { loadRouteGrid } from '../map/grid'
+import type { GradeModel } from '../map/physio'
 import { LegRouter, type Leg, type RouteGrid } from '../map/router'
 
 /** config/site.yaml crs.analysis_proj: the pad-local frame of mission.json. */
@@ -82,7 +83,11 @@ export interface BrowserRouteData {
   /** WS2 pointer field: the fastest way home from any cell (hud/wayhome) */
   pointer: PointerField | null
   grid: RouteGrid
+  /** the router's grade model (pace per grade): the reachable-component check uses the same move rules */
+  model: GradeModel
   router: { route(from: number, to: number): Leg | null }
+  /** cells the router can reach from a pad cell (key: pad cell), filled lazily by compute.ts */
+  components: Map<number, Uint8Array>
   /** leg cache (map/legs.ts routeLegs): key "from-to" cell pair; kept across recomputes */
   legCache: Map<string, Leg | null>
   stations: BrowserStation[]
@@ -126,7 +131,7 @@ export function makeBrowserRouteData(p: {
   o2Home: FieldGrid | null
   pointer: PointerField | null
   grid: RouteGrid
-  router: { route(from: number, to: number): Leg | null }
+  model: GradeModel
   stations: readonly Station[]
   padFile: PadFile | null
   rad: Rad | null
@@ -141,7 +146,9 @@ export function makeBrowserRouteData(p: {
     o2Home: p.o2Home,
     pointer: p.pointer,
     grid: p.grid,
-    router: p.router,
+    model: p.model,
+    router: new LegRouter(p.grid, p.model),
+    components: new Map(),
     legCache: new Map(),
     stations: browserStations(p.stations, p.scenario),
     fieldsPad: fieldsPadOf(p.padFile),
@@ -186,7 +193,7 @@ export function loadBrowserRouteData(scenario: string = CONFIG.defaultScenario):
         o2Home,
         pointer,
         grid: rg.grid,
-        router: new LegRouter(rg.grid, rg.model),
+        model: rg.model,
         stations,
         padFile,
         rad,
