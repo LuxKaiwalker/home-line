@@ -13,7 +13,8 @@ import { all, byRole, byTag, installDom, one, type FakeNode } from '../../testin
 import { boundaryFromValue, boundaryOptions, boundaryValue } from './boundary'
 import copy from './copy.U3.json'
 import { CLOCK, formatHms, lmstH, mslSol } from './marstime'
-import { BoundarySettings, register, RouteSettings, StartTimeSettings, STORM_REPLAY_DATE, StormSettings, sunSiteFor, useBoundaryOptions } from './RouteSettings'
+import { useRoutePanelSection, resetRoutePanelSections } from '../sections'
+import { BoundarySettings, install, register, RouteSettings, StartTimeSettings, STORM_REPLAY_DATE, StormSettings, sunSiteFor, useBoundaryOptions } from './RouteSettings'
 import { DEFAULT_START_MS, fromUtcInput, hoursOf, isDefaultStart, MAX_START_MS, MIN_START_MS, startMsOf, startUtcFor, startUtcForSolLmst, toUtcInput } from './startTime'
 
 /** clock.json: start_utc of the simulated EVA (09:00 LMST, sol 5074; mission/marstime.test.ts) */
@@ -274,6 +275,19 @@ describe('section + registration', () => {
     const got: [string, unknown][] = []
     register((name, c) => void got.push([name, c]))
     expect(got).toEqual([['settings', RouteSettings]])
+  })
+  it('install() fills U1’s settings region; unregister empties it', () => {
+    resetRoutePanelSections()
+    const Region = ({ store }: { store: PlanningStore }) => {
+      const C = useRoutePanelSection('settings')
+      return C ? <C store={store} /> : null
+    }
+    const off = install()
+    mount(<Region store={createPlanningStore()} />)
+    expect(byRole(root, 'switch')).toHaveLength(1)
+    act(() => off())
+    expect(byRole(root, 'switch')).toHaveLength(0)
+    resetRoutePanelSections()
   })
 })
 

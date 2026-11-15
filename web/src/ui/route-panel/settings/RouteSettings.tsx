@@ -10,6 +10,7 @@ import { listPads, padLoadState, peekPadEnv, loadPadEnv, type PadInfo } from '..
 import { OFFICIAL_PAD_ID, planning as appPlanning, usePlanning, type PlanningStore } from '../../../state/planning'
 import { useSignalValue } from '../../../state/signal'
 import { Select, Toggle } from '../../components'
+import { registerRoutePanelSection } from '../sections'
 import { copyFrom } from '../../copy'
 import { boundaryFromValue, boundaryOptions, boundaryValue, type BoundaryOption } from './boundary'
 import copy from './copy.U3.json'
@@ -183,7 +184,10 @@ export function RouteSettings({ store = appPlanning }: SettingsProps) {
   )
 }
 
-/** U1's registerRoutePanelSection (passed in, so this folder does not depend on U1's module). */
+/** Mount into U1's Route panel 'settings' region (I1 calls this once, as for U2/U4). Returns unregister. */
+export const install = (): (() => void) => registerRoutePanelSection('settings', RouteSettings)
+
+/** Any registerRoutePanelSection-like function (kept for callers that inject it). */
 export type RegisterSection = (name: 'settings', component: ComponentType) => (() => void) | void
 
 /** Wire the section into the Route panel: `register(registerRoutePanelSection)`. */
