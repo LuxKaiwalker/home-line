@@ -27,7 +27,8 @@ import { createApiClient, type ApiClient, type FetchLike } from './client'
 import { dataUrl } from '../env'
 import { SIM_EXPORT_ENABLED } from './config'
 import { bannerFor, watchHealth, type LiveState } from './health'
-import type { MapPort } from './mapPort'
+import { consoleMapPort as basePort, type ConsoleMapLike, type MapPort } from './mapPort'
+import type { RouteConsoleMap } from './route/map'
 import { MOCK_OFFICIAL_HASH } from './mock/hashes'
 import { mountPadTool } from './padmount'
 import { mountPlanRoute, resultDataUrl } from './planmount'
@@ -38,7 +39,7 @@ export { API_BASE, LIVE_ENABLED, LIVE_LABEL, OFFLINE_LABEL, WARMING_LABEL } from
 export { bannerFor, checkHealth, watchHealth, type Banner, type HealthWatch, type LiveState } from './health'
 export { startJob, type JobCallbacks, type JobHandle, type JobOptions, type JobOutcome } from './jobs'
 export { liveLoader } from './result'
-export { consoleMapPort, type ConsoleMapLike, type MapPort } from './mapPort'
+export { type ConsoleMapLike, type MapPort } from './mapPort'
 export { createPadTool, type PadTool, type PadToolState } from './padtool'
 export { mountPadTool } from './padmount'
 export { createCrew, CREW_FIELDS, EXTRAPOLATION_TEXT, type CrewModel, type CrewState } from './crew'
@@ -61,7 +62,7 @@ const staticTree = async (path: string): Promise<string | null> => {
   return res.ok ? res.text() : null
 }
 const lazyMockFetch: FetchLike = async (input, init) => {
-  const f = await (mockFetch ??= import('./mock/fetch').then((m) => m.createMockFetch({ crewJobs: true, trees: { [MOCK_OFFICIAL_HASH]: staticTree } })))
+  const f = await (mockFetch ??= Promise.all([import('./mock/fetch'), import('./mock/route')]).then(([m, r]) => r.withRouteMock(m.createMockFetch({ crewJobs: true, trees: { [MOCK_OFFICIAL_HASH]: staticTree } }))))
   return f(input, init)
 }
 
@@ -130,5 +131,19 @@ function planRoute(app: HTMLElement, client: ApiClient): () => void {
  * while the engine is ready (U1's banner covers offline and warming). Returns cleanup.
  */
 export function padTool(panel: Element, port: MapPort, client: ApiClient = liveClient()): () => void {
-  return mountPadTool(panel, port, { client, onLiveState, ...(USE_MOCK ? { loaderFor: mockLiveLoader(lazyMockFetch) } : {}) }).cleanup
+  const loader = USE_MOCK ? { loaderFor: mockLiveLoader(lazyMockFetch) } : {}
+  // R5 (D97): the Edit-route panel in the Plan rail, on the same console map (lazy, live builds only)
+  let offRoute: (() => void) | null = null
+  let gone = false
+  const cmap = (port as MapPort & { consoleMap?: RouteConsoleMap }).consoleMap ?? null
+  void import('./route/mount').then((m) => !gone && (offRoute = m.mountRoutePanel({ client, onLiveState, cmap, ...loader })))
+  const off = mountPadTool(panel, port, { client, onLiveState, ...loader }).cleanup
+  return () => {
+    gone = true
+    offRoute?.()
+    off()
+  }
 }
+
+/** consoleMapPort (mapPort.ts); the port also carries the console map for the Edit-route panel (R5). */
+export const consoleMapPort = (cm: ConsoleMapLike, restore?: () => void): MapPort & { consoleMap: ConsoleMapLike } => Object.assign(basePort(cm, restore), { consoleMap: cm })
