@@ -146,15 +146,32 @@ def _key(root: Path) -> tuple:
     return str(root.resolve()), st.st_mtime_ns, st.st_size, st.st_ino
 
 
+def _grid(root: Path, m: dict) -> Grid:
+    g = m["grid"]
+    arr = {k: np.load(root / v["path"], mmap_mode="r") for k, v in g["arrays"].items()}
+    return Grid(elev=arr["elev"], passable=np.asarray(arr["cellstate"]) == ASSESSED,
+                res_m=float(g["res_m"]), x0=float(g["x0"]), y0=float(g["y0"]), crs=g["crs"],
+                cellstate=arr["cellstate"], maxslope=arr["maxslope"], slope=arr["slope"],
+                stepguard=arr["stepguard"])
+
+
+def open_grid(root: Path | None = None) -> Grid:
+    """The server data routing grid as read-only memory maps (no siting, no station fields): what
+    a job worker opens once (server.engine.warmup.worker_init)."""
+    root = version.server_data_dir() if root is None else root
+    _key(root)  # ServerDataMissing without a manifest
+    try:
+        m = json.loads((root / version.SERVER_DATA_MANIFEST).read_text(encoding="utf-8"))
+        return _grid(root, m)
+    except (KeyError, OSError, ValueError) as e:
+        raise ServerDataMissing(f"server data grid at {root} incomplete: {e!r} "
+                                "(run `make serverdata`)") from e
+
+
 def _load(root: Path, key: tuple) -> World:
     m = json.loads((root / version.SERVER_DATA_MANIFEST).read_text(encoding="utf-8"))
     try:
-        g = m["grid"]
-        arr = {k: np.load(root / v["path"], mmap_mode="r") for k, v in g["arrays"].items()}
-        grid = Grid(elev=arr["elev"], passable=np.asarray(arr["cellstate"]) == ASSESSED,
-                    res_m=float(g["res_m"]), x0=float(g["x0"]), y0=float(g["y0"]), crs=g["crs"],
-                    cellstate=arr["cellstate"], maxslope=arr["maxslope"], slope=arr["slope"],
-                    stepguard=arr["stepguard"])
+        grid = _grid(root, m)
         st_list, _ = load_ws1_stations(root / STATIONS)
     except (KeyError, OSError, ValueError) as e:
         raise ServerDataMissing(f"server data at {root} incomplete for the pad tool: {e!r} "
@@ -193,6 +210,12 @@ def world() -> World:
             _WORLD = None  # drop the old maps before loading the new ones
             _WORLD = _load(root, key)
         return _WORLD
+
+
+def preload() -> World:
+    """Load the server data now (API start-up, server.engine.warmup.preload_server_data), so the
+    first /pads request finds them loaded."""
+    return world()
 
 
 # -------------------------------------------------------------------------------- validate ----

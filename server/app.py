@@ -6,10 +6,12 @@ Run: ``uv run --no-sync uvicorn server.app:app`` (``make serve``), then
 http://localhost:8000/api/v1/health. Contract: contracts/backend/openapi.yaml (v1.0.0); prefix,
 CORS origins and the kill-switch variable come from config/backend.yaml (server.settings).
 
-/health answers at once; ``engine_warm`` turns true only after the Numba warm-up of the engine
-kernels (server.engine.warmup), which the lifespan starts in a background thread. The lifespan also
-starts the job runner (server.engine.jobs: compute.workers processes, started once the warm-up has
-finished) and stops it at shutdown.
+/health answers at once; ``engine_warm`` turns true only after the start-up work, which the
+lifespan runs in a background thread: the Numba warm-up of the engine kernels, then the preload of
+the pad tool's server data (server.engine.warmup), so the first /pads request needs no load. The
+lifespan also starts the job runner (server.engine.jobs: compute.workers processes, started once
+the start-up work has finished; each worker runs ``warmup.worker_init`` first) and stops it at
+shutdown.
 """
 
 from __future__ import annotations
@@ -29,7 +31,7 @@ from server.api.plans.pinning import evict_after_new_job
 from server.engine import defaults as engine_defaults
 from server.engine import version as engine_version
 from server.engine.jobs import JobRunner
-from server.engine.warmup import EngineState, warm_engine
+from server.engine.warmup import EngineState, preload_server_data, warm_engine, worker_init
 from server.settings import settings
 
 
@@ -69,11 +71,24 @@ def get_defaults() -> dict:
     return engine_defaults.defaults()
 
 
+def start_up(warmup: Callable[[], object],
+             preload: Callable[[], object] | None) -> Callable[[], None]:
+    """The start-up work /health waits for: the warm-up, then the preload."""
+    def run() -> None:
+        warmup()
+        if preload is not None:
+            preload()
+    return run
+
+
 def create_app(warmup: Callable[[], object] = warm_engine,
-               jobs: JobRunner | None = None) -> FastAPI:
-    """The API app; ``warmup`` is injectable so tests need not wait for the Numba compiler, and
-    ``jobs`` so tests can run the runner with test job types and small limits (default: the
-    config's compute limits and the registered job types)."""
+               jobs: JobRunner | None = None,
+               preload: Callable[[], object] | None = preload_server_data,
+               initializer: Callable[[], object] | None = worker_init) -> FastAPI:
+    """The API app; ``warmup`` is injectable so tests need not wait for the Numba compiler,
+    ``preload`` (run after it, before /health turns warm) so tests can count server data loads,
+    and ``jobs`` so tests can run the runner with test job types and small limits (default: the
+    config's compute limits, the registered job types and ``initializer`` in every worker)."""
     cfg = settings()
 
     @asynccontextmanager
@@ -92,8 +107,9 @@ def create_app(warmup: Callable[[], object] = warm_engine,
     # openapi.yaml is the API description (F35); FastAPI's generated one would diverge from it
     app = FastAPI(title="HOMELINE live API", lifespan=lifespan,
                   openapi_url=None, docs_url=None, redoc_url=None)
-    app.state.engine = EngineState(warmup)
-    app.state.jobs = jobs if jobs is not None else JobRunner.from_config(cfg)
+    app.state.engine = EngineState(start_up(warmup, preload))
+    app.state.jobs = (jobs if jobs is not None
+                      else JobRunner.from_config(cfg, initializer=initializer))
     # WS12: per-IP heavy-job limit on POST /jobs; added before CORS so it runs inside it (a
     # browser can read the 429)
     app.add_middleware(HeavyJobLimiter, cfg=cfg, on_new_job=evict_after_new_job)
