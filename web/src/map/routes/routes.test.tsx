@@ -164,6 +164,24 @@ describe('features', () => {
     expect(v.stops[0].at).toEqual([137.403, -4.7765])
   })
 
+  it('PORT F19: a stop badge sits on the route vertex (snapped leg end), not the raw planned lng/lat', () => {
+    const stops = twoStops()
+    const snapped: [number, number] = [137.40371, -4.77612] // the core snapped W1 to a cell centre
+    const r: RouteResults = {
+      ...MOCK_ROUTE_RESULTS,
+      legs: MOCK_ROUTE_RESULTS.legs.map((l) =>
+        l.index === 1 ? { ...l, path: [...l.path.slice(0, -1), snapped] } : l.index === 2 ? { ...l, path: [snapped, ...l.path.slice(1)] } : l,
+      ),
+    }
+    // the station lookup says one thing, the routed leg ends a cell away: the badge follows the line
+    const v = mineView({ stops, padId: 'official', pad: [137.4018, -4.7775], results: r, keys: captureKeys(r, stops, 'official'), stationAt: () => [137.5, -4.8] })
+    const into = (i: number) => v.fc.features.find((f) => f.properties.leg === i)!.geometry.coordinates
+    expect(v.stops[0].at).toEqual(into(0).at(-1))
+    expect(v.stops[1].at).toEqual(snapped)
+    expect(v.stops[1].at).toEqual(into(1).at(-1))
+    expect(v.stops[1].at).not.toEqual([W1.kind === 'point' ? W1.lon : 0, W1.kind === 'point' ? W1.lat : 0])
+  })
+
   it('first infeasible leg and every later leg in the infeasible state; their stops flagged', () => {
     const stops = twoStops()
     const r: RouteResults = { ...MOCK_ROUTE_RESULTS, legs: MOCK_ROUTE_RESULTS.legs.map((l) => (l.index === 1 ? { ...l, feasible: false } : { ...l, feasible: l.index === 0 })), firstInfeasibleLeg: 1 }

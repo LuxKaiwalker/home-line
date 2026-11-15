@@ -135,7 +135,10 @@ export function createPadEnvironmentHandler(opts: PadLayerOptions = {}): PadEnvi
       const sync = () => {
         const shown = padLayer.shown.peek()
         for (const x of markers) {
-          x.el.setAttribute('class', markerClass(x.p, shown))
+          // PORT F19: keep MapLibre's own classes (maplibregl-marker = position absolute at the projected
+          // point); rewriting the whole class attribute dropped them and the pins fell out of place
+          const keep = (x.el.getAttribute('class') ?? '').split(/\s+/).filter((c) => c.startsWith('maplibregl-'))
+          x.el.setAttribute('class', [markerClass(x.p, shown), ...keep].join(' '))
           x.el.setAttribute('aria-current', x.id === shown.id ? 'true' : 'false')
         }
       }

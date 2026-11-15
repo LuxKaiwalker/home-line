@@ -23,27 +23,37 @@ export const GROUND_ATTR = 'data-hl-ground'
 
 const tracked = new WeakMap<object, { users: number; stop: () => void }>()
 
+/** PORT F19: the map's tilt-tracker owners (0 = none); one shared tracker per map, as F10 intended. */
+export function pointerOwners(map: PointerMap): number {
+  return tracked.get(map)?.users ?? 0
+}
+
+// PORT F19: everything that can change the lift or wipe the container state. 'resize' and 'idle'
+// cover layout changes (panels opened/closed, drawers, 2D/3D) and a remounted panel; nothing is cached
+// across them: each sync reads the pitch and the container's actual state.
+const EVENTS = ['pitch', 'pitchend', 'terrain', 'resize', 'idle'] as const
+
 /** Keep the map container's tilt state (class + --hl-leader) in step with the pitch; ref-counted per map. */
 function track(map: PointerMap): () => void {
   const c = map.getContainer?.()
   if (!c || !map.getPitch) return () => {}
   let t = tracked.get(map)
   if (!t) {
-    let last = -1
     const sync = () => {
+      // read the live pitch and the live DOM (an owner re-render can rewrite the container's class
+      // or style): no stale last-lift cache
       const lift = leaderLift(map.getPitch!())
-      if (lift === last) return
-      last = lift
-      c.classList.toggle(TILTED_CLASS, lift > 0)
-      c.style.setProperty('--hl-leader', `${lift}px`)
+      const on = lift > 0
+      if (c.classList.contains(TILTED_CLASS) !== on) c.classList.toggle(TILTED_CLASS, on)
+      const v = `${lift}px`
+      if (c.style.getPropertyValue('--hl-leader') !== v) c.style.setProperty('--hl-leader', v)
     }
     sync()
-    // the pitch drives the lift; 'terrain' because a terrain switch can come with a camera reset
-    for (const ev of ['pitch', 'pitchend', 'terrain']) map.on?.(ev, sync)
+    for (const ev of EVENTS) map.on?.(ev, sync)
     const entry = {
       users: 0,
       stop: () => {
-        for (const ev of ['pitch', 'pitchend', 'terrain']) map.off?.(ev, sync)
+        for (const ev of EVENTS) map.off?.(ev, sync)
         c.classList.remove(TILTED_CLASS)
         c.style.removeProperty('--hl-leader')
       },
@@ -59,7 +69,7 @@ function track(map: PointerMap): () => void {
     done = true
     if (--entry.users > 0) return
     entry.stop()
-    tracked.delete(map)
+    if (tracked.get(map) === entry) tracked.delete(map)
   }
 }
 

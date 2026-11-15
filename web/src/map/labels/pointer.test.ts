@@ -1,7 +1,7 @@
 // PORT F10: ground pointers (pointer.ts): the station-label leader mechanism for the port's markers.
 import { describe, expect, it } from 'vitest'
 import { LABELS, LEADER_LIFT_PX } from './config'
-import { groundPointers, TILTED_CLASS } from './pointer'
+import { groundPointers, pointerOwners, TILTED_CLASS } from './pointer'
 
 // vitest runs in 'node': a minimal element (class list + custom properties) is all pointer.ts touches
 function el(): HTMLElement {
@@ -60,5 +60,31 @@ describe('F10: ground pointers', () => {
 
   it('a stand-in map without pitch or container (unit tests elsewhere) is fine', () => {
     expect(() => groundPointers({})()).not.toThrow()
+  })
+  it('PORT F19: a panel remount keeps one tracker; resize re-syncs a wiped container (no stale cache)', () => {
+    const { map, c } = fakeMap(60)
+    let dispose = groundPointers(map)
+    const n = map.listeners()
+    for (let i = 0; i < 3; i++) {
+      // unmount + remount (Route panel closed and reopened)
+      dispose()
+      expect(pointerOwners(map)).toBe(0)
+      expect(map.listeners()).toBe(0)
+      dispose = groundPointers(map)
+      expect(pointerOwners(map)).toBe(1)
+      expect(map.listeners()).toBe(n)
+    }
+    // a host re-render rewrote the container's class/style while the pitch did not change
+    c.classList.remove(TILTED_CLASS)
+    c.style.removeProperty('--hl-leader')
+    map.fire('resize')
+    expect(c.classList.contains(TILTED_CLASS)).toBe(true)
+    expect(c.style.getPropertyValue('--hl-leader')).toBe(`${LEADER_LIFT_PX}px`)
+    // 3D -> 2D seen at idle after a layout change
+    map.pitch = 0
+    map.fire('idle')
+    expect(c.classList.contains(TILTED_CLASS)).toBe(false)
+    dispose()
+    expect(map.listeners()).toBe(0)
   })
 })

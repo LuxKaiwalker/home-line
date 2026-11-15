@@ -129,7 +129,19 @@ export function mineView(o: MineInput): MineView {
   }
 
   // stop positions: points as placed; stations from the lookup, else from any result path ending there
-  const pos = (s: PlanStop): LonLat | null => {
+  // PORT F19: a stop the results already route through is drawn on the route's own vertex (the
+  // snapped cell / leg end of the current leg into it, else the start of the leg out of it), so its
+  // badge and 3D ground dot sit on the line, never beside it at the raw planned lng/lat.
+  const routed = (k: number): LonLat | null => {
+    const into = legs[k]
+    if (into && into.path.length) return end(into.path, true)
+    const out = legs[k + 1]
+    if (out && out.path.length) return end(out.path, false)
+    return null
+  }
+  const pos = (s: PlanStop, k: number): LonLat | null => {
+    const r = routed(k)
+    if (r) return r
     if (s.kind === 'point') return [s.lon, s.lat]
     const hit = o.stationAt?.(s.station)
     if (hit) return hit
@@ -140,7 +152,7 @@ export function mineView(o: MineInput): MineView {
     }
     return null
   }
-  const at = stops.map(pos)
+  const at = stops.map((s, k) => pos(s, k))
   const pad = o.pad ?? (samePad ? (end(results.legs.find((l) => l.index === 0)?.path ?? [], false) ?? null) : null)
 
   const features: LegFeature[] = []
