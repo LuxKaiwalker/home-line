@@ -4,7 +4,11 @@
 //   VITE_LIVE=1          turn the live layer on (default off: no live code in the bundle path)
 //   VITE_API_BASE=<url>  origin of the live API, default http://localhost:8012 (api.prefix is appended)
 //   VITE_LIVE_MOCK=1     dev only: answer API calls from the contract-example mock (mock/fetch.ts)
-//   VITE_SIM_EXPORT=1    D76: show the "Send to simulator" slot on a loaded plan (default off)
+//   VITE_SIM_EXPORT=…    "Send to simulator" (D76 slot, D110 mission.json, D116 modes), default off:
+//                        official   the official plan only, from the static sim/official/mission.json
+//                                   (no API call; works with the live layer off or offline)
+//                        1|all|true the official plan and live results (manifest kind sim_plan)
+//                        unset/0/anything else: off. npm run dev:live-demo uses all.
 //   VITE_ROUTE_EDIT=0    D116: hide the Edit-route panel and its map waypoints (default on; the
 //                        published Pages build sets 0 until route editing is cleared for it)
 import backendRaw from '../../../config/backend.yaml'
@@ -89,7 +93,18 @@ export function apiBaseFrom(value: EnvValue): string {
 
 export const LIVE_ENABLED: boolean = isLiveFlag(import.meta.env.VITE_LIVE)
 export const API_BASE: string = apiBaseFrom(import.meta.env.VITE_API_BASE)
-/** D76: "Send to simulator" slot (manifest files of kind sim_plan); off unless VITE_SIM_EXPORT is 1 or true. */
-export const SIM_EXPORT_ENABLED: boolean = isLiveFlag(import.meta.env.VITE_SIM_EXPORT)
+/** "Send to simulator" mode (D116): off, official (the official plan only, static file), all. */
+export type SimExportMode = 'off' | 'official' | 'all'
+
+/** VITE_SIM_EXPORT parsing (D116): 'official' -> official; '1', 'true', 'all' -> all; anything else -> off. */
+export function simExportModeFrom(value: EnvValue): SimExportMode {
+  if (value === 'official') return 'official'
+  return value === 'all' || isLiveFlag(value) ? 'all' : 'off'
+}
+
+/** D116: VITE_SIM_EXPORT as a mode. */
+export const SIM_EXPORT_MODE: SimExportMode = simExportModeFrom(import.meta.env.VITE_SIM_EXPORT)
+/** The slot is on in some mode (official or all); kept for boolean callers. */
+export const SIM_EXPORT_ENABLED: boolean = SIM_EXPORT_MODE !== 'off'
 /** D116: the Edit-route panel (and the map waypoints it installs); on unless VITE_ROUTE_EDIT is 0 or false. */
 export const ROUTE_EDIT_ENABLED: boolean = isRouteEditFlag(import.meta.env.VITE_ROUTE_EDIT)
