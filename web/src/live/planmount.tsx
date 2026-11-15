@@ -4,9 +4,10 @@
 // own container next to it, and gives .outlet back on any other route. It starts from mountLive
 // (index.ts), so it exists only in builds with VITE_LIVE=1. A router entry would be cleaner; the
 // exact lines are in /tmp/hl-orch/notes/U3.md.
-import { render } from 'preact'
+import { render as preactRender, type ComponentChildren } from 'preact'
 import { dataUrl } from '../env'
 import type { ApiClient } from './client'
+import type { LiveState } from './health'
 import type { ScenarioLayers } from './mapPort'
 import { importPlanFile, loadPlan, parsePlanRoute, permalink, type ImportState, type PlanLoad, type PlanRoute, type PlanTree } from './plan'
 import { ImportPage, PlanLoading, PlanPage, PlanProblem, PlayHeader, ProvenancePage } from './planview'
@@ -73,6 +74,14 @@ export interface PlanRouteOptions {
   hudDataUrl?: (load: OkLoad) => (path: string) => string
   /** Draw the result on a map in `el` (default ConsoleMap); null: no map. */
   mountMap?: ((el: HTMLElement, load: OkLoad) => Promise<Cleanup>) | null
+  /**
+   * Health state source (index.ts onLiveState). While it says offline every #/plan/{hash} view
+   * shows the offline text at once, without a request and also for a plan loaded earlier in the
+   * session (no Play, Export or simulator slot); the view is shown again when health comes back.
+   */
+  onLiveState?: (fn: (s: LiveState) => void) => () => void
+  /** Test seam: draw into the box (default preact's render). */
+  render?: (vnode: ComponentChildren, el: HTMLElement) => void
 }
 
 /** Start the hash listener; returns cleanup. `app` holds the router's .outlet. */
@@ -83,6 +92,7 @@ export function mountPlanRoute(app: HTMLElement, opts: PlanRouteOptions): Cleanu
   box.className = 'live-plan'
   box.hidden = true
   outlet.after(box)
+  const render = opts.render ?? ((v: ComponentChildren, el: HTMLElement) => preactRender(v, el))
   const loadHud = opts.loadHud ?? (() => import('../hud') as Promise<HudModule>)
   const mountMap = opts.mountMap === undefined ? consoleMapFor : opts.mountMap
   const loads = new Map<string, Promise<PlanLoad>>()
@@ -123,6 +133,11 @@ export function mountPlanRoute(app: HTMLElement, opts: PlanRouteOptions): Cleanu
     if (route.view === 'import') {
       rerender = () => render(<ImportPage state={importState} onFile={onFile} />, box)
       rerender()
+      return
+    }
+    if (offline) {
+      rerender = undefined
+      render(<PlanProblem load={{ state: 'offline', hash: route.hash, message: 'the health check says the live server is offline' }} />, box)
       return
     }
     render(<PlanLoading hash={route.hash} />, box)
@@ -201,9 +216,24 @@ export function mountPlanRoute(app: HTMLElement, opts: PlanRouteOptions): Cleanu
     })
   }
 
+  // Health: crossing into or out of offline redraws an open #/plan/{hash} view (a pending load is
+  // dropped by the seq bump in onHash, so a hanging server never holds the offline text back).
+  let offline = false
+  let started = false
+  const offLive =
+    opts.onLiveState?.((s) => {
+      const now = s.kind === 'offline'
+      if (now === offline) return
+      offline = now
+      const route = started ? parsePlanRoute(location.hash) : null
+      if (route && route.view !== 'import') onHash()
+    }) ?? (() => {})
+
   window.addEventListener('hashchange', onHash)
   onHash()
+  started = true
   return () => {
+    offLive()
     window.removeEventListener('hashchange', onHash)
     importAbort?.abort()
     teardown?.()

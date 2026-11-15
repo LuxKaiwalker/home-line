@@ -56,6 +56,16 @@ export interface ApiClient {
   provenance(hash: string, opts?: RequestOptions): Promise<RunRecord>
   /** Absolute base URL of a result tree for the loader (dataUrl(path, mode, base)). */
   resultBase(job: Pick<Job, 'hash' | 'result_url'>): string
+  /**
+   * Called when a request other than /health gets no answer (network error, timeout) or a 5xx:
+   * the server may be gone, so the health watch checks at once (index.ts). Returns unsubscribe.
+   */
+  onFailure(fn: (e: ApiError) => void): () => void
+}
+
+/** A failure that says the server may be down: no answer (not an abort) or a 5xx. */
+export function isServerFailure(e: unknown): e is ApiError {
+  return e instanceof ApiError && ((e.status === 0 && (e.code === 'network' || e.code === 'timeout')) || e.status >= 500)
 }
 
 function retryAfter(res: Response, body: ApiErrorBody | null): number | null {
@@ -69,8 +79,18 @@ export function createApiClient(opts: ApiClientOptions = {}): ApiClient {
   const root = `${base}${API_PREFIX}`
   const doFetch: FetchLike = opts.fetch ?? ((input, init) => fetch(input, init))
   const defaultTimeout = opts.requestTimeoutMs ?? CLIENT.requestTimeoutMs
+  const failureSubs = new Set<(e: ApiError) => void>()
 
   async function request<T>(method: 'GET' | 'POST', path: string, body: unknown, ro: RequestOptions = {}): Promise<T> {
+    try {
+      return await send<T>(method, path, body, ro)
+    } catch (e) {
+      if (path !== '/health' && isServerFailure(e)) for (const fn of failureSubs) fn(e)
+      throw e
+    }
+  }
+
+  async function send<T>(method: 'GET' | 'POST', path: string, body: unknown, ro: RequestOptions): Promise<T> {
     const ctl = new AbortController()
     const outer = ro.signal
     if (outer?.aborted) throw new ApiError(0, 'aborted', `${method} ${path}: aborted`)
@@ -135,6 +155,10 @@ export function createApiClient(opts: ApiClientOptions = {}): ApiClient {
       // result_url is a server path (/api/v1/results/{hash}/); resolve it against the API origin.
       const rel = job.result_url ?? `${API_PREFIX}/results/${job.hash}/`
       return new URL(rel, `${base}/`).href.replace(/\/+$/, '')
+    },
+    onFailure(fn) {
+      failureSubs.add(fn)
+      return () => failureSubs.delete(fn)
     },
   }
 }
