@@ -1,0 +1,31 @@
+{
+  "marvis": "Send to MARVIS",
+  "download": "Download mission.json",
+  "busy": "Preparing mission.json…",
+  "what": {
+    "route": "Your route · Estimate",
+    "official": "No route yet: the official plan of this pad"
+  },
+  "result": {
+    "sent": "Sent: MARVIS starts the EVA.",
+    "refused": "MARVIS did not start the EVA: {reason}",
+    "saved": "Saved as {file}. In MARVIS, load it from the Missions tab of the map.",
+    "fallback": "Download mission.json instead"
+  },
+  "errors": {
+    "route": "The route cannot be exported yet: {reason}",
+    "pad": "This pad has no routing fields, so its route cannot be exported.",
+    "official": "The official plan of this pad could not be loaded: {reason}",
+    "generic": "Could not build mission.json: {reason}"
+  },
+  "share": {
+    "button": "Copy share link",
+    "copied": "Link copied",
+    "select": "Copy this link:",
+    "label": "Share link"
+  },
+  "link": {
+    "invalid": "This link could not be read, so nothing was loaded. Your plan is unchanged.",
+    "loaded": "Plan loaded from the link"
+  }
+}

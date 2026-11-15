@@ -1,0 +1,40 @@
+/* PORT U4: Route panel export section (tokens only). */
+.hl-route-export {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+.hl-route-export__what,
+.hl-route-export__status {
+  margin: 0;
+  font-size: var(--font-size-small);
+  line-height: var(--line-height-small);
+  color: var(--color-text-muted);
+}
+.hl-route-export__status[data-ok='false'] {
+  color: var(--color-limit);
+}
+.hl-route-export__share {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+.hl-route-export__link {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  width: 100%;
+  font-size: var(--font-size-small);
+  color: var(--color-text-muted);
+}
+.hl-route-export__link input {
+  width: 100%;
+  font-family: var(--font-mono);
+  font-size: var(--font-size-small);
+  color: var(--color-text);
+  background: var(--color-card);
+  border: 1px solid var(--color-card-border);
+  border-radius: var(--radius-input);
+  padding: var(--space-1) var(--space-2);
+}
