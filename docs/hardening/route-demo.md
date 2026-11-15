@@ -91,7 +91,7 @@ A criterion that is `null` is informational and is not judged.
 
 WP8b fills this table on the real API. The mock run is WP8a's, on the UI described in the next section.
 
-| | Mock (WP8a run3, 11:4x) | Real (WP8b) | Key numbers (mock) |
+| | Mock (WP8a run3 + run5) | Real (WP8b) | Key numbers (mock) |
 |---|---|---|---|
 | a | **PASS** | | first stage on the map 5.3 s, result 22.7 s after Compute (stage 4 s); picking three stations 2.2 s; stages nominal → bands → partner → route → summary; legs pad→S4→S1→S2→pad |
 | b | **PASS** | | "Leg 5: S7 → S8 · Limit: EVA length (D28) · Short by 30.0 min"; leg row 4 `failing`, 5 `not-planned`; route file has the 4 planned legs |
@@ -103,11 +103,16 @@ WP8b fills this table on the real API. The mock run is WP8a's, on the UI describ
 
 ## UI under test (mock run)
 
-Evidence: `/tmp/hl-way/wp8a/run3/` (screenshots and `route-e2e-result.json`) and `/tmp/hl-way/wp8a-run3.log`.
+Evidence: `/tmp/hl-way/wp8a/run3/` and `/tmp/hl-way/wp8a/run5/` (screenshots and `route-e2e-result.json`), and
+`/tmp/hl-way/wp8a-run{3,5}.log`.
 
 
-- Scratch worktree `/tmp/hl-way/wt/wp8a-ui`: origin/ws18-direct-edit-R5 (9a6b9db, PR #110) merged with
-  origin/ws15-design-system-R7 (b85e2e7). The merge is clean. It is not pushed.
+- Scratch worktree `/tmp/hl-way/wt/wp8a-ui`: the PR heads, R5 #110 (ws18-direct-edit-R5 **63a0448**) merged
+  with R7 #116 (ws15-design-system-R7 **b85e2e7**). The merge is clean. It is not pushed.
+- run3 used R5 9a6b9db and run5 used 63a0448, which changes only CSS. Both give the same verdicts, and the
+  key numbers in the table come from both runs.
+- WP1 #117 (`traverse._route_order`) checked: its feasibility shape is the one the mock and the criteria
+  use (`leg` 0-based, `legs_planned` = leg, `shortfall_min` rounded to 2 decimals; the panel shows 1).
 - Selectors come from R5's `web/src/edit/route/panel.tsx` and `text.ts`, and from R7's
   `web/src/live/plans/view.tsx` and `planview.tsx` (`S` in the driver).
 - The real-mode code path (Vite proxy) was smoke-tested against a second mock on 8151:
