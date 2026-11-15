@@ -12,6 +12,8 @@
 //                            as Escape did in the sidebar. With a selection card open, the strip sits on
 //                            top of it instead (one card at a time), as it sat above the selection card.
 // Numbers, trust chips and card content are unchanged: only the container moved.
+// J1d (team lead 2026-11-15 16:57): the station card also has "Add to route" -> #/mission?add=<id> (the
+// Mission Planer appends the station to its route, mission/add.ts; ui/cards/selectionCard.tsx).
 import { createPortal, render } from 'preact'
 import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks'
 import { data } from '../data/loader'
@@ -28,6 +30,7 @@ import { registerPlanMount } from './planSlots'
 import './planStation.css'
 
 export { SELECTION_CARD, STATION_CARD }
+export { StationAddToRoute } from '../ui/cards/selectionCard' // J1d: "Add to route" -> #/mission?add=<id>
 export const ROVER_CARD = 'rover'
 
 /**
@@ -125,7 +128,7 @@ function PlanCards({ cmap, slot, tools, bindClick }: { cmap: ConsoleMap; slot: H
   return (
     <>
       {createPortal(
-        <div class="plan-tools">
+        <div class="plan-sumcol">
           <IconButton
             icon="file-text"
             label={t('cards.routeSummary.open')}
@@ -162,18 +165,36 @@ function PlanCards({ cmap, slot, tools, bindClick }: { cmap: ConsoleMap; slot: H
 registerPlanMount('station', (ctx) => {
   for (const id of [...SELECTION_CARDS, ROVER_CARD]) registerContainer({ id, kind: 'card' })
   const offs = [hostIn('station'), hostIn('selection'), hostRoverCard()]
-  // the map's own tool column (L2e: the Plan summary opener), a slot of its own over the map
-  const tools = ctx.el.card.ownerDocument.createElement('div')
-  tools.className = 'plan-layout__tools'
-  tools.setAttribute('data-plan-slot', 'tools')
-  ctx.el.card.parentElement?.insertBefore(tools, ctx.el.card)
+  // the Plan summary opener (L2e) joins the map-edge tool column (L2c: Layers, 2D/3D, Flythrough, at
+  // the end); without that column it has a slot of its own on the right edge
+  const doc = ctx.el.card.ownerDocument
+  const tools = doc.createElement('div')
+  tools.className = 'plan-tools__summary'
+  const own = doc.createElement('div')
+  own.className = 'plan-layout__tools'
+  own.setAttribute('data-plan-slot', 'tools')
+  const place = () => {
+    const col = ctx.el.edge.querySelector('.plan-tools')
+    if (col) {
+      if (tools.parentElement !== col) col.appendChild(tools)
+      if (own.isConnected) own.remove()
+    } else if (!tools.isConnected) {
+      ctx.el.card.parentElement?.insertBefore(own, ctx.el.card)
+      own.appendChild(tools)
+    }
+  }
+  place()
+  const watch = typeof MutationObserver === 'undefined' ? null : new MutationObserver(place)
+  watch?.observe(ctx.el.edge, { childList: true, subtree: true })
   render(<PlanCards cmap={ctx.cmap} slot={ctx.el.card} tools={tools} bindClick={(fn) => ctx.onStationClick(fn)} />, ctx.el.card)
   return () => {
     ctx.onStationClick(null)
     render(null, ctx.el.card) // effects off first: closing the cards below is no Discard
     for (const id of [...SELECTION_CARDS, ROVER_CARD]) closeContainer(id, { restoreFocus: false })
     applyRoom(ctx.el.card, null)
+    watch?.disconnect()
     tools.remove()
+    own.remove()
     offs.forEach((f) => f())
   }
 })

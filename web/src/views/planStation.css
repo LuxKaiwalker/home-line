@@ -4,3 +4,11 @@
 .plan-card--rover.hl-lay-card { max-height: calc(100% - var(--space-4)); }
 .plan-card--rover .hl-lay-card__body { min-height: 0; overflow: auto; }
 .plan-card__open { margin: var(--space-2) 0 0; }
+/* J1d: "Open station" and "Add to route" side by side */
+.plan-card__open { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+.plan-card__add { display: inline-flex; align-items: center; gap: var(--space-1); }
+/* L2e: the cards stay clear of the map-edge tool column (L2c .plan-tools: 32 px icons, right edge, drawn
+   above the cards), so the card's × is never under it, as long as the map is wide enough for the full card
+   width beside the column (a narrow map, e.g. a portrait tablet, keeps the full width for the readouts);
+   the slot keeps the map's left / top origin */
+.plan-layout > .plan-layout__card { right: clamp(0px, calc(100% - var(--layout-sidebar) - var(--space-4) - var(--space-7)), var(--space-7)); }

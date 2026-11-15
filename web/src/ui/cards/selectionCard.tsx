@@ -18,6 +18,7 @@ import { href } from '../../router'
 import { clearSelection, refKey, selection, type SelectionRef } from '../../state/selection'
 import { batch, effect, type ReadSignal } from '../../state/signal'
 import { CardSkeleton } from '../components'
+import { Icon } from '../components/Icon'
 import { t } from '../copy'
 import { closeContainer, layout, openContainer, registerContainer } from '../layout'
 import { TOKENS } from '../tokens'
@@ -84,10 +85,11 @@ export function anchorLngLat(r: SelectionRef, s: CardSources, fallback: [number,
   return fallback
 }
 
-/** Narrowest card that still reads, and the lowest card worth placing above / below (px): two thirds
- *  of the sidebar width the cards are laid out for (card-fit). */
+/** Narrowest card that still reads (px): two thirds of the sidebar width the cards are laid out for. */
 export const CARD_MIN_W = Math.round((TOKENS.layout.sidebar * 2) / 3)
-export const CARD_MIN_H = CARD_MIN_W
+/** Above / below at full width wins over a narrower card beside the object down to this height (px): the
+ *  readouts need the full width (card-fit), a low card scrolls. */
+export const CARD_MIN_H = Math.round(CARD_MIN_W * (2 / 3))
 
 /**
  * The largest card that cannot cover the point `p` (px inside a `box`). MarkerCard puts the card right
@@ -258,7 +260,17 @@ export function SummaryCardBody({ L }: { L: Loader }) {
 
 type Panel = (p: { L: Loader; cell?: CellLookup }) => ComponentChildren
 
-/** The sidebar's SelectionPanel (lazy cards chunk) and, for a station with a page, "Open station". */
+/** J1d: "Add to route" on a station card: the Mission Planer with ?add=<id> (it appends the station). */
+export function StationAddToRoute({ id }: { id: string }) {
+  return (
+    <a class="hl-btn hl-btn--secondary plan-card__add" href={href({ name: 'mission', add: id })} title={t('cards.station.addToRouteTip')} data-add-to-route={id}>
+      <Icon name="plus" /> {t('cards.station.addToRoute')}
+    </a>
+  )
+}
+
+/** The sidebar's SelectionPanel (lazy cards chunk) and, for a station with a page, "Open station" and
+ *  "Add to route" (J1d). */
 export function SelectionCardBody({ sel, L, cell, stationPage }: { sel: SelectionRef; L: Loader; cell?: CellLookup; stationPage?: boolean }) {
   const [Sel, setSel] = useState<Panel | null>(null)
   const probe = useRef<HTMLDivElement>(null)
@@ -278,6 +290,7 @@ export function SelectionCardBody({ sel, L, cell, stationPage }: { sel: Selectio
           <a class="hl-btn hl-btn--secondary" href={href({ name: 'station', id: sel.id })} title={t('cards.station.openTip')}>
             {t('cards.station.open')}
           </a>
+          <StationAddToRoute id={sel.id} />
         </p>
       )}
     </div>

@@ -32,7 +32,7 @@ export const NAV = {
   fixSigmaM: cfg<{ rover: number; station: number }>(navRaw, 'fix_sigma_m'),
   ellipseEveryMin: cfg<number>(navRaw, 'tracks.ellipse_every_min'),
   ellipseVertices: cfg<number>(navRaw, 'tracks.ellipse_vertices'),
-  /** Homeline budget the fix-interval map uses (SPEC F21: the 30-min homeline). */
+  /** Home line budget the fix-interval map uses (SPEC F21: the 30-min homeline). */
   homelineBudgetMin: budgetFrom(cfg<string>(navRaw, 'fix_interval_ws9.budget_from')),
   reserveMin: cfg<number>(navRaw, 'fix_interval_ws9.reserve_min'),
   edgePercentile: cfg<number>(navRaw, 'fix_interval_ws9.edge_percentile'),

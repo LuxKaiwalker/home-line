@@ -3,6 +3,7 @@
 import type { IControl, Map as MlMap } from 'maplibre-gl'
 import { effect, mission, missionClock } from '../../state'
 import { t } from '../../ui/copy'
+import { iconSvg } from '../../ui/icons/icons'
 import type { FlyLayers } from './fly'
 import './flythrough.css'
 
@@ -23,7 +24,10 @@ export class FlythroughControl implements IControl {
     const go = document.createElement('button')
     go.type = 'button'
     go.className = 'hl-fly-btn'
-    go.textContent = t('buttons.flythrough')
+    // L2c (D111): icon + label; the Plan map-edge tools show the icon only (label = name + tooltip)
+    go.innerHTML = `${iconSvg('camera', { className: 'hl-ctrl-icon' })}<span class="hl-ctrl-text"></span>`
+    go.querySelector('.hl-ctrl-text')!.textContent = t('buttons.flythrough')
+    go.title = t('buttons.flythrough')
     go.setAttribute('aria-pressed', 'false')
     const speed = document.createElement('button')
     speed.type = 'button'

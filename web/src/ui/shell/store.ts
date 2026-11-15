@@ -34,7 +34,9 @@ export interface ModeView {
 }
 export const MODE_VIEWS: Readonly<Record<Mode, readonly ModeView[]>> = {
   plan: [
-    { route: { name: 'console' }, label: 'modes.plan.label', icon: 'map' },
+    // Mission Planer first: the landing page and where the PLAN tab leads by default (user, 2026-11-15)
+    { route: { name: 'mission' }, label: 'nav.views.mission', icon: 'mountain' },
+    { route: { name: 'console' }, label: 'nav.views.console', icon: 'map' },
   ],
   fly: [
     { route: { name: 'hud' }, label: 'nav.views.hud', icon: 'gauge' },
@@ -56,6 +58,10 @@ export const MODE_KEY: Readonly<Record<Mode, string>> = { plan: 'P', fly: 'Y', r
 
 /** Map modes get the timeline dock and the selection sidebar; REPORT and EVIDENCE are documents (D7 mockups 05, 06). */
 export const isMapMode = (m: Mode): boolean => m === 'plan' || m === 'fly'
+/** Map views without the EVA-time dock: the Mission Planer has its own times and margins panel. */
+const NO_DOCK_ROUTES: ReadonlySet<Route['name']> = new Set(['mission'])
+/** Whether the timeline dock shows: map modes, except the views in NO_DOCK_ROUTES. */
+export const hasDock = (m: Mode, r: Route): boolean => isMapMode(m) && !NO_DOCK_ROUTES.has(r.name)
 
 export const shell = {
   route: signal<Route>({ name: 'console' }),

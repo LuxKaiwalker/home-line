@@ -123,3 +123,15 @@ describe('rover card (delta strip)', () => {
     expect(a.dismiss).toHaveBeenCalledTimes(1)
   })
 })
+
+// J1d (team lead 2026-11-15 16:57): the station card's "Add to route" goes to #/mission?add=<id>.
+describe('station card: Add to route', () => {
+  it('links to the Mission Planer with ?add=<id>, plus icon, copy text', async () => {
+    const { StationAddToRoute } = await import('./planStation')
+    const v = StationAddToRoute({ id: 'S4' }) as unknown as { props: { href: string; title: string; children: unknown[] } }
+    expect(v.props.href).toBe('#/mission?add=S4')
+    expect(v.props.title).toBe('Add this station to the route in Plan your EVA (estimate)')
+    expect(JSON.stringify(v.props.children)).toContain('Add to route')
+    expect((v.props.children[0] as { props: { name: string } }).props.name).toBe('plus')
+  })
+})

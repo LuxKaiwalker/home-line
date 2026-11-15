@@ -11,6 +11,16 @@
 //                        unset/0/anything else: off. npm run dev:live-demo uses all.
 //   VITE_ROUTE_EDIT=0    D116: hide the Edit-route panel and its map waypoints (default on; the
 //                        published Pages build sets 0 until route editing is cleared for it)
+//   VITE_ROUTE_EDITOR_IN_DRAWER=1  J1d (team lead 2026-11-15 16:57): show the route editor (instant
+//                        estimate, mode, stop list, map waypoints) inside Plan's Edit-route drawer.
+//                        Default off: the drawer links to the Mission Planer (#/mission) instead; the
+//                        pad tool, crew, My plans and the server's Compute plan stay in the drawer.
+//   VITE_EDIT_ROUTE_DRAWER=1  J1f (team lead 2026-11-15 17:31): show Plan's Edit-route drawer and its
+//                        map-edge "Edit route" button (today's drawer). Default off, the fallback: route
+//                        planning lives in the Mission Planer tab ("Plan your EVA (estimate)"); Plan has
+//                        no drawer, no edge button and no route panel, so the pad card keeps its own
+//                        "Compute full plan" and the crew panel stays next to it (as with VITE_ROUTE_EDIT=0).
+//                        The Pages build leaves it unset (hidden).
 import backendRaw from '../../../config/backend.yaml'
 import { cfg } from '../config'
 
@@ -85,6 +95,16 @@ export function isRouteEditFlag(value: EnvValue): boolean {
   return !(value === false || value === '0' || value === 'false')
 }
 
+/** VITE_ROUTE_EDITOR_IN_DRAWER parsing (J1d): '1' or 'true' shows the editor in the drawer; anything else (or unset) is off. */
+export function isEditorInDrawerFlag(value: EnvValue): boolean {
+  return value === true || value === '1' || value === 'true'
+}
+
+/** VITE_EDIT_ROUTE_DRAWER parsing (J1f): '1' or 'true' shows Plan's Edit-route drawer; anything else (or unset) hides it. */
+export function isEditRouteDrawerFlag(value: EnvValue): boolean {
+  return value === true || value === '1' || value === 'true'
+}
+
 /** VITE_API_BASE parsing: trailing slashes dropped, default http://localhost:8012. */
 export function apiBaseFrom(value: EnvValue): string {
   const v = typeof value === 'string' && value.trim() ? value.trim() : 'http://localhost:8012'
@@ -108,3 +128,9 @@ export const SIM_EXPORT_MODE: SimExportMode = simExportModeFrom(import.meta.env.
 export const SIM_EXPORT_ENABLED: boolean = SIM_EXPORT_MODE !== 'off'
 /** D116: the Edit-route panel (and the map waypoints it installs); on unless VITE_ROUTE_EDIT is 0 or false. */
 export const ROUTE_EDIT_ENABLED: boolean = isRouteEditFlag(import.meta.env.VITE_ROUTE_EDIT)
+/** J1d: the route editor inside the Edit-route drawer; off unless VITE_ROUTE_EDITOR_IN_DRAWER is 1 or true. */
+export const ROUTE_EDITOR_IN_DRAWER: boolean = isEditorInDrawerFlag(import.meta.env.VITE_ROUTE_EDITOR_IN_DRAWER)
+/** J1f: Plan's Edit-route drawer and edge button; off unless VITE_EDIT_ROUTE_DRAWER is 1 or true. */
+export const EDIT_ROUTE_DRAWER: boolean = isEditRouteDrawerFlag(import.meta.env.VITE_EDIT_ROUTE_DRAWER)
+/** J1f: route editing on Plan (drawer, edge button, route panel, pad-card link): both flags on. */
+export const PLAN_ROUTE_EDIT: boolean = ROUTE_EDIT_ENABLED && EDIT_ROUTE_DRAWER

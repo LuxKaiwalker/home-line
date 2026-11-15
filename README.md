@@ -1,4 +1,4 @@
-# HOMELINE
+# MARVIS
 
 NASA Space Apps 2026, challenge *Interplanetary Survival Guide: Martian Map*.
 

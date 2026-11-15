@@ -3,7 +3,7 @@
 // rendering into main.outlet on their own. All text comes from copy.json via t().
 import { render } from 'preact'
 import { useEffect, useRef, useState } from 'preact/hooks'
-import { canonicalHref, type Route } from '../../router'
+import { canonicalHref, LANDING_HASH, type Route } from '../../router'
 import { listenLiveStatus } from '../../state/live'
 import { effect, useSignalValue } from '../../state/signal'
 import { MODES, ui, type Mode } from '../../state/ui'
@@ -20,6 +20,7 @@ import {
   dockCollapsed,
   dockContent,
   dockHosted,
+  hasDock,
   hostedInPlan,
   isMapMode,
   MODE_KEY,
@@ -87,7 +88,7 @@ export function TopBar() {
   const phone = bp === 'phone'
   return (
     <>
-      <a class="hl-wordmark" href="#/">
+      <a class="hl-wordmark" href={LANDING_HASH}>
         {t('nav.wordmark')}
       </a>
       <nav class="hl-topbar__modes" aria-label={t('nav.modesMenu')}>
@@ -308,7 +309,7 @@ export function mountShell(frame: Frame, navigate: (hash: string) => void, win: 
     const sheet = railSheetMode()
     set('data-railmode', sheet ? 'sheet' : 'docked')
     set('data-rail', (sheet ? !shell.railSheet.value : railCollapsed()) ? 'collapsed' : 'open')
-    set('data-dock', isMapMode(mode) && !dockHosted() ? (dockCollapsed() ? 'collapsed' : 'open') : 'none')
+    set('data-dock', hasDock(mode, shell.route.value) && !dockHosted() ? (dockCollapsed() ? 'collapsed' : 'open') : 'none')
     root.style.setProperty('--hl-rail-w', `${ui.panels.leftRail.value}px`)
     root.style.setProperty('--hl-side-w', `${ui.panels.sidebar.value}px`)
     root.style.setProperty('--hl-dock-h', `${ui.panels.timeline.value}px`)
