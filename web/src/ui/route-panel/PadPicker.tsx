@@ -2,7 +2,10 @@
 // the pads come from listPads() (loadPadIndex() once on mount), the choice goes to the planning store
 // (setPad: one undo step), the loading state comes from padLoadState(). A radiogroup in the Mission
 // Planer's tag-button style; a pad without walk-home fields stays visible but cannot start a route.
+// PORT F9: a click (or Enter / Space, the button's native click) also flies the map to the pad and opens
+// its pop-up card (map/pads/focus.ts); arrow keys only move the choice, so the camera does not fly per key.
 import { useEffect, useState } from 'preact/hooks'
+import { focusPad } from '../../map/pads/focus'
 import { listPads, loadPadEnv, loadPadIndex, padLoadState, type PadInfo } from '../../pads'
 import { planning, selectPad, usePlanning, type PlanningStore } from '../../state/planning'
 import { useSignalValue } from '../../state/signal'
@@ -43,6 +46,13 @@ export function PadPicker({ store = planning }: { store?: PlanningStore }) {
     store.setPad(p.id)
     // start the load at once (cached: no refetch); the map layer and the core read the same cache
     loadPadEnv(p.id).catch(() => {})
+  }
+
+  // click, Enter, Space (a button's native click): pick, then frame the pad and open its card
+  const click = (p: PadInfo, el: HTMLElement | null) => {
+    if (!p.hasRoutingFields && p.id !== padId) return
+    pick(p)
+    focusPad(p, el)
   }
 
   // ARIA radio group: one tab stop (the checked pad), arrow keys move the choice over the pads that can
@@ -91,7 +101,7 @@ export function PadPicker({ store = planning }: { store?: PlanningStore }) {
                 disabled={!p.hasRoutingFields && !on}
                 title={p.hasRoutingFields ? undefined : t('route.panel.pads.noFields')}
                 aria-describedby={whyId}
-                onClick={() => pick(p)}
+                onClick={(e) => click(p, e.currentTarget as HTMLElement | null)}
               >
                 {padName(p)}
               </button>,
