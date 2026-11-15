@@ -159,8 +159,6 @@ export function mountRoutePanel(o: MountRouteOptions): () => void {
       map: o.cmap ? consoleRouteMap(o.cmap, () => (alive ? (o.restore ?? restoreStatic)(o.cmap!).catch((e) => void (alive && console.warn('edit route: static plan not restored:', e))) : undefined), () => alive) : null,
       canCompute: live,
     }))
-    // WP6: free waypoints (markers, click to add) and the ghost route (estimate) on the console map
-    offs.push(installWaypointMap(c, o.cmap))
     // the console's plan (pad drag, scenario) changes the inputs and the hash, not the route history
     let first = true
     offs.push(
@@ -176,7 +174,16 @@ export function mountRoutePanel(o: MountRouteOptions): () => void {
     // while /health says the server is ready (heavy jobs off: shown, Compute disabled with the reason);
     // the route and its undo history stay in memory and come back with the server.
     let unregister: (() => void) | null = null
-    const section = () => (o.register ?? registerRailSection)({ id: ROUTE_SECTION_ID, modes: ['plan'], title: 'nav.rail.stationsRoute', icon: 'station', render: () => h(RoutePanel, { ctl: c, live, reason, key: ROUTE_TEXT.title }) })
+    const section = () => {
+      const off = (o.register ?? registerRailSection)({ id: ROUTE_SECTION_ID, modes: ['plan'], title: 'nav.rail.stationsRoute', icon: 'station', render: () => h(RoutePanel, { ctl: c, live, reason, key: ROUTE_TEXT.title }) })
+      // WP6: free waypoints (markers, click to add) and the ghost route (estimate) on the console map,
+      // shown and hidden with the panel (offline: gone with the other live controls)
+      const offMap = installWaypointMap(c, o.cmap)
+      return () => {
+        offMap()
+        off()
+      }
+    }
     offs.push(() => {
       unregister?.()
       unregister = null
