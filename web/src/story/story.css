@@ -39,9 +39,14 @@ html[data-story] .hl-ui,
 html[data-story] .maplibregl-control-container { transition: opacity var(--motion-panel-max) ease-out; }
 html[data-story-chrome='hide'] .hl-ui,
 html[data-story-chrome='hide'] .maplibregl-control-container,
-html[data-story-chrome='hide'] .console-panel {
+html[data-story-chrome='hide'] .console-panel,
+html[data-story-warm] .hl-ui,
+html[data-story-warm] .maplibregl-control-container,
+html[data-story-warm] .console-panel {
   opacity: 0;
 }
+/* M10d: the warm-up cover (live intro / kiosk only, both start with the chrome hidden) hides the chrome
+   too; html[data-story-chrome] is written only when the clock starts (stage.ts writeChrome). */
 html[data-story-capture][data-story-chrome='hide'] .hl-ui,
 html[data-story-capture][data-story-chrome='hide'] .maplibregl-control-container,
 html[data-story-capture][data-story-chrome='hide'] .console-panel {
