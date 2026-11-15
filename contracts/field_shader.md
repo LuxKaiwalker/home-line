@@ -137,7 +137,7 @@ order, which is the spike's `classify`:
 2. no `T_home` value for the variant (§1.2 rule 3), or no `O2_home` value in margin mode → `none`,
    which is neither coloured nor hatched (see §6).
 3. bands mode: `T(x) ≤ u_budget` → `safe`, else `none`.
-4. margin mode: `m < 0` → `limit`; `m < u_amber` → `caution`; else `safe`. The zero-margin edge is
+4. margin mode: `m < 0` → `limit`; `m ≤ u_amber` → `caution` (the HUD rule, D88); else `safe`. The zero-margin edge is
    drawn as a 1.5 px line in screen space.
 
 Acceptance (U2): at every station and every 5 min along the route the margin equals

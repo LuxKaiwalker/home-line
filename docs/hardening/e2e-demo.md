@@ -278,3 +278,77 @@ disagreeing with web/public/data/manifest.json. It has nothing to do with the li
 The driver clicks map positions without any app hook. It clicks, reads the pad position the tool reports and
 corrects the offset, with the scale taken from vertical clicks and Web Mercator. It re-measures the clickable area
 before each click and refuses to click a spot covered by an HTML marker.
+
+## Run after E8c (H5r): step 4 PASS, H5-1 fixed
+
+E8c (#79) makes the plan job write a partial `scenarios/index.json` and `manifest.json` after every stage. This
+re-run checks step 4 again in the browser on the demo configuration. It also re-runs steps 1–3, 5 and 6 with the same driver.
+
+**Result: all six steps pass.** The nominal band and route are fetched and drawn **110.5 s after "Compute full plan"**, which is
+250 s before the job ends. There are no 404s for `index.json` or `manifest.json`, and 0 uncaught errors.
+
+### Setup
+- Date: 2026-11-15, 05:27–05:34 local (CET). Worktree `hardening-h5r` at origin/main **8f2df5b** (E8c #79 + H1-1 #81).
+- `/engine/version`: commit `8f2df5b0…` = HEAD, engine_tree `6135328580…`, terrain `sha256:67fe3ced…`. Official hash `7d491d3e2dd6a60d`.
+- `ss -ltn` showed 8012 and 5173 free before the start. Both servers ran inside `flock /tmp/hl-heavy.lock`:
+  `make serve HL_SERVER_DATA=/home/vincent/hl-data/server` and `cd web && VITE_LIVE=1 npm run dev`. Web security was on.
+- Environment: `uv sync --frozen`, `cd web && npm ci`, and a gitignored `data -> ~/hl-data` symlink. Playwright 1.65.1 from
+  `~/coding/hl-h2/web/node_modules` drove the system Chromium headless at 1900×1000 (as before).
+- Command:
+  `OUT=/tmp/hl-orch/h5r/run1 OFFICIAL_HASH=7d491d3e2dd6a60d PAD_CLICK=137.390,-4.786 node docs/hardening/e2e-drive.mjs http://localhost:5173`
+- Driver change (this PR): step 4 now records the headline area each time it changes (`headlines`), takes a screenshot
+  `step4-first-map.png` 1.5 s after the first result-tree band or route file returns 200 (`firstDrawn`), and counts the 404
+  console errors after the click (`notFound404`). The pass criterion is unchanged.
+
+### The pad
+- **Rank 4, 137.387206, −4.781529** (D21 candidate). It is not rank 2 or 3, and not the rank-5 nearest-valid pad E8c used.
+- Its hash at this engine identity, **`2e6b1ee139340286`**, was not in `$HL_SERVER_DATA/results/` before the run. I computed it with
+  `server.engine.hashing.result_hash` on the default inputs; the same method gives E8c's `c39b2d277ede3668` for its pad.
+  H5's earlier rank-4 probe (`aed58d507a7a7f53`) was computed on an older engine tree.
+- How it was picked in the UI: the driver clicked the slope spot 137.38996, −4.785945 ("Nearest valid block: 137.387206°E −4.781529°N, 308.2 m away")
+  and took "Use the nearest valid block". The `#4` marker covers the pad itself (H5-3).
+
+### Step 4 timings (seconds after the click on "Compute full plan")
+
+| Event | Seconds | Source |
+|---|---|---|
+| Job queued, then running stage nominal | 0.3–1.0 | panel text |
+| **First map content**: `index.json`, `manifest.json`, `route_nom_104.geojson`, `scenarios/bands_104.geojson`, `nom_104/{isochrones,edges,partner}` all **200** | **110.5** | network log |
+| "Stages on the map: nominal" and the headline shown | 111.1 / 111.6 | panel |
+| Screenshot `step4-first-map.png` (the live nominal band has replaced the static one) | 113.1 | driver |
+| **Bands stage**: index re-read (lists opt/con/nom_104), headline gains its range | **315.6** / 316.7 | network log / panel |
+| Partner stage | 335.6 | network log |
+| Route + summary; **job done** (first `done` poll) | **360.6** / 361.4 | job polls / panel |
+
+- Run record stages: nominal 106.81, bands 205.20, partner 19.48, route 26.93, summary 0.05 s. The total is 358.5 s from the
+  stage start (04:27:43.780Z to 04:33:42.278Z UTC). The UI polls every 5 s, which explains the small offset.
+- The pad tool fetched the nominal files again after each later stage (all 200). It never requests the opt/con isochrone files
+  (it draws `bands_104.geojson` and the nom_104 layers). So the "other variants" show up in the UI as the headline range at the bands
+  stage, plus the re-fetched `bands_104.geojson`.
+- Compared with H5 (run3), the first map content moved from 375.8 s (at the end of the job) to 110.5 s (just after nominal).
+  The expected value was about 95 s; this nominal stage took 106.8 s on a machine shared with other agents.
+- **Headline area during the nominal-only phase (111.6–316.7 s):** "Reachable within a 30-min walk home (nom_104): 22.1%".
+  There is no range text, no "null" and no placeholder. `view.tsx` skips the range when both ends are null, so the
+  `[null, null]` range from the partial index is simply left out. From the bands stage on it reads "… 22.1% (range 17.2% to 30.9%)".
+  Reported only; nothing was changed. A presenter may want to say that the range follows with the other variants.
+- Done: label "Computed live · not part of the validated scorecard · provenance of plan 2e6b1ee139340286", link `#/plan/2e6b1ee139340286`,
+  "No range flags: every input is inside its validated range.", no contract errors.
+- **Console:** 0 uncaught errors. After the click there were **0** `console.error` entries and 0 404s. The one 404 of the whole run is the vite
+  favicon at page load (0.31 s, H5-4).
+- `mapBeforeDone: true`: band and route returned 200 at 110.5 s and the job reported done at 360.6 s. Driver verdict: **step 4 PASS**.
+- Screenshots (in `/tmp/hl-orch/h5r/run1/`): `step3-preview.png` (static official band, before the job),
+  **`step4-first-map.png`** (the live rank-4 nominal band, while "Running stage bands"), `step4-stage2-bands.png`, `step4-stage3-partner.png`,
+  `step4-stage5-summary.png`, `step4-done.png`, `step4-done-zoomed-out.png`. At this zoom the route line is hard to tell apart from the
+  band in the screenshots; its file was fetched with 200 at 110.5 s.
+
+### Other steps (same run, no regression)
+1. **PASS:** ready after 1.5 s (3.0 s with the map settle), pad tool visible, no offline banner, console headline unchanged:
+   **23 %**, range 15.2 % to 28.7 %, 60 min 31.5 % (16.2 % to 43.8 %).
+2. **PASS:** `disc_off_grid`, nearest valid block 360.9 m (the official pad), reason 6 ms after the click.
+3. **PASS:** preview 105 ms after "Use the nearest valid block", 14/14 numbers flagged as estimates; feasible EVAs (D21 score) 50.
+5. **PASS:** the permalink renders in 477 ms, `computed_live`, 8 manifest-backed numbers and 0 withheld. The headline is 22.1 % (17.2 % to 30.9 %),
+   60 min 17 % (10.4 % to 35.1 %), equal to index.json. The provenance shows the stage table. Export is 661 bytes; re-import gives the same hash in 170 ms.
+6. **PASS:** official `7d491d3e2dd6a60d` "Precomputed · official plan", 23 / 15.2 / 28.7 %, the same as the static console.
+
+Evidence: `/tmp/hl-orch/h5r/run1/` (screenshots, `e2e-result.json`, `plan_inputs.json`), `/tmp/hl-orch/h5r/run1.log`,
+`/tmp/hl-orch/h5r/{api,vite,lock}.log`. Both servers were stopped afterwards, and 8012 and 5173 are free.

@@ -219,7 +219,9 @@ try {
     const t = performance.now()
     await page.click('.live-compute')
     const order = [], stageAt = {}, shots = new Set()
-    let last = null, final = null
+    let last = null, final = null, lastHead = null, firstDrawn = null
+    const headlines = [] // (H5r) what the headline area shows while the job runs (nominal-only phase: range [null, null])
+    const t0net = (t - T0) / 1000
     while ((performance.now() - t) / 1000 < JOB_WAIT_S) {
       const s = await page.evaluate(() => {
         const p = document.querySelector('.live-pad .live-plan')
@@ -232,6 +234,19 @@ try {
         for (const st of done) if (!(st in stageAt)) { stageAt[st] = +((performance.now() - t) / 1000).toFixed(1); order.push(st); log('stage on the map:', st, stageAt[st], 's') }
         if (!hash && s.prov) hash = (s.prov.match(/#\/plan\/([0-9a-f]+)/) ?? [])[1] ?? null
         if (done.length && !shots.has(done.length)) { shots.add(done.length); await shot(page, `step4-stage${done.length}-${done.at(-1)}`) }
+        const at = +((performance.now() - t) / 1000).toFixed(1)
+        const head = s.headline ?? (await txt(page, '.live-pad .live-plan .muted'))
+        if (head !== lastHead) { lastHead = head; headlines.push({ s: at, kind: s.kind, stages: s.stages, headline: head }); log('headline area:', JSON.stringify(head)) }
+        // (H5r) the first map file of the result tree (band or route, 200) while the job runs: screenshot that moment
+        if (!firstDrawn) {
+          const n = netlog.find((n) => n.t >= t0net && n.status === 200 && n.method === 'GET' && /^\/results\/[0-9a-f]+\/(route_|scenarios\/bands_)/.test(n.url ?? ''))
+          if (n) {
+            await sleep(1500) // let maplibre draw the layers
+            firstDrawn = { fetchS: +(n.t - t0net).toFixed(1), url: n.url, shotS: +((performance.now() - t) / 1000).toFixed(1), kind: s.kind, stages: s.stages, headline: await txt(page, '.live-pad .live-plan .live-headline'), plan: await txt(page, '.live-pad .live-plan') }
+            log("first map content", JSON.stringify(firstDrawn))
+            await shot(page, 'step4-first-map')
+          }
+        }
         const key = JSON.stringify([s.kind, s.progress?.slice(0, 40)])
         if (key !== last) { last = key; log('plan', s.kind, s.progress ?? '') }
         if (s.kind === 'done' || s.kind === 'failed' || s.kind === 'cancelled') { final = s; break }
@@ -256,6 +271,8 @@ try {
       label: final?.label ?? null, labelOk: !!final?.label?.includes(LIVE_LABEL), provHref: final?.prov ?? null,
       headline: final?.headline ?? null, rangeFlags: final?.flags ?? null, attached: final?.attached ?? null, failed: final?.failed ?? null, contractErrors: final?.errs ?? null,
       uncaughtSoFar: errors.filter((e) => e.kind === 'uncaught').length,
+      firstDrawn, headlines,
+      notFound404: errors.filter((e) => e.t >= t0net && /404/.test(e.msg)).length,
     }
     R.steps[4].nominalFirst = order[0] === 'nominal'
     // "the nominal band and route appear on the map first": both fetched (200) before the first job poll that
