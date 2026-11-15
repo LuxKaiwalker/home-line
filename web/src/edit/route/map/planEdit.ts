@@ -118,6 +118,14 @@ export function createPlanEditor(o: PlanEditOptions = {}) {
   let dragEndedAt: number | null = null
   /** a map layer query (planMap.ts): a station / pad feature under the pointer → not ours */
   let featureAt: ((p: MapPointer) => boolean) | null = null
+  /** F11: the ground (terrain surface) under the pointer, from the map (planMap.ts: map.unproject, the
+   *  terrain-aware unprojection MapSelection's crosshair uses); null = the event's own lngLat */
+  let groundAt: ((p: MapPointer) => { lon: number; lat: number } | null) | null = null
+  /** The pointer's ground position: the map's terrain pick, else the event's lngLat. */
+  const ground = (p: MapPointer): { lon: number; lat: number } => {
+    const g = groundAt?.(p)
+    return g && Number.isFinite(g.lon) && Number.isFinite(g.lat) ? g : { lon: p.lon, lat: p.lat }
+  }
 
   const stops = () => store.doc.peek().route.stops
   const nameOf = (id: StopId): string => {
@@ -250,7 +258,8 @@ export function createPlanEditor(o: PlanEditOptions = {}) {
       }
       if (otherMarkerAt(p) || featureAt?.(p)) return false
       prevent(p)
-      addPointAt(p.lon, p.lat)
+      const g = ground(p)
+      addPointAt(g.lon, g.lat)
       return true // consumed even when refused: the notice is the answer, not a selection card
     },
     hover(p) {
@@ -273,8 +282,9 @@ export function createPlanEditor(o: PlanEditOptions = {}) {
     drag(p) {
       const d = drag.peek()
       if (!d) return
-      const r = refusal({ lon: p.lon, lat: p.lat }, 'point', false, d.id)
-      drag.value = { ...d, lon: p.lon, lat: p.lat, valid: r ? false : true }
+      const g = ground(p)
+      const r = refusal(g, 'point', false, d.id)
+      drag.value = { ...d, lon: g.lon, lat: g.lat, valid: r ? false : true }
     },
     dragEnd(p) {
       const d = drag.peek()
@@ -283,8 +293,9 @@ export function createPlanEditor(o: PlanEditOptions = {}) {
       if (!d) return
       if (Math.hypot(p.x - d.x0, p.y - d.y0) < CLICK_SLOP_PX) return // a click on the handle: stays
       // a touchend may carry no position: the last drag position is the drop
-      const fin = Number.isFinite(p.lon) && Number.isFinite(p.lat)
-      const at = { lon: round6(fin ? p.lon : d.lon), lat: round6(fin ? p.lat : d.lat) }
+      const g = Number.isFinite(p.x) && Number.isFinite(p.y) ? ground(p) : p
+      const fin = Number.isFinite(g.lon) && Number.isFinite(g.lat)
+      const at = { lon: round6(fin ? g.lon : d.lon), lat: round6(fin ? g.lat : d.lat) }
       const r = refusal(at, 'point', false, d.id)
       if (r) return say('refused', refuseText(r)) // the handle snaps back (the store is unchanged)
       if (store.moveStop(d.id, at)) say('info', t('route.mapEdit.notice.pointMoved', { name: d.name }))
@@ -327,6 +338,10 @@ export function createPlanEditor(o: PlanEditOptions = {}) {
     },
     setFeatureQuery(f: ((p: MapPointer) => boolean) | null): void {
       featureAt = f
+    },
+    /** F11: the map's terrain-aware ground pick for a pointer (planMap.ts); null = the event's lngLat */
+    setGroundQuery(f: ((p: MapPointer) => { lon: number; lat: number } | null) | null): void {
+      groundAt = f
     },
     addPointAt,
     addStation,

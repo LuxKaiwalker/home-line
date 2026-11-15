@@ -38,6 +38,7 @@ export interface MapPort {
 
 interface ClickEvent {
   lngLat: { lng: number; lat: number }
+  originalEvent?: { defaultPrevented?: boolean }
 }
 interface GeoJsonSourceLike {
   setData(d: unknown): unknown
@@ -95,7 +96,8 @@ export function consoleMapPort(cm: ConsoleMapLike, restore?: () => void): MapPor
   }
   return {
     onClick(cb) {
-      const h = (e: ClickEvent) => cb({ lon: e.lngLat.lng, lat: e.lngLat.lat })
+      // F11: a click a map edit handler consumed (R3 added a route point) drops no live pad
+      const h = (e: ClickEvent) => void (e.originalEvent?.defaultPrevented || cb({ lon: e.lngLat.lng, lat: e.lngLat.lat }))
       cm.map.on('click', h)
       return () => {
         cm.map.off('click', h)

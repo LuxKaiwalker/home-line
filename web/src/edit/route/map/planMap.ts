@@ -67,6 +67,22 @@ export function bindPlanEditMap(ed: PlanEditor, ctx: MapExtensionContext, o: Bin
   })
   offs.push(() => ed.setFeatureQuery(null))
 
+  // ---- F11: clicks and drops land on the ground under the pointer ------------------------------------
+  // map.unproject raycasts the 3D terrain (MapLibre >= 5: transform.screenPointToLocation(p, terrain)),
+  // the same pick MapSelection's crosshair and the DOM handles (Marker: project with terrain elevation)
+  // use, so a point lands where the pointer is in 2D and in a tilted 3D view, not at sea level.
+  const unproject = (map as unknown as { unproject?: (p: [number, number]) => { lng: number; lat: number } | undefined }).unproject
+  ed.setGroundQuery((p: MapPointer) => {
+    if (typeof unproject !== 'function' || !Number.isFinite(p.x) || !Number.isFinite(p.y)) return null
+    try {
+      const ll = unproject.call(map, [p.x, p.y])
+      return ll ? { lon: ll.lng, lat: ll.lat } : null
+    } catch {
+      return null
+    }
+  })
+  offs.push(() => ed.setGroundQuery(null))
+
   // ---- ghost while dragging ---------------------------------------------------------------------
   if (!map.getSource(R3_GHOST_SOURCE)) map.addSource(R3_GHOST_SOURCE, { type: 'geojson', data: EMPTY })
   if (!map.getLayer(R3_GHOST_LAYER))

@@ -1,6 +1,9 @@
 // PORT R3: the map binding (handles, ghost while dragging, notice, no pan while dragging).
-import { describe, expect, it } from 'vitest'
-import type { MapExtensionContext, MapPointer } from '../../../map/extensions'
+import { afterEach, describe, expect, it } from 'vitest'
+import { installMapExtensions, registerEditHandlers, resetMapExtensions, type MapExtensionContext, type MapPointer } from '../../../map/extensions'
+import { MapSelection, type SelectMap } from '../../../map/select'
+import { consoleMapPort, type ConsoleMapLike } from '../../../live/mapPort'
+import { resetSelection, selection } from '../../../state/selection'
 import { createPlanningStore } from '../../../state/planning'
 import { createPlanEditor } from './planEdit'
 import { bindPlanEditMap, ghostLine, R3_GHOST_LAYER, R3_GHOST_SOURCE } from './planMap'
@@ -138,5 +141,102 @@ describe('R3 planMap', () => {
     expect(ghostLine(null).features).toHaveLength(0)
     const g = ghostLine({ lon: 1, lat: 2, valid: false, prev: { lon: 0, lat: 0 }, next: null })
     expect(g.features[0].properties).toMatchObject({ valid: false, state: 'estimate' })
+  })
+})
+
+// ---- F11: a click / drop lands on the terrain under the pointer; a consumed click opens no card ----
+
+/** Terrain-aware pick (map.unproject raycasts the 3D terrain) vs the flat sea-level answer the event
+ *  would give without terrain: in a tilted 3D view they differ by a screen-height-dependent offset. */
+const TERRAIN = (x: number, y: number) => ({ lng: 137.4 + x * 1e-4, lat: PAD.lat + 0.01 - y * 1e-4 })
+const FLAT = (x: number, y: number) => ({ lng: 137.4 + x * 1e-4, lat: PAD.lat + 0.01 - y * 2e-4 })
+
+describe('F11: map click and drop pick the ground under the pointer (2D and 3D)', () => {
+  afterEach(() => {
+    resetMapExtensions()
+    resetSelection()
+  })
+  const C = (x: number, y: number, stop?: string): MapPointer => ({ ...P(FLAT(x, y).lng, x, stop), lat: FLAT(x, y).lat, y })
+
+  it('click: the free point is at the terrain-aware lngLat, not the flat one; drag and drop too; the handle sits there', () => {
+    const store = createPlanningStore()
+    const ed = createPlanEditor({ store, pad: () => PAD, noticeMs: 0 })
+    const f = fakeMap()
+    const map = f.ctx.map as unknown as Record<string, unknown>
+    map.unproject = ([x, y]: [number, number]) => TERRAIN(x, y)
+    const off = bindPlanEditMap(ed, f.ctx, { doc: { createElement: () => new El() } as never, win: null })
+    ed.setEditing(true)
+    expect(ed.handlers.click!(C(100, 300))).toBe(true)
+    const s = store.doc.peek().route.stops[0] as { id: string; lon: number; lat: number }
+    expect([s.lon, s.lat]).toEqual([TERRAIN(100, 300).lng, TERRAIN(100, 300).lat].map((v) => Math.round(v * 1e6) / 1e6))
+    expect(s.lat).not.toBeCloseTo(FLAT(100, 300).lat, 4)
+    expect(f.live()[0].ll).toEqual([s.lon, s.lat]) // the handle marker is anchored on that ground point
+    // drag: the ghost and handle follow the terrain pick; the drop stores it
+    ed.handlers.dragStart!(C(100, 300, s.id))
+    ed.handlers.drag!(C(200, 250, s.id))
+    expect(f.live()[0].ll).toEqual([TERRAIN(200, 250).lng, TERRAIN(200, 250).lat])
+    ed.handlers.dragEnd!(C(200, 250, s.id))
+    const t = store.doc.peek().route.stops[0] as { lon: number; lat: number }
+    expect([t.lon, t.lat]).toEqual([TERRAIN(200, 250).lng, TERRAIN(200, 250).lat].map((v) => Math.round(v * 1e6) / 1e6))
+    off()
+  })
+
+  it('2D (no unproject / no answer): the event lngLat is used', () => {
+    const store = createPlanningStore()
+    const ed = createPlanEditor({ store, pad: () => PAD, noticeMs: 0 })
+    const f = fakeMap()
+    ;(f.ctx.map as unknown as Record<string, unknown>).unproject = () => undefined
+    const off = bindPlanEditMap(ed, f.ctx, { doc: { createElement: () => new El() } as never, win: null })
+    ed.setEditing(true)
+    ed.handlers.click!(C(100, 300))
+    const s = store.doc.peek().route.stops[0] as { lon: number; lat: number }
+    expect(s.lat).toBeCloseTo(FLAT(100, 300).lat, 6)
+    off()
+  })
+
+  it('R3 consumes the click: MapSelection opens no card and the live pad tool drops no pad', () => {
+    const store = createPlanningStore()
+    const ed = createPlanEditor({ store, pad: () => PAD, noticeMs: 0 })
+    ed.setEditing(true)
+    registerEditHandlers(ed.handlers)
+    const handlers = new Map<string, ((e: unknown) => void)[]>()
+    const container = { addEventListener() {}, removeEventListener() {}, closest: () => null }
+    const canvas = { style: { cursor: '' } }
+    const map = {
+      on: (t: string, fn: (e: unknown) => void) => void handlers.set(t, [...(handlers.get(t) ?? []), fn]),
+      off: (t: string, fn: (e: unknown) => void) => void handlers.set(t, (handlers.get(t) ?? []).filter((x) => x !== fn)),
+      getContainer: () => container,
+      getCanvas: () => canvas,
+      queryRenderedFeatures: () => [],
+      getSource: () => undefined,
+      addSource() {},
+      getLayer: () => undefined,
+      addLayer() {},
+      getStyle: () => ({ layers: [] }),
+      getPaintProperty: () => undefined,
+      setPaintProperty() {},
+    }
+    // the app's order (consoleMap.ts): extensions, then MapSelection, then the live port
+    const host = installMapExtensions({ map, beforeId: () => undefined, marker: () => ({}), inShell: true } as unknown as MapExtensionContext)
+    const ms = new MapSelection(map as unknown as SelectMap, () => ({ labels: [], stations: [], pad: PAD, route: null }) as never)
+    const pads: unknown[] = []
+    const offLive = consoleMapPort({ map } as unknown as ConsoleMapLike).onClick((p) => pads.push(p))
+    const click = (target: unknown) => {
+      const originalEvent = { button: 0, target, defaultPrevented: false, preventDefault() { originalEvent.defaultPrevented = true } }
+      for (const fn of handlers.get('click') ?? []) fn({ point: { x: 5, y: 5 }, lngLat: { lng: 137.41, lat: PAD.lat }, originalEvent })
+    }
+    const ground = { closest: () => null }
+    click(ground)
+    expect(store.doc.peek().route.stops).toHaveLength(1) // R3 added the point
+    expect(selection.selected.peek()).toBeNull() // no "Terrain spot" card
+    expect(pads).toHaveLength(0) // no live pad dot
+    // editing off: the same click is MapSelection's (terrain cell card) and the live tool's again
+    ed.setEditing(false)
+    click(ground)
+    expect(selection.selected.peek()).not.toBeNull()
+    expect(pads).toHaveLength(1)
+    offLive()
+    ms.destroy()
+    host.destroy()
   })
 })
