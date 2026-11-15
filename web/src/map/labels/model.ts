@@ -245,3 +245,25 @@ export function layoutLabels(items: LayoutInput[], opts: LayoutOptions): LayoutR
   }
   return { placed, hidden }
 }
+
+/**
+ * Free overlay labels (the edge-cause and zero-margin binding labels: HTML markers outside labels.json,
+ * placed on their line in lon/lat) yield to the placed pills. labels.priority puts `overlay` last, and
+ * in 3D the pills float up on their leader lines into the overlay labels' spot, so each overlay label
+ * keeps its spot when it is clear of the pills and of the overlay labels before it, else moves just
+ * above or below the box it hits (the smaller shift first), else hides. Returns the vertical shift
+ * per label in px, null = hidden. Pure; layer.ts runs it with the on-screen boxes after every placement.
+ */
+export function yieldOverlays(boxes: Box[], pills: Box[], gap = COLLISION_GAP_PX): (number | null)[] {
+  const taken = [...pills]
+  return boxes.map((b) => {
+    const at = (dy: number): Box => ({ ...b, y: b.y + dy })
+    const clear = (dy: number) => taken.every((q) => !overlaps(at(dy), q, gap))
+    const shifts = [0]
+    for (const q of taken) if (overlaps(b, q, gap)) shifts.push(q.y - gap - b.h - b.y, q.y + q.h + gap - b.y)
+    const dy = shifts.sort((x, y) => Math.abs(x) - Math.abs(y)).find(clear)
+    if (dy === undefined) return null
+    taken.push(at(dy))
+    return dy
+  })
+}

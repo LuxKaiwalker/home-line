@@ -41,8 +41,8 @@ function realOptions(reduced = false): DirectorOptions {
 }
 
 describe('storyboard files (web/public/story)', () => {
-  it('has the U6 set (storm.json waits for storm mode, notes/M10.md)', () => {
-    expect(files).toEqual(['flythrough.json', 'intro.json', 'kiosk.json', 'video_beat1.json'])
+  it('has the U6 set (storm.json = the U9 storm replay, M12; ?capture=storm switches the storm on)', () => {
+    expect(files).toEqual(['flythrough.json', 'intro.json', 'kiosk.json', 'storm.json', 'video_beat1.json'])
   })
   for (const f of files) {
     it(`${f} validates against contracts/storyboard.schema.json and the director rules`, () => {

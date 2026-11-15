@@ -1,5 +1,17 @@
 /* WS16 task 10 (M10): the Flythrough button and its speed control (DESIGN U6). Tokens only. */
 .maplibregl-ctrl-group.hl-fly { display: flex; }
+/* D9 promotion run: on MapLibre's white control group the light text was near-invisible. The group
+   takes the card surface like the other map controls ("Flat vs real", 2D/3D); the storm switch (M12,
+   "same look as the flythrough button") shares the rule. */
+.maplibregl-ctrl-group.hl-fly,
+.maplibregl-ctrl-group.hl-storm-ctrl {
+  background: var(--color-card);
+  border: 1px solid var(--color-card-border);
+}
+.maplibregl-ctrl-group.hl-fly button + button {
+  border-top: 0;
+  border-left: 1px solid var(--color-card-border);
+}
 .maplibregl-ctrl-group .hl-fly-btn {
   width: auto;
   padding: 0 var(--space-2);

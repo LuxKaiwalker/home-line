@@ -12,7 +12,7 @@ import type { Map as MlMap } from 'maplibre-gl'
 import { Marker } from 'maplibre-gl'
 import { DataError, data } from '../../data/loader'
 import { DATA_MODE, dataUrl } from '../../env'
-import { expandedText, labelFeatures, layoutLabels, parseLabels, type LabelFeature, type MapLabel, type Placement } from './model'
+import { expandedText, labelFeatures, layoutLabels, parseLabels, yieldOverlays, type Box, type LabelFeature, type MapLabel, type Placement } from './model'
 import './labels.css'
 
 /** Trust hook (DESIGN §3.6): label positions come from the IAU gazetteer, stations.json, pad.json and the pads index. */
@@ -31,6 +31,11 @@ export async function loadLabels(): Promise<MapLabel[] | null> {
   if (!res.ok) return null
   return parseLabels(await res.json())
 }
+
+/** The console's free overlay labels (edge causes, zero-margin bindings; HTML markers outside labels.json). */
+export const OVERLAY_SELECTOR = '.edge-label'
+/** An overlay label with no clear spot next to the pills (labels.css: visibility hidden, keeps its layout box). */
+export const YIELD_CLASS = 'hl-label-yield'
 
 export interface LabelBinding {
   /** tooltip for the pill (e.g. the station's access note) */
@@ -67,6 +72,7 @@ export class LabelLayer {
   private raf = 0
   private refs = new Map<string, string>()
   private readonly map: MlMap
+  private readonly added: MutationObserver | null
 
   constructor(map: MlMap) {
     this.map = map
@@ -77,6 +83,10 @@ export class LabelLayer {
     // an exaggeration change moves them without a camera move; the pitch drives the leader lines
     map.on('terrain', this.onMove)
     map.on('idle', this.onMove)
+    // overlay labels (edge causes, zero-margin bindings) are re-created as HTML markers by the console;
+    // place them against the pills as soon as they appear, not on the next camera move
+    this.added = typeof MutationObserver === 'undefined' ? null : new MutationObserver(this.onMove)
+    this.added?.observe(map.getCanvasContainer(), { childList: true })
     const c = map.getContainer()
     c.setAttribute(LABELS_TRUST.attr, LABELS_TRUST.chip)
     c.setAttribute(LABELS_TRUST.sourceAttr, LABELS_TRUST.source)
@@ -161,12 +171,37 @@ export class LabelLayer {
         return { props: e.f.properties, x: pt.x, y: pt.y }
       })
     const { placed } = layoutLabels(items, { zoom: m.getZoom(), selected: selectedCode, pitch: m.getPitch() })
+    // read the overlay labels' boxes before any write (one layout per frame)
+    const overlays = this.overlayBoxes()
     const at = new Map(placed.map((p) => [p.code, p]))
     for (const [code, e] of this.entries) {
       const p = at.get(code)
       e.wrap.hidden = !p
       if (p) this.place(e, p, items.find((i) => i.props.code === code)!)
     }
+    const shifts = yieldOverlays(
+      overlays.map((o) => o.box),
+      placed.map((p) => p.box),
+    )
+    overlays.forEach(({ el }, i) => {
+      const dy = shifts[i]
+      el.classList.toggle(YIELD_CLASS, dy === null)
+      el.dataset.hlYieldDy = String(dy ?? 0)
+      el.style.translate = dy ? `0 ${dy}px` : ''
+    })
+  }
+
+  /** On-screen boxes of the visible overlay labels in map-container px, without the shift this layer gave them. */
+  private overlayBoxes(): { el: HTMLElement; box: Box }[] {
+    const c = this.map.getContainer().getBoundingClientRect()
+    const out: { el: HTMLElement; box: Box }[] = []
+    for (const el of this.map.getCanvasContainer().querySelectorAll<HTMLElement>(OVERLAY_SELECTOR)) {
+      if (el.hidden) continue
+      const r = el.getBoundingClientRect()
+      if (!r.width || !r.height) continue
+      out.push({ el, box: { x: r.left - c.left, y: r.top - c.top - Number(el.dataset.hlYieldDy ?? 0), w: r.width, h: r.height } })
+    }
+    return out
   }
 
   private place(e: Entry, p: Placement, pt: { x: number; y: number }): void {
@@ -190,6 +225,7 @@ export class LabelLayer {
     this.map.off('resize', this.onMove)
     this.map.off('terrain', this.onMove)
     this.map.off('idle', this.onMove)
+    this.added?.disconnect()
     for (const e of this.entries.values()) e.marker.remove()
     this.entries.clear()
     layers.delete(this)

@@ -1,6 +1,7 @@
 // WS16 task 5 (M5) acceptance: the cursor readout equals the field values at that cell (DESIGN U4).
 // Real tree: t_home PNGs through FieldData.at (= fieldAt), the shared slope PNG through WS7's FieldGrid.
 /// <reference types="node" />
+import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { decodeRGBA, FieldGrid, fieldGrid } from '../hud/fields'
@@ -63,5 +64,21 @@ describe('cursor readout = fieldAt at the cell', () => {
     expect(readoutValues(p[0], p[1], fieldAt(...p), null).tHomeMin).toBe(fieldAt(...p)!.tHome.con)
     field.setMargin(null, 'nom')
     setActiveField(null)
+  })
+})
+
+// M10b (orchestrator): the map's cursor readout used `.hl-readout*`, A2's card Readout component class, and
+// its later-loading furniture.css overrode the card and dock readouts (A5b worked around it in cards).
+describe('class names: the cursor readout never styles the card Readout component', () => {
+  const strip = (s: string) => s.replace(/\/\*[\s\S]*?\*\//g, '')
+  const css = strip(readFileSync(resolve(REPO, 'web/src/map/furniture/furniture.css'), 'utf8'))
+  const src = readFileSync(resolve(REPO, 'web/src/map/readout.ts'), 'utf8')
+  it('furniture.css has no .hl-readout selector; the cursor readout rules are .hl-cursor-readout*', () => {
+    expect(css).not.toMatch(/\.hl-readout/)
+    for (const sel of ['.hl-cursor-readout {', '.hl-cursor-readout__row', '.hl-cursor-readout__label', '.hl-cursor-readout__value']) expect(css).toContain(sel)
+  })
+  it('readout.ts builds its DOM with the map-specific classes only', () => {
+    expect(src).not.toMatch(/['`]hl-readout|\shl-readout/)
+    expect(src).toContain("'maplibregl-ctrl hl-cursor-readout'")
   })
 })

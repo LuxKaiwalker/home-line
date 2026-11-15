@@ -10,8 +10,8 @@ import { resolve } from 'node:path'
 import { parse } from 'yaml'
 import { describe, expect, it } from 'vitest'
 import { REPO } from '../../hud/testutil'
-import { LABELS, LEADER_LIFT_PX, MARKER_CLEARANCE_PX } from './config'
-import { configMinzoom, configPriority, labelFeatures, layoutLabels, leaderLift, overlaps, parseLabels, pillSize, projectWorld, type LayoutInput, type MapLabel } from './model'
+import { COLLISION_GAP_PX, LABELS, LEADER_LIFT_PX, MARKER_CLEARANCE_PX } from './config'
+import { configMinzoom, configPriority, labelFeatures, layoutLabels, leaderLift, overlaps, parseLabels, pillSize, projectWorld, yieldOverlays, type Box, type LayoutInput, type MapLabel } from './model'
 
 const PUBLISHED = resolve(REPO, 'web/public/data/labels.json')
 const FIXTURE = resolve(REPO, 'web/src/map/labels/fixtures/labels.P1.json')
@@ -213,5 +213,52 @@ describe('config/design.yaml cross-check (when present on this branch)', () => {
     expect({ ...LABELS.minzoom }).toEqual(d.labels.minzoom)
     expect(LABELS.leaderLineMinPitchDeg).toBe(d.labels.leader_line_min_pitch_deg)
     expect([...LABELS.pillPaddingPx]).toEqual(d.labels.pill_padding_px)
+  })
+})
+
+// M10b (D9 promotion run, 08-terrain-3d-early): in 3D the station pills float up on their leader lines
+// into the edge-cause labels ("physiology" over S6, "slope" over S4). The overlay labels yield.
+describe('overlay labels yield to the pills (edge causes, zero-margin bindings)', () => {
+  const pill = (x: number, y: number, code = 'S4'): Box => ({ x, y, ...pillSize(code) })
+  const word = (x: number, y: number): Box => ({ x, y, w: 80, h: 18 })
+
+  it('keeps a clear overlay label where it is', () => {
+    expect(yieldOverlays([word(0, 0)], [pill(300, 300)])).toEqual([0])
+  })
+
+  it('3D: the S4 pill lifted onto "slope" moves the overlay label off it by the smaller shift, never over a pill', () => {
+    // S4 at (870, 355) on screen, pitch 60: the pill floats LEADER_LIFT_PX above it (as in the 3D screenshot)
+    const pts: LayoutInput[] = screen(15, VIEWPORTS[0]).filter((i) => i.props.code === 'S4').map((i) => ({ ...i, x: 870, y: 355 }))
+    const s4 = layoutLabels(pts, { zoom: 15, pitch: 60 }).placed[0].box
+    const slope = word(s4.x - 20, s4.y + 4) // the edge label's own spot under the lifted pill
+    expect(overlaps(slope, s4)).toBe(true)
+    const [dy] = yieldOverlays([slope], [s4])
+    expect(dy).not.toBeNull()
+    const moved = { ...slope, y: slope.y + dy! }
+    expect(overlaps(moved, s4)).toBe(false)
+    // below the pill is the nearer clear spot here (the label sits low on it)
+    expect(dy).toBe(s4.y + s4.h + COLLISION_GAP_PX - slope.y)
+  })
+
+  it('hides an overlay label boxed in by a column of pills (every nearby gap is too small)', () => {
+    const col = Array.from({ length: 10 }, (_, i) => ({ ...pill(0, -120 + 30 * i), w: 200 })) // 12 px gaps: an 18 px label never fits
+    expect(yieldOverlays([word(10, 10)], col)).toEqual([null])
+  })
+
+  it('never leaves an overlay label over a pill or over an earlier overlay label (random scenes)', () => {
+    let seed = 7
+    const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647)
+    for (let scene = 0; scene < 200; scene++) {
+      const pills = Array.from({ length: 6 }, () => pill(rnd() * 600, rnd() * 400))
+      const words = Array.from({ length: 6 }, () => word(rnd() * 600, rnd() * 400))
+      const out = yieldOverlays(words, pills)
+      const shown = words.flatMap((w, i) => (out[i] === null ? [] : [{ ...w, y: w.y + out[i]! }]))
+      for (const [i, a] of shown.entries()) {
+        for (const p of pills) expect(overlaps(a, p)).toBe(false)
+        for (const b of shown.slice(i + 1)) expect(overlaps(a, b)).toBe(false)
+      }
+      // a shift only clears a box the label hit where it was: at most one label plus one pill height (it stays by its line)
+      for (const dy of out) if (dy !== null) expect(Math.abs(dy)).toBeLessThanOrEqual(18 + pills[0].h + 2 * COLLISION_GAP_PX)
+    }
   })
 })

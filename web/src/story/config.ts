@@ -14,12 +14,11 @@ export const FLYTHROUGH = {
 } as const
 
 /**
- * Follow-camera turn rate, deg per simulated EVA minute (assumed: true, M10; no design.yaml key yet,
- * asked for as camera.flythrough.turn_deg_per_min in notes/M10.md). The routes go out and back, so
- * the crew -> look-ahead direction flips by up to 180 deg at a station; the camera swings round at
- * this rate instead (180 deg in 15 EVA minutes, mostly during the station dwell).
+ * camera.flythrough.turn_deg_per_min: follow-camera turn rate, deg per simulated EVA minute (assumed
+ * in design.yaml, M10). The routes go out and back, so the crew -> look-ahead direction flips by up to
+ * 180 deg at a station; the camera swings round at this rate instead (mostly during the station dwell).
  */
-export const FOLLOW_TURN_DEG_PER_MIN = 12
+export const FOLLOW_TURN_DEG_PER_MIN = cfg<number>(designRaw, 'camera.flythrough.turn_deg_per_min')
 /** step of the precomputed follow-camera bearing table, EVA minutes (assumed: true, M10) */
 export const FOLLOW_TABLE_STEP_MIN = 0.05
 

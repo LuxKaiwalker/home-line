@@ -76,3 +76,7 @@
   outline: var(--line-focus-ring) solid var(--color-select);
   outline-offset: var(--line-focus-ring);
 }
+
+/* overlay labels (edge causes, zero-margin bindings) yield to the pills (model.ts yieldOverlays): hidden
+   here when no spot next to the pills is clear; visibility keeps the box so the next placement measures it */
+.edge-label.hl-label-yield { visibility: hidden; pointer-events: none; }

@@ -22,13 +22,20 @@
 }
 .hl-story-caption[hidden] { display: none; }
 
-/* UI chrome hidden by a storyboard (ui: "hide") or in capture mode; reveal fades it back in */
+/* UI chrome hidden by a storyboard (ui: "hide") or in capture mode; reveal fades it back in.
+   Live (intro, kiosk) the hidden chrome keeps taking the pointer: any input skips the story (attach.ts,
+   a window capture listener), so the first click both skips it and reaches its target (top bar, rail,
+   panel, map controls, dock; D9 / A7b). Only a capture, which takes no input, turns the pointer off. */
 html[data-story] .hl-ui,
 html[data-story] .maplibregl-control-container { transition: opacity var(--motion-panel-max) ease-out; }
 html[data-story-chrome='hide'] .hl-ui,
 html[data-story-chrome='hide'] .maplibregl-control-container,
 html[data-story-chrome='hide'] .console-panel {
   opacity: 0;
+}
+html[data-story-capture][data-story-chrome='hide'] .hl-ui,
+html[data-story-capture][data-story-chrome='hide'] .maplibregl-control-container,
+html[data-story-capture][data-story-chrome='hide'] .console-panel {
   pointer-events: none;
 }
 

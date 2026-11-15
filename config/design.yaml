@@ -67,7 +67,7 @@ camera:
     low: {pitch: 70}
     focus: {padding_px: 80}
     follow: {behind_m: 250, above_m: 120, lookahead_m: 150}
-  flythrough: {sample_m: 20, spline: centripetal_catmull_rom, behind_m: 250, above_m: 120, lookahead_m: 150}
+  flythrough: {sample_m: 20, spline: centripetal_catmull_rom, behind_m: 250, above_m: 120, lookahead_m: 150, turn_deg_per_min: 12}   # turn_deg_per_min added by M10b 2026-11-15 (assumed: true, M10): follow-camera bearing turns at most this many deg per EVA minute (out-and-back routes flip 180 deg at a station; 180 deg in 15 EVA min, mostly in the dwell)
   history_max: 10
 overlays:
   max_thematic_on: 2
@@ -98,6 +98,9 @@ quality:
   shadows_off_below_fps: 30
   crew_count: 2
   ground_ring_radius_m: 1.5
+storm:                               # added by M10b 2026-11-15 (DESIGN U9; notes/M12.md)
+  ring_cell_m: 20                    # assumed: true (M12): dose-ring lattice cell, ground metres (stride 4 of the 5 m field); RR judges the staircase at z15-17
+  assumed: [ring_cell_m]
 intro: {once_per_browser: true, skip_on_any_input: true, off_with_reduced_motion: true, approx_s: 20}
 capture: {size: [1920, 1080], fps: 60}
 render_review:
