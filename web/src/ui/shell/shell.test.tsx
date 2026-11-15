@@ -57,7 +57,7 @@ describe('legacy frame = the layout from before the shell', () => {
     const root = f.root as unknown as FakeNode
     const header = one(byTag(root, 'header'))
     expect(header.getAttribute('class')).toBe('topbar')
-    expect(text(one(byClass(header, 'brand')))).toBe('HOMELINE')
+    expect(text(one(byClass(header, 'brand')))).toBe('M.A.R.V.I.S')
     const links = byTag(one(byClass(header, 'topnav')), 'a')
     expect(links.map((a) => a.getAttribute('href'))).toEqual(['#/', '#/mission', '#/trade', '#/cuff', '#/scorecard', '#/about'])
     expect(links.map(text)).toEqual(NAV_ITEMS.map((n) => n.label))

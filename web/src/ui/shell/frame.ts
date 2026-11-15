@@ -45,7 +45,7 @@ const DUMMY_TEXT = 'DUMMY DATA · synthetic world, not Mars results · never cap
 export function buildLegacyFrame(doc: Document): Frame {
   const nav = el(doc, 'nav', { class: 'topnav' })
   for (const item of NAV_ITEMS) nav.appendChild(el(doc, 'a', { href: href(item.route), 'data-route': item.route.name }, item.label))
-  const topbar = el(doc, 'header', { class: 'topbar' }, el(doc, 'a', { class: 'brand', href: '#/' }, 'HOMELINE'), nav)
+  const topbar = el(doc, 'header', { class: 'topbar' }, el(doc, 'a', { class: 'brand', href: '#/' }, 'M.A.R.V.I.S'), nav)
   const banner = el(doc, 'div', { class: 'dummy-banner' }, DUMMY_TEXT)
   const outlet = el(doc, 'main', { class: 'outlet' })
   // display: contents keeps #app's flex column layout exactly as before
