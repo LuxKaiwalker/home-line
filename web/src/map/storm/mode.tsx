@@ -97,7 +97,7 @@ export async function startStormMode(map: MlMap): Promise<(StormHandle & { model
     const f = activeField()
     if (!f) return null
     if (latticeOf !== f) {
-      lattice = ringLattice((lo, la) => fieldAt(lo, la), { width: f.t.nom.width, height: f.t.nom.height, bounds: f.bounds })
+      lattice = ringLattice((lo, la) => fieldAt(lo, la), { width: f.t.nom.width, height: f.t.nom.height, bounds: f.bounds, resM: f.resM })
       latticeOf = f
       ringLeash = NaN
     }

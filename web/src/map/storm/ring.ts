@@ -5,17 +5,26 @@
 // cells with no route home are never in the ring (unknown stays unknown). The ring is drawn as the
 // exact boundary of that cell set (cell edges between an inside and an outside cell), chained into
 // lines so the dash pattern runs continuously.
+import designRaw from '../../../../config/design.yaml'
+import { CONFIG, cfg } from '../../config'
 import type { FieldSample } from '../field'
 
 export type Bounds = [number, number, number, number]
 export type LonLat = [number, number]
 
+/** design.yaml storm.ring_cell_m: the dose-ring lattice cell, ground metres (assumed: true, M12; RR judges the staircase at z15-17). */
+export const RING_CELL_M = cfg<number>(designRaw, 'storm.ring_cell_m')
+
 /**
- * Lattice step in field pixels. The field is 5 m (fields/index.json res_m), so 4 = 20 m cells:
- * 370 × 370 fieldAt lookups once per field, then a threshold per clock change. ASSUMED (no design
- * constant exists for it); RR judges the staircase at z15-17.
+ * Lattice step in field pixels for RING_CELL_M cells: the field's res_m (fields/index.json; 5 m, so
+ * 20 m = stride 4: 370 × 370 fieldAt lookups once per field, then a threshold per clock change). Without
+ * res_m the pixel size comes from the grid's latitude span on the Mars sphere.
  */
-export const RING_STRIDE_PX = 4
+export function ringStride(grid: { height: number; bounds: Bounds; resM?: number | null }): number {
+  const [, s, , n] = grid.bounds
+  const resM = grid.resM && grid.resM > 0 ? grid.resM : (((n - s) * Math.PI) / 180) * CONFIG.marsRadiusM / grid.height
+  return Math.max(1, Math.round(RING_CELL_M / resM))
+}
 
 export interface RingLattice {
   cols: number
@@ -28,7 +37,7 @@ export interface RingLattice {
 }
 
 /** Sample `at` (fieldAt or FieldData.at) at the centre of every lattice cell over the field grid. */
-export function ringLattice(at: (lon: number, lat: number) => FieldSample | null, grid: { width: number; height: number; bounds: Bounds }, stride = RING_STRIDE_PX): RingLattice {
+export function ringLattice(at: (lon: number, lat: number) => FieldSample | null, grid: { width: number; height: number; bounds: Bounds; resM?: number | null }, stride = ringStride(grid)): RingLattice {
   const cols = Math.floor(grid.width / stride)
   const rows = Math.floor(grid.height / stride)
   const [w, s, e, n] = grid.bounds

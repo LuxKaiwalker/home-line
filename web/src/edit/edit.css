@@ -7,7 +7,8 @@
 .hl-edit-rover:focus-visible { outline: var(--line-focus-ring) solid var(--color-select); outline-offset: var(--space-1); }
 
 /* readout under the dragged rover: exact lookups, then ghost rows */
-.hl-edit-drag-host { pointer-events: none; }
+/* above the U13 label pills (labels.css z 1-4, hover / focus 4): the readout card is never drawn under S4/S6 (D9) */
+.hl-edit-drag-host { pointer-events: none; z-index: 5; }
 .hl-edit-drag {
   display: grid;
   gap: var(--space-1);
