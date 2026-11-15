@@ -477,6 +477,32 @@
     "live": {
       "unknown": "Needs the live server: not checked yet",
       "offline": "Needs the live server: not reachable"
+    },
+    "answer": "Answer",
+    "disabled": "disabled: {reason}",
+    "time": {
+      "row": "Jump to mission time {time}",
+      "hint": "t then minutes, or at h:mm: jump the mission clock"
+    },
+    "route": {
+      "row": "Draft a route through {stops}",
+      "unknown": "Draft a route: no station called {code}",
+      "hint": "route then station codes in visiting order",
+      "unavailable": "Route drafting is not available in this build yet"
+    },
+    "within": {
+      "row": "{code} {name}: time home",
+      "none": "No station within {n} min",
+      "hint": "stations within a number of minutes of walk home"
+    },
+    "reason": {
+      "timeRange": "Outside the mission clock",
+      "offline": "Needs live planning, which is offline",
+      "routeEditOff": "Route editing is off in this build",
+      "unknownStop": "Not a station code",
+      "tooManyStops": "Too many stops for one route",
+      "withinRange": "Above the longest time that can be searched",
+      "nothingToOpen": "Nothing to open"
     }
   },
 

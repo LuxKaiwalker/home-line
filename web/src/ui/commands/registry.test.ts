@@ -80,11 +80,24 @@ describe('registry', () => {
 describe('imports (design rule 6)', () => {
   const SRC = resolve(__dirname, '../..')
   const files = (dir: string): string[] => readdirSync(dir, { withFileTypes: true }).flatMap((e) => (e.isDirectory() ? files(join(dir, e.name)) : /\.tsx?$/.test(e.name) ? [join(dir, e.name)] : []))
+  // One exception (S3a, team lead order): the route builder's adapter loads WP12's setRouteDraft from
+  // edit/route/store with a dynamic import() behind the VITE_LIVE build flag (liveBuild()), so the static
+  // build holds no edit code. Allowed for exactly that file, that path, as import() on a liveBuild()-gated
+  // line, once. Static imports of live/ or edit/route/ stay forbidden everywhere, routeAdapter.ts included.
+  const ADAPTER = join('ui', 'search', 'queries', 'routeAdapter.ts')
   it('ui/commands and ui/search import nothing from live/ or edit/route/', () => {
+    let exceptions = 0
     for (const f of [...files(join(SRC, 'ui/commands')), ...files(join(SRC, 'ui/search'))]) {
       const src = readFileSync(f, 'utf8')
-      const specs = [...src.matchAll(/(?:from\s+|import\()\s*['"]([^'"]+)['"]/g)].map((m) => m[1])
-      for (const s of specs) expect(s, `${f} imports ${s}`).not.toMatch(/(^|\/)live(\/|$)|edit\/route/)
+      for (const m of src.matchAll(/(?:from\s+|import\()\s*['"]([^'"]+)['"]/g)) {
+        const line = src.slice(src.lastIndexOf('\n', m.index) + 1, src.indexOf('\n', m.index))
+        if (f.endsWith(ADAPTER) && m[0].startsWith('import(') && m[1] === '../../../edit/route/store' && /liveBuild\(\)\s*\?/.test(line)) {
+          exceptions++
+          continue
+        }
+        expect(m[1], `${f} imports ${m[1]}`).not.toMatch(/(^|\/)live(\/|$)|edit\/route/)
+      }
     }
+    expect(exceptions).toBe(1)
   })
 })
