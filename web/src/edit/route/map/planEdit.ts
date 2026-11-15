@@ -284,7 +284,9 @@ export function createPlanEditor(o: PlanEditOptions = {}) {
       dragEndedAt = now()
       if (!d) return
       if (Math.hypot(p.x - d.x0, p.y - d.y0) < CLICK_SLOP_PX) return // a click on the handle: stays
-      const at = { lon: round6(p.lon), lat: round6(p.lat) }
+      // a touchend may carry no position: the last drag position is the drop
+      const fin = Number.isFinite(p.lon) && Number.isFinite(p.lat)
+      const at = { lon: round6(fin ? p.lon : d.lon), lat: round6(fin ? p.lat : d.lat) }
       const r = refusal(at, 'point', false, d.id)
       if (r) return say('refused', refuseText(r)) // the handle snaps back (the store is unchanged)
       if (store.moveStop(d.id, at)) say('info', tr('notice.pointMoved', { name: d.name }))
