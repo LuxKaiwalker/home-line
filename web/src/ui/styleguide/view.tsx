@@ -9,7 +9,7 @@ import '../fonts/fonts.css'
 import '../components/components.css'
 import './styleguide.css'
 import type { ComponentChildren } from 'preact'
-import { useState } from 'preact/hooks'
+import { useEffect, useState } from 'preact/hooks'
 import hudRaw from '../../../../config/hud.yaml'
 import { CONFIG, cfg } from '../../config'
 import type { ManifestEntry } from '../../data/types'
@@ -48,6 +48,7 @@ import {
   type ForcedState,
   type ReadoutTone,
 } from '../components'
+import { BottomDrawer, Collapsible, Drawer, installLayoutKeys, MarkerCard, Popover as MapPopover, useOpener } from '../layout'
 
 const CUSTOM_MARKS = ['pad', 'station', 'scored-site', 'user-point', 'turn-back', 'tripwire', 'fix', 'thread-home', 'rover', 'crew'] as const
 
@@ -573,6 +574,51 @@ function IconSection() {
   )
 }
 
+/**
+ * L1 layout containers (D111) on a stand-in map area: the right drawer (open, with a collapsible
+ * section), the bottom drawer (collapsed to its one-line summary), a marker card and a map-edge
+ * popover. Esc closes the topmost; state is not remembered on this page (no storage bound).
+ */
+function LayoutSection() {
+  useEffect(() => installLayoutKeys(window), [])
+  const drawer = useOpener('sg-drawer')
+  return (
+    <Section id="layout" title="Layout containers (L1): drawer, bottom drawer, marker card, map-edge popover, collapsible" note="Inside a stand-in map area. Right drawer at most 40 % of the map width; bottom drawer one line collapsed, at most 40 % of the height expanded; one drawer per side, one card at a time; Esc closes the topmost and returns focus to its opener.">
+      <div class="sg-row">
+        <button type="button" class="hl-btn hl-btn--secondary" {...drawer}>
+          {t('cards.common.details')}
+        </button>
+      </div>
+      <div class="sg-map">
+        <MapPopover id="sg-pop" icon="layers" label={t('nav.rail.layers')} title={t('nav.rail.layers')} edge="top-left">
+          <p class="sg-p">{t('layers.relief.what')}</p>
+        </MapPopover>
+        <MarkerCard id="sg-card" title={t('cards.common.details')} at={{ x: 160, y: 200 }} defaultOpen>
+          <p class="sg-p">{t('glossary.marginHint')}</p>
+        </MarkerCard>
+        <Drawer id="sg-drawer" title={t('cards.common.details')} headingLevel={3} defaultOpen persist={false}>
+          <p class="sg-p">{t('glossary.marginHint')}</p>
+          <Collapsible id="sg-sec" title={t('nav.rail.crewBudgets')} hint={t('cards.common.actions')} headingLevel={4} persist={false}>
+            <p class="sg-p">{t('layers.partner.what')}</p>
+          </Collapsible>
+        </Drawer>
+        <BottomDrawer
+          id="sg-bottom"
+          label={t('nav.dock.label')}
+          tabs={[
+            { id: 'table', label: t('cards.common.keyNumbers'), render: () => <p class="sg-p">{t('glossary.marginHint')}</p> },
+            { id: 'timeline', label: t('nav.dock.label'), render: () => <p class="sg-p">{t('layers.relief.what')}</p> },
+          ]}
+          collapsed={() => t('nav.rail.summary')}
+          expandLabel={t('nav.dock.expand')}
+          collapseLabel={t('nav.dock.collapse')}
+          persist={false}
+        />
+      </div>
+    </Section>
+  )
+}
+
 export function Styleguide() {
   return (
     <div class="hl-ui hl-sg">
@@ -598,6 +644,7 @@ export function Styleguide() {
       <TypeSection />
       <SpaceSection />
       <IconSection />
+      <LayoutSection />
     </div>
   )
 }
