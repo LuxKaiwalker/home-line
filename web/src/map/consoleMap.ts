@@ -24,6 +24,8 @@ import { MapFurniture, MARKER_LAYERS, ROUTE_LAYERS } from './furniture'
 import { LabelLayer, loadLabels } from './labels/layer'
 import { TerrainController } from './terrain'
 import type { RoverHandle } from '../edit/roverMap'
+import { FlythroughControl } from './flythrough/control'
+import { storyParams, storyRequest } from '../story/query'
 import { activeField, BINDING_LABEL, driveMargin, FIELD_TRUST, fieldModeQuery, fieldRequested, loadFieldData, loadFieldLayer, setActiveField, VARIANT_OF, webgl2Available, zeroEdgeLabels, type FieldData, type MarginState } from './field'
 
 /** The GPU field layer handle (field/layer.ts, loaded lazily). */
@@ -123,6 +125,8 @@ export class ConsoleMap {
   private terrain: TerrainController | null = null
   // WS18 task 2: drag the rover (U15), shell frame only; lazy chunk
   private rover: RoverHandle | null = null
+  // WS16 task 10 (M10): U6 flythrough button and story mode (intro, ?demo=1, ?capture=; lazy)
+  private stopStory: (() => void) | null = null
   private destroyed = false
 
   constructor(container: HTMLElement, onStation: (id: string) => void) {
@@ -215,6 +219,15 @@ export class ConsoleMap {
     this.applyFilters()
     this.applyVisibility()
     void this.initLabels()
+    this.map.addControl(new FlythroughControl(), 'top-right')
+    const legacy = !!this.map.getContainer().closest('.hl-frame-legacy')
+    const story = storyRequest(storyParams(location.search, location.hash), { reduced: ui.reducedMotion.peek(), introSeen: ui.introSeen.peek(), legacy })
+    if (story) void import('../story/attach').then((m) => !this.destroyed && (this.stopStory = m.attachStory(this, story)))
+  }
+
+  /** Whether a layer group is on (story mode saves and restores it). */
+  layerVisible(group: LayerGroup): boolean {
+    return this.visible[group]
   }
 
   /** U13 labels (labels.json); without the file the old HTML labels stay as they are. */
@@ -630,6 +643,8 @@ export class ConsoleMap {
   }
 
   destroy(): void {
+    this.destroyed = true
+    this.stopStory?.()
     this.terrain?.destroy()
     this.labels?.destroy()
     this.destroyed = true
