@@ -4,10 +4,14 @@
 // form) runs through those samples in local metres. Parameter s = metres along the route, so the clock
 // maps straight onto it through Plan.stateAt(t).distanceWalkedM (the timeline scrubs the camera).
 //
-// The camera (followPose): the look-at point is lookahead_m ahead of the crew on the smoothed route;
-// the camera sits behind_m behind and above_m above the look-at point (above_m is true metres before
-// exaggeration; the map conversion scales it, camera.ts). Expressed as (target, alt, bearing, pitch),
-// the same shape as a storyboard camera keyframe, so the director treats both alike.
+// The camera (chasePose, L10/D111): a chase camera. It looks at the crew's planned position on the
+// smoothed route, from behind_m behind the crew and above_m above it (above_m is true metres before
+// exaggeration; the map conversion scales it, camera.ts). "Behind" is against the direction from the
+// crew to the route point lookahead_m ahead, so the view looks along the route; the pitch is
+// atan(behind / above), capped at max_pitch_deg. Before L10 the look-at point was the point 150 m
+// ahead, which put the camera only 100 m behind the crew (first-person-like, no crew in view).
+// Expressed as (target, alt, bearing, pitch), the same shape as a storyboard camera keyframe, so the
+// director treats both alike.
 import type { LonLat } from '../../hud/types'
 
 export interface Metric {
@@ -37,6 +41,8 @@ export interface FollowConfig {
   behindM: number
   aboveM: number
   lookaheadM: number
+  /** pitch cap, deg from straight down (camera.flythrough.max_pitch_deg) */
+  maxPitchDeg: number
 }
 
 type XY = [number, number]
@@ -161,12 +167,18 @@ export function bearingOf(dx: number, dy: number): number {
   return (deg(Math.atan2(dx, dy)) + 360) % 360
 }
 
+/** Chase pitch for a config: atan(behind / above), capped at maxPitchDeg (deg from straight down). */
+export function chasePitch(cfg: FollowConfig): number {
+  return Math.min(cfg.maxPitchDeg, deg(Math.atan2(cfg.behindM, cfg.aboveM)))
+}
+
 /**
- * Follow camera at s metres along the route: look at the point `lookaheadM` ahead, from `behindM`
- * behind it (along the crew → look-at direction) and `aboveM` above it. Near the end the direction
- * comes from the stretch just walked; on a degenerate route it faces north.
+ * Chase camera for the crew at s metres along the route: look at the crew from `behindM` behind it
+ * (against the crew -> look-ahead direction, `lookaheadM` ahead on the route) and `aboveM` above it.
+ * Near the end the direction comes from the stretch just walked; on a degenerate route it faces north.
+ * With the pitch capped, the camera keeps its height and sits aboveM · tan(cap) behind.
  */
-export function followPose(path: SmoothPath, s: number, cfg: FollowConfig): CameraPose {
+export function chasePose(path: SmoothPath, s: number, cfg: FollowConfig): CameraPose {
   const sc = Math.min(Math.max(0, s), path.length)
   const P = path.xyAt(sc)
   const L = path.xyAt(sc + cfg.lookaheadM)
@@ -178,7 +190,7 @@ export function followPose(path: SmoothPath, s: number, cfg: FollowConfig): Came
     dy = P[1] - B[1]
   }
   const bearing = Math.hypot(dx, dy) < 1 ? 0 : bearingOf(dx, dy)
-  return { target: path.toLonLat(L), altM: cfg.aboveM, bearing, pitch: deg(Math.atan2(cfg.behindM, cfg.aboveM)) }
+  return { target: path.toLonLat(P), altM: cfg.aboveM, bearing, pitch: chasePitch(cfg) }
 }
 
 /**

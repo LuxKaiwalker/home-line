@@ -79,6 +79,10 @@
       "t": 18,
       "ui": "reveal",
       "caption": null,
+      "clock": {
+        "t_min": 0,
+        "playing": false
+      },
       "camera": {
         "target": "PAD",
         "alt_m": 9000,

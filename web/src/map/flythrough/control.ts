@@ -3,6 +3,7 @@
 import type { IControl, Map as MlMap } from 'maplibre-gl'
 import { effect, mission, missionClock } from '../../state'
 import { t } from '../../ui/copy'
+import type { FlyLayers } from './fly'
 import './flythrough.css'
 
 export class FlythroughControl implements IControl {
@@ -10,6 +11,11 @@ export class FlythroughControl implements IControl {
   private stops: (() => void)[] = []
   private flight: { stop(): void } | null = null
   private flying = false
+  private readonly layers: FlyLayers | undefined
+
+  constructor(layers?: FlyLayers) {
+    this.layers = layers
+  }
 
   onAdd(map: MlMap): HTMLElement {
     const box = document.createElement('div')
@@ -36,10 +42,14 @@ export class FlythroughControl implements IControl {
       setFlying(true)
       void import('./fly').then(async (m) => {
         if (!this.flying) return
-        this.flight = await m.startFlythrough(map, () => {
-          this.flight = null
-          setFlying(false)
-        })
+        this.flight = await m.startFlythrough(
+          map,
+          () => {
+            this.flight = null
+            setFlying(false)
+          },
+          this.layers,
+        )
         if (!this.flight) setFlying(false)
       })
     })
