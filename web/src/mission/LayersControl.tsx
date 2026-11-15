@@ -27,7 +27,7 @@ async function rgbaToUrl(rgba: Uint8ClampedArray, w: number, h: number): Promise
 type Status = 'off' | 'loading' | 'on' | 'error'
 
 export function LayersControl({ mmap, bounds }: { mmap: MissionMap; bounds: Bounds }) {
-  const [open, setOpen] = useState(true)
+  const [open, setOpen] = useState(false) // closed by default; the head shows "Layers ▸"
   const [st, setSt] = useState<Record<Overlay, Status>>({ slope: 'off', curiosity: 'off' })
   const [err, setErr] = useState<Partial<Record<Overlay, string>>>({})
   const [slopeFile, setSlopeFile] = useState<string | null>(null)

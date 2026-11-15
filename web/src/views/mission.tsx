@@ -368,7 +368,6 @@ function MissionPanel({ mmap, handlers, mapsEl, layersEl, initial }: { mmap: Mis
               <button type="button" class="mp-clear" onClick={copyLink}>
                 {copied ? 'Link copied ✓' : 'Copy link to this plan'}
               </button>
-              <span class="muted">The plan lives in the link: it survives a reload and opens the same plan anywhere.</span>
             </div>
           )}
         </details>

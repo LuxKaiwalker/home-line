@@ -122,3 +122,16 @@
 .mission-map .hl-terrain-exag { gap: 6px; padding-right: 6px; color: var(--muted); font-size: 11px; }
 .mission-map .hl-terrain-exag input { width: 80px; accent-color: var(--accent); }
 .mission-map .hl-terrain-exag output { min-width: 32px; color: var(--ink); font: 11px system-ui, sans-serif; font-variant-numeric: tabular-nums; }
+
+/* Layers closed: only its head, as wide as the label */
+.mp-layers:not(:has(.mp-layers-body)) { width: auto; }
+
+/* Zoom buttons (MapLibre NavigationControl, top left): the same dark card as Maps, Layers and 2D/3D. */
+.mission-map .maplibregl-ctrl-top-left .maplibregl-ctrl-group:not(.hl-terrain-ctrl) { background: rgba(33, 26, 23, 0.94); border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4); overflow: hidden; }
+.mission-map .maplibregl-ctrl-top-left .maplibregl-ctrl-group:not(.hl-terrain-ctrl) button { width: 32px; height: 32px; background-color: transparent; }
+.mission-map .maplibregl-ctrl-top-left .maplibregl-ctrl-group:not(.hl-terrain-ctrl) button + button { border-top: 1px solid var(--line); }
+.mission-map .maplibregl-ctrl-top-left .maplibregl-ctrl-group:not(.hl-terrain-ctrl) button:not(:disabled):hover { background-color: rgba(255, 255, 255, 0.06); }
+.mission-map .maplibregl-ctrl-top-left .maplibregl-ctrl-group:not(.hl-terrain-ctrl) button:focus-visible { box-shadow: inset 0 0 0 2px var(--accent); }
+/* MapLibre's icons are dark SVGs: invert them to the light text colour */
+.mission-map .maplibregl-ctrl-top-left .maplibregl-ctrl-group:not(.hl-terrain-ctrl) .maplibregl-ctrl-icon { filter: invert(0.92) sepia(0.15); }
+.mission-map .maplibregl-ctrl-top-left .maplibregl-ctrl-group:not(.hl-terrain-ctrl) button:disabled .maplibregl-ctrl-icon { opacity: 0.35; }
