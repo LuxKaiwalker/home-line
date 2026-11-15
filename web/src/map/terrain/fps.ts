@@ -22,10 +22,28 @@ export const FPS_WATCH: FpsWatchOptions = {
 
 export type FpsState = 'ok' | 'slow' | 'tripped'
 
+// M10d: a story (descent intro, kiosk, capture) suspends every watch from its start to its end
+// (StoryStage constructor / restore()): its frame rate is the storyboard's, and a slow GPU must not
+// drop the descent to flat mid-intro. Every resume bumps `epoch`, so each watch starts a fresh window.
+let suspended = false
+let epoch = 0
+
+/** Suspend (true) or resume (false) the 3D frame-rate watch; the story stage calls it. */
+export function setFpsWatchSuspended(on: boolean): void {
+  if (on === suspended) return
+  suspended = on
+  epoch++
+}
+
+export function fpsWatchSuspended(): boolean {
+  return suspended
+}
+
 export class FpsWatch {
   private frames: number[] = []
   private slowSince: number | null = null
   private tripped = false
+  private epoch = epoch
   private readonly o: FpsWatchOptions
   constructor(o: FpsWatchOptions = FPS_WATCH) {
     this.o = o
@@ -41,6 +59,12 @@ export class FpsWatch {
   /** Feed one rendered frame at time `t` (ms); returns the state after it. Once tripped, stays tripped. */
   frame(t: number): FpsState {
     if (this.tripped) return 'tripped'
+    if (this.epoch !== epoch) {
+      // suspended or resumed since the last frame: measurements across a story never count
+      this.epoch = epoch
+      this.reset()
+    }
+    if (suspended) return 'ok'
     const last = this.frames[this.frames.length - 1]
     if (last !== undefined && t - last > this.o.idleGapMs) this.reset()
     const f = this.frames
