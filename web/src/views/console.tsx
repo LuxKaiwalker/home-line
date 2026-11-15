@@ -35,7 +35,7 @@ import { makeSections, mountPlanSlots, PlanSummary, S, SectionsCtx } from './pla
 import './planBottom' // L2b: the plan-bottom drawer (plan table + timeline tabs)
 import './planLayers' // L2c (D111): layers popover, legend chip, map-edge tools (registers its Plan mount)
 import { PlanSlot } from './planPortSlots' // PORT W0a: Route panel, pad layer, strip mount points
-import { installPlanPort, mountPlanPort } from './planPort' // PORT I1: the Plan port packages
+import { installPlanPort, mountPlanPort, PlanLinkNotice } from './planPort' // PORT I1: the Plan port packages
 import { planning, usePlanning } from '../state/planning'
 import { HeadlineStrip } from './planStrip' // L2a: the headline strip (registers its Plan mount)
 import './planStation' // L2d: station + rover marker cards
@@ -80,6 +80,8 @@ export const view: View = async (el) => {
   // PORT I1: the Plan port (Route panel, route layers, overlays, planning runner, #/?route= sync); shell frame only
   if (shellFrame) installPlanPort()
   const stopPort = shellFrame ? mountPlanPort() : () => {}
+  const noticeEl = shellFrame ? mapEl.appendChild(document.createElement('div')) : null
+  if (noticeEl) render(<PlanLinkNotice />, noticeEl)
   const root = panelEl.appendChild(document.createElement('div'))
   root.className = 'console-root'
   render(
@@ -144,6 +146,7 @@ export const view: View = async (el) => {
     alive = false
     disposeLive?.()
     stopPort()
+    if (noticeEl) render(null, noticeEl)
     stopSlots()
     render(null, root)
     cmap.destroy()
@@ -318,8 +321,9 @@ function ConsolePanel({ cmap, shell = false }: { cmap: ConsoleMap; shell?: boole
   const mode = padViewMode(padSel)
 
   // Parking-option markers (official pad excluded: it is the "Pad" marker); click selects.
+  // PORT I1 (P2): in Plan the pad layer (map/pads) draws the pad markers and their card: no duplicates here
   useEffect(() => {
-    if (!padIndex) return
+    if (!padIndex || shell) return
     cmap.setPadOptions(
       padIndex.options
         .filter((o) => !o.official && o.lon !== null && o.lat !== null)

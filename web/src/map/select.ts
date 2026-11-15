@@ -202,6 +202,7 @@ export class MapSelection {
 
   private readonly onClick = (e: never): void => {
     const ev = e as MouseEv
+    if ((ev.originalEvent as Event | undefined)?.defaultPrevented) return // PORT I1 (R3): consumed by a map edit handler
     if (inMarker(ev.originalEvent?.target)) return // the DOM objects: onDomClick
     selectFromMap(this.map.queryRenderedFeatures(ev.point), ev.lngLat)
   }

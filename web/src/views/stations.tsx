@@ -140,7 +140,7 @@ function StationRow({ s, sid }: { s: Station; sid: string }) {
       </div>
       <div class="st-actions">
         <a href={href({ name: 'station', id: s.id })}>Details →</a>
-        <a href={href({ name: 'mission', add: s.id })}>+ Add to Mission Planer</a>
+        <a href={`#/?add=${encodeURIComponent(s.id)}`} data-add-to-route={s.id}>+ Add to route</a>
       </div>
     </li>
   )

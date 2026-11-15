@@ -507,7 +507,7 @@ function WhyStation({ s }: { s: Station }) {
       <p class="caption">{RIDGE_RADIUS_NOTE}
       </p>
       <div class="st-actions">
-        <a href={href({ name: 'mission', add: s.id })}>+ Add to Mission Planer</a>
+        <a href={`#/?add=${encodeURIComponent(s.id)}`} data-add-to-route={s.id}>+ Add to route</a>
         <a href={href({ name: 'stations' })}>All science stations</a>
       </div>
     </section>

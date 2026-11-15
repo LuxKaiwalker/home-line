@@ -124,14 +124,25 @@ describe('rover card (delta strip)', () => {
   })
 })
 
-// J1d (team lead 2026-11-15 16:57): the station card's "Add to route" goes to #/mission?add=<id>.
+// PORT I1 (R3): the station card's "Add to route" appends the station to the Plan route (R3's button,
+// loaded lazily: §7b) and opens the Route panel; the old #/mission?add= link is gone with the Mission tab.
 describe('station card: Add to route', () => {
-  it('links to the Mission Planer with ?add=<id>, plus icon, copy text', async () => {
+  it('is R3\'s button (no Mission link): data-add-to-route, plus icon, copy text', async () => {
+    const { h, render } = await import('preact')
+    const { act } = await import('preact/test-utils')
+    const { byTag, installDom } = await import('../ui/testing/dom')
+    const { container } = installDom()
     const { StationAddToRoute } = await import('./planStation')
-    const v = StationAddToRoute({ id: 'S4' }) as unknown as { props: { href: string; title: string; children: unknown[] } }
-    expect(v.props.href).toBe('#/mission?add=S4')
-    expect(v.props.title).toBe('Add this station to your route (estimate)')
-    expect(JSON.stringify(v.props.children)).toContain('Add to route')
-    expect((v.props.children[0] as { props: { name: string } }).props.name).toBe('plus')
+    act(() => render(h(StationAddToRoute, { id: 'S4' }), container as never))
+    await import('../edit/route/map/addToRoute')
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 0))
+    })
+    const btn = byTag(container, 'button')[0]
+    expect(btn.getAttribute('data-add-to-route')).toBe('S4')
+    expect(btn.hasAttribute('disabled')).toBe(false)
+    expect(btn.textContent).toContain('Add to route')
+    expect(byTag(container, 'a')).toHaveLength(0)
+    render(null, container as never)
   })
 })
