@@ -42,6 +42,7 @@
       "expand": "Expand panel"
     },
     "views": {
+      "mission": "Mission Planer",
       "trade": "Trade table",
       "conditions": "Conditions",
       "cuff": "Cuff card",

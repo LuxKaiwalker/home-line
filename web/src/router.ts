@@ -1,5 +1,5 @@
 // Hash router (SPEC F17). Hash routes survive GitHub Pages (no SPA fallback) and work logged out.
-// Pages: / (planning console), /station/:id, /trade, /conditions, /scorecard, /cuff, /about.
+// Pages: / (planning console), /mission (Mission Planer, 3D map), /station/:id, /trade, /conditions, /scorecard, /cuff, /about.
 // Mount slot for another workstream: /hud (WS7).
 // Removed views (D98, D99): /nav (navigation add-on) redirects to EVIDENCE, /hud3d (first-person 3D)
 // redirects to the 2D HUD; their mode paths #/evidence/nav and #/fly/3d redirect the same way.
@@ -23,6 +23,8 @@ export type Route =
   | { name: 'cuff' }
   | { name: 'about' }
   | { name: 'hud' }
+  /** Mission Planer (3D map). plan: a shared plan string (mission/share.ts); add: a station id to append as a waypoint */
+  | { name: 'mission'; plan?: string; add?: string }
   | { name: 'notfound'; path: string }
 
 const SIMPLE = ['trade', 'conditions', 'cuff', 'about', 'hud'] as const
@@ -70,6 +72,14 @@ export function parseRoute(hash: string): Route {
     if (view) return { name: view }
   }
   if (head === 'station' && rest.length === 1) return { name: 'station', id: decodeURIComponent(rest[0]) }
+  if (head === 'mission' && rest.length === 0) {
+    const r: Route = { name: 'mission' }
+    const plan = params.get('plan')
+    const add = params.get('add')
+    if (plan) r.plan = plan
+    if (add) r.add = add
+    return r
+  }
   if (head === 'scorecard' && rest.length === 0) {
     const key = params.get('key')
     return key ? { name: 'scorecard', key } : { name: 'scorecard' }
@@ -94,6 +104,13 @@ export function href(route: Route): string {
       return `#/station/${encodeURIComponent(route.id)}`
     case 'scorecard':
       return route.key ? `#/scorecard?key=${encodeURIComponent(route.key)}` : '#/scorecard'
+    case 'mission': {
+      const q = new URLSearchParams()
+      if (route.plan) q.set('plan', route.plan)
+      if (route.add) q.set('add', route.add)
+      const qs = q.toString()
+      return qs ? `#/mission?${qs}` : '#/mission'
+    }
     case 'notfound':
       return `#${route.path}`
     default:
@@ -151,6 +168,7 @@ export function isLegacy(param: string | null, route: Route): boolean {
 /** Top navigation, in display order. The hud slot is listed but owned by WS7. */
 export const NAV_ITEMS: { route: Route; label: string }[] = [
   { route: { name: 'console' }, label: 'Plan' },
+  { route: { name: 'mission' }, label: 'Mission Planer' },
   { route: { name: 'trade' }, label: 'Trade' },
   { route: { name: 'conditions' }, label: 'Conditions' },
   { route: { name: 'cuff' }, label: 'Cuff card' },

@@ -35,6 +35,7 @@ export interface ModeView {
 export const MODE_VIEWS: Readonly<Record<Mode, readonly ModeView[]>> = {
   plan: [
     { route: { name: 'console' }, label: 'modes.plan.label', icon: 'map' },
+    { route: { name: 'mission' }, label: 'nav.views.mission', icon: 'mountain' },
     { route: { name: 'trade' }, label: 'nav.views.trade', icon: 'file-text' },
   ],
   fly: [
