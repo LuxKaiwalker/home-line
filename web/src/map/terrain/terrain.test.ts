@@ -27,7 +27,11 @@ import { demSource, parseTerrainTiles, pixelCentre, terrariumHeight, tilePixel }
 const PUBLISHED = resolve(REPO, 'web/public/data/terrain')
 const FIXTURE = resolve(REPO, 'web/src/map/terrain/fixtures/terrain')
 const TERRAIN_DIR = existsSync(resolve(PUBLISHED, 'tiles.json')) ? PUBLISHED : FIXTURE
-const tiles = parseTerrainTiles(JSON.parse(readFileSync(resolve(TERRAIN_DIR, 'tiles.json'), 'utf8')))
+const tilesRaw = JSON.parse(readFileSync(resolve(TERRAIN_DIR, 'tiles.json'), 'utf8')) as { vertical_offset_m?: number }
+const tiles = parseTerrainTiles(tilesRaw)
+/** P2c: metres added after scaling (h = elevation × factor + offset) so the site sits near 0 m in MapLibre; absent = 0 (pre-P2c fixtures). */
+const OFFSET_M = tilesRaw.vertical_offset_m ?? 0
+const design = parse(readFileSync(resolve(REPO, 'config/design.yaml'), 'utf8')) as { terrain_tiles: { vertical_offset_m: number } }
 const site = parse(readFileSync(resolve(REPO, 'config/site.yaml'), 'utf8')) as { pad_default: { lon: number; lat: number }; crs: { mars_radius_m: number } }
 
 /** P2's known value: the 1 m DEM bilinear at the centre of the z16 pixel holding pad_default (m, true). */
@@ -93,17 +97,18 @@ function tileHeights(z: number, x: number, y: number): (i: number, j: number) =>
 }
 
 describe('U1 tiles: the factor is baked in, exaggeration 1 = true shape', () => {
-  it('decoding the tile pixel at the pad equals the 1 m DEM × 1.878 (P2 known value, ± 0.1 m × factor)', () => {
+  it('decoding the tile pixel at the pad equals the 1 m DEM × 1.878 + vertical_offset_m (P2/P2c known value, ± 0.1 m × factor)', () => {
     const { lon, lat } = site.pad_default
     const z = tiles.focus!.maxzoom
     const p = tilePixel(lon, lat, z)
     const h = tileHeights(z, p.x, p.y)(p.i, p.j)
     expect(tiles.factor).toBe(TERRAIN.elevationFactor)
-    expect(Math.abs(h - PAD_DEM_M * tiles.factor)).toBeLessThanOrEqual(0.1 * tiles.factor)
+    if (TERRAIN_DIR === PUBLISHED) expect(OFFSET_M).toBe(design.terrain_tiles.vertical_offset_m)
+    expect(Math.abs(h - (PAD_DEM_M * tiles.factor + OFFSET_M))).toBeLessThanOrEqual(0.1 * tiles.factor)
     // and the published pad.json elevation of the same point (rounded to 0.1 m)
     const pad = JSON.parse(readFileSync(resolve(REPO, 'web/public/data/pad.json'), 'utf8')) as { alternatives: { id: string; elev_m: number }[] }
     const elev = pad.alternatives.find((a) => a.id === 'pad_default')!.elev_m
-    expect(Math.abs(h / tiles.factor - elev)).toBeLessThanOrEqual(0.15)
+    expect(Math.abs((h - OFFSET_M) / tiles.factor - elev)).toBeLessThanOrEqual(0.15)
   })
 
   it('the factor is Earth / Mars radius (DESIGN U1 item 2) and only in the tiles', () => {

@@ -244,7 +244,7 @@ def test_vertical_offset_comes_from_config_and_centres_the_official_pad():
     assert "assumed: true" in line and "MapLibre" in line
     assert OFFSET == -round(PAD_JSON["pad"]["elev_m"] * FACTOR)
     # the build key covers it: a different offset re-exports
-    c = T.load_config()
+    c = dict(T.load_config(), sources=[])  # no source stat (the DEM is not in CI)
     assert T.build_key(c, []) != T.build_key(dict(c, vertical_offset_m=OFFSET + 1), [])
 
 
