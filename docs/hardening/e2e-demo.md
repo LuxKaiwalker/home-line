@@ -23,6 +23,11 @@ Peak memory of the API process tree (RSS summed, sampled every 1 s):
   D21 siting world; it then settled at about 0.45 GiB.
 - The idle tree used 0.42 GiB.
 
+**Main moved after the run.** The branch was rebased onto cf24341 before the PR. That brings in E8b (#63):
+the worker initializer and the pad data are now preloaded at API start. It changes neither `web/src/live/` nor
+`server/engine/plan_job.py`, so H5-1 still holds on main. The 0.73 GiB server peak at the first validate (below) should
+now happen at start-up instead.
+
 ## Setup
 
 - Date: 2026-11-15, 01:58–02:25 local (CET). Worktree `hardening-h5` at origin/main e75cb3d.
