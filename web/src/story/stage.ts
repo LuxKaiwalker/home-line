@@ -15,6 +15,7 @@ import { t, type CopyKey } from '../ui/copy'
 import { CAMERA_MS, ELEVATION_FACTOR, PANEL_MS } from './config'
 import { addReliefLow, removeReliefLow, setReliefLowVisible } from './descent'
 import type { DirectorState } from './director'
+import { introPlaying, loadingDone } from './loading'
 import './story.css'
 
 /** Storyboard layer id -> console layer groups. terrain and relief_low are handled apart. */
@@ -84,8 +85,13 @@ export class StoryStage {
     this.caption.className = 'hl-story-caption'
     this.caption.setAttribute('role', 'status')
     this.caption.setAttribute('aria-live', 'polite')
+    // hidden until a step sets a caption: a storyboard without captions (flythrough.json) otherwise
+    // showed an empty caption card low in the middle of every frame (notes/Kcap.md)
+    this.caption.hidden = true
     this.map.getContainer().append(this.caption)
     document.documentElement.dataset.story = 'on'
+    // L12 (D111): a live story fills the viewport (story.css) until its chrome is revealed or it ends
+    if (chrome === 'story') this.startFullscreen()
     this.setChrome(chrome === 'shown' ? 'reveal' : chrome === 'hidden' ? 'hide' : undefined)
     // live runs only: a capture places the labels on every frame (frame-exact)
     this.paused = chrome === 'story'
@@ -110,8 +116,49 @@ export class StoryStage {
     if (this.cover) return
     // only on change: an attribute write on <html> restyles the whole page
     if (this.chromeWant === this.last.chrome) return
+    const was = this.last.chrome
     this.last.chrome = this.chromeWant
     document.documentElement.dataset.storyChrome = this.chromeWant
+    // L12: the chrome fading back in (ui: reveal after hide) ends the full-screen intro and its controls
+    if (was === 'hide' && this.chromeWant === 'show' && this.chrome === 'story') this.endFullscreen()
+  }
+
+  private readonly onResize = (): void => this.markSlot()
+
+  /**
+   * L12 (D111): the map leaves its shell slot for the whole viewport. Its controls (zoom, Flythrough,
+   * scale) stay exactly where they are in the slot (--hl-slot-*, story.css): the invisible chrome lies
+   * above the map, so a control under the top bar or the rail could not take the first click, and a
+   * control that moved when the skip puts the map back would lose the click's mouseup (D9).
+   */
+  private startFullscreen(): void {
+    this.markSlot()
+    if (typeof window !== 'undefined' && window.addEventListener) window.addEventListener('resize', this.onResize)
+    document.documentElement.dataset.storyFull = 'on'
+  }
+
+  /** The map's rect in its shell slot (measured with the full-screen rule off; no paint in between). */
+  private markSlot(): void {
+    const html = document.documentElement
+    const el = this.map.getContainer() as Partial<HTMLElement>
+    if (typeof el.getBoundingClientRect !== 'function' || !html.style) return // no layout (unit tests)
+    const full = html.dataset.storyFull
+    if (full) delete html.dataset.storyFull
+    const r = el.getBoundingClientRect()
+    if (full) html.dataset.storyFull = full
+    html.style.setProperty('--hl-slot-top', `${r.top}px`)
+    html.style.setProperty('--hl-slot-left', `${r.left}px`)
+    html.style.setProperty('--hl-slot-width', `${r.width}px`)
+    html.style.setProperty('--hl-slot-height', `${r.height}px`)
+  }
+
+  /** L12 (D111): the map goes back into the shell and the loading screen (with its buttons) goes. */
+  private endFullscreen(): void {
+    if (typeof window !== 'undefined' && window.removeEventListener) window.removeEventListener('resize', this.onResize)
+    const html = document.documentElement
+    delete html.dataset.storyFull
+    for (const k of ['top', 'left', 'width', 'height']) html.style?.removeProperty(`--hl-slot-${k}`)
+    loadingDone()
   }
 
   /** M10c warm-up: hide the map canvas and its markers while layers and tiles load out of sight. */
@@ -131,6 +178,7 @@ export class StoryStage {
     if (on) document.documentElement.dataset.storyWarm = 'on'
     else delete document.documentElement.dataset.storyWarm
     if (!on) this.writeChrome() // M10d: the chrome state of frame 0 lands with t = 0
+    if (!on && this.chrome === 'story') introPlaying() // L12: the loading screen fades into the intro
   }
 
   /** True when the relief backdrop the state asks for is still loading (capture waits for it). */
@@ -214,6 +262,7 @@ export class StoryStage {
     if (this.touchedSelection) setSelectedLabel(sv.selection)
     delete document.documentElement.dataset.story
     delete document.documentElement.dataset.storyChrome
+    this.endFullscreen()
     const cam = { center: sv.center, zoom: sv.zoom, bearing: sv.bearing, pitch: sv.pitch }
     if (animate && !ui.reducedMotion.peek()) this.map.easeTo({ ...cam, duration: CAMERA_RETURN_MS })
     else this.map.jumpTo(cam)

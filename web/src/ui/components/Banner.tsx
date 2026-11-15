@@ -4,6 +4,7 @@ import type { ComponentChildren } from 'preact'
 import { t } from '../copy'
 import { IconButton } from './Button'
 import { cx, Icon, type IconName } from './Icon'
+import { ChipMark } from './TrustChip'
 
 export type BannerKind = 'info' | 'caution' | 'offline' | 'limit'
 
@@ -30,9 +31,26 @@ export function Banner({ kind, title, children, onDismiss }: BannerProps) {
   )
 }
 
-/** A short code (station, pad, landmark) in mono on a pill. */
-export function Badge({ children }: { children: ComponentChildren }) {
-  return <span class="hl-badge">{children}</span>
+export type BadgeKind = 'estimate' | 'computed'
+
+export interface BadgeProps {
+  /**
+   * Without a kind: a short code (children: station, pad, landmark) in mono on a pill.
+   * `estimate`: an instant estimate (dashed, neutral); `computed`: a computed-live result (live purple, ◆).
+   * Text and tooltip from copy.json hints.badges.{kind} (D117, L6 L-10).
+   */
+  kind?: BadgeKind
+  children?: ComponentChildren
+}
+
+export function Badge({ kind, children }: BadgeProps) {
+  if (!kind) return <span class="hl-badge">{children}</span>
+  return (
+    <span class={cx('hl-badge', `hl-badge--${kind}`)} data-badge={kind} title={t(`hints.badges.${kind}.explanation`)}>
+      {kind === 'computed' && <ChipMark kind="live" />}
+      {t(`hints.badges.${kind}.label`)}
+    </span>
+  )
 }
 
 export type TagKind = 'assumed' | 'precomputed' | 'live' | 'hypotheticalTiming' | 'preliminary' | 'estimate' | 'dummy'

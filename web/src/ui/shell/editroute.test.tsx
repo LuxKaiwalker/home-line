@@ -116,7 +116,9 @@ describe('Edit-route host (live builds, route editing on)', () => {
     expect(byClass(edge, 'fake-note')).toHaveLength(1)
     expect(openerOf('edit-route')).toHaveLength(0)
     registerRoute()
-    expect(byClass(mapEl, 'fake-note')).toHaveLength(0)
+    // I1b (D128): with the panel registered (API up or down) the note moves inside the drawer
+    expect(byClass(one(byClass(mapEl, 'hl-editroute__edge'), 'edge slot'), 'fake-note')).toHaveLength(0)
+    expect(byClass(one(byId('hl-lay-edit-route'), 'drawer'), 'fake-note')).toHaveLength(1)
     expect(openerOf('edit-route')).toHaveLength(1)
   })
 

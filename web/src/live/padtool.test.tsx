@@ -15,6 +15,9 @@ import { createPadTool, planInputsFor, type PadTool, type PadToolState } from '.
 import { textOf, toHtml } from './testing/html'
 import type { LonLat } from './types'
 import { PadToolPanel, REASON_TEXT } from './view'
+import { ROUTE_TEXT } from '../edit/route/text'
+import { render } from 'preact'
+import { all, hasClass, installDom } from '../ui/testing/dom'
 import type { RouteFC } from '../data/types'
 
 const READY: LiveState = { kind: 'ready', health: HEALTH_WARM }
@@ -139,7 +142,11 @@ describe('pad tool: instant preview', () => {
     expect(t).toContain('S2 yes 34.2 min 36.9 min')
     expect(t).toContain('S4 no unknown unknown')
     expect(t).toContain('Best route estimate: pad → S1 → S2 → S6 → pad, 212.5 min')
+    // WP12 (L6 W-1): labelled "Estimate"; without an Edit-route panel in the build (D116
+    // VITE_ROUTE_EDIT=0) the card keeps its own compute (the WP12 test below covers the panel's)
+    expect(t).toContain('Instant preview Estimate')
     expect(t).toContain('Compute full plan')
+    expect(t).not.toContain(ROUTE_TEXT.cardCompute)
     // preview numbers are flagged as screening estimates (no manifest in the PadScreen contract)
     expect(html(tool)).toContain('class="num num-screen"')
     expect(calls.pads.at(-1)).toEqual({ ...MOCK_PAD_VALID, valid: true })
@@ -151,8 +158,41 @@ describe('pad tool: instant preview', () => {
     tool.click(MOCK_PAD_VALID)
     await until(() => tool.state.preview.kind === 'done')
     expect(html(tool)).toMatch(/<button[^>]*disabled[^>]*>Compute full plan/)
+    expect(text(tool)).toContain('Full plans are switched off on the server right now.')
     tool.computePlan()
     expect(callsTo('/jobs')).toEqual([])
+  })
+})
+
+describe('WP12 (L6 W-1): the card has no compute of its own', () => {
+  it('the button runs the Edit-route compute (one job there), never a job of the card; disabled with a reason without the route', async () => {
+    const { tool } = setup()
+    tool.click(MOCK_PAD_VALID)
+    await until(() => tool.state.preview.kind === 'done')
+    const { container } = installDom()
+    const compute = vi.fn()
+    const draw = (status: 'unavailable' | 'ready' | 'running') =>
+      render(<PadToolPanel state={tool.state} actions={tool} engineHref={ENGINE_HREF} route={{ status, compute }} />, container as unknown as Element)
+    draw('ready')
+    const buttons = () => all(container, (n) => n.nodeName.toLowerCase() === 'button' && hasClass(n, 'live-compute'))
+    expect(buttons()).toHaveLength(1)
+    expect(buttons()[0].textContent).toBe(ROUTE_TEXT.cardCompute)
+    buttons()[0].dispatch('click')
+    expect(compute).toHaveBeenCalledTimes(1)
+    // running: still pressable (it only brings the progress into view), says where the job runs
+    draw('running')
+    expect(buttons()[0].hasAttribute('disabled')).toBe(false)
+    expect(container.textContent).toContain(ROUTE_TEXT.cardRunning)
+    // no route panel: disabled, and the reason is on the button
+    draw('unavailable')
+    const b = buttons()[0]
+    expect(b.hasAttribute('disabled')).toBe(true)
+    expect(b.getAttribute('title')).toBe(ROUTE_TEXT.cardNoRoute)
+    expect(all(container, (n) => n.getAttribute('id') === b.getAttribute('aria-describedby'))[0].textContent).toBe(ROUTE_TEXT.cardNoRoute)
+    await new Promise((r) => setTimeout(r, 30))
+    expect(callsTo('/jobs')).toEqual([]) // the card never submits a job
+    expect(tool.state.plan.kind).toBe('idle')
+    render(null, container as unknown as Element)
   })
 })
 
