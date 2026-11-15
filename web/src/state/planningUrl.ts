@@ -9,7 +9,7 @@
 //   point row   [lon, lat, stopMin, tagMask, note, name?]      (lon/lat rounded to 1e-6 deg; no grid cell)
 // tagMask = bits of PLAN_TAGS in order (same as v1). The v1 decoder is a copy of mission/share.ts
 // decodePlan (mission/ is deleted at the end of wave 2; this file must not import it).
-import { EMPTY_ROUTE, makeStop, OFFICIAL_PAD_ID, PLAN_TAGS, type PadId, type PlanningDoc, type PlanningRoute, type PlanStop, type PlanTag } from './planning'
+import { DEFAULT_STORM, EMPTY_ROUTE, makeStop, OFFICIAL_PAD_ID, PLAN_TAGS, type PadId, type PlanningDoc, type PlanningRoute, type PlanStop, type PlanTag } from './planning'
 
 export const ROUTE_PARAM = 'route'
 const V2 = 2
@@ -33,7 +33,7 @@ const tagsOf = (mask: unknown): PlanTag[] => PLAN_TAGS.filter((_, i) => (typeof 
 /** The `route` param value for a doc ('' for the official pad with no route and default settings). */
 export function encodeRouteParam(doc: PlanningDoc): string {
   const r = doc.route
-  if (doc.padId === OFFICIAL_PAD_ID && !r.stops.length && r.startUtc === null && !r.storm && !r.boundary) return ''
+  if (doc.padId === OFFICIAL_PAD_ID && !r.stops.length && r.startUtc === null && r.storm === DEFAULT_STORM && !r.boundary) return ''
   const rows = r.stops.map((s) => {
     const row: (number | string)[] = s.kind === 'station' ? ['s', s.station] : [round6(s.lon), round6(s.lat)]
     row.push(minutes(s.stopMin), maskOf(s.tags), s.note)

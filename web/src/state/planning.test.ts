@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { createPlanningStore, decodeLegacyPlan, decodeRouteParam, encodeRouteParam, legacyRedirect, OFFICIAL_PAD_ID, parsePlanningHash, planningHref, planningUndoSource, subscribePlanning, toPlanRoute, type PlanningDoc } from './planning'
+import { createPlanningStore, decodeLegacyPlan, DEFAULT_STORM, decodeRouteParam, encodeRouteParam, legacyRedirect, OFFICIAL_PAD_ID, parsePlanningHash, planningHref, planningUndoSource, subscribePlanning, toPlanRoute, type PlanningDoc } from './planning'
 import { createSharedUndo } from '../edit/route/undo'
 import { copyFrom } from '../ui/copy'
 import type { PlanRoute as CorePlanRoute } from '../edit/route/model'
@@ -36,7 +36,7 @@ describe('planning store actions', () => {
     s.reorderStops(1, 0)
     s.setPad('rank2')
     expect(s.setPad('rank2')).toBe(false)
-    s.setStorm(true)
+    s.setStorm(false) // D143: on by default
     s.setStartUtc('2026-01-01T10:00:00Z')
     s.setBoundary('b30')
     const st = s.state.peek()
@@ -58,9 +58,10 @@ describe('planning store actions', () => {
     expect(s.canUndo.peek()).toBe(false)
     s.addStop({ kind: 'station', station: 'a' })
     s.removeStop(s.state.peek().route.stops[0].id)
-    s.replaceRoute({ stops: [], startUtc: null, storm: true })
+    expect(s.state.peek().route.storm).toBe(true) // D143: storm in the margin is on by default
+    s.replaceRoute({ stops: [], startUtc: null, storm: false })
     expect(s.canUndo.peek()).toBe(true)
-    expect(s.state.peek().route.storm).toBe(true)
+    expect(s.state.peek().route.storm).toBe(false)
   })
 
   it('subscribePlanning fires on a selected change only', () => {
@@ -108,7 +109,9 @@ describe('planning URL codec', () => {
   })
 
   it('default doc encodes to #/ and bad values decode to null', () => {
-    expect(planningHref({ padId: OFFICIAL_PAD_ID, route: { stops: [], startUtc: null, storm: false } })).toBe('#/')
+    expect(planningHref({ padId: OFFICIAL_PAD_ID, route: { stops: [], startUtc: null, storm: DEFAULT_STORM } })).toBe('#/')
+    // D143: storm off is no longer the default, so it is written into the link
+    expect(planningHref({ padId: OFFICIAL_PAD_ID, route: { stops: [], startUtc: null, storm: false } })).toMatch(/^#\/\?route=/)
     expect(decodeRouteParam('not-base64!')).toBeNull()
     expect(decodeRouteParam('')).toMatchObject({ padId: OFFICIAL_PAD_ID })
     expect(parsePlanningHash('#/?route=garbage')).toMatchObject({ doc: null, invalid: true, legacy: false })

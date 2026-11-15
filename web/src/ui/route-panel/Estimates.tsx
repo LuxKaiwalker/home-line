@@ -88,7 +88,8 @@ export function EstimatesBody({ results: r, stops, padId }: { results: RouteResu
           {why ? tr('panel.estimates.infeasible', { n: bad.index + 1, from: ends.from, to: ends.to, reason: why }) : tr('panel.estimates.infeasibleBare', { n: bad.index + 1, from: ends.from, to: ends.to })}
         </p>
       )}
-      <div class="hl-rp__est" data-estimates>
+      {/* PORT I1 (Q1): data-status / data-pad let the e2e wait for "ready" instead of sleeping */}
+      <div class="hl-rp__est" data-estimates data-status={r.status} data-pad={r.padId}>
         <Row k={tr('panel.estimates.total')} v={fmt(shown?.totalMinutes ?? null, 'minutes')} />
         <Row k={tr('panel.estimates.margin')} v={fmt(shown?.marginMin ?? null, 'minutes')} tone={marginTone(shown?.marginMin ?? null)} title={tr('panel.estimates.marginTitle')} />
         <Row k={tr('panel.estimates.o2')} v={fmt(shown ? legsO2(shown.legs) : null, 'litres')} title={tr('panel.estimates.o2Title')} />

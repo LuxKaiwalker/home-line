@@ -33,12 +33,14 @@ export interface BottomDrawerProps {
   defaultOpen?: boolean
   persist?: boolean
   class?: string
+  /** Shown next to the tabs while the drawer is open (e.g. a link to another view; D142 "Compare plans"). */
+  actions?: ComponentChildren
 }
 
 /** Pointer travel (px) that counts as a drag rather than a click. */
 const DRAG_PX = 8
 
-export function BottomDrawer({ id, label, tabs, collapsed, expandLabel, collapseLabel, defaultTab, defaultOpen, persist, class: cls }: BottomDrawerProps) {
+export function BottomDrawer({ id, label, tabs, collapsed, expandLabel, collapseLabel, defaultTab, defaultOpen, persist, class: cls, actions }: BottomDrawerProps) {
   const open = useContainer({ id, kind: 'drawer', side: 'bottom', defaultOpen, persist })
   const reduced = useSignalValue(ui.reducedMotion)
   const fallback = defaultTab ?? tabs[0]?.id ?? ''
@@ -137,6 +139,7 @@ export function BottomDrawer({ id, label, tabs, collapsed, expandLabel, collapse
         ) : (
           <div class="hl-lay-bottom__summary">{collapsed({ tab, expand })}</div>
         )}
+        {open && actions ? <div class="hl-lay-bottom__actions">{actions}</div> : null}
       </div>
       <div id={bodyId} class="hl-lay-bottom__body" hidden={!open}>
         {open && active && (

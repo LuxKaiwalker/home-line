@@ -65,7 +65,8 @@ export interface PlanningRoute {
   stops: readonly PlanStop[]
   /** EVA start (ISO 8601 UTC); null = clock.json's start of the scenario (default) */
   startUtc: string | null
-  /** D39 storm replay in the margin ("Include storm in the margin"); engine default = false */
+  /** D39 storm replay in the margin ("Include solar storm replay (20 May 2024) in the margin"); engine default = true
+   *  (worst-case storm timing, D47; D143: the planning store follows the engine) */
   storm: boolean
   /** reachable-area boundary shown (mission/plan.ts boundaryOptions id); undefined / 'none' = none */
   boundary?: string
@@ -90,7 +91,9 @@ export interface PlanningDoc {
   route: PlanningRoute
 }
 
-export const EMPTY_ROUTE: PlanningRoute = { stops: [], startUtc: null, storm: false }
+/** D143: storm in the margin is ON by default (= engine official margins, makeBrowserRouteData storm: true). */
+export const DEFAULT_STORM = true
+export const EMPTY_ROUTE: PlanningRoute = { stops: [], startUtc: null, storm: DEFAULT_STORM }
 export const DEFAULT_VIEW: PlanningView = { showOfficial: true, showMine: true }
 export const initialPlanning = (): PlanningState => ({ padId: OFFICIAL_PAD_ID, route: EMPTY_ROUTE, view: DEFAULT_VIEW })
 

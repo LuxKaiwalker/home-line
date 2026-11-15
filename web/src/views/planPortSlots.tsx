@@ -15,6 +15,7 @@
 import type { ComponentChildren, VNode } from 'preact'
 import { signal, useSignalValue } from '../state/signal'
 import type { ConsoleMap } from '../map/consoleMap'
+import { mapControls, type MapControlSlot } from '../map/extensions'
 
 export type PlanPortSlot = 'route-panel' | 'pad-layer' | 'context-bar' | 'drawer-summary'
 
@@ -42,4 +43,21 @@ export function registerPlanSlot(name: PlanPortSlot, render: PlanSlotRender): ()
 export function PlanSlot({ name, cmap, fallback = null }: { name: PlanPortSlot; cmap: ConsoleMap; fallback?: ComponentChildren }) {
   const R = useSignalValue(slots)[name]
   return R ? <R cmap={cmap} fallback={fallback} /> : <>{fallback}</>
+}
+
+/** PORT I1: the registered map controls of one slot (map/extensions.ts registerMapControl), in order.
+ *  'layers-popover' rows go into the Plan layers popover (views/planLayers.tsx), 'map-edge' controls into
+ *  the bottom-left map-edge group. */
+export function MapControls({ slot, class: cls }: { slot: MapControlSlot; class?: string }) {
+  const list = useSignalValue(mapControls).filter((c) => c.slot === slot)
+  if (!list.length) return null
+  return (
+    <div class={cls} data-map-controls={slot}>
+      {list.map((c) => (
+        <div key={c.id} class="plan-mapctl" data-map-control={c.id}>
+          {c.render()}
+        </div>
+      ))}
+    </div>
+  )
 }

@@ -42,6 +42,9 @@
 }
 .hl-lay-bottom__grip { flex: none; touch-action: none; }
 .hl-lay-bottom__tabs { flex: 1; min-width: 0; border-bottom: 0; }
+/* D142: actions (a link to another view) sit right after the tabs */
+.hl-lay-bottom__tabs:has(+ .hl-lay-bottom__actions) { flex: 0 1 auto; }
+.hl-lay-bottom__actions { flex: none; display: flex; align-items: center; gap: var(--space-2); font-size: var(--font-size-small); }
 .hl-lay-bottom__summary {
   flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
   font-size: var(--font-size-small); line-height: var(--line-height-small); color: var(--color-text-muted);
