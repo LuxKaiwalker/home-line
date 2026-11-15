@@ -186,6 +186,7 @@ RULES: list[Rule] = [
     Rule("WS6", "validation", "v1.json", to="validation/v1.json"),
     Rule("WS6", "validation", "v1.svg", to="validation/v1.svg"),
     Rule("WS6", "validation", "kats.json", to="validation/kats.json"),
+    *(Rule("WS16", "export", f"{t}/{f}") for t in ("terrain", "terrain_low") for f in ("tiles.json", "*/*/*.png")),  # noqa: E501 U1 elevation tiles (pipeline/export/terrain_tiles.py)
     # WS7 fields, WS8 3D: export/ mirrors the web tree (pipeline/export/*)
     Rule("WS7", "export", "fields/index.json"),
     Rule("WS7", "export", "fields/*/*.png"),
