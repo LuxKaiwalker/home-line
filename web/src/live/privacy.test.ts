@@ -170,7 +170,7 @@ describe('privacy note text', () => {
   })
 
   it('"My plans": the note says saved plans stay in this browser; the store touches storage only inside try', () => {
-    expect(text).toMatch(/saved plans, and which panels and view you left open, stay in this browser only/i)
+    expect(text).toMatch(/saved plans, and which panels and view you left open, stay in this browser;/i)
     expect(text).toMatch(/nothing else uses browser storage/i)
     // the storage object is obtained in one place, inside try, and every getItem/setItem call sits in a try block
     const body = stripComments(read('web/src/live/plans/store.ts'))
@@ -182,7 +182,7 @@ describe('privacy note text', () => {
 
   // Skipped while design's L1 (#134) is not on the branch; the scan above still fails any other storage user.
   it.skipIf(!hasLayoutStore)('layout store: the note says which panels and view you left open stay in this browser; storage only inside try', () => {
-    expect(text).toMatch(/which panels and view you left open, stay in this browser only/i)
+    expect(text).toMatch(/which panels and view you left open, stay in this browser;/i)
     // the accessor is called, and every getItem/setItem (and any direct localStorage) sits, inside a try block
     const body = stripComments(readFileSync(LAYOUT_STORE, 'utf8'))
     expect(expectInsideTry(body, /localStorage|\.getItem\(|\.setItem\(|getStorage\(\)/g, 'ui/layout/store.ts')).toBeGreaterThanOrEqual(4)

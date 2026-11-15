@@ -24,7 +24,7 @@
 export const PRIVACY_TITLE = 'Privacy'
 
 export const PRIVACY_TEXT: readonly string[] = [
-  'No accounts, logins or cookies. Saved plans, and which panels and view you left open, stay in this browser only; nothing else uses browser storage.',
+  'No accounts, logins or cookies. Saved plans, and which panels and view you left open, stay in this browser; nothing else uses browser storage.',
   'The live server keeps the plan inputs it computes (with their title) and the results, filed by a hash of the inputs, each with a run record: engine version, stages and timings.',
   'The least recently used results are removed when its cache is full.',
   'To limit how many computations one address can start, it keeps salted hashes of addresses, in memory only, cleared on restart.',
