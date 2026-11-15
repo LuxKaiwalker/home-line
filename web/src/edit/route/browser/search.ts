@@ -163,8 +163,10 @@ export class LegSearch {
   private readonly unit: Float64Array
   private readonly dr = OFFSETS.map((o) => o[0])
   private readonly dc = OFFSETS.map((o) => o[1])
-  /** crossed cells of move k as flat index deltas (same rows/cols as CROSSINGS) */
+  /** crossed cells of move k (rows, cols relative to the origin: CROSSINGS) */
   private readonly cross: [number, number][][] = CROSSINGS
+  /** allowed moves per cell, filled lazily: bit k = move k allowed (LegRouter.target), bit 16 = known */
+  private readonly moves: Uint32Array
 
   constructor(grid: RouteGrid, model: GradeModel) {
     const n = grid.width * grid.height
@@ -175,6 +177,7 @@ export class LegSearch {
     this.parent = new Int32Array(n)
     this.stamp = new Uint32Array(n)
     this.closed = new Uint32Array(n)
+    this.moves = new Uint32Array(n)
     this.unit = Float64Array.from(OFFSETS, ([a, b]) => Math.hypot(a, b) * grid.resM)
   }
 
@@ -191,7 +194,7 @@ export class LegSearch {
   private run(from: number, to: number, weight: number, capMs: number, fallback: boolean, signal: SearchOpts['signal'], now: () => number): SearchResult {
     if (!(weight >= 1) || !Number.isFinite(weight)) throw new Error(`search: weight must be a finite number >= 1, got ${weight}`)
     const t0 = now()
-    const { width: W, height: H, passable, elev } = this.grid
+    const { width: W, passable, elev } = this.grid
     const done = (leg: Leg | null, extra: Partial<SearchResult>, expanded: number, wMax: number): SearchResult => {
       const timedOut = extra.timedOut ?? false
       const aborted = extra.aborted ?? false
@@ -206,7 +209,7 @@ export class LegSearch {
       this.gen = 1
     }
     const gen = this.gen
-    const { cost, parent, stamp, closed, heap, unit, dr, dc, cross, model } = this
+    const { cost, parent, stamp, closed, heap, unit, dr, dc, moves, model } = this
     const tr = Math.floor(to / W)
     const tc = to % W
     const hf = model.minPace * this.grid.resM
@@ -246,22 +249,14 @@ export class LegSearch {
       const c = i - r * W
       const ci = cost[i]
       const ei = elev[i]
+      let mv = moves[i]
+      if (mv === 0) mv = moves[i] = this.movesOf(r, c)
       for (let k = 0; k < 16; k++) {
-        // LegRouter.target: in bounds, passable, every crossed cell passable
+        if (!(mv & (1 << k))) continue
         const r2 = r + dr[k]
         const c2 = c + dc[k]
-        if (r2 < 0 || c2 < 0 || r2 >= H || c2 >= W) continue
         const j = r2 * W + c2
-        if (!passable[j]) continue
-        const xs = cross[k]
-        let ok = true
-        for (let x = 0; x < xs.length; x++) {
-          if (!passable[(r + xs[x][0]) * W + (c + xs[x][1])]) {
-            ok = false
-            break
-          }
-        }
-        if (!ok || closed[j] === gen) continue
+        if (closed[j] === gen) continue
         // LegRouter.edge
         const len = unit[k]
         const pace = model.lookup(Math.atan((elev[j] - ei) / len)).pace
@@ -276,6 +271,21 @@ export class LegSearch {
       }
     }
     return done(null, { timedOut }, expanded, wMax)
+  }
+
+  /** LegRouter.target for all 16 moves of (r, c): bit k = in bounds, target and crossed cells passable; bit 16 set. */
+  private movesOf(r: number, c: number): number {
+    const { width: W, height: H, passable } = this.grid
+    let m = 1 << 16
+    for (let k = 0; k < 16; k++) {
+      const r2 = r + this.dr[k]
+      const c2 = c + this.dc[k]
+      if (r2 < 0 || c2 < 0 || r2 >= H || c2 >= W || !passable[r2 * W + c2]) continue
+      let ok = true
+      for (const [xi, xj] of this.cross[k]) if (!passable[(r + xi) * W + (c + xj)]) ok = false
+      if (ok) m |= 1 << k
+    }
+    return m
   }
 
   /** = LegRouter.build: walk the parents, then re-sum time, O2 and length along the path. */

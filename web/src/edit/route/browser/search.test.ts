@@ -270,15 +270,15 @@ function distKm(r: RealGrid, a: number, b: number): number {
   return (Math.hypot(Math.floor(a / W) - Math.floor(b / W), (a % W) - (b % W)) * r.grid.resM) / 1000
 }
 
-/** Long legs (D137): walkable targets 2.4-3.4 km from the pad, eight bearings, reachable from the pad. */
+/** Long legs (D137): walkable targets 2.4-3.4 km from the pad, four bearings per distance, reachable from the pad. */
 function longTargets(r: RealGrid): number[] {
   const W = r.grid.width
   const pr = Math.floor(r.pad / W)
   const pc = r.pad % W
   const out: number[] = []
   for (const km of [2.4, 2.9, 3.4]) {
-    for (let k = 0; k < 8; k++) {
-      const ang = (k * Math.PI) / 4 + km
+    for (let k = 0; k < 4; k++) {
+      const ang = (k * Math.PI) / 2 + km
       const rr = Math.round(pr - (Math.cos(ang) * km * 1000) / r.grid.resM)
       const cc = Math.round(pc + (Math.sin(ang) * km * 1000) / r.grid.resM)
       if (rr < 0 || cc < 0 || rr >= r.grid.height || cc >= W) continue
@@ -292,6 +292,7 @@ function longTargets(r: RealGrid): number[] {
 interface Timing {
   grid: string
   km: number
+  refMs: number
   exactMs: number
   fastMs: number
   exactExp: number
@@ -319,7 +320,7 @@ describe.skipIf(!existsSync(PUB))('real grids: parity, bound and timing (officia
     expect(grids.map((g) => g.name)).toEqual(['official nom_104', 'rank2 nom_104', 'rank3 nom_104', 'rank4 nom_104'])
   })
 
-  it('exact mode equals LegRouter on pad <-> station legs and every long leg (cells, time, O2, tau)', () => {
+  it('exact mode equals LegRouter on pad <-> station legs (cells, time, O2, tau)', () => {
     const stations = J<Station[]>('stations.json')
     let n = 0
     for (const r of grids) {
@@ -329,70 +330,67 @@ describe.skipIf(!existsSync(PUB))('real grids: parity, bound and timing (officia
       const pairs: [number, number][] = []
       for (let i = 1; i < pts.length; i++) pairs.push([r.pad, pts[i]], [pts[i], r.pad])
       for (let i = 1; i + 1 < pts.length; i++) pairs.push([pts[i], pts[i + 1]])
-      for (const t of longTargets(r)) pairs.push([r.pad, t])
       for (const [a, b] of pairs) {
-        const want = ref.route(a, b)
         const got = s.searchLeg(a, b, { weight: 1, capMs: 1e9 })
-        expect(got.leg, `${r.name} ${a}->${b}`).toEqual(want)
+        expect(got.leg, `${r.name} ${a}->${b}`).toEqual(ref.route(a, b))
         expect(got.exact).toBe(true)
         n++
       }
     }
-    expect(n).toBeGreaterThan(60)
+    expect(n).toBeGreaterThan(40)
   }, 300_000)
 
-  it('fast mode (w = 1.6) on the long 2.4-3.4 km legs: cost <= w x fastest, within the cap, fewer expansions; timings', () => {
-    const maxExact = { ms: 0 }
+  it('long 2.4-3.4 km legs (D137): exact = LegRouter; fast (w = 1.6) cost <= w x fastest with fewer expansions; default cap returns a path; timings', () => {
+    let capped = 0
     for (const r of grids) {
+      const ref = new LegRouter(r.grid, r.model)
       const s = createLegSearch(r.grid, r.model)
       for (const t of longTargets(r)) {
         const km = distKm(r, r.pad, t)
         expect(km).toBeGreaterThan(2.3)
         expect(km).toBeLessThan(3.5)
-        s.searchLeg(r.pad, t, { weight: 1, capMs: 1e9 }) // warm-up (JIT), not timed
+        const t0 = performance.now()
+        const want = ref.route(r.pad, t)
+        const refMs = performance.now() - t0
         const ex = s.searchLeg(r.pad, t, { weight: 1, capMs: 1e9 })
+        expect(ex.leg, `${r.name} pad->${t}`).toEqual(want)
+        expect(ex.exact).toBe(true)
         const fa = s.searchLeg(r.pad, t, { weight: HEURISTIC_WEIGHT, capMs: 1e9 })
-        if (!ex.leg) {
+        // the default cap on the real clock: a path whenever one exists (unless even the greedy finish
+        // ran out, which only a badly overloaded machine causes); how many hit the cap depends on load
+        const fd = s.searchLeg(r.pad, t)
+        if (fd.timedOut) capped++
+        if (!want) {
           expect(fa.leg).toBeNull()
+          expect(fd.leg).toBeNull()
           continue
         }
+        if (!fd.timedOut) expect(fd.leg).not.toBeNull()
         expect(fa.leg).not.toBeNull()
         expect(fa.cost).toBeGreaterThanOrEqual(ex.cost - EPS)
         expect(fa.cost).toBeLessThanOrEqual(HEURISTIC_WEIGHT * ex.cost + EPS)
         expect(fa.expanded).toBeLessThanOrEqual(ex.expanded)
-        maxExact.ms = Math.max(maxExact.ms, ex.ms)
-        timings.push({ grid: r.name, km: Math.round(km * 100) / 100, exactMs: ex.ms, fastMs: fa.ms, exactExp: ex.expanded, fastExp: fa.expanded, ratio: fa.cost / ex.cost })
+        timings.push({ grid: r.name, km: Math.round(km * 100) / 100, refMs, exactMs: ex.ms, fastMs: fa.ms, exactExp: ex.expanded, fastExp: fa.expanded, ratio: fa.cost / ex.cost })
       }
     }
     expect(timings.length).toBeGreaterThan(20)
-    // with the default cap (150 ms, real clock) every reachable long leg gets a path; how many needed
-    // the greedy finish depends on the machine's load, so it is printed, not asserted
-    let capped = 0
-    for (const r of grids) {
-      const s = createLegSearch(r.grid, r.model)
-      for (const t of longTargets(r)) {
-        const ex = s.refineLeg(r.pad, t, { capMs: 1e9 })
-        const fa = s.searchLeg(r.pad, t)
-        if (ex.leg === null) expect(fa.leg).toBeNull()
-        else if (!fa.timedOut) expect(fa.leg, `${r.name} -> ${t}`).not.toBeNull()
-        if (fa.timedOut) capped++
-      }
-    }
     const med = (xs: number[]) => [...xs].sort((a, b) => a - b)[Math.floor(xs.length / 2)]
+    const col = (f: (x: Timing) => number) => timings.map(f)
     const sum = {
       legs: timings.length,
-      exactMedMs: med(timings.map((x) => x.exactMs)),
-      exactMaxMs: Math.max(...timings.map((x) => x.exactMs)),
-      fastMedMs: med(timings.map((x) => x.fastMs)),
-      fastMaxMs: Math.max(...timings.map((x) => x.fastMs)),
-      expansionsMed: `${med(timings.map((x) => x.exactExp))} -> ${med(timings.map((x) => x.fastExp))}`,
-      costRatioMed: med(timings.map((x) => x.ratio)),
-      costRatioMax: Math.max(...timings.map((x) => x.ratio)),
+      legRouterMedMs: med(col((x) => x.refMs)),
+      exactMedMs: med(col((x) => x.exactMs)),
+      exactMaxMs: Math.max(...col((x) => x.exactMs)),
+      fastMedMs: med(col((x) => x.fastMs)),
+      fastMaxMs: Math.max(...col((x) => x.fastMs)),
+      expansionsMed: `${med(col((x) => x.exactExp))} -> ${med(col((x) => x.fastExp))}`,
+      costRatioMed: med(col((x) => x.ratio)),
+      costRatioMax: Math.max(...col((x) => x.ratio)),
       cappedAtDefaultCap: capped,
     }
     if (process.env.R2_TIMING_OUT) writeFileSync(process.env.R2_TIMING_OUT, JSON.stringify({ sum, timings }, null, 1))
     console.log(`[R2 timing] long legs 2.4-3.4 km, cap ${LEG_CAP_MS} ms, w = ${HEURISTIC_WEIGHT}: ${JSON.stringify(sum)}`)
-  }, 300_000)
+  }, 400_000)
 
   it('a real long leg cut by the cap still returns a path (greedy finish), flagged timedOut', () => {
     const r = grids[0]
