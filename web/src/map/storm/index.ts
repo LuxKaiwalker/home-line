@@ -3,8 +3,9 @@
 // (mode.tsx) load with import() the first time the storm is switched on, from this button or any
 // other writer of the store (search command, storyboard).
 //   ?storm=1         start with the storm on (page or hash query)
-//   ?capture=storm   the storm storyboard (web/public/story/storm.json) runs with the storm on: the
-//                    storyboard contract v1 has no step key for conditions (notes/M12.md)
+//   ?capture=storm   the storm storyboard runs with the storm on: the storyboard contract v1 has no
+//                    step key for conditions (notes/M12.md). The storyboard itself (storm.story.json
+//                    here) moves to web/public/story/storm.json with the M10 follow-up package.
 import type { IControl, Map as MlMap } from 'maplibre-gl'
 import { effect, mission } from '../../state'
 import { fmtEva } from '../../ui/timeline/model'
@@ -13,7 +14,7 @@ import type { StormHandle } from './mode'
 import type { StormModel } from './model'
 import './storm.css'
 
-/** The storyboard id that runs with the storm on (web/public/story/storm.json). */
+/** The storyboard id that runs with the storm on (storm.story.json -> web/public/story/storm.json, M10 follow-up). */
 export const STORM_STORY_ID = 'storm'
 
 /** `?storm=1`, or `?capture=storm` / the storm storyboard (search or hash query). */

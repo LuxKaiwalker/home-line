@@ -22,7 +22,6 @@ import { buildStormModel, stormView, stormVisuals, threadRed, type StormModel, t
 import { StormCurve, StormPanel } from './Panel'
 import { ringBoundary, ringCount, ringLattice, ringMask, type LonLat, type RingLattice } from './ring'
 
-
 export const RING_SOURCE = 'storm-ring'
 export const RING_LAYER = 'storm-ring-line'
 export const THREAD_SOURCE = 'thread' // furniture/index.ts

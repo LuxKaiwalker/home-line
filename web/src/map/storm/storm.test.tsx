@@ -252,7 +252,9 @@ describe('5. thread colour and the field dose term', () => {
 })
 
 describe('6. storyboard and query', () => {
-  const story = JSON.parse(readFileSync(resolve(REPO, 'web/public/story/storm.json'), 'utf8')) as unknown
+  // the storm storyboard is held here until the M10 follow-up adds it to web/public/story/ together with
+  // the director.test.ts file list (orchestrator); same content as /tmp/hl-design/notes/M12-storm.json
+  const story = JSON.parse(readFileSync(resolve(REPO, 'web/src/map/storm/storm.story.json'), 'utf8')) as unknown
   it('storm.json validates (contract + director rules: copy-key captions, known layers, t order)', () => {
     const sb = parseStoryboard(story, 'storm')
     expect(sb.id).toBe('storm')
