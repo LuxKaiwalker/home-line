@@ -12,11 +12,12 @@
 //
 // Loaded only through the VITE_LIVE dynamic import in views/console.tsx (and the live chunks), so
 // the static build does not contain it. It imports nothing from src/live/ (isolation.test.ts): the
-// "My plans" store and list come in through mountEditRoute (MyPlansDeps), from the guarded import. Layout store ids (L5 selector contract): edit-route (Drawer),
-// crew and my-plans (Collapsible inside it).
+// D116 gate (live/config.ts ROUTE_EDIT_ENABLED) and the "My plans" store and list come in through
+// mountEditRoute, from the guarded import in views/console.tsx. Layout store ids (L5 selector
+// contract): edit-route (Drawer), crew and my-plans (Collapsible inside it).
 import { render, type ComponentType } from 'preact'
 import { useState } from 'preact/hooks'
-import { signal, useSignalValue } from '../../state/signal'
+import { signal, useSignalValue, type ReadSignal } from '../../state/signal'
 import { Button } from '../components'
 import { Collapsible, Drawer, useLayoutInsets, useOpener } from '../layout'
 import type { RailSection, Render } from './store'
@@ -27,14 +28,6 @@ export const CREW_ID = 'crew'
 export const MY_PLANS_ID = 'my-plans'
 export const EDIT_ROUTE_TITLE = 'Edit route'
 export const MY_PLANS_SECTION_TITLE = 'My plans'
-
-// D116 (WP14, #142): VITE_ROUTE_EDIT=0 hides route editing; the button and the drawer go with it.
-// TODO(L3, WP14): local fallback until #142 merges, then import ROUTE_EDIT_ENABLED from
-// live/config.ts (same parsing: '0' or 'false' turns it off; anything else, or unset, is on).
-export function isRouteEditFlag(value: string | boolean | undefined): boolean {
-  return !(value === false || value === '0' || value === 'false')
-}
-export const ROUTE_EDIT_ENABLED: boolean = isRouteEditFlag(import.meta.env.VITE_ROUTE_EDIT as string | boolean | undefined)
 
 /** The route panel (R5) while its live controls are on; undefined = offline / checking / not loaded. */
 const routeRender = signal<Render | undefined>(undefined)
@@ -57,6 +50,9 @@ export function registerEditRoute(s: Pick<RailSection, 'render'>): () => void {
   }
 }
 
+/** The registered route panel render (read-only; tests and the host). */
+export const editRouteSection: ReadSignal<Render | undefined> = routeRender
+
 /** True while a host is mounted (the console map in a live build with route editing on). */
 export const editRouteHosted = (): boolean => hosts > 0
 
@@ -75,13 +71,25 @@ function EditRouteButton() {
   )
 }
 
+/** The note in the button's place while live planning is unreachable (WP12 RouteOfflineNote, W-7). */
+const noteRender = signal<Render | undefined>(undefined)
+
 /**
- * SLOT (W-7, waypoint WP12): the offline note "Route editing needs the live planner" goes here, where
- * the Edit-route button is while live planning is unreachable. WP12 exports the component (rendering
- * only while live is unreachable); it is mounted here once its PR is up. Empty until then.
+ * SLOT (W-7, waypoint WP12 #152): the offline note "Route editing needs the live planner" takes the
+ * Edit-route button's place while live planning is unreachable. The route mount registers WP12's
+ * edit/route/offline.tsx RouteOfflineNote here (registerEditRouteNote) once #152 is in; until then
+ * nothing registers and the edge stays empty (the offline banner covers it, kit rule 4).
  */
+export function registerEditRouteNote(s: Pick<RailSection, 'render'>): () => void {
+  noteRender.value = s.render
+  return () => {
+    if (noteRender.peek() === s.render) noteRender.value = undefined
+  }
+}
+
 function EditRouteOfflineNoteSlot() {
-  return null
+  const note = useSignalValue(noteRender)
+  return note ? <>{note()}</> : null
 }
 
 /**
@@ -146,13 +154,13 @@ export function EditRouteHost<Snap>({ plans }: { plans: MyPlansDeps<Snap> }) {
 }
 
 export interface MountEditRouteOptions {
-  /** D116: VITE_ROUTE_EDIT (default ROUTE_EDIT_ENABLED); false mounts nothing. */
-  enabled?: boolean
+  /** D116: live/config.ts ROUTE_EDIT_ENABLED (VITE_ROUTE_EDIT); false mounts nothing (no button, no drawer). */
+  enabled: boolean
 }
 
 /** Mount the host inside the map container `mapEl` (position: relative); returns cleanup. */
-export function mountEditRoute<Snap>(mapEl: Element, plans: MyPlansDeps<Snap>, o: MountEditRouteOptions = {}): () => void {
-  if (!(o.enabled ?? ROUTE_EDIT_ENABLED)) return () => {}
+export function mountEditRoute<Snap>(mapEl: Element, plans: MyPlansDeps<Snap>, o: MountEditRouteOptions): () => void {
+  if (!o.enabled) return () => {}
   const el = mapEl.appendChild(document.createElement('div'))
   el.setAttribute('class', 'hl-editroute')
   hosts++

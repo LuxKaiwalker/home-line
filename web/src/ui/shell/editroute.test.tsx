@@ -5,13 +5,15 @@
 //  - the drawer holds the route panel, the crew Collapsible ("Crew: default", hint "Edit") and the
 //    "My plans" Collapsible with the list rendered by the passed view, on the passed store;
 //  - layout store ids: edit-route, crew, my-plans (DOM ids hl-lay-<id>, openers aria-controls them).
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 import { render } from 'preact'
 import { act } from 'preact/test-utils'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { ui } from '../../state/ui'
 import { bindLayoutStorage, resetLayout } from '../layout'
 import { all, byClass, installDom, one, type FakeDocument, type FakeNode } from '../testing/dom'
-import { editRouteHosted, isRouteEditFlag, mountEditRoute, registerEditRoute, setEditRouteCrew, type MyPlansDeps } from './editroute'
+import { editRouteHosted, mountEditRoute, registerEditRoute, registerEditRouteNote, setEditRouteCrew, type MyPlansDeps } from './editroute'
 
 let doc: FakeDocument
 let mapEl: FakeNode
@@ -45,7 +47,7 @@ function fakePlans(): MyPlansDeps<Snap> & { titles: string[] } {
 }
 
 let offs: (() => void)[] = []
-const mount = (o: { enabled?: boolean } = {}) => {
+const mount = (o: { enabled: boolean } = { enabled: true }) => {
   let off = () => {}
   act(() => void (off = mountEditRoute(mapEl as unknown as Element, fakePlans(), o)))
   offs.push(off)
@@ -76,13 +78,10 @@ afterEach(() => {
 })
 
 describe('VITE_ROUTE_EDIT (D116): the Edit-route button and drawer are absent when route editing is off', () => {
-  it('parses the flag as WP14 does: "0" or "false" is off, anything else (or unset) is on', () => {
-    expect(isRouteEditFlag(undefined)).toBe(true)
-    expect(isRouteEditFlag('1')).toBe(true)
-    expect(isRouteEditFlag('')).toBe(true)
-    expect(isRouteEditFlag('0')).toBe(false)
-    expect(isRouteEditFlag('false')).toBe(false)
-    expect(isRouteEditFlag(false)).toBe(false)
+  it('the gate is live/config.ts ROUTE_EDIT_ENABLED (WP14), passed in by views/console.tsx', () => {
+    // (this file may not import src/live/: isolation.test.ts; WP14's routeedit.test.tsx covers the parsing)
+    const consoleSrc = readFileSync(resolve(__dirname, '../../views/console.tsx'), 'utf8')
+    expect(consoleSrc).toContain('{ enabled: m.ROUTE_EDIT_ENABLED }')
   })
 
   it('enabled: false mounts nothing, even with the route panel registered', () => {
@@ -92,11 +91,6 @@ describe('VITE_ROUTE_EDIT (D116): the Edit-route button and drawer are absent wh
     expect(editRouteHosted()).toBe(false)
     expect(openerOf('edit-route')).toHaveLength(0)
     expect(byId('hl-lay-edit-route')).toHaveLength(0)
-  })
-
-  it('the tests run with the flag unset: on', async () => {
-    const { ROUTE_EDIT_ENABLED } = await import('./editroute')
-    expect(ROUTE_EDIT_ENABLED).toBe(true)
   })
 })
 
@@ -108,6 +102,19 @@ describe('Edit-route host (live builds, route editing on)', () => {
     expect(byId('hl-lay-edit-route')).toHaveLength(0)
     const edge = one(byClass(mapEl, 'hl-editroute__edge'), 'edge slot')
     expect(edge.childNodes.length).toBe(0)
+  })
+
+  it('the offline note (WP12) takes the button\'s place while no route panel is registered', () => {
+    mount()
+    let offNote = () => {}
+    act(() => void (offNote = registerEditRouteNote({ render: () => <p class="fake-note">Route editing needs the live planner</p> })))
+    offs.push(offNote)
+    const edge = one(byClass(mapEl, 'hl-editroute__edge'), 'edge slot')
+    expect(byClass(edge, 'fake-note')).toHaveLength(1)
+    expect(openerOf('edit-route')).toHaveLength(0)
+    registerRoute()
+    expect(byClass(mapEl, 'fake-note')).toHaveLength(0)
+    expect(openerOf('edit-route')).toHaveLength(1)
   })
 
   it('route panel registered: "Edit route" opens the drawer with the panel, crew and My plans; unregister removes them', () => {
