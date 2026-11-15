@@ -212,7 +212,7 @@ describe('map binding: markers, armed click, ghost layer', () => {
   })
 })
 
-describe('pointer model (L9 / I1 independent): only a press ON a marker moves a waypoint; 4 px slop', () => {
+describe('pointer model (I1 as built, D114): only a left press ON a marker moves a waypoint; 4 px slop (H2b)', () => {
   async function two() {
     const { store, ctl } = setup()
     ctl.setMode('ordered')
@@ -232,19 +232,19 @@ describe('pointer model (L9 / I1 independent): only a press ON a marker moves a 
     return { store, ctl, ed, fm, made, loadGrid }
   }
 
-  it('a press off every marker + move (a pan) moves no waypoint, starts no drag, and an armed press that moves > 4 px adds nothing', async () => {
+  it('a left press off every marker + move moves no waypoint and starts no drag; an armed press that moves > 4 px adds nothing', async () => {
     const { store, ed, fm, made } = await two()
     const before = store.route.value
     const steps = store.past.value.length
-    // left press on the empty map, move, release: MapLibre pans; no marker hears it
+    // left press on the empty map, move, release: the map's own (I1: nothing; panning is the right button); no marker hears it
     expect(fm.press(137.41, -4.77)).toBe(false) // not stopped: it reaches MapLibre
     fm.container.fire('pointermove', { target: fm.canvas, ...{ clientX: 10400, clientY: 7700 } })
-    expect(fm.click(137.4105, -4.7705)).toBe(false) // the browser's click after a pan is MapLibre's
+    expect(fm.click(137.4105, -4.7705)).toBe(false) // the browser's click after that drag is MapLibre's
     expect(store.route.value).toBe(before)
     expect(store.past.value).toHaveLength(steps)
     expect(ed.dragging.value).toBeNull()
     expect(made.map((m) => m.ll)).toEqual([[137.404, -4.776], [137.406, -4.778]])
-    // armed: a press that moves beyond the slop is a pan, not the armed click; it stays armed
+    // armed: a press that moves beyond the slop is a drag, not the armed click; it stays armed
     ed.startAdd()
     fm.press(137.41, -4.77)
     expect(fm.click(137.41 + 5e-6, -4.77)).toBe(false) // 5 px

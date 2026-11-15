@@ -2,17 +2,19 @@
 // from origin/waypoint-routing web/src/mission/missionMap.ts (N0CEO, Mission Planer: numbered
 // draggable markers, click to add, dashed line), adapted to the design map and its tokens.
 //
-// Pointer model (independent of the map's own mapping, I1 or L9): a waypoint moves only with a LEFT
-// press that starts ON its marker element (MapLibre's marker drag); a right / middle press on a
-// marker belongs to the map; a press that starts off a marker always reaches MapLibre (pan, rotate,
-// select) and never moves a waypoint. Both the marker drop and the armed click use the rover's click
-// slop (H2b, edit/drag.ts CLICK_SLOP_PX = 4 px): less movement is a click, more is a drag.
+// Pointer model, I1 as built (D114: the left button interacts, right drag pans, Ctrl/Shift+right or
+// middle rotates / tilts): a waypoint moves only with a LEFT press that starts ON its marker element
+// (MapLibre's marker drag); a right / middle press on a marker belongs to the map (pan, rotate); a
+// press that starts off a marker reaches MapLibre unchanged and never moves a waypoint. Both the
+// marker drop and the armed click use the rover's click slop (H2b, edit/drag.ts CLICK_SLOP_PX = 4 px):
+// less movement is a click, more is a drag.
 //
 //   markers  one MapLibre Marker per free point, .hl-route-marker[data-point="W{n}"], draggable;
 //            the drag changes nothing until the drop (D85), then one undo step (editor.drop); a
 //            drop within the slop is a click (the point stays, no undo step)
-//   add      while "Add waypoint" is armed, the next map CLICK appends W{n} (a press that moves
-//            beyond the slop is a pan and leaves it armed); Escape disarms
+//   add      while "Add waypoint" is armed, the next left CLICK on the map appends W{n} (a left
+//            press that moves beyond the slop is a drag, not a click: it adds nothing and stays
+//            armed); Escape disarms
 //   ghost    one dashed line layer (muted: an estimate), hidden once a computed result is drawn
 import type { FeatureCollection } from 'geojson'
 import { effect } from '../../../state/signal'
@@ -230,7 +232,7 @@ export function attachWaypointMap(ed: WaypointEditor, cm: WaypointConsoleMap, o:
     if (!ed.adding.peek()) return
     if (e.target !== canvas) return // controls, markers, popups keep their clicks
     const me = e as MouseEvent
-    // a press that moved beyond the slop was a pan (L9 left-drag), not the armed click: stay armed
+    // a left press that moved beyond the slop was a drag, not the armed click (H2b): stay armed
     if (press && isDragMove(press, { x: me.clientX, y: me.clientY })) return
     const r = canvas.getBoundingClientRect()
     const ll = cm.map.unproject([me.clientX - r.left, me.clientY - r.top])
