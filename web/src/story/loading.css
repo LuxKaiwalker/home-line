@@ -1,0 +1,94 @@
+/* WS16 L12 (D111): the intro loading screen (markup inline in web/index.html, logic story/loading.ts).
+   Linked from index.html, so it is part of the render-blocking stylesheet: on screen with the first
+   paint, before any JS runs. Tokens only; every duration is a motion token (0 under reduced motion). */
+@import '../ui/tokens.css';
+
+.hl-loading {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: grid;
+  place-items: center;
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-family: var(--font-text);
+  font-size: var(--font-size-body);
+  line-height: var(--line-height-body);
+  --hl-load-p: 0;
+  transition: background-color var(--motion-data-max) ease-out;
+}
+.hl-loading [hidden] { display: none !important; }
+
+.hl-loading__panel {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-4);
+  width: min(320px, calc(100vw - 2 * var(--space-5)));
+  transition: opacity var(--motion-data-max) ease-out;
+}
+.hl-loading__mark {
+  margin: 0;
+  color: var(--color-text);
+  font-size: var(--font-size-heading);
+  line-height: var(--line-height-heading);
+  font-weight: var(--font-weight-heading);
+  letter-spacing: 0.24em;
+  padding-left: 0.24em; /* the tracking after the last letter, so the word stays centred */
+}
+.hl-loading__bar {
+  position: relative;
+  width: 100%;
+  height: 2px;
+  overflow: hidden;
+  background: var(--color-card-border);
+}
+.hl-loading__fill {
+  position: absolute;
+  inset: 0;
+  background: var(--color-text);
+  transform-origin: left center;
+  transform: scaleX(var(--hl-load-p));
+  transition: transform var(--motion-panel-max) ease-out;
+}
+.hl-loading__still {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-small);
+}
+
+/* the intro's own controls: bottom right, above the map and the hidden chrome */
+.hl-loading__ctl {
+  position: absolute;
+  right: var(--space-4);
+  bottom: var(--space-4);
+  display: flex;
+  gap: var(--space-2);
+  pointer-events: auto;
+}
+.hl-loading__btn {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--space-6);
+  padding: 0 var(--space-3);
+  border: 1px solid var(--color-card-border);
+  border-radius: var(--radius-input);
+  background: var(--color-card);
+  color: var(--color-text);
+  font: inherit;
+  text-decoration: none;
+  cursor: pointer;
+}
+.hl-loading__btn:hover { background: var(--color-card-border); }
+.hl-loading__btn:focus-visible { outline: var(--line-focus-ring) solid var(--color-select); outline-offset: var(--line-focus-ring); }
+
+/* playing: the clock started, the screen fades out into the intro; only the two buttons stay */
+html[data-hl-intro='playing'] .hl-loading {
+  background-color: transparent;
+  pointer-events: none;
+}
+html[data-hl-intro='playing'] .hl-loading__panel { opacity: 0; }
+
+@media (prefers-reduced-motion: reduce) {
+  .hl-loading, .hl-loading__panel, .hl-loading__fill { transition: none; }
+}

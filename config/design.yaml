@@ -110,7 +110,7 @@ quality:
 storm:                               # added by M10b 2026-11-15 (DESIGN U9; notes/M12.md)
   ring_cell_m: 20                    # assumed: true (M12): dose-ring lattice cell, ground metres (stride 4 of the 5 m field); RR judges the staircase at z15-17
   assumed: [ring_cell_m]
-intro: {once_per_browser: true, skip_on_any_input: true, off_with_reduced_motion: true, approx_s: 20, warmup_max_ms: 2500, warmup_extra_ms: 1000}   # warmup_* added by M10d 2026-11-15 (assumed: true): M10c caps on the live intro / kiosk wait before t = 0 (layer warm-up, then frame 0's tiles)
+intro: {once_per_browser: true, skip_on_any_input: true, off_with_reduced_motion: true, approx_s: 20, warmup_max_ms: 2500, warmup_extra_ms: 1000, still_loading_s: 15}   # warmup_* added by M10d 2026-11-15 (assumed: true): M10c caps on the live intro / kiosk wait before t = 0 (layer warm-up, then frame 0's tiles); still_loading_s added by L12 2026-11-15 (assumed: true): the loading screen's 'Still loading…' note appears after this many seconds
 capture: {size: [1920, 1080], fps: 60}
 render_review:
   sizes: [[1440, 900], [1024, 768]]

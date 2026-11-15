@@ -28,6 +28,7 @@ import type { RoverHandle } from '../edit/roverMap'
 import { FlythroughControl } from './flythrough/control'
 import { installStorm } from './storm'
 import { storyParams, storyRequest } from '../story/query'
+import { whenIntroStarted } from '../story/loading'
 import { CameraController, type ControllerMap } from './camera'
 import { installOverlays } from './overlays'
 import { MapSelection, SELECT_ROUTE_HIT, type SelectMap, type SelectSources } from './select'
@@ -181,7 +182,8 @@ export class ConsoleMap {
     // X3 (fallback drill finding 1): the view may be gone before 'load'; never touch a removed map
     this.ready.then(() => !this.destroyed && this.initLayers())
     if (container.closest('.hl-shell'))
-      void this.ready.then(() => import('../edit/roverMap')).then((m) => {
+      // L12 (c): the edit code loads once the intro has started (or at once when none plays)
+      void this.ready.then(() => whenIntroStarted()).then(() => import('../edit/roverMap')).then((m) => {
         if (this.destroyed) return
         this.rover = m.installRoverDrag(this.map)
         if (this.padMarker) this.rover.attach(this.padMarker)
