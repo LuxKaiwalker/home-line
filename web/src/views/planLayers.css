@@ -1,0 +1,56 @@
+/* Plan mode: layers popover, legend corner chip, map-edge tools (L2c, D111). Tokens only (kit rule 2). */
+
+/* ---------- map-edge tools: right edge, top; one column, above the cards and popovers (never covered) */
+.plan-tools {
+  position: absolute; top: var(--space-2); right: 0; z-index: 28;
+  margin-right: var(--space-2);
+  display: flex; flex-direction: column; align-items: flex-end; gap: var(--space-1);
+}
+.plan-borrow:empty { display: none; }
+.plan-tools > .plan-borrow { display: flex; }
+/* MapLibre's control margins belong to its corners, not to this column */
+.plan-tools .maplibregl-ctrl { margin: 0; float: none; clear: none; }
+.plan-tools .maplibregl-ctrl-group:not(:empty) { box-shadow: none; }
+/* the layers popover sits in the column: its panel opens to the left of the column */
+.plan-tools > .plan-pop--layers.hl-lay-pop { position: relative; top: auto; right: auto; }
+.plan-tools > .plan-pop--layers .hl-lay-pop__panel {
+  position: absolute; top: 0; right: calc(100% + var(--space-2));
+  width: min(calc(var(--layout-sidebar) + var(--space-5)), 80vw);
+  max-height: min(70vh, calc(var(--layout-sidebar) + var(--layout-sidebar)));
+}
+/* the 3D exaggeration slider lives in the layers popover; in the column only the 2D/3D switch shows */
+.plan-tools .hl-terrain-ctrl .hl-terrain-exag { display: none; }
+.plan-tools .hl-terrain-ctrl { padding: 0; }
+/* Flythrough and Storm replay: compact icon buttons (the label stays as the accessible name and tooltip) */
+.plan-tools .hl-fly-btn:not(.hl-fly-speed),
+.plan-tools .hl-storm-btn {
+  width: 32px; height: 32px; padding: 0;
+  display: inline-flex; align-items: center; justify-content: center;
+}
+.plan-tools .plan-borrow .hl-ctrl-icon { display: block; width: var(--space-4); height: var(--space-4); }
+.plan-tools .hl-fly-btn:not(.hl-fly-speed) .hl-ctrl-text,
+.plan-tools .hl-storm-btn .hl-ctrl-text {
+  position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap;
+}
+
+/* ---------- layers popover body */
+.plan-layers__group { display: flex; flex-direction: column; gap: var(--space-1); }
+.plan-layers__group + .plan-layers__group,
+.plan-pop--layers .hl-ovl { border-top: 1px solid var(--color-card-border); padding-top: var(--space-2); }
+.plan-layers__title, .plan-pop--layers .hl-ovl__group-title {
+  margin: 0; font-size: var(--font-size-small); line-height: var(--line-height-small);
+  font-weight: var(--font-weight-label); color: var(--color-text-muted);
+}
+.plan-layers__hint { margin: 0; color: var(--color-text-muted); }
+/* the hint stands in for the slider while 2D is on (the slider is hidden then) */
+.plan-layers__exag:has(.hl-terrain-exag:not([hidden])) + .plan-layers__hint { display: none; }
+.plan-layers__exag .hl-terrain-exag { display: flex; align-items: center; gap: var(--space-2); }
+.plan-layers__exag .hl-terrain-exag[hidden] { display: none; }
+.plan-layers__exag .hl-terrain-exag input { flex: 1; min-width: 0; width: auto; }
+.plan-layers__collapse .collapse-toggle { margin: 0; float: none; box-shadow: none; }
+/* the console section's own heading repeats the group title */
+.plan-pop .plan-sectionhost > .plan-section > section > h3:first-child { display: none; }
+
+/* ---------- legend corner chip: bottom left, above MapLibre's scale bar */
+.plan-pop--legend.hl-lay-pop--bottom-left { bottom: calc(var(--space-2) + var(--space-6)); }
+.plan-pop--legend .hl-lay-pop__panel { width: min(calc(var(--layout-sidebar) + var(--space-5)), 80vw); }
