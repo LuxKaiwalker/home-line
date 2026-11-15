@@ -8,6 +8,7 @@ import type { IControl } from 'maplibre-gl'
 import { formatValue } from '../../prov/provenance'
 import { lookup } from '../../prov/store'
 import { effect, ui } from '../../state'
+import { t } from '../../ui/copy'
 import { collapseFade, headlineCount, HEADLINE_DP, playCollapse, setCollapse, type CollapseHeadline } from './collapse'
 import './collapse.css'
 
@@ -44,8 +45,10 @@ export class CollapseToggle implements IControl {
       const k = ui.collapseK.value
       const flat = k !== undefined && k < 1
       b.setAttribute('aria-pressed', String(flat))
-      b.title = flat ? TOGGLE_LABEL.toReal : TOGGLE_LABEL.toFlat
-      b.disabled = collapseFade.playing.value
+      const playing = collapseFade.playing.value
+      // D117: while the collapse plays the button is disabled and its tooltip says why
+      b.title = playing ? t('hints.disabled.collapsePlaying') : flat ? TOGGLE_LABEL.toReal : TOGGLE_LABEL.toFlat
+      b.disabled = playing
     })
     return box
   }
