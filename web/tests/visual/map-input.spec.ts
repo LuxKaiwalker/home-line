@@ -104,10 +104,13 @@ test('a left click on the S7 pill opens its card', async ({ page }) => {
   await open(page)
   const s7 = page.getByRole('button', { name: /^S7: / })
   await expect(s7).toBeVisible({ timeout: 10_000 })
-  await expect(card(page)).not.toContainText('Science target')
+  // L2 (D111, L0 Q1): a station click selects only and opens the station card on the map
+  const stationCard = page.locator('#hl-lay-station')
+  await expect(stationCard).toHaveCount(0)
   await s7.click()
-  await expect(card(page)).toContainText('Science target', { timeout: 5_000 }) // copy cards.station.title
-  await expect(card(page)).toContainText('S7')
+  await expect(stationCard).toContainText('Science target', { timeout: 5_000 }) // copy cards.station.title
+  await expect(stationCard).toContainText('S7')
+  expect(page.url()).not.toContain('#/station/') // the map stays; the full page is "Open station"
 })
 
 test('Ctrl + right drag in 3D changes the bearing', async ({ page }) => {

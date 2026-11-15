@@ -1,0 +1,80 @@
+/* Plan mode layout (L2, D111): the console sections in the L1 containers over a full-width map.
+   Tokens only (kit rule 2). */
+
+/* the old side panel is the hidden stash of the console sections (their numbers stay in the page) */
+.console--layout > .console-panel:not(.console-live) { display: none; }
+
+/* layout host: same box as the map, above the MapLibre controls; lets the map take the pointer */
+.plan-layout { position: absolute; inset: 0; z-index: 3; pointer-events: none; }
+.plan-layout > .hl-lay-bottom, .plan-layout > .hl-lay-card, .plan-notes > *, .plan-edge > * { pointer-events: auto; }
+.plan-edge { position: absolute; top: 0; left: 0; right: 0; pointer-events: none; }
+/* MapLibre's bottom corners (scale bar, readout) sit above the bottom drawer bar */
+.console--layout .console-map .maplibregl-ctrl-bottom-left,
+.console--layout .console-map .maplibregl-ctrl-bottom-right { bottom: var(--plan-inset-bottom, 0); }
+/* layers: right edge, under MapLibre's top-right buttons (compass, flythrough, storm) */
+.plan-edge .plan-pop--layers { top: calc(var(--space-7) * 3); }
+/* legend corner chip: bottom left, over the scale bar */
+.plan-edge .plan-pop--legend { bottom: calc(var(--space-2) + var(--space-6)); }
+.plan-pop .hl-lay-pop__panel { max-height: min(60vh, 520px); }
+.plan-pop .legend ul { padding-left: 0; list-style: none; margin: 0; }
+.plan-pop .legend h3, .plan-pop .plan-slot h3 { display: none; }
+/* the 3D exaggeration slider and the collapse toggle, moved here from the map corners */
+.console--layout .maplibregl-ctrl-top-left .hl-terrain-exag,
+.console--layout .maplibregl-ctrl-top-right .collapse-toggle { display: none !important; }
+.plan-borrow:empty { display: none; }
+.plan-borrow .hl-terrain-exag { display: flex; align-items: center; gap: var(--space-2); }
+.plan-borrow .hl-terrain-exag[hidden] { display: none; }
+.plan-borrow .collapse-toggle { float: none; margin: 0; box-shadow: none; }
+
+/* data problems and the dummy note: never hidden, top centre of the map */
+.plan-notes { position: absolute; top: var(--space-2); left: 50%; transform: translateX(-50%); max-width: 60%; pointer-events: none; }
+.plan-notes .plan-slot { padding: 0; }
+.plan-notes .plan-slot:not(:empty) { background: var(--color-card); border: 1px solid var(--color-card-border); border-radius: var(--radius-card); padding: var(--space-2) var(--space-3); }
+
+/* slots inside containers: no side-panel padding */
+.plan-slot.panel-body { padding: 0; }
+.plan-slot--inline { display: contents; }
+.plan-slothost { display: contents; }
+.plan-table { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: var(--space-3) var(--space-5); align-items: start; }
+.plan-table .plan-slot:empty { display: none; }
+.plan-table .plan-slot > section > h3:first-child, .plan-table .plan-slot > .pad-picker > h3 { margin-top: 0; }
+.plan-timeline { min-height: calc(var(--layout-timeline) - var(--space-5)); display: flex; align-items: center; }
+.plan-timeline > * { flex: 1; min-width: 0; }
+
+/* collapsed lines */
+.plan-summary { display: inline-flex; align-items: center; gap: var(--space-1); white-space: nowrap; color: var(--color-text); }
+.plan-scrub { display: flex; align-items: center; gap: var(--space-2); }
+.plan-scrub input[type=range] { flex: 1; min-width: 0; }
+.plan-scrub__time { color: var(--color-text); font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+/* station card */
+.plan-card.hl-lay-card { width: min(var(--layout-sidebar), calc(100% - var(--space-4))); max-height: calc(100% - var(--space-4)); overflow: auto; }
+.plan-card__open { margin: var(--space-2) 0 0; }
+
+/* headline strip in the top bar */
+.hl-strip { display: flex; align-items: center; min-width: 0; height: 100%; }
+.hl-strip__row { display: flex; align-items: center; gap: var(--space-3); min-width: 0; white-space: nowrap; font-size: var(--font-size-small); line-height: var(--line-height-small); }
+.hl-strip__item { display: inline-flex; align-items: center; gap: var(--space-1); }
+.hl-strip__item .num { font-weight: var(--font-weight-heading); font-size: var(--font-size-body); color: var(--color-text); }
+.hl-strip__label { color: var(--color-text-muted); }
+.hl-strip__none { color: var(--color-text-muted); }
+.hl-strip__choice { position: relative; display: inline-flex; }
+.hl-strip__chip {
+  font: inherit; color: var(--color-text); background: var(--color-card); cursor: pointer;
+  border: 1px solid var(--color-card-border); border-radius: var(--radius-input); padding: var(--space-1) var(--space-2);
+}
+.hl-strip__chip:focus-visible { outline: var(--line-focus-ring) solid var(--color-select); outline-offset: 2px; }
+.hl-strip__chip[aria-expanded=true] { border-color: var(--color-select); }
+.hl-strip__pop.hl-lay-pop { position: absolute; top: 100%; left: 0; z-index: 40; }
+.hl-strip__pop > .hl-iconbtn { display: none; }
+.hl-strip__pop .hl-lay-pop__panel { margin-top: var(--space-1); white-space: normal; }
+.hl-strip__pop .plan-slot h3 { display: none; }
+/* narrow top bars: the labels go first, then the chips' labels */
+@media (max-width: 1279px) {
+  .hl-strip__chip .hl-strip__label { display: none; }
+  .hl-strip__row { gap: var(--space-2); }
+}
+
+/* the descent intro hides the chrome (story.css); like the dock, the bottom drawer keeps the pointer so a
+   click on Play both skips the intro and plays (shell.css, A7b) */
+html[data-story-chrome='hide'] .plan-layout .hl-lay-bottom, html[data-story-chrome='hide'] .plan-layout .hl-lay-bottom .hl-ui { pointer-events: auto; }

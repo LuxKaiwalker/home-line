@@ -34,7 +34,7 @@ test.describe('console unmount race', () => {
     await cdp.send('Emulation.setCPUThrottlingRate', { rate: 4 })
     for (let delay = 0; delay <= 1000; delay += 100) {
       await page.goto('/?intro=0#/')
-      await page.locator('.console-panel .headline-value').waitFor({ timeout: 30_000 })
+      await page.locator('.console .headline-value').waitFor({ state: 'attached', timeout: 30_000 }) // L2: in the closed plan table
       await page.waitForTimeout(delay)
       await page.evaluate(() => (location.hash = '#/trade'))
       await page.waitForTimeout(1_000)
@@ -83,24 +83,26 @@ test.describe('rank markers', () => {
 test.describe('parking option provenance', () => {
   test('choosing rank 3 never shows the old route under rank-3 keys', async ({ page }) => {
     await page.goto('/?intro=0#/')
-    const legs = page.locator('.console-panel .route-legs')
+    // L2 (D111): the route and the parking options are in the plan table of the bottom drawer
+    await page.locator('[aria-controls="hl-lay-plan-bottom"]').click()
+    const legs = page.locator('.console .route-legs')
     await legs.waitFor({ timeout: 30_000 })
     await page.evaluate(() => {
       const w = window as unknown as { __unbacked: string[] }
       w.__unbacked = []
-      const panel = document.querySelector('.console-panel')!
+      const panel = document.querySelector('.console')!
       const seen = (n: Node) => {
         if (!(n instanceof Element)) return
         for (const el of [n, ...n.querySelectorAll('.num-unbacked')]) if (el.classList.contains('num-unbacked')) w.__unbacked.push(`${el.textContent} | ${el.getAttribute('title')}`)
       }
       new MutationObserver((ms) => ms.forEach((m) => m.addedNodes.forEach(seen))).observe(panel, { childList: true, subtree: true })
     })
-    const before = await page.locator('.console-panel .num-unbacked').count()
+    const before = await page.locator('.console .num-unbacked').count()
     await page.locator('.pad-picker tbody tr', { hasText: /rank\s*3/ }).click()
     await expect(page.locator('.pad-picker tbody tr.on')).toContainText(/rank\s*3/)
     await expect(legs).toContainText('37.7') // rank 3's first leg, from its own route file
     await page.waitForTimeout(500)
     expect(await page.evaluate(() => (window as unknown as { __unbacked: string[] }).__unbacked)).toEqual([])
-    expect(await page.locator('.console-panel .num-unbacked').count()).toBe(before)
+    expect(await page.locator('.console .num-unbacked').count()).toBe(before)
   })
 })

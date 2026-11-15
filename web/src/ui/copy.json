@@ -668,6 +668,36 @@
     "independence": "Independent team project for the Space Apps Challenge; not affiliated with any space agency."
   },
 
+  "layout": {
+    "strip": {
+      "label": "Plan headline",
+      "reach": "{budget}-min reach",
+      "margin": "Tightest margin",
+      "scenario": "Scenario",
+      "budget": "Walkback budget",
+      "budgetValue": "{budget} min"
+    },
+    "bottom": {
+      "label": "Plan details",
+      "expand": "Show the plan table and the timeline",
+      "collapse": "Hide the plan table and the timeline",
+      "planTable": "Plan table",
+      "timeline": "Timeline",
+      "total": "total",
+      "stations": "{n} stations",
+      "routeLoading": "Loading the route for {label}…",
+      "noRoute": "No route for {label}"
+    },
+    "layers": { "label": "Layers" },
+    "legend": { "label": "Legend" },
+    "station": {
+      "open": "Open station",
+      "loading": "Loading the station card…"
+    },
+    "storageTitle": "Stored in this browser",
+    "privacy": "There are no accounts or logins and no cookies. Saved plans, and which panels and view you left open, stay in this browser only; nothing else uses browser storage."
+  },
+
   "a11y": {
     "mapSummary": "Map: the homeline covers {reachable} of the {budget_min}-minute flat circle around the rover pad",
     "mapSummaryStations": "{reachable_count} of {station_count} science targets are reachable on foot"

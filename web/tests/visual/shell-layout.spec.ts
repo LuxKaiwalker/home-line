@@ -6,9 +6,10 @@
  * the rail and the selection card stacked under the map.
  *   - Play takes a real click (Playwright actionability: visible, stable, receives the pointer), also
  *     while the descent intro (M10) hides the chrome, and pauses again while the clock runs.
- *   - Tablet (768–1279): the map region keeps the full width beside a 56 px icon rail and everything
- *     above the 96 px dock; the selection card overlays the map and never covers the dock or the rail.
- *   - Desktop: 320 rail | map | 360 sidebar, 120 dock, as before.
+ *   - L2 (D111): in Plan, at both sizes, the map region keeps the full width beside a 56 px icon rail
+ *     (its toggle opens the rail as a sheet over the map) and the full height under the top bar; the
+ *     timeline is the bottom drawer's slim scrubber (Play = .hl-tl__play there); a station selection
+ *     opens the station card on the map (the sidebar stays closed).
  * Run: cd web && npm run build && npx playwright test tests/visual/shell-layout.spec.ts
  */
 import { expect, test, type Page } from 'playwright/test'
@@ -55,23 +56,23 @@ test.describe('timeline dock Play', () => {
   })
 })
 
-test.describe('shell layout (§4.3)', () => {
-  test('the map region keeps the viewport; a selection never covers the dock', async ({ page }) => {
+test.describe('shell layout (§4.3; L2 Plan declutter, D111)', () => {
+  test('the Plan map keeps the viewport beside a 56 px rail; a station selection opens its card on the map, not the sidebar', async ({ page }) => {
     const vp = page.viewportSize()!
-    const tablet = vp.width < 1280
     await page.goto('/?intro=0#/')
     await page.locator('.hl-tl__play').waitFor({ timeout: 30_000 })
     const main = await box(page, 'main.outlet')
     const rail = await box(page, '.hl-rail')
-    const dock = await box(page, '.hl-dock')
-    const dockH = tablet ? 96 : 120
-    const railW = tablet ? 56 : 320
+    const bottom = await box(page, '.plan-layout .hl-lay-bottom')
+    const railW = 56 // L2: icon column by default in Plan at every size
     expect(Math.round(rail.width)).toBe(railW)
-    expect(Math.round(dock.height)).toBe(dockH)
+    await expect(page.locator('.hl-shell')).toHaveAttribute('data-dock', 'none') // the timeline is in the bottom drawer
     expect(Math.round(main.x)).toBe(railW)
     expect(Math.round(main.width)).toBe(vp.width - railW)
-    expect(Math.round(main.height)).toBe(vp.height - TOP_BAR - dockH)
-    expect(Math.round(dock.y)).toBe(vp.height - dockH)
+    expect(Math.round(main.height)).toBe(vp.height - TOP_BAR)
+    // the collapsed bottom drawer: one line along the bottom map edge
+    expect(Math.round(bottom.y + bottom.height)).toBe(vp.height)
+    expect(bottom.height).toBeLessThanOrEqual(48)
 
     // select station S7 through the search palette (U17: Enter opens the same card as a map click)
     await page.keyboard.press('Control+k')
@@ -79,26 +80,21 @@ test.describe('shell layout (§4.3)', () => {
     await search.fill('S7')
     await expect(page.getByRole('option', { selected: true })).toContainText('S7')
     await search.press('Enter')
-    await page.locator('.hl-shell[data-sidebar="open"]').waitFor({ state: 'attached', timeout: 30_000 })
-    await page.locator('.hl-sidebar .hl-card').first().waitFor({ timeout: 30_000 })
-    const side = await box(page, '.hl-sidebar')
+    const card = page.locator('#hl-lay-station')
+    await card.waitFor({ timeout: 30_000 })
+    await expect(card.getByRole('link', { name: 'Open station' })).toHaveAttribute('href', /#\/station\/S7$/)
+    await expect(page.locator('.hl-shell')).toHaveAttribute('data-sidebar', 'closed')
+    const c = await box(page, '#hl-lay-station')
     const main2 = await box(page, 'main.outlet')
-    expect(Math.round(side.width)).toBe(360)
-    expect(overlaps(side, await box(page, '.hl-dock'))).toBe(false)
-    expect(overlaps(side, await box(page, '.hl-rail'))).toBe(false)
-    if (tablet) {
-      // overlay on the right of the map region: the map region itself keeps its size
-      expect(Math.round(main2.width)).toBe(vp.width - railW)
-      expect(Math.round(side.x + side.width)).toBe(vp.width)
-      expect(Math.round(side.height)).toBe(Math.round(main2.height))
-    } else {
-      expect(Math.round(main2.width)).toBe(vp.width - railW - 360)
-    }
+    expect(Math.round(main2.width)).toBe(vp.width - railW) // the map keeps its size
+    expect(c.x).toBeGreaterThanOrEqual(main2.x - 1)
+    expect(c.x + c.width).toBeLessThanOrEqual(main2.x + main2.width + 1)
+    await page.keyboard.press('Escape') // the topmost container closes first
+    await expect(card).toHaveCount(0)
     await clickPlayAndPause(page)
   })
 
-  test('tablet: the rail toggle opens the full rail over the map and a rail link closes it', async ({ page }) => {
-    test.skip(page.viewportSize()!.width >= 1280, 'tablet only')
+  test('the rail toggle opens the full rail over the map; the map does not move', async ({ page }) => {
     await page.goto('/?intro=0#/')
     await page.locator('.hl-tl__play').waitFor({ timeout: 30_000 })
     const toggle = page.locator('.hl-rail__toggle')
@@ -107,7 +103,7 @@ test.describe('shell layout (§4.3)', () => {
     await expect(page.locator('.hl-shell')).toHaveAttribute('data-rail', 'open')
     expect(Math.round((await box(page, '.hl-rail')).width)).toBe(320)
     expect(Math.round((await box(page, 'main.outlet')).x)).toBe(56) // overlay: the map does not move
-    await page.locator('.hl-rail__view', { hasText: 'Trade table' }).click()
+    await toggle.click()
     await expect(page.locator('.hl-shell')).toHaveAttribute('data-rail', 'collapsed')
   })
 })

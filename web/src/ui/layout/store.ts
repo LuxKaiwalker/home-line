@@ -141,6 +141,18 @@ export function bindLayoutStorage(get: () => StorageLike | null): void {
   saved = readSaved()
 }
 
+/** Bind the remembered layout to this browser's storage (the app shell calls it once). The only place
+ *  in the app outside live/plans/ that names browser storage (privacy note; WP16 allowlists this file). */
+export function bindBrowserStorage(): void {
+  bindLayoutStorage(() => {
+    try {
+      return globalThis.localStorage ?? null
+    } catch {
+      return null
+    }
+  })
+}
+
 // ---------------------------------------------------------------- registry
 
 const persists = (s: ContainerSpec): boolean => s.persist ?? (s.kind === 'drawer' || s.kind === 'section')

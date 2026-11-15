@@ -31,6 +31,7 @@ import { CellSlopeNote, PlanningRuleNote } from '../components/DecisionNotes'
 import { choosePlanScenario, mission, resolvePlanScenario } from '../state/mission'
 import { useSignalValue } from '../state/signal'
 import type { View } from './types'
+import { HeadlineStrip, makeSlots, mountPlanLayout, PlanSummary, S, SlotsCtx } from './planLayout'
 
 const LAYER_LABELS: Record<LayerGroup, string> = {
   basemap: 'Basemap',
@@ -50,12 +51,27 @@ export const view: View = async (el) => {
   el.innerHTML = `<div class="console"><div class="console-map"></div><aside class="console-panel"></aside></div>`
   const mapEl = el.querySelector<HTMLElement>('.console-map')!
   const panelEl = el.querySelector<HTMLElement>('.console-panel')!
+  // L2 (D111): inside the app shell the console sections go into the layout containers over the map
+  // (headline strip, bottom drawer, popovers); ?legacy=1 keeps the side panel as it was.
+  const host = el.closest('.hl-shell') ? 'layout' : 'legacy'
+  const slots = makeSlots(panelEl, host)
   await ensureManifest()
+  let openCard: (id: string) => void = () => {}
   const cmap = new ConsoleMap(mapEl, (id) => {
     select({ kind: 'station', id }, 'map') // U14: same card as the list and search
-    location.hash = href({ name: 'station', id })
+    // L0 Q1: in the layout a map click selects only (station card); the full page is one click away
+    if (host === 'layout') openCard(id)
+    else location.hash = href({ name: 'station', id })
   })
-  render(<ConsolePanel cmap={cmap} />, panelEl)
+  const root = panelEl.appendChild(document.createElement('div'))
+  root.className = 'console-root'
+  render(
+    <SlotsCtx.Provider value={slots}>
+      <ConsolePanel cmap={cmap} />
+    </SlotsCtx.Provider>,
+    root,
+  )
+  const stopLayout = host === 'layout' ? mountPlanLayout(mapEl, el.closest('.console')!, slots, cmap, (f) => (openCard = f)) : () => {}
   // Live pad tool (D48, WS13 U2; team lead D81): lazy, only in builds with VITE_LIVE=1.
   let alive = true
   let disposeLive: (() => void) | undefined
@@ -65,7 +81,8 @@ export const view: View = async (el) => {
   return () => {
     alive = false
     disposeLive?.()
-    render(null, panelEl)
+    stopLayout()
+    render(null, root)
     cmap.destroy()
   }
 }
@@ -333,13 +350,13 @@ function ConsolePanel({ cmap }: { cmap: ConsoleMap }) {
 
   if (error && !idx) {
     return (
-      <div class="panel-body">
+      <S name="notes">
         <h2>Planning console</h2>
         <DataProblem error={error} what="Scenarios" />
-      </div>
+      </S>
     )
   }
-  if (!idx || !scenario) return <div class="panel-body muted">Loading…</div>
+  if (!idx || !scenario) return <S name="notes"><p class="muted">Loading…</p></S>
 
   const pick = (variant: string, suit: number) => {
     const s = findScenario(idx, variant, suit)
@@ -355,11 +372,28 @@ function ConsolePanel({ cmap }: { cmap: ConsoleMap }) {
   const label = (g: LayerGroup) => (g === 'partner' ? partnerLabel(partner) : LAYER_LABELS[g])
   const rd = routeData?.key === routeProps.routeKey ? routeData : null
 
+  const headline30 = padSel && padF ? null : { v: h.reachable_pct, k: `reachable_pct.${scenario.id}.${hb}`, file: 'scenarios/index.json', budget: hb }
   return (
-    <div class="panel-body">
-      <DummyNote />
-      {error != null && <DataProblem error={error} what="Scenario layers" />}
+    <>
+      <S name="notes">
+        <DummyNote />
+        {error != null && <DataProblem error={error} what="Scenario layers" />}
+      </S>
 
+      <HeadlineStrip
+        h30={headline30}
+        h60={padSel && padF ? null : headline60(scenario)}
+        sid={scenario.id}
+        pad={padSel && padF ? { id: padSel, summary: padSummary?.id === padSel ? padSummary : null, file: padF.summary } : null}
+        route={rd ? { timeline: rd.timeline, file: routeProps.timelineFile, key: routeProps.timelineKey } : null}
+        scenarioText={`${scenario.variant} · ${scenario.suit_kg} kg`}
+        budget={budget}
+      />
+      <S name="summary">
+        <PlanSummary route={rd?.route ?? null} label={routeProps.label} file={routeProps.timelineFile} routeKey={routeProps.routeKey} loading={!rd} stations={stations?.length ?? null} />
+      </S>
+
+      <S name="headline">
       {padSel && padF ? (
         <PadHeadline id={padSel} summary={padSummary?.id === padSel ? padSummary : null} file={padF.summary} budget={budget} error={padError} />
       ) : (
@@ -382,11 +416,15 @@ function ConsolePanel({ cmap }: { cmap: ConsoleMap }) {
           <Headline60 entry={scenario} />
         </section>
       )}
+      </S>
 
-      {padIndex && nominal && <PadPicker index={padIndex} selected={padSel} onPick={pickPad} suitKg={nominal.suit_kg} />}
+      <S name="padpicker">{padIndex && nominal && <PadPicker index={padIndex} selected={padSel} onPick={pickPad} suitKg={nominal.suit_kg} />}</S>
 
-      <RouteSection {...routeProps} route={rd?.route ?? null} timeline={rd?.timeline ?? null} loading={!rd} shown={visible.route} onShow={(on) => toggle('route', on)} />
+      <S name="route">
+        <RouteSection {...routeProps} route={rd?.route ?? null} timeline={rd?.timeline ?? null} loading={!rd} shown={visible.route} onShow={(on) => toggle('route', on)} />
+      </S>
 
+      <S name="scenario">
       <section>
         <h3>Scenario</h3>
         <div class="seg" role="radiogroup" aria-label="Variant">
@@ -423,7 +461,9 @@ function ConsolePanel({ cmap }: { cmap: ConsoleMap }) {
           {!mode.scenarioPicker && <> Locked to <code>{scenario.id}</code> while a parking option is selected (options are computed for it only).</>}
         </p>
       </section>
+      </S>
 
+      <S name="budget">
       <section>
         <h3>Walkback budget</h3>
         <div class="seg" role="radiogroup" aria-label="Walkback budget">
@@ -448,7 +488,9 @@ function ConsolePanel({ cmap }: { cmap: ConsoleMap }) {
           <p class="caption slider-off">Budget slider off: no isochrones are computed for parking options. Select the official pad to use it.</p>
         )}
       </section>
+      </S>
 
+      <S name="layers">
       <section>
         <h3>Layers</h3>
         {(Object.keys(LAYER_LABELS) as LayerGroup[])
@@ -461,7 +503,9 @@ function ConsolePanel({ cmap }: { cmap: ConsoleMap }) {
             </label>
           ))}
       </section>
+      </S>
 
+      <S name="legend">
       <Legend
         visible={visible}
         budget={budget}
@@ -473,16 +517,20 @@ function ConsolePanel({ cmap }: { cmap: ConsoleMap }) {
         proposal={visible.siting ? proposal : null}
         padOptions={!!padIndex}
       />
+      </S>
 
+      <S name="roverpad">
       {padUse && (
         <section>
           <h3>Rover pad</h3>
           <PadInUseText u={padUse} />
         </section>
       )}
+      </S>
 
-      {visible.siting && <PadProposalSection p={proposal} heatmap={sitingShown} pad={padInfo} />}
+      <S name="siting">{visible.siting && <PadProposalSection p={proposal} heatmap={sitingShown} pad={padInfo} />}</S>
 
+      <S name="stations">
       <section>
         <h3>Stations</h3>
         {stations ? (
@@ -557,7 +605,8 @@ function ConsolePanel({ cmap }: { cmap: ConsoleMap }) {
           </p>
         )}
       </section>
-    </div>
+      </S>
+    </>
   )
 }
 
