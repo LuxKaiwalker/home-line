@@ -24,6 +24,8 @@ import { isStationStop, layoutIds, ROUTE_LIMITS, type PlanRoute, type RouteCheck
 import { failureText, fill, infeasibleText, ROUTE_PROBLEM_TEXT, ROUTE_TEXT as T, STOP_PROBLEM_TEXT } from './text'
 import { AddPointButton, GhostSummary, PointRowBody } from './map/rows'
 import type { SharedUndo } from './undo'
+import type { RouteEstimate } from './instant/estimate'
+import { EstimateBox } from './instant/view'
 import './route.css'
 
 export interface RouteRow {
@@ -94,6 +96,8 @@ export interface RoutePanelViewProps {
   resultSlot?: ResultSlot | null
   /** WP12: the root element (the panel focuses the progress through it) */
   rootRef?: { current: HTMLDivElement | null }
+  /** I1b (D128): the instant browser estimate (recomputed on every edit; Send to simulator); null = none */
+  estimate?: RouteEstimate | null
 }
 
 /** ids of the reason notes the disabled controls point at (aria-describedby); one panel per page */
@@ -227,6 +231,8 @@ export function RoutePanelView(p: RoutePanelViewProps) {
 
   return (
     <div class="hl-route" ref={p.rootRef} data-mode={route.mode} data-state={c.kind} data-feasible={c.kind === 'done' && c.result.feasibility ? String(c.result.feasibility.feasible) : undefined}>
+      {/* I1b (D128): the instant browser estimate first; the server's answer (R5-C) right below */}
+      {p.estimate ? <EstimateBox est={p.estimate} route={route} /> : null}
       {/* the answer first: visible without scrolling the rail (R5-C); details below */}
       {c.kind === 'done' ? <ResultView c={c} slot={p.resultSlot} /> : null}
       {c.kind === 'failed' ? (
@@ -409,7 +415,21 @@ export function RoutePanelView(p: RoutePanelViewProps) {
 const NO_REASON = signal<string | null>(null)
 
 /** The panel bound to the controller (re-renders on every signal it shows). */
-export function RoutePanel({ ctl, live, reason, undo, resultSlot }: { ctl: RouteController; live: ReadSignal<boolean>; reason?: ReadSignal<string | null>; undo?: SharedUndo | null; resultSlot?: ResultSlot | null }) {
+export function RoutePanel({
+  ctl,
+  live,
+  reason,
+  undo,
+  resultSlot,
+  estimate,
+}: {
+  ctl: RouteController
+  live: ReadSignal<boolean>
+  reason?: ReadSignal<string | null>
+  undo?: SharedUndo | null
+  resultSlot?: ResultSlot | null
+  estimate?: RouteEstimate | null
+}) {
   const why = useSignalValue(reason ?? NO_REASON)
   const rootRef = useRef<HTMLDivElement | null>(null)
   const props: RoutePanelViewProps = {
@@ -428,6 +448,7 @@ export function RoutePanel({ ctl, live, reason, undo, resultSlot }: { ctl: Route
     rootRef,
     layout: useSignalValue(ctl.layout),
     resultSlot,
+    estimate: estimate ?? null,
   }
   useSignalValue(ctl.legs)
   useSignalValue(ctl.store.step) // the inputs line (pad, crew)

@@ -12,7 +12,10 @@
 //            plan in use) + the crew panel's changed fields + the route; the Live pad card calls
 //            `compute()` of the handle given to onReady (opens this section, same controller action).
 //            One undo (W-5, edit/route/undo.ts) behind the global Ctrl/Cmd-Z and the panel buttons.
-//            Offline (L-05, D114): a one-line note in place of the section, no controls.
+//            I1b (D128, instant browser path): the panel is shown whatever /health says; every route
+//            edit recomputes the whole route in the browser (edit/route/instant, next animation frame,
+//            no server call) and "Send to simulator" exports that estimate. Offline only the server's
+//            Compute plan is unavailable (a small note next to it, L-05's text).
 import { h } from 'preact'
 import { createRouteController, type RouteController } from '../../edit/route/controller'
 import type { StationGeo, StopProbe } from '../../edit/route/model'
@@ -31,7 +34,8 @@ import { activeField, VARIANT_OF } from '../../map/field'
 import { mission } from '../../state/mission'
 import { officialPart } from '../../state/official'
 import { effect, signal } from '../../state/signal'
-import { offlineNoteText, RouteOfflineNote } from '../../edit/route/offline'
+import { offlineNoteText } from '../../edit/route/offline'
+import { createRouteEstimate, type RouteEstimateOptions } from '../../edit/route/instant/estimate'
 import { dockContent, registerRailSection, setDockContent, setRailCollapsed, shell, type Render } from '../../ui/shell/store'
 import { planUrl } from '../plan'
 import type { ApiClient } from '../client'
@@ -67,6 +71,8 @@ export interface MountRouteOptions {
   resultSlot?: ResultSlot | null
   /** WP12: the window for the one undo (default: window; null: none) */
   win?: UndoWindow | null
+  /** I1b test seams of the browser estimate (compute core, frame scheduler, download) */
+  estimate?: Pick<RouteEstimateOptions, 'core' | 'raf' | 'now' | 'save'>
 }
 
 /** What the Live pad card may do with the route panel (W-1). */
@@ -224,6 +230,9 @@ export function mountRoutePanel(o: MountRouteOptions): () => void {
       canCompute: live,
       blocked,
     }))
+    // I1b (D128): the instant browser estimate, recomputed on every route / plan edit (no API involved)
+    const est = createRouteEstimate({ store, pad: padOf, ...o.estimate })
+    offs.push(() => est.dispose())
     // W-9 (L7b, T9): the top bar's "Official plan" clears a shown route result or a running job
     const op = officialPart('live-route', () => c.reset())
     offs.push(
@@ -260,52 +269,39 @@ export function mountRoutePanel(o: MountRouteOptions): () => void {
         }
       }),
     )
-    // Kit rule 4 / F23: live controls hide behind the offline banner. The section is registered only
-    // while /health says the server is ready (heavy jobs off: shown, Compute disabled with the reason);
-    // the route and its undo history stay in memory and come back with the server.
+    // I1b (D128): the section is registered once and stays, API up or down: the browser estimate and
+    // Send to simulator need no server. Kit rule 4 / F23 now covers the server's Compute plan only:
+    // disabled with the offline note (L-05's text) as its reason; a running job is dropped.
     let unregister: (() => void) | null = null
-    let noteOff: (() => void) | null = null
-    const noteText = signal<string | null>(ROUTE_TEXT.checkingLive)
-    // L-05 (D114): while the planner is unreachable the section shows one line, no controls (kit rule 4)
-    const note = () =>
-      (o.register ?? registerRailSection)({ id: ROUTE_SECTION_ID, modes: ['plan'], title: 'nav.rail.stationsRoute', icon: 'station', render: () => h(RouteOfflineNote, { note: noteText, key: 'offline' }) })
     const section = () => {
-      const off = (o.register ?? registerRailSection)({ id: ROUTE_SECTION_ID, modes: ['plan'], title: 'nav.rail.stationsRoute', icon: 'station', render: () => h(RoutePanel, { ctl: c, live, reason, undo, resultSlot: o.resultSlot ?? null, key: ROUTE_TEXT.title }) })
-      // WP6: free waypoints (markers, click to add) and the ghost route (estimate) on the console map,
-      // shown and hidden with the panel (offline: gone with the other live controls)
+      const off = (o.register ?? registerRailSection)({
+        id: ROUTE_SECTION_ID,
+        modes: ['plan'],
+        title: 'nav.rail.stationsRoute',
+        icon: 'station',
+        render: () => h(RoutePanel, { ctl: c, live, reason, undo, resultSlot: o.resultSlot ?? null, estimate: est, key: ROUTE_TEXT.title }),
+      })
+      // WP6: free waypoints (markers, click to add) and the ghost route (estimate) on the console map
       const offMap = installWaypointMap(c, o.cmap)
       return () => {
         offMap()
         off()
       }
     }
+    if (alive) unregister = section()
     offs.push(() => {
       unregister?.()
       unregister = null
-      noteOff?.()
-      noteOff = null
     })
     offs.push(
       o.onLiveState((s) => {
         const b = bannerFor(s)
         live.value = b.controls && b.heavyJobs
-        reason.value = b.controls ? (b.heavyJobs ? null : ROUTE_TEXT.heavyJobsOff) : (b.text ?? ROUTE_TEXT.checkingLive)
-        if (!b.controls) {
-          c.reset()
-          unregister?.()
-          unregister = null
-          noteText.value = offlineNoteText(s, b.text)
-          if (!noteOff && alive) noteOff = note()
-          emit()
-          return
-        }
-        noteText.value = null
-        noteOff?.()
-        noteOff = null
-        if (!unregister && alive) unregister = section()
+        reason.value = b.controls ? (b.heavyJobs ? null : ROUTE_TEXT.heavyJobsOff) : offlineNoteText(s, b.text)
+        if (!b.controls) c.reset()
         emit()
         // the engine identity (plan hash) is asked again once the server is back
-        if (!store.identity.peek()) askIdentity()
+        if (b.controls && !store.identity.peek()) askIdentity()
       }),
     )
     // R5-C: while a route result is shown, the EVA-time dock must not show the official plan's timeline

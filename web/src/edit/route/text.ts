@@ -25,7 +25,8 @@ export const ROUTE_TEXT = {
   cancel: 'Cancel',
   hash: 'Plan hash',
   hashPending: 'known once live planning answers',
-  needsLive: 'Computing a route needs live planning.',
+  // I1b (D128): only the server's Compute plan needs live planning; the instant estimate never does
+  needsLive: 'Compute plan on the server needs live planning; the instant estimate above works without it.',
   checkingLive: 'Checking whether live planning is reachable…',
   heavyJobsOff: 'Live planning is not taking new plans now.',
   legs: 'Legs',
@@ -62,7 +63,8 @@ export const ROUTE_TEXT = {
   whyStops: 'Fix the stops marked in the list first.',
   whyDragging: 'Drop the station first.',
   // WP12 (L-05, D114): in place of the section while the live planner is unreachable (no controls)
-  offlineNote: 'Route editing needs the live planner · it is offline right now',
+  // I1b (D128): only the server action is unavailable now (the panel and its estimate stay)
+  offlineNote: 'Server “Compute plan” is unavailable · the live planner is offline right now',
   // WP12 (L6 W-1): the Live pad card hands the compute to this panel
   cardCompute: 'Compute in Edit route',
   cardRunning: 'Computing in Edit route…',

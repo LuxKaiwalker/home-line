@@ -262,12 +262,14 @@ describe('Edit-route panel (Plan rail, live builds)', () => {
     expect(restored.n).toBe(1) // the console's static plan is put back
   })
 
-  it('API unreachable (kit rule 4 / F23, L-05): a one-line note replaces the panel (no controls), the panel comes back with the server, keeps the route; no errors', async () => {
+  it('API unreachable (I1b, D128): the panel stays with its browser estimate and Send to simulator; only Compute plan is off (L-05 note); no errors', async () => {
     const errs: unknown[] = []
     const spy = [vi.spyOn(console, 'error').mockImplementation((...a) => void errs.push(a)), vi.spyOn(console, 'warn').mockImplementation((...a) => void errs.push(a))]
     let up = false
     const real = withRouteMock(createMockFetch())
+    let calls = 0
     const flaky = (async (input: string, init?: RequestInit) => {
+      calls++
       if (!up) throw new TypeError('Failed to fetch')
       return real(input, init)
     }) as unknown as typeof fetch
@@ -275,6 +277,9 @@ describe('Edit-route panel (Plan rail, live builds)', () => {
     let section: RailSection | null = null
     let registrations = 0
     let live: ((s: LiveState) => void) | null = null
+    const computed: string[][] = []
+    const saved: { text: string; name: string }[] = []
+    const stopName = (x: object) => ('station' in x ? (x as { station: string }).station : 'W')
     cleanup = mountRoutePanel({
       client,
       onLiveState: (fn) => {
@@ -291,38 +296,68 @@ describe('Edit-route panel (Plan rail, live builds)', () => {
         registrations++
         return () => (section = null)
       },
+      estimate: {
+        raf: (fn) => setTimeout(fn, 0),
+        core: {
+          load: async () => ({}),
+          compute: (_d, _pad, stops) => {
+            computed.push(stops.map(stopName))
+            const names = ['pad', ...stops.map(stopName), 'pad']
+            return {
+              legs: names.slice(1).map((to, i) => ({ leg: i, from: names[i], to, walkMin: 10, o2UsedL: 10, marginMin: 30, binding: 'O2' })),
+              totals: { walkMin: 40, evaMin: 90, o2UsedL: 100, o2LeftL: 900 },
+              tightest: { marginMin: 30, binding: 'O2', leg: 0 },
+              feasibility: { feasible: true },
+            }
+          },
+          mission: (_r, ctx) => ({ schema_version: '1.1.0', origin_label: 'Estimate · browser, 5 m grid · not part of the validated scorecard', waypoints: ctx.stops.map(stopName) }),
+        },
+        save: (text, name) => void saved.push({ text, name }),
+      },
     })
     for (let i = 0; i < 20; i++) await act(async () => void (await flush()))
     expect(live).not.toBeNull()
     const shown = () => {
       act(() => render(section ? ((section as RailSection).render() as ComponentChildren) : null, root as unknown as Element))
-      return { note: q('hl-route-offline').map(text), panel: q('hl-route').length, controls: all(root, (n) => ['button', 'input'].includes(n.nodeName.toLowerCase())).length }
+      return { panel: q('hl-route').length, estimate: q('hl-route__estimate').length, compute: q('hl-route__compute')[0]?.hasAttribute('disabled') ?? null, reason: q('hl-route__reason').map(text) }
     }
-    // L-05 (D114): offline = one line in place of the section, no controls (kit rule 4: nothing half-done)
+    // the panel is there with the API down; only the server Compute plan is off, with the offline note
     expect(section).not.toBeNull()
-    expect(shown()).toEqual({ note: [ROUTE_TEXT.offlineNote], panel: 0, controls: 0 })
+    expect(shown()).toEqual({ panel: 1, estimate: 1, compute: true, reason: [`${ROUTE_TEXT.needsLive} ${ROUTE_TEXT.offlineNote}`] })
+    // route edits recompute in the browser, no server call
+    const before = calls
+    mode('ordered')
+    for (const id of ['S4', 'S1', 'S6', 'S7']) check(id)
+    await until(() => computed.length > 0 && computed.at(-1)!.length === 4, 'the browser estimate')
+    expect(computed.at(-1)).toEqual(['S4', 'S1', 'S6', 'S7'])
+    shown()
+    expect(q('hl-route__estimate')[0].getAttribute('data-route-estimate')).toBe('ready')
+    expect(text(q('hl-tag--estimate')[0])).toBe('Estimate · browser, 5 m grid · not part of the validated scorecard')
+    // Send to simulator works offline
+    const send = q('hl-route__send')[0]
+    expect(send.hasAttribute('disabled')).toBe(false)
+    await act(async () => {
+      send.dispatch('click')
+      await flush()
+    })
+    expect(saved).toHaveLength(1)
+    expect(saved[0].name).toMatch(/^homeline-mission-[0-9a-f]{8}\.json$/)
+    expect(JSON.parse(saved[0].text)).toMatchObject({ schema_version: '1.1.0', waypoints: ['S4', 'S1', 'S6', 'S7'] })
+    // nothing but the identity retries reached the (dead) API
+    expect(calls - before).toBeLessThanOrEqual(1)
     for (const st of [{ kind: 'checking' }, { kind: 'warming' }] as LiveState[]) {
       act(() => live!(st))
-      const v = shown()
-      expect(v.panel).toBe(0)
-      expect(v.controls).toBe(0)
-      expect(v.note).toHaveLength(1)
+      expect(shown()).toMatchObject({ panel: 1, estimate: 1, compute: true })
     }
-    act(() => live!({ kind: 'offline' } as LiveState))
-    expect(shown().note).toEqual([ROUTE_TEXT.offlineNote])
     up = true
     act(() => live!({ kind: 'ready', health: HEALTH_WARM } as LiveState))
-    // /health recovers: the note goes, the panel comes back without a reload
-    expect(shown()).toMatchObject({ note: [], panel: 1 })
+    // /health recovers: Compute plan comes back without a reload; the route stayed
+    expect(shown()).toMatchObject({ panel: 1, compute: false, reason: [] })
     await until(() => !text(q('hl-route__hash')[0]).includes(ROUTE_TEXT.hashPending), 'the identity asked again on recovery')
-    mode('ordered')
-    check('S4')
     act(() => live!({ kind: 'offline' } as LiveState))
-    expect(shown()).toEqual({ note: [ROUTE_TEXT.offlineNote], panel: 0, controls: 0 })
-    act(() => live!({ kind: 'ready', health: HEALTH_WARM } as LiveState))
-    expect(registrations).toBe(4) // note, panel, note, panel
-    expect(shown()).toMatchObject({ note: [], panel: 1 })
-    expect(order()).toEqual(['S4']) // the route survives the outage
+    expect(shown()).toMatchObject({ panel: 1, compute: true })
+    expect(registrations).toBe(1) // registered once: never swapped for a note
+    expect(order()).toEqual(['S4', 'S1', 'S6', 'S7']) // the route survives the outage
     expect(errs).toEqual([])
     spy.forEach((s) => s.mockRestore())
   })

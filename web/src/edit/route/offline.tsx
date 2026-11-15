@@ -5,6 +5,9 @@
 // offline banner). The live side (live/route/mount.tsx) drives `note` from the same health state the
 // panel uses (index.ts onLiveState + bannerFor): offline -> ROUTE_TEXT.offlineNote; checking or
 // warming -> the banner's text; ready -> null (the panel is back, without a reload).
+// I1b (D128, instant browser path): the panel no longer hides offline; this note now says only that the
+// server's Compute plan is unavailable (the browser estimate and Send to simulator keep working). The
+// live mount uses offlineNoteText as the Compute button's reason; L3 may still show the note elsewhere.
 import { useSignalValue, type ReadSignal } from '../../state/signal'
 import { ROUTE_TEXT } from './text'
 import './route.css'
