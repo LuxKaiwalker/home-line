@@ -32,6 +32,7 @@ function fakeCtx() {
       placed.push(rec)
       const m = {
         setLngLat: (ll: [number, number]) => ((rec.at = ll), m),
+        setOffset: () => m,
         addTo: () => m,
         remove: () => void (rec.removed = true),
       }

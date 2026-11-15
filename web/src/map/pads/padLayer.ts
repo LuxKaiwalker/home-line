@@ -10,7 +10,7 @@ import type { Dispose, MapExtensionContext, PadEnvironmentHandler } from '../ext
 import { listPads, loadPadIndex, prefetchPads } from '../../pads'
 import { OFFICIAL_PAD_ID, type PadEnv, type PadId, type PadInfo } from '../../pads/types'
 import { effect, signal } from '../../state/signal'
-import { motionMs } from '../../ui/tokens'
+import { motionMs, TOKENS } from '../../ui/tokens'
 import { containerSpec, openContainer, registerContainer, type CardMap } from '../../ui/layout'
 import { createEnvSwap, type EnvSwap, type SwapMap } from './swap'
 import { pt } from './copy'
@@ -121,7 +121,9 @@ export function createPadEnvironmentHandler(opts: PadLayerOptions = {}): PadEnvi
         padLayer.pads.value = list
         markers = list.map((p) => {
           const el = markerEl(doc, p)
-          return { id: p.id, p, el, m: ctx.marker(el).setLngLat([p.lon, p.lat]).addTo(ctx.map) }
+          // the label sits just under the pad point (the pad graphic and the rover drag stay clickable)
+          const m = ctx.marker(el).setLngLat([p.lon, p.lat]).setOffset([0, TOKENS.space[4]]).addTo(ctx.map)
+          return { id: p.id, p, el, m }
         })
         sync()
       }

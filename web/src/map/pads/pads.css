@@ -1,7 +1,6 @@
 /* PORT P2: pad markers, pad card and pad status on the Plan map. Tokens only (kit rule 2).
-   The short label sits just under the pad point, so the existing pad graphic (rover drag) stays clickable. */
+   The short label sits just under the pad point (Marker offset in padLayer.ts; MapLibre owns transform). */
 .hl-padmark {
-  transform: translateY(var(--space-4));
   font: inherit; font-size: var(--font-size-label); line-height: var(--line-height-label); font-weight: var(--font-weight-label);
   color: var(--color-text); background: var(--color-label-pill);
   border: 1px solid var(--color-card-border); border-radius: var(--radius-pill);
