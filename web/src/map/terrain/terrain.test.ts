@@ -146,7 +146,9 @@ describe('U1 tiles: the factor is baked in, exaggeration 1 = true shape', () => 
   })
 })
 
-describe('fps fallback state machine (below 30 fps for 3 s in 3D -> flat + notice)', () => {
+describe('fps fallback state machine (below performance.fps_3d_min for 3 s in 3D -> flat + notice; D38: 20 fps)', () => {
+  /** a frame rate under the threshold (L13: 15 fps against D38's 20; was 20 against 30) */
+  const SLOW = TERRAIN.fps3dMin - 5
   function run(w: FpsWatch, fps: number, fromMs: number, forMs: number): { state: FpsState; end: number } {
     let state: FpsState = 'ok'
     let t = fromMs
@@ -155,10 +157,10 @@ describe('fps fallback state machine (below 30 fps for 3 s in 3D -> flat + notic
     return { state, end: t }
   }
 
-  it('20 fps for 3 s trips; not before 3 s', () => {
+  it('slow (15 fps) for 3 s trips; not before 3 s', () => {
     const w = new FpsWatch()
-    expect(run(w, 20, 0, 2800).state).toBe('slow')
-    expect(run(new FpsWatch(), 20, 0, TERRAIN_PENDING.slowWindowMs + 100).state).toBe('tripped')
+    expect(run(w, SLOW, 0, 2800).state).toBe('slow')
+    expect(run(new FpsWatch(), SLOW, 0, TERRAIN_PENDING.slowWindowMs + 100).state).toBe('tripped')
   })
   it('40 fps never trips; exactly the config minimum is not slow', () => {
     expect(run(new FpsWatch(), 40, 0, 10000).state).toBe('ok')
@@ -166,11 +168,11 @@ describe('fps fallback state machine (below 30 fps for 3 s in 3D -> flat + notic
   })
   it('a 2.5 s dip that recovers does not trip, and the clock restarts after it', () => {
     const w = new FpsWatch()
-    const a = run(w, 20, 0, 2500)
+    const a = run(w, SLOW, 0, 2500)
     expect(a.state).toBe('slow')
     const b = run(w, 50, a.end, 1000)
     expect(b.state).toBe('ok')
-    expect(run(w, 20, b.end, 2500).state).toBe('slow')
+    expect(run(w, SLOW, b.end, 2500).state).toBe('slow')
   })
   it('idle gaps (on-demand rendering) are not slow frames', () => {
     const w = new FpsWatch()

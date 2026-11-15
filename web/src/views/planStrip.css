@@ -1,0 +1,37 @@
+/* Plan headline strip (L2a, D111) in the top bar. Tokens only (kit rule 2).
+   Each number sits under its label (two short lines in the 48 px bar), so the strip, the two chips and
+   L7b's Official plan button fit beside the mode tabs at 1440 and at 1024. */
+.hl-strip { display: flex; align-items: center; min-width: 0; height: 100%; overflow: hidden; margin-right: var(--space-3); }
+.hl-strip__row { display: flex; align-items: center; gap: var(--space-4); min-width: 0; white-space: nowrap; font-size: var(--font-size-small); line-height: var(--line-height-small); }
+.hl-strip__nums { display: flex; align-items: center; gap: var(--space-4); }
+.hl-strip__item { display: inline-flex; flex-direction: column; justify-content: center; }
+.hl-strip__value { display: inline-flex; align-items: center; gap: var(--space-1); }
+.hl-strip__item .num { font-weight: var(--font-weight-heading); font-size: var(--font-size-body); line-height: var(--line-height-small); color: var(--color-text); }
+.hl-strip__item .num:focus-visible { outline: var(--line-focus-ring) solid var(--color-select); outline-offset: 2px; border-radius: var(--radius-input); }
+.hl-strip__label, .hl-strip__none { color: var(--color-text-muted); }
+.hl-strip__short { display: none; }
+.hl-strip__choices { display: flex; align-items: center; gap: var(--space-2); }
+.hl-strip__choice { display: inline-flex; }
+.hl-strip__chip {
+  display: inline-flex; align-items: center; gap: var(--space-1);
+  font: inherit; color: var(--color-text); background: var(--color-card); cursor: pointer;
+  border: 1px solid var(--color-card-border); border-radius: var(--radius-input); padding: var(--space-1) var(--space-2);
+}
+.hl-strip__chip:hover { border-color: var(--color-text-muted); }
+.hl-strip__chip:focus-visible { outline: var(--line-focus-ring) solid var(--color-select); outline-offset: -2px; }
+.hl-strip__chip[aria-expanded=true] { border-color: var(--color-select); }
+/* the chip is the opener: the popover's own icon button is not shown. The panel hangs under the top
+   bar at the chip's own left edge (fixed, so the strip's overflow never clips it). */
+.hl-strip__pop.hl-lay-pop { position: fixed; top: var(--layout-top-bar); left: auto; right: auto; z-index: 40; }
+.hl-strip__pop > .hl-iconbtn { display: none; }
+.hl-strip__pop .hl-lay-pop__panel { margin-top: var(--space-1); white-space: normal; }
+.hl-strip__pop .plan-sectionhost h3 { display: none; } /* the popover title names it */
+/* tablet top bars: short labels, icon-only chips, no key hints on the mode tabs (P/Y/R/E stay in the
+   shortcut help and on aria-keyshortcuts), a tighter top bar */
+@media (max-width: 1279px) {
+  .hl-strip__row, .hl-strip__nums { gap: var(--space-2); }
+  .hl-strip__long, .hl-strip__chiptext { display: none; }
+  .hl-strip__short { display: inline; }
+  .hl-shell[data-mode=plan] .hl-modes__key { display: none; }
+  .hl-shell[data-mode=plan] .hl-topbar { gap: var(--space-3); }
+}

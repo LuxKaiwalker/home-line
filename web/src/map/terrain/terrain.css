@@ -66,3 +66,21 @@
   pointer-events: none;
 }
 .hl-terrain-notice[hidden] { display: none; }
+/* L13: the low-frame-rate note can be dismissed (× button): the note takes pointer events then */
+.hl-terrain-notice[data-dismissible] {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  pointer-events: auto;
+}
+.hl-terrain-notice[data-dismissible][hidden] { display: none; }
+.hl-terrain-notice__close {
+  flex: none;
+  padding: 0 var(--space-1);
+  border: 0;
+  background: transparent;
+  color: var(--color-text);
+  font: inherit;
+  cursor: pointer;
+}
+.hl-terrain-notice__close[hidden] { display: none; }
