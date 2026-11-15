@@ -78,6 +78,8 @@ jobs:
           VITE_API_BASE: ${{ vars.HL_API_URL }}
           # route editing on the published site: team lead 14:10 (D125), after the hl-prod smoke test
           VITE_ROUTE_EDIT: "1"
+          # simulator export on the published site: team lead 14:12 sim-test release (D126)
+          VITE_SIM_EXPORT: all
       - name: Built site has no dummy tree and no dummy-flagged file
         run: |
           test ! -e web/dist/data-dummy || { echo "::error::dist contains data-dummy/"; exit 1; }
