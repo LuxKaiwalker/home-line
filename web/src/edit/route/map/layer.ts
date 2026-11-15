@@ -66,6 +66,8 @@ export function attachWaypointMap(ed: WaypointEditor, cm: WaypointConsoleMap, o:
   let alive = true
   const offs: (() => void)[] = []
   const markers = new Map<string, { m: PointMarker; el: HTMLElement; off: () => void }>()
+  /** after a marker drag the browser's click lands on the map (MapLibre took the pointer): swallow it */
+  let swallowClick = false
 
   // ---- ghost layer --------------------------------------------------------------------------
   let ghostReady = false
@@ -120,6 +122,7 @@ export function attachWaypointMap(ed: WaypointEditor, cm: WaypointConsoleMap, o:
       ed.dragStart(el.dataset.point ?? name)
     })
     m.on('dragend', () => {
+      swallowClick = true
       el.classList.remove('is-dragging')
       const p = m.getLngLat()
       const cur = freePoints(ctl.store.route.peek()).find((f) => f.name === el.dataset.point)
@@ -198,8 +201,15 @@ export function attachWaypointMap(ed: WaypointEditor, cm: WaypointConsoleMap, o:
   // armed click places the point and nothing else (no selection card, no live pad from the pad tool).
   const container = cm.map.getContainer()
   const onDomClick = (e: Event): void => {
-    if (!ed.adding.peek()) return
     const canvas = cm.map.getCanvas()
+    if (swallowClick) {
+      swallowClick = false
+      if (e.target === canvas) {
+        e.stopPropagation() // the end of a marker drag is not a click on the map (no selection, no live pad)
+        return
+      }
+    }
+    if (!ed.adding.peek()) return
     if (e.target !== canvas) return // controls, markers, popups keep their clicks
     const me = e as MouseEvent
     const r = canvas.getBoundingClientRect()
@@ -208,8 +218,15 @@ export function attachWaypointMap(ed: WaypointEditor, cm: WaypointConsoleMap, o:
     e.preventDefault()
     ed.add(ll.lng, ll.lat)
   }
+  const onPress = (): void => {
+    swallowClick = false // a new press: whatever follows is a real click
+  }
   container.addEventListener('click', onDomClick, true)
-  offs.push(() => container.removeEventListener('click', onDomClick, true))
+  container.addEventListener('pointerdown', onPress, true)
+  offs.push(() => {
+    container.removeEventListener('click', onDomClick, true)
+    container.removeEventListener('pointerdown', onPress, true)
+  })
   const onKey = (e: Event) => {
     if ((e as KeyboardEvent).key === 'Escape' && ed.adding.peek()) {
       ed.cancelAdd()

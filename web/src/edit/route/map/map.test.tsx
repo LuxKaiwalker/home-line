@@ -191,6 +191,10 @@ describe('map binding: markers, armed click, ghost layer', () => {
     m.handlers.get('dragend')!()
     expect(store.past.value).toHaveLength(steps + 1)
     expect(store.route.value.stops[0]).toEqual({ lon: 137.405, lat: -4.7765 })
+    // the browser's click after the drop lands on the map: swallowed (no selection, no live pad); the next one is real
+    expect(fm.click(137.405, -4.7765)).toBe(true)
+    fm.container.fire('pointerdown')
+    expect(fm.click(137.405, -4.7765)).toBe(false)
     ctl.undo()
     expect(m.ll).toEqual([137.404, -4.776])
     expect(m.el.fire('click')).toBe(true) // a click on a marker never reaches the map (no add, no select)
