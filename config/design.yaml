@@ -65,7 +65,8 @@ route:                               # added by D6b 2026-11-15 (DESIGN U4; notes
   coming_opacity: 0.5                # DESIGN U4 "coming legs at 50% opacity"
   width_px: 2.5                      # assumed: true (M5): route line width
   turnback_tick_m: 30                # assumed: true (M5): turn-back tick length across the arriving direction, ground metres
-  assumed: [width_px, turnback_tick_m]
+  heuristic_weight: 1.6              # assumed: true (PORT R2, Notion port plan §3): weighted A* w for the browser's fast route (cost <= w x fastest; labelled "Fast route"); the idle refine runs at w = 1
+  assumed: [width_px, turnback_tick_m, heuristic_weight]
 thread:
   update_hz: 30
   dash_steps: 14                     # frames per dash cycle
