@@ -1950,16 +1950,15 @@ Branch: `ws10-vo`
 - Caveat for step 2: 256² only (f ≈ 306 px); the mast looks right and down (az 90°, el −29°) on 4 drives and forward on sol 5070, so VO sees near-field ground.
 - VO: a failed step or a missing drive-end pair is bridged with the onboard relative pose (reported as `bridged_m`, never hidden); at the start pose the last pair before driving is used, elsewhere the first pair at a pose.
 
-## Backend (WS2 support, WS11–WS14), orchestrated — B1′ and B2′ met (02:45)  (updated 2026-11-15T01:50Z)
-Source of truth: Notion decision log and the backend agent kit. Demo cut D69. Orchestrator state: /tmp/hl-orch/ on the build machine. Overnight (D71): Notion Overnight log.
-Done:        setup S1–S9, S1b–S1e, S2b–S2d, S5b, T1 (contracts/backend v1.1.0; config; Makefile serve 127.0.0.1:8012, stack-up/down; server.yml; job timeout 600 s assumed); WS2 W1–W4; WS11 E1–E8, E10, E1b, E8b; WS12 O1, O3, O1b; WS13 U1–U4, U1b, U3b; SIM0 (docs/simulator-integration.md); H2 fallback drill (passes); H5 end-to-end check (docs/hardening/e2e-demo.md)
-Doing:       E8c staged map arrival (partial index per stage, D81); hardening H1 load test, H3 privacy note (behind VITE_LIVE)
-Next:        BACKEND DONE after hardening (D75), then watch mode
+## Backend (WS2 support, WS11–WS14), orchestrated — BACKEND DONE (Sun 10:17 CET)  (updated 2026-11-15T09:20Z)
+Source of truth: Notion decision log (D1–D94) and the backend agent kit. Demo cut D69. Orchestrator state: /tmp/hl-orch/ on the build machine.
+Done:        setup and contracts (contracts/backend v1.1.0); WS2 W1–W4; WS11 E1–E8, E10 with fixes E1b, E7b, E8b, E8c, E10b; WS12 O1, O3 with O1b, O3b; WS13 U1–U4 with U1b, U3b; SIM0 (docs/simulator-integration.md); hardening: fallback drill (docs/hardening/fallback-drill.md), end-to-end check (docs/hardening/e2e-demo.md), load test with 10 guests (docs/hardening/load-test.md), privacy note in live builds
+Doing:       watch mode (main CI + make server-test every 30 min)
 Blocked:     none
-Assumptions: config/backend.yaml assumed: title/notes/message caps, ranges.start_lmst_h, ranges.reserve_min, limits.proxy_max_body_bytes, compute.job_timeout_s
-Parity:      real-data make parity green on 9b8aebc (E8b): 29 passed, 98 files, 0 differ
-Demo:        API `make serve` (127.0.0.1:8012, HL_SERVER_DATA=~/hl-data/server) + `cd web && VITE_LIVE=1 npm run dev` (localhost:5173); a custom pad takes about 6 min, a new crew about 6–8 min
-Follow-up:   C rebuilds the Unity fixture (make bundle-fixture) before the deadline; the local bundle KAT is skipped until then
+Assumptions: config/backend.yaml assumed: title/notes/message caps, ranges.start_lmst_h, ranges.reserve_min, limits.proxy_max_body_bytes, compute.job_timeout_s (600)
+Parity:      real-data make parity green on 7f92af5 (E10b): 29 passed, 98 files, 0 differ
+Demo:        `make serve` (127.0.0.1:8012, HL_SERVER_DATA=~/hl-data/server) + `cd web && VITE_LIVE=1 npm run dev` (localhost:5173); demo pad rank 2; a custom pad takes about 6 min (first map content about 2 min); keep other heavy work off the machine
+After the event (D93): suit mass and O2 reserve inputs, precomputed station fields in build_plan; delete ~/hl-data/server/cache/station_fields and the access logs after judging; C rebuilds the Unity fixture
 
 ## Decision log (fresh run, recorded by C)
 
