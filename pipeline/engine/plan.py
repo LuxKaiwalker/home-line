@@ -112,8 +112,8 @@ def build_plan(
     (auto); a list of station stops (``"S4"`` or ``{"station": "S4"}``) = an ordered route
     applied to every route scenario (traverse.plan). Unknown or repeated stations raise
     traverse.RouteStopError before any work; an infeasible order is a result: the summary
-    gets ``route`` {mode, stops, scenario, feasibility (the default scenario's)} and
-    ``routes.{sid}.feasibility``.
+    gets ``route`` {mode, stops, scenario (the default scenario, whose feasibility the run
+    record carries), feasibility {scenario id: block}} and ``routes.{sid}.feasibility``.
     """
     with provenance.to_dir(manifest_dir):
         return _build(grid, pad_lonlat, list(scenario_ids), settings, Path(out_dir),
@@ -252,7 +252,7 @@ def _build(grid, pad_lonlat, sids, settings, out, pub, terrain, st_in, missing_i
     }  # fmt: skip
     if route is not None:  # D97: only an ordered route adds the block (auto stays as it was)
         summary["route"] = {"mode": "ordered", "stops": route, "scenario": default,
-                            "feasibility": routes.get(default, {}).get("feasibility")}
+                            "feasibility": {sid: r["feasibility"] for sid, r in routes.items()}}
     if crew:  # F26: only a custom crew adds the block (the batch summary stays as it was)
         summary["crew"] = physio.crew_values(crew)
     summ = out / "summary.json"

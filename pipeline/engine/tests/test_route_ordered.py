@@ -342,7 +342,7 @@ def test_build_plan_route(tmp_path):
     rev = list(reversed(order))
     summ = build_plan(grid, out_dir=tmp_path / "ord", route=rev, **kw)
     assert summ["route"] == {"mode": "ordered", "stops": rev, "scenario": "nom_104",
-                             "feasibility": {"feasible": True}}  # fmt: skip
+                             "feasibility": {"nom_104": {"feasible": True}}}  # fmt: skip
     assert summ["routes"]["nom_104"]["order"] == rev
     assert summ["routes"]["nom_104"]["feasibility"] == {"feasible": True}
     ta, tb = _tree(tmp_path / "auto"), _tree(tmp_path / "ord")
