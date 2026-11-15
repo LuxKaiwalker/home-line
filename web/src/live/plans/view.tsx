@@ -88,7 +88,7 @@ export function MyPlans({ snap, error, onRename, onRemove }: MyPlansProps) {
 export function SavePlan({ hash, id, snap, onSave }: { hash: string; id: string } & Pick<MyPlansProps, 'snap' | 'onSave'>) {
   const saved = snap.plans.some((p) => p.id === id)
   return (
-    <p class="live-plan-save">
+    <p class="live-plan-save" data-saved={saved ? 'true' : 'false'}>
       <button type="button" class="live-btn" onClick={() => onSave(hash)}>
         {saved ? `Save again to ${PLANS_TITLE}` : `Save to ${PLANS_TITLE}`}
       </button>

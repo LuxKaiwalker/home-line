@@ -260,9 +260,12 @@ describe('"My plans" view', () => {
     const props = propsOf(store, { hash: H1, inputs: withRoute(ROUTE, 'From the permalink') })
     const btn = <SavePlan hash={H1} id={planId(H1, withRoute(ROUTE, 'From the permalink'))} snap={props.snap} onSave={props.onSave} />
     expect(textOf(btn)).toBe('Save to My plans')
+    expect(toHtml(btn)).toContain('class="live-plan-save" data-saved="false"')
     ;(elements(btn).find((p) => typeof p.onClick === 'function')!.onClick as () => void)()
     expect(byHash(store, H1)).toMatchObject({ title: 'From the permalink', route: ROUTE })
-    expect(textOf(<SavePlan hash={H1} id={planId(H1, withRoute(ROUTE, 'From the permalink'))} snap={props.snap} onSave={props.onSave} />)).toMatch(/Save again to My plans Saved in this browser/)
+    const after = <SavePlan hash={H1} id={planId(H1, withRoute(ROUTE, 'From the permalink'))} snap={props.snap} onSave={props.onSave} />
+    expect(textOf(after)).toMatch(/Save again to My plans Saved in this browser/)
+    expect(toHtml(after)).toContain('data-saved="true"')
   })
 
   it('#/plan shows the import and "My plans"; without plans props it is unchanged', () => {
