@@ -66,7 +66,7 @@ export const view: View = async (el) => {
   // "My plans" comes from src/live/plans through the same guard.
   if (import.meta.env.VITE_LIVE === '1') void Promise.all([import('../live'), import('../ui/shell/editroute'), import('../live/plans/store'), import('../live/plans/view')]).then(([m, er, ps, pv]) => {
     if (!alive) return
-    const offEdit = er.mountEditRoute(mapEl, { store: ps.createPlansStore(), View: pv.MyPlans }, { enabled: m.ROUTE_EDIT_ENABLED })
+    const offEdit = er.mountEditRoute(mapEl, { store: ps.createPlansStore(), View: pv.MyPlans }, { enabled: m.ROUTE_EDIT_ENABLED, simMode: m.SIM_EXPORT_MODE })
     const offPad = m.padTool(liveAside(), m.consoleMapPort(cmap))
     disposeLive = () => {
       offPad()

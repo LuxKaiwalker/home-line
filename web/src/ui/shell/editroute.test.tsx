@@ -9,8 +9,9 @@ import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { render } from 'preact'
 import { act } from 'preact/test-utils'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ui } from '../../state/ui'
+import { t } from '../copy'
 import { bindLayoutStorage, resetLayout } from '../layout'
 import { all, byClass, installDom, one, type FakeDocument, type FakeNode } from '../testing/dom'
 import { editRouteHosted, mountEditRoute, registerEditRoute, registerEditRouteNote, setEditRouteCrew, type MyPlansDeps } from './editroute'
@@ -47,7 +48,7 @@ function fakePlans(): MyPlansDeps<Snap> & { titles: string[] } {
 }
 
 let offs: (() => void)[] = []
-const mount = (o: { enabled: boolean } = { enabled: true }) => {
+const mount = (o: { enabled: boolean; simMode?: 'off' | 'official' | 'all' } = { enabled: true }) => {
   let off = () => {}
   act(() => void (off = mountEditRoute(mapEl as unknown as Element, fakePlans(), o)))
   offs.push(off)
@@ -81,7 +82,7 @@ describe('VITE_ROUTE_EDIT (D116): the Edit-route button and drawer are absent wh
   it('the gate is live/config.ts ROUTE_EDIT_ENABLED (WP14), passed in by views/console.tsx', () => {
     // (this file may not import src/live/: isolation.test.ts; WP14's routeedit.test.tsx covers the parsing)
     const consoleSrc = readFileSync(resolve(__dirname, '../../views/console.tsx'), 'utf8')
-    expect(consoleSrc).toContain('{ enabled: m.ROUTE_EDIT_ENABLED }')
+    expect(consoleSrc).toContain('{ enabled: m.ROUTE_EDIT_ENABLED, simMode: m.SIM_EXPORT_MODE }')
   })
 
   it('enabled: false mounts nothing, even with the route panel registered', () => {
@@ -154,6 +155,22 @@ describe('Edit-route host (live builds, route editing on)', () => {
     expect(byClass(one(byId('hl-lay-crew')), 'fake-crew')).toHaveLength(1)
     act(() => setEditRouteCrew({ summary: 'changed', render: () => <p class="fake-crew">crew</p> }))
     expect(one(openerOf('crew')).textContent).toContain('Crew: changed')
+  })
+
+  it('"Send to simulator" (S1) sits in the drawer next to the route panel when VITE_SIM_EXPORT is on; off: none', () => {
+    vi.stubGlobal('fetch', () => Promise.reject(new Error('no network in tests')))
+    try {
+      const off = mount({ enabled: true, simMode: 'official' })
+      registerRoute()
+      const drawer = one(byId('hl-lay-edit-route'))
+      const slot = one(byClass(drawer, 'hl-simslot'), 'sim slot')
+      expect(slot.getAttribute('aria-label')).toBe(t('simulator.sendSlot'))
+      act(() => off())
+      mount({ enabled: true, simMode: 'off' })
+      expect(byClass(one(byId('hl-lay-edit-route')), 'hl-simslot')).toHaveLength(0)
+    } finally {
+      vi.unstubAllGlobals()
+    }
   })
 
   it('My plans actions go to the store and redraw the list; a refused action shows its error', () => {

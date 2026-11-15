@@ -1,6 +1,7 @@
 // Edit-route drawer and its map-edge opener (L3, D111; Notion plan §4, §7). Where the live panels are
 // MOUNTED in live builds: the Edit-route panel (R5, edit/route/panel.tsx), the crew panel (F26,
-// live/crewview.tsx), "My plans" (R7, live/plans/view.tsx) and the "Send to simulator" slot (S1).
+// live/crewview.tsx), "My plans" (R7, live/plans/view.tsx) and "Send to simulator" (S1,
+// ui/cards/simslot-export.tsx).
 // Mount only: every panel, its props and its logic stay in web/src/live/ and web/src/edit/route/
 // (waypoint block); this file only decides the container they render in.
 //
@@ -18,6 +19,7 @@
 import { render, type ComponentType } from 'preact'
 import { useState } from 'preact/hooks'
 import { signal, useSignalValue, type ReadSignal } from '../../state/signal'
+import { SendToSimulator, type SendToSimulatorProps } from '../cards/simslot-export'
 import { Button } from '../components'
 import { Collapsible, Drawer, useLayoutInsets, useOpener } from '../layout'
 import type { RailSection, Render } from './store'
@@ -93,12 +95,17 @@ function EditRouteOfflineNoteSlot() {
 }
 
 /**
- * SLOT (S1, branch ws15-design-system-S1): "Send to simulator", next to export in the drawer. Mounted
- * here once S1's PR has merged; WP12 mounts the same component in the route result box. Empty until then.
+ * "Send to simulator" (S1 #144, D110): the plan's mission.json, next to the route panel's export. The
+ * drawer offers the official plan's file (origin precomputed; mode 'all' tries the API copy first);
+ * a live result's file is in the route panel's result box (WP12). Mode 'off' (VITE_SIM_EXPORT unset)
+ * renders nothing.
  */
-function EditRouteSimSlot() {
-  return null
+function EditRouteSimSlot({ mode }: { mode: SimMode }) {
+  return mode === 'off' ? null : <SendToSimulator origin="precomputed" mode={mode} />
 }
+
+/** live/config.ts SIM_EXPORT_MODE (VITE_SIM_EXPORT). */
+export type SimMode = NonNullable<SendToSimulatorProps['mode']>
 
 type PlansResult = { ok: true } | { ok: false; error: string }
 /** "My plans" from src/live/plans (passed in: this file may not import src/live/). */
@@ -121,7 +128,7 @@ function MyPlansSection<Snap>({ deps: { store, View } }: { deps: MyPlansDeps<Sna
   return <View snap={store.list()} error={error} onSave={() => {}} onRename={(id, title) => act(store.rename(id, title))} onRemove={(id) => act(store.remove(id))} />
 }
 
-export function EditRouteHost<Snap>({ plans }: { plans: MyPlansDeps<Snap> }) {
+export function EditRouteHost<Snap>({ plans, simMode = 'off' }: { plans: MyPlansDeps<Snap>; simMode?: SimMode }) {
   const route = useSignalValue(routeRender)
   const crew = useSignalValue(crewSlot)
   const { bottom } = useLayoutInsets()
@@ -139,7 +146,7 @@ export function EditRouteHost<Snap>({ plans }: { plans: MyPlansDeps<Snap> }) {
       </div>
       <Drawer id={EDIT_ROUTE_ID} title={EDIT_ROUTE_TITLE}>
         {route()}
-        <EditRouteSimSlot />
+        <EditRouteSimSlot mode={simMode} />
         {crew ? (
           <Collapsible id={CREW_ID} title={`Crew: ${crew.summary}`} hint="Edit">
             {crew.render()}
@@ -156,6 +163,8 @@ export function EditRouteHost<Snap>({ plans }: { plans: MyPlansDeps<Snap> }) {
 export interface MountEditRouteOptions {
   /** D116: live/config.ts ROUTE_EDIT_ENABLED (VITE_ROUTE_EDIT); false mounts nothing (no button, no drawer). */
   enabled: boolean
+  /** S1: live/config.ts SIM_EXPORT_MODE (default 'off': no "Send to simulator"). */
+  simMode?: SimMode
 }
 
 /** Mount the host inside the map container `mapEl` (position: relative); returns cleanup. */
@@ -164,7 +173,7 @@ export function mountEditRoute<Snap>(mapEl: Element, plans: MyPlansDeps<Snap>, o
   const el = mapEl.appendChild(document.createElement('div'))
   el.setAttribute('class', 'hl-editroute')
   hosts++
-  render(<EditRouteHost plans={plans} />, el)
+  render(<EditRouteHost plans={plans} simMode={o.simMode} />, el)
   let done = false
   return () => {
     if (done) return
