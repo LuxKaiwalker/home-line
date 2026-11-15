@@ -13,9 +13,7 @@ describe('hash router (SPEC F17 routes; mount slot for WS7)', () => {
     ['#/cuff', { name: 'cuff' }],
     ['#/about', { name: 'about' }],
     ['#/hud', { name: 'hud' }],
-    ['#/mission', { name: 'mission' }],
-    ['#/mission?plan=WzEsW11d', { name: 'mission', plan: 'WzEsW11d' }],
-    ['#/mission?add=S4', { name: 'mission', add: 'S4' }],
+    ['#/mission', { name: 'console' }], // PORT: the Mission Planer tab is gone (main.ts redirects its links first)
     ['#/stations', { name: 'stations' }],
     ['#/hud3d', { name: 'hud' }],
     ['#/nav', { name: 'scorecard' }],
@@ -30,7 +28,7 @@ describe('hash router (SPEC F17 routes; mount slot for WS7)', () => {
   })
 
   it('the nav lists every page and slot', () => {
-    expect(NAV_ITEMS.map((n) => n.route.name)).toEqual(['console', 'mission', 'stations', 'trade', 'conditions', 'cuff', 'hud', 'scorecard', 'about'])
+    expect(NAV_ITEMS.map((n) => n.route.name)).toEqual(['console', 'stations', 'trade', 'conditions', 'cuff', 'hud', 'scorecard', 'about'])
   })
 })
 
@@ -138,13 +136,13 @@ describe('?legacy switch (DESIGN U0, kit rule 10)', () => {
 })
 
 describe('landing page (user, 2026-11-15)', () => {
-  it('a bare address opens the Mission Planer; #/ stays the Plan page', () => {
-    expect(LANDING_HASH).toBe('#/mission')
-    expect(landingFor('')).toBe('#/mission')
-    expect(landingFor('#')).toBe('#/mission')
+  it('a bare address opens the Plan page (PORT: the Mission Planer is part of it)', () => {
+    expect(LANDING_HASH).toBe('#/')
+    expect(landingFor('')).toBe('#/')
+    expect(landingFor('#')).toBe('#/')
     expect(landingFor('#/')).toBeNull()
     expect(parseRoute('#/')).toEqual({ name: 'console' })
-    expect(parseRoute(LANDING_HASH)).toEqual({ name: 'mission' })
+    expect(parseRoute(LANDING_HASH)).toEqual({ name: 'console' })
   })
 
   it('D132: the bare address plays the intro first (first visit), then lands; #/ and story links never land', () => {
@@ -159,10 +157,9 @@ describe('landing page (user, 2026-11-15)', () => {
     expect(landingWhen('', '#/?demo=1', false)).toBeNull()
   })
 
-  it('the Mission Planer routes: #/mission and its plan links (?plan=, ?add=)', () => {
-    for (const r of [{ name: 'mission' }, { name: 'mission', plan: 'WzEsW11d' }, { name: 'mission', add: 'S4' }] as const) expect(parseRoute(canonicalHref(r))).toEqual(r)
-    expect(canonicalHref({ name: 'mission' })).toBe('#/mission')
-    expect(redirectFor('#/mission')).toBeNull() // no mode redirect: #/mission is its own PLAN route
+  it('old Mission Planer links open the Plan page (main.ts applyPlanLink rewrites ?plan= / ?add= first)', () => {
+    expect(parseRoute('#/mission')).toEqual({ name: 'console' })
+    expect(parseRoute('#/mission?plan=WzEsW11d')).toEqual({ name: 'console' })
   })
 })
 

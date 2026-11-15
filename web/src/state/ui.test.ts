@@ -5,7 +5,7 @@ import { ROUTE_MODE } from './ui'
 describe('ROUTE_MODE', () => {
   it('has one key per live route and none for the removed views (D98, D99)', () => {
     expect(Object.keys(ROUTE_MODE).sort()).toEqual(
-      ['about', 'conditions', 'console', 'cuff', 'hud', 'mission', 'scorecard', 'station', 'stations', 'trade'],
+      ['about', 'conditions', 'console', 'cuff', 'hud', 'scorecard', 'station', 'stations', 'trade'],
     )
     expect(ROUTE_MODE).not.toHaveProperty('hud3d')
     expect(ROUTE_MODE).not.toHaveProperty('nav')

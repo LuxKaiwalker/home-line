@@ -60,7 +60,7 @@ describe('legacy frame = the layout from before the shell', () => {
     expect(header.getAttribute('class')).toBe('topbar')
     expect(text(one(byClass(header, 'brand')))).toBe('HOMELINE')
     const links = byTag(one(byClass(header, 'topnav')), 'a')
-    expect(links.map((a) => a.getAttribute('href'))).toEqual(['#/', '#/mission', '#/stations', '#/trade', '#/conditions', '#/cuff', '#/hud', '#/scorecard', '#/about'])
+    expect(links.map((a) => a.getAttribute('href'))).toEqual(['#/', '#/stations', '#/trade', '#/conditions', '#/cuff', '#/hud', '#/scorecard', '#/about'])
     expect(links.map(text)).toEqual(NAV_ITEMS.map((n) => n.label))
     expect(byClass(root, 'dummy-banner')).toHaveLength(1)
     expect(one(byTag(root, 'main')).getAttribute('class')).toBe('outlet')

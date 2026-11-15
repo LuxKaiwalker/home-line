@@ -635,6 +635,7 @@ describe('VITE_LIVE off: nothing mounts', () => {
       ['edit', 'route', 'instant', 'adapter.ts'],
       ['edit', 'route', 'map', 'plan.ts'], // R3 map editing
       ['edit', 'route', 'map', 'addToRoute.tsx'], // R3 station card "Add to route"
+      ['edit', 'route', 'undo.ts'], // I2 planning undo (state/planningActivity.ts)
     ].map((p) => resolve(SRC, ...p)),
   )
 

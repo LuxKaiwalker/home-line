@@ -7,9 +7,6 @@ type Loader = () => Promise<View>
 
 export const VIEWS: Record<Route['name'], Loader> = {
   console: async () => (await import('./console')).view,
-  // PORT I3: the Mission Planer view is gone; #/mission is redirected into Plan before routing (main.ts
-  // applyPlanLink). The legacy layout (?legacy=1), which skips that redirect, shows the Plan view.
-  mission: async () => (await import('./console')).view,
   stations: async () => (await import('./stations')).view,
   station: async () => (await import('./station')).view,
   trade: async () => (await import('./trade')).view,

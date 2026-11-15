@@ -1,5 +1,5 @@
 // Hash router (SPEC F17). Hash routes survive GitHub Pages (no SPA fallback) and work logged out.
-// Pages: / (planning console), /mission (Mission Planer, 3D map), /station/:id, /trade, /conditions, /scorecard, /cuff, /about.
+// Pages: / (planning console; PORT: the Mission Planer is part of it, old /mission links land there), /station/:id, /trade, /conditions, /scorecard, /cuff, /about.
 // Mount slot for another workstream: /hud (WS7).
 // Removed views (D98, D99): /nav (navigation add-on) redirects to EVIDENCE, /hud3d (first-person 3D)
 // redirects to the 2D HUD; their mode paths #/evidence/nav and #/fly/3d redirect the same way.
@@ -25,8 +25,6 @@ export type Route =
   | { name: 'cuff' }
   | { name: 'about' }
   | { name: 'hud' }
-  /** Mission Planer (3D map). plan: a shared plan string (mission/share.ts); add: a station id to append as a waypoint */
-  | { name: 'mission'; plan?: string; add?: string }
   | { name: 'notfound'; path: string }
 
 const SIMPLE = ['stations', 'trade', 'conditions', 'cuff', 'about', 'hud'] as const
@@ -74,14 +72,9 @@ export function parseRoute(hash: string): Route {
     if (view) return { name: view }
   }
   if (head === 'station' && rest.length === 1) return { name: 'station', id: decodeURIComponent(rest[0]) }
-  if (head === 'mission' && rest.length === 0) {
-    const r: Route = { name: 'mission' }
-    const plan = params.get('plan')
-    const add = params.get('add')
-    if (plan) r.plan = plan
-    if (add) r.add = add
-    return r
-  }
+  // PORT I1: the Mission Planer tab is gone (I3). main.ts applyPlanLink turns #/mission?plan=…/?add=… into
+  // #/?route=… before routing; what still reaches the router here (?legacy=1) opens the Plan page.
+  if (head === 'mission' && rest.length === 0) return { name: 'console' }
   if (head === 'scorecard' && rest.length === 0) {
     const key = params.get('key')
     return key ? { name: 'scorecard', key } : { name: 'scorecard' }
@@ -92,9 +85,9 @@ export function parseRoute(hash: string): Route {
   return { name: 'notfound', path }
 }
 
-/** Landing page: the address with no route (the bare site URL) opens the Mission Planer (user,
- *  2026-11-15). `#/` stays the Plan page, so every existing Plan link still works. */
-export const LANDING_HASH = '#/mission'
+/** Landing page: the bare site URL opens the Plan page (PORT I3/I1: the Mission Planer is part of Plan;
+ *  was '#/mission' since the user's 2026-11-15 choice). */
+export const LANDING_HASH = '#/'
 /** Where a bare address (no hash, or just "#") lands; null for any other hash. */
 export const landingFor = (hash: string): string | null => (hash === '' || hash === '#' ? LANDING_HASH : null)
 /**
@@ -121,13 +114,6 @@ export function href(route: Route): string {
       return `#/station/${encodeURIComponent(route.id)}`
     case 'scorecard':
       return route.key ? `#/scorecard?key=${encodeURIComponent(route.key)}` : '#/scorecard'
-    case 'mission': {
-      const q = new URLSearchParams()
-      if (route.plan) q.set('plan', route.plan)
-      if (route.add) q.set('add', route.add)
-      const qs = q.toString()
-      return qs ? `#/mission?${qs}` : '#/mission'
-    }
     case 'notfound':
       return `#${route.path}`
     default:
@@ -185,7 +171,6 @@ export function isLegacy(param: string | null, route: Route): boolean {
 /** Top navigation, in display order. The hud slot is listed but owned by WS7. */
 export const NAV_ITEMS: { route: Route; label: string }[] = [
   { route: { name: 'console' }, label: 'Official plan' },
-  { route: { name: 'mission' }, label: 'Plan your EVA (estimate)' },
   { route: { name: 'stations' }, label: 'Science stations' },
   { route: { name: 'trade' }, label: 'Trade' },
   { route: { name: 'conditions' }, label: 'Conditions' },

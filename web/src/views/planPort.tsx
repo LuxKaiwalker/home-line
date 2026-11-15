@@ -17,6 +17,7 @@ import { install as installPads } from '../map/pads'
 import { install as installRoutes } from '../map/routes'
 import { loadPadIndex, padService, prefetchPads } from '../pads'
 import { mission } from '../state/mission'
+import { installPlanningActivity } from '../state/planningActivity'
 import { encodeRouteParam, OFFICIAL_PAD_ID, planning, ROUTE_PARAM, type PlanningDoc, type PlanningStore } from '../state/planning'
 import { effect } from '../state/signal'
 import { Banner } from '../ui/components'
@@ -122,6 +123,8 @@ export function mountPlanPort(store: PlanningStore = planning): () => void {
     const want = p ?? OFFICIAL_PAD_ID
     if (store.state.peek().padId !== want) store.setPad(want)
   })
+  // I2: planning edits stop players; one Ctrl/Cmd-Z timeline over the planning store (undo.ts, lazy)
+  const offActivity = installPlanningActivity({ store })
   // R1: the planning runner (worker + route results). Lazy: the route core is its own chunk (§7b).
   let stopRunner: (() => void) | null = null
   // P1: after first paint, prefetch the picker pads with routing fields in idle time (never evicts a used pad)
@@ -140,6 +143,7 @@ export function mountPlanPort(store: PlanningStore = planning): () => void {
     clearTimeout(prefetch)
     offSync()
     offPadA()
+    offActivity()
     offPadB()
     stopRunner?.()
   }
