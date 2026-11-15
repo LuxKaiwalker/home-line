@@ -24,8 +24,7 @@ import { installRoutePanel, openRoutePanel, registerRoutePanelSection, routePane
 import { browserLinkIO, clearPlanLinkNotice, planLinkNotice } from '../ui/route-panel/export/planLink'
 import { WaypointList } from '../ui/route-panel/list'
 import { StartTimeSettings, StormSettings, type SettingsProps } from '../ui/route-panel/settings/RouteSettings'
-import { copyFrom } from '../ui/copy'
-import settingsCopy from '../ui/route-panel/settings/copy.U3.json'
+import { t } from '../ui/copy'
 import { installStrip } from '../ui/strip'
 import { useSignalValue } from '../state/signal'
 import { install as installExport } from '../ui/route-panel/export'
@@ -151,11 +150,9 @@ export function mountPlanPort(store: PlanningStore = planning): () => void {
  * Mission Planer drew it), and a selector that does nothing is worse than none (orchestrator 21:19; cut
  * list). Mount U3's RouteSettings again once a boundary layer exists.
  */
-const trSettings = copyFrom(settingsCopy)
-
 function PlanRouteSettings({ store = planning }: SettingsProps) {
   return (
-    <section class="rp-settings" aria-label={trSettings('title')}>
+    <section class="rp-settings" aria-label={t('route.settings.title')}>
       <StartTimeSettings store={store} />
       <StormSettings store={store} />
     </section>
