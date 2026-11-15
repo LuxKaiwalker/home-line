@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "homeline/contracts/terrain_tiles.schema.json",
   "title": "terrain/tiles.json, terrain_low/tiles.json",
-  "description": "Design contracts v1 (family 'design', DESIGN §6; frozen at merge: additive change = minor bump, breaking change = human-gated). Metadata of the U1 elevation tiles (terrain/, z10-15 planning extent + z16 focus area, 1 m merged DEM with 20 m CTX at low zoom, budget config/design.yaml terrain_tiles.budget_mb 25) and of the intro relief tiles (terrain_low/, z6-10 over Gale, CTX 20 m + MOLA-HRSC 200 m, budget lowzoom_budget_mb 5). Tiles: 256 px PNG, XYZ scheme (Mars lon/lat straight through, D4), Terrarium encoding: h = (R*256 + G + B/256) - 32768 m, with h = true elevation * factor (Earth/Mars radius 1.878, so 1x exaggeration on screen is true shape). True elevation = h / factor; elevation readouts never come from these tiles (they come from the fields). Written by pipeline/export/terrain_tiles.py and relief_lowzoom.py (WS16).",
+  "description": "Design contracts v1 (family 'design', DESIGN §6; frozen at merge: additive change = minor bump, breaking change = human-gated). Metadata of the U1 elevation tiles (terrain/, z10-15 planning extent + z16 focus area, 1 m merged DEM with 20 m CTX at low zoom, budget config/design.yaml terrain_tiles.budget_mb 25) and of the intro relief tiles (terrain_low/, z6-10 over Gale, CTX 20 m + MOLA-HRSC 200 m, budget lowzoom_budget_mb 5). Tiles: 256 px PNG, XYZ scheme (Mars lon/lat straight through, D4), Terrarium encoding: h = (R*256 + G + B/256) - 32768 m, with h = true elevation * factor + vertical_offset_m (factor = Earth/Mars radius 1.878, so 1x exaggeration on screen is true shape; vertical_offset_m, optional, default 0, puts the site near 0 m on the map). True elevation = (h - vertical_offset_m) / factor; elevation readouts never come from these tiles (they come from the fields). Written by pipeline/export/terrain_tiles.py and relief_lowzoom.py (WS16).",
   "x-contract-version": "1.0.0",
   "x-source": "DESIGN §6.1, §2.2 U1, U6 step 3; config/design.yaml scale, terrain_tiles",
   "type": "object",
@@ -37,6 +37,10 @@
       "type": "number",
       "exclusiveMinimum": 0,
       "description": "elevation multiplier baked into the tiles (config scale.elevation_factor = 1.878); also in the manifest"
+    },
+    "vertical_offset_m": {
+      "type": "number",
+      "description": "optional (P2c, additive): metres added to every tile height after scaling, h = true elevation * factor + vertical_offset_m (config terrain_tiles.vertical_offset_m; the same value in terrain/ and terrain_low/; absent = 0); also in the manifest"
     },
     "datum": {
       "type": "string",
