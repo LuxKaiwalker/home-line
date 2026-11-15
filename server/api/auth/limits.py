@@ -15,6 +15,13 @@ sliding window over the start times (exact for "the seventh in 10 minutes"), kep
   ``attached: false``. Attaching to a running job, a cached result (``done`` at once), a refusal
   (422, 503 kill switch, 429 queue cap) cost nothing. To stay exact under concurrent submits the
   slot is reserved before the request runs, then confirmed or given back (SlidingWindow).
+- **What passes without a slot (H1-2, O3b).** Before reserving, the limiter takes the submit's
+  result hash exactly as POST /jobs does (``result_hash`` with the route's identity provider) and
+  asks the runner (``JobRunner.lookup``). A hash that is running, queued or done passes at once,
+  even at the limit, and is not counted: it costs nothing, and all local clients share one key.
+  Anything else (no match, invalid inputs, no engine identity) takes the reserve path as before,
+  so a new heavy job is never let through the limit by this check. If a passed submit starts a
+  new job after all (its job ended between the check and the route), that job is counted.
 - **Where.** An ASGI middleware around the app (WS11's route stays untouched: the hook is the
   route's own answer). It is installed inside the CORS middleware, so a browser can read the 429.
 - **Queue-cap hook.** The queue cap itself is the runner's (compute.queue_max_waiting,
@@ -39,12 +46,15 @@ from collections.abc import Callable
 import anyio
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
+from server.engine.hashing import EngineIdentity, canonical_inputs, result_hash
 from server.settings import BackendConfig, settings
 
 UNKNOWN_CLIENT = "unknown"  # no client address in the scope (never with uvicorn)
 # How often a submit re-checks while other submits from its address settle (process timing, not a
 # product limit: POST /jobs answers at once, server.engine.jobs)
 SETTLE_POLL_S = 0.005
+# JobRunner.lookup answers that mean a submit attaches or gets a cached result (no new job)
+NO_NEW_JOB = frozenset({"running", "queued", "done"})
 
 
 class SlidingWindow:
@@ -116,6 +126,14 @@ class SlidingWindow:
             if entry is not None:
                 entry[1].discard(token)
 
+    def record(self, key: str) -> None:
+        """Count a job start that held no reservation (a submit that passed as an attach or a
+        cached result but started a job after all)."""
+        with self._lock:
+            q, _ = self._hits.setdefault(key, (deque(), set()))
+            q.append(self._clock())
+            self._hits.move_to_end(key)
+
     def keys(self) -> int:
         with self._lock:
             return len(self._hits)
@@ -130,6 +148,57 @@ def started_new_job(status: int | None, body: bytes) -> bool:
     except ValueError:
         return True  # a 202 we cannot read: count it (never under-count)
     return not (isinstance(doc, dict) and doc.get("attached") is True)
+
+
+async def read_body(receive: Receive) -> tuple[bytes, Receive]:
+    """The whole request body, and a ``receive`` that replays it to the app (then defers to the
+    server's own ``receive``, e.g. for http.disconnect)."""
+    chunks: list[bytes] = []
+    while True:
+        message = await receive()
+        if message["type"] != "http.request":  # the client went away: hand that on as is
+            return b"".join(chunks), _replay(None, receive, message)
+        chunks.append(message.get("body", b""))
+        if not message.get("more_body", False):
+            break
+    body = b"".join(chunks)
+    return body, _replay(body, receive, None)
+
+
+def _replay(body: bytes | None, receive: Receive, last: Message | None) -> Receive:
+    pending: list[Message] = ([{"type": "http.request", "body": body, "more_body": False}]
+                              if body is not None else [last])
+
+    async def replay() -> Message:
+        if pending:
+            return pending.pop(0)
+        return await receive()
+
+    return replay
+
+
+def submit_lookup(scope: Scope, body: bytes) -> str | None:
+    """What POST /jobs would find for this body: ``JobRunner.lookup`` of its result hash, taken
+    the same way as the route (server.api.compute.jobs.create_job), or None when the hash cannot
+    be taken (not JSON, invalid inputs, no engine identity, no runner). Read-only."""
+    from server.api.compute.results import identity_provider  # the route's dependency
+
+    app = scope.get("app")
+    runner = getattr(getattr(app, "state", None), "jobs", None)
+    if runner is None or not hasattr(runner, "lookup"):
+        return None
+    try:
+        doc = json.loads(body)
+        if not isinstance(doc, dict) or not isinstance(doc.get("inputs"), dict):
+            return None
+        raw = doc["inputs"]
+        canonical_inputs(raw)  # the route answers 422 for invalid inputs: not ours to decide
+        overrides = getattr(app, "dependency_overrides", {})
+        ident = EngineIdentity(*overrides.get(identity_provider, identity_provider)()())
+        h = result_hash(raw, ident)
+        return runner.lookup(h, lambda: ident)
+    except Exception:  # noqa: BLE001  any doubt takes the reserve path (the limit applies)
+        return None
 
 
 def rate_limited(retry_after_s: int, count: int, window_min: float) -> tuple[int, dict, bytes]:
@@ -163,6 +232,10 @@ class HeavyJobLimiter:
             return
         client = scope.get("client")
         key = self.window.key(client[0] if client else UNKNOWN_CLIENT)
+        body, receive = await read_body(receive)
+        if submit_lookup(scope, body) in NO_NEW_JOB:  # attach or cached result: no slot (H1-2)
+            await self._run(scope, receive, send, key, None)
+            return
         while True:
             token, retry = self.window.reserve(key)
             if token is not None or retry is not None:
@@ -174,6 +247,12 @@ class HeavyJobLimiter:
                         "headers": [(k.encode(), v.encode()) for k, v in headers.items()]})
             await send({"type": "http.response.body", "body": body})
             return
+        await self._run(scope, receive, send, key, token)
+
+    async def _run(self, scope: Scope, receive: Receive, send: Send, key: str,
+                   token: int | None) -> None:
+        """Run the route; count the submit when it started a new job (with its reservation, or
+        without one when it passed as an attach or a cached result), else give the slot back."""
         seen: dict = {"status": None, "body": bytearray()}
 
         async def watch(message: Message) -> None:
@@ -188,7 +267,10 @@ class HeavyJobLimiter:
             await self.app(scope, receive, watch)
             new = started_new_job(seen["status"], bytes(seen["body"]))
         finally:
-            if new:
+            if token is None:
+                if new:
+                    self.window.record(key)
+            elif new:
                 self.window.confirm(key, token)
             else:
                 self.window.release(key, token)
