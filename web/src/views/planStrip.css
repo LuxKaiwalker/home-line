@@ -7,6 +7,7 @@
 .hl-strip__item { display: inline-flex; flex-direction: column; justify-content: center; }
 .hl-strip__value { display: inline-flex; align-items: center; gap: var(--space-1); }
 .hl-strip__item .num { font-weight: var(--font-weight-heading); font-size: var(--font-size-body); line-height: var(--line-height-small); color: var(--color-text); }
+.hl-strip__item .num:focus-visible { outline: var(--line-focus-ring) solid var(--color-select); outline-offset: 2px; border-radius: var(--radius-input); }
 .hl-strip__label, .hl-strip__none { color: var(--color-text-muted); }
 .hl-strip__short { display: none; }
 .hl-strip__choices { display: flex; align-items: center; gap: var(--space-2); }
