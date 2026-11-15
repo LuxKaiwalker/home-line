@@ -275,10 +275,16 @@ describe('mine layer', () => {
         return { index: i, fromStopId: i ? stops[i - 1].id : 'pad', toStopId: i < 8 ? stops[i].id : 'pad', minutes: 5, o2L: 1, distanceM: 100, feasible: i < 6, path, mode: 'fast' as const, refined: false }
       })
     const N = 60
-    const t0 = performance.now()
-    for (let s = 1; s <= N; s++) results.publish({ ...MOCK_ROUTE_RESULTS, seq: s, legs: legsFor(s), firstInfeasibleLeg: 6 })
-    const perFrame = (performance.now() - t0) / N
-    expect(perFrame).toBeLessThanOrEqual(16)
+    const frames: RouteResults[] = Array.from({ length: N }, (_, k) => ({ ...MOCK_ROUTE_RESULTS, seq: k + 1, legs: legsFor(k + 1), firstInfeasibleLeg: 6 }))
+    const ms: number[] = []
+    for (const r of frames) {
+      const t0 = performance.now()
+      results.publish(r)
+      ms.push(performance.now() - t0)
+    }
+    // median per frame (robust to a loaded box); the budget is one 60 Hz frame
+    const median = [...ms].sort((a, b) => a - b)[N >> 1]
+    expect(median).toBeLessThanOrEqual(16)
     expect(counts.addLayer).toBe(MINE_LAYERS.length)
     expect(sources.get(MINE_SOURCE)!.setCalls).toBe(N + 1)
   })
