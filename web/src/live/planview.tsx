@@ -19,11 +19,23 @@ export function labelFor(origin: RunOrigin): string {
   return origin === 'precomputed' ? PRECOMPUTED_LABEL : LIVE_LABEL
 }
 
-/** Label + provenance link: on every view of a result. */
+/**
+ * Label + provenance link: on every view of a result. Without an origin (the run record has not
+ * loaded, or never will: offline, not found) no origin label is drawn, only a neutral placeholder on
+ * the same line, so the official tree never reads as computed live and nothing jumps when it loads.
+ */
 export function PlanTag({ hash, origin }: { hash: string; origin: RunOrigin | null }) {
   return (
     <p class="live-label" data-origin={origin ?? ''}>
-      {origin ? labelFor(origin) : LIVE_LABEL} ·{' '}
+      {origin ? (
+        <>
+          {labelFor(origin)} ·{' '}
+        </>
+      ) : (
+        <span class="live-origin-pending" aria-hidden="true">
+          {'\u00a0'}
+        </span>
+      )}
       <a class="live-prov" href={planUrl(hash, 'provenance')}>
         provenance of plan {hash}
       </a>
@@ -53,21 +65,18 @@ export function PlanProblem({ load }: { load: Exclude<PlanLoad, { state: 'ok' }>
           This plan could not be shown: {load.message}
         </p>
       )}
-      <p class="live-label">
-        {LIVE_LABEL} · <a class="live-prov" href={planUrl(load.hash, 'provenance')}>provenance of plan {load.hash}</a>
-      </p>
+      <PlanTag hash={load.hash} origin={null} />
     </Page>
   )
 }
 
-export function PlanLoading({ hash }: { hash: string }) {
+/** While a permalink loads: the origin label once the run record is in (origin), a placeholder before. */
+export function PlanLoading({ hash, origin = null }: { hash: string; origin?: RunOrigin | null }) {
   return (
     <Page>
       <h1>Plan {hash}</h1>
       <p class="muted">Loading…</p>
-      <p class="live-label">
-        {LIVE_LABEL} · <a class="live-prov" href={planUrl(hash, 'provenance')}>provenance of plan {hash}</a>
-      </p>
+      <PlanTag hash={hash} origin={origin} />
     </Page>
   )
 }

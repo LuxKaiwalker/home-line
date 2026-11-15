@@ -12,6 +12,7 @@ import type { ScenarioLayers } from './mapPort'
 import { importPlanFile, loadPlan, parsePlanRoute, permalink, type ImportState, type PlanLoad, type PlanRoute, type PlanTree } from './plan'
 import { ImportPage, PlanLoading, PlanPage, PlanProblem, PlayHeader, ProvenancePage } from './planview'
 import type { LoaderFor } from './stage'
+import type { RunOrigin } from './types'
 
 type OkLoad = Extract<PlanLoad, { state: 'ok' }>
 type Cleanup = () => void
@@ -96,6 +97,8 @@ export function mountPlanRoute(app: HTMLElement, opts: PlanRouteOptions): Cleanu
   const loadHud = opts.loadHud ?? (() => import('../hud') as Promise<HudModule>)
   const mountMap = opts.mountMap === undefined ? consoleMapFor : opts.mountMap
   const loads = new Map<string, Promise<PlanLoad>>()
+  /** Run records in before their tree: the loading view shows the origin label from them. */
+  const records = new Map<string, RunOrigin>()
   let seq = 0
   let teardown: Cleanup | undefined
   let importState: ImportState = { kind: 'idle' }
@@ -104,10 +107,16 @@ export function mountPlanRoute(app: HTMLElement, opts: PlanRouteOptions): Cleanu
   const getLoad = (hash: string) => {
     let p = loads.get(hash)
     if (!p) {
-      p = loadPlan(opts.client, hash, { loaderFor: opts.loaderFor })
+      p = loadPlan(opts.client, hash, {
+        loaderFor: opts.loaderFor,
+        onRecord: (r) => {
+          records.set(hash, r.origin)
+          rerender?.()
+        },
+      })
       loads.set(hash, p)
       // only a found result is kept; not found or offline is asked again next time
-      void p.then((l) => l.state !== 'ok' && loads.delete(hash))
+      void p.then((l) => l.state !== 'ok' && (loads.delete(hash), records.delete(hash)))
     }
     return p
   }
@@ -140,7 +149,8 @@ export function mountPlanRoute(app: HTMLElement, opts: PlanRouteOptions): Cleanu
       render(<PlanProblem load={{ state: 'offline', hash: route.hash, message: 'the health check says the live server is offline' }} />, box)
       return
     }
-    render(<PlanLoading hash={route.hash} />, box)
+    rerender = () => render(<PlanLoading hash={route.hash} origin={records.get(route.hash) ?? null} />, box)
+    rerender()
     const load = await getLoad(route.hash)
     if (my !== seq) return
     if (load.state !== 'ok') {
