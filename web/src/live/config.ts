@@ -5,6 +5,8 @@
 //   VITE_API_BASE=<url>  origin of the live API, default http://localhost:8012 (api.prefix is appended)
 //   VITE_LIVE_MOCK=1     dev only: answer API calls from the contract-example mock (mock/fetch.ts)
 //   VITE_SIM_EXPORT=1    D76: show the "Send to simulator" slot on a loaded plan (default off)
+//   VITE_ROUTE_EDIT=0    D116: hide the Edit-route panel and its map waypoints (default on; the
+//                        published Pages build sets 0 until route editing is cleared for it)
 import backendRaw from '../../../config/backend.yaml'
 import { cfg } from '../config'
 
@@ -74,6 +76,11 @@ export function isLiveFlag(value: EnvValue): boolean {
   return value === true || value === '1' || value === 'true'
 }
 
+/** VITE_ROUTE_EDIT parsing: '0' or 'false' turns route editing off; anything else (or unset) is on. */
+export function isRouteEditFlag(value: EnvValue): boolean {
+  return !(value === false || value === '0' || value === 'false')
+}
+
 /** VITE_API_BASE parsing: trailing slashes dropped, default http://localhost:8012. */
 export function apiBaseFrom(value: EnvValue): string {
   const v = typeof value === 'string' && value.trim() ? value.trim() : 'http://localhost:8012'
@@ -84,3 +91,5 @@ export const LIVE_ENABLED: boolean = isLiveFlag(import.meta.env.VITE_LIVE)
 export const API_BASE: string = apiBaseFrom(import.meta.env.VITE_API_BASE)
 /** D76: "Send to simulator" slot (manifest files of kind sim_plan); off unless VITE_SIM_EXPORT is 1 or true. */
 export const SIM_EXPORT_ENABLED: boolean = isLiveFlag(import.meta.env.VITE_SIM_EXPORT)
+/** D116: the Edit-route panel (and the map waypoints it installs); on unless VITE_ROUTE_EDIT is 0 or false. */
+export const ROUTE_EDIT_ENABLED: boolean = isRouteEditFlag(import.meta.env.VITE_ROUTE_EDIT)
