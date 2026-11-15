@@ -1,0 +1,51 @@
+{
+  "panel": {
+    "label": "Route panel",
+    "collapse": "Collapse the route panel",
+    "expand": "Expand the route panel",
+    "empty": "Click the map or a station to add a stop",
+    "sections": {
+      "list": "Stops",
+      "settings": "EVA settings",
+      "export": "Export and share"
+    },
+    "pads": {
+      "label": "Start pad",
+      "loading": "Loading pad {pad}…",
+      "error": "Pad {pad} could not be loaded. Try again, or pick another pad.",
+      "indexLoading": "Loading the pads…",
+      "indexError": "The pad list could not be loaded: the official pad stays in use.",
+      "noFields": "No walk-home fields for this pad: it shows its official plan only",
+      "note": "The official pad and the next pads of the pad ranking, each with its own precomputed plan."
+    },
+    "estimates": {
+      "title": "Estimates",
+      "estimate": "Estimate",
+      "estimateTitle": "Computed in this browser from the pad's walk-home fields; not a checked plan",
+      "total": "Total time",
+      "margin": "Margin",
+      "marginTitle": "The engine's four-term margin (O₂, daylight, dose, EVA duration) at the tightest point of the route, as the route core gives it",
+      "o2": "O₂ on the legs",
+      "o2Title": "Sum of the O₂ the route core gives per leg",
+      "minutes": "{v} min",
+      "litres": "{v} L",
+      "unknown": "–",
+      "idle": "Estimates follow once the route is computed.",
+      "computing": "Computing the route…",
+      "partial": "{done} of {n} legs in; the rest follow…",
+      "error": "The route could not be computed: {error}",
+      "infeasible": "Leg {n} ({from} → {to}) cannot be walked: {reason}",
+      "infeasibleBare": "Leg {n} ({from} → {to}) cannot be walked",
+      "pad": "pad",
+      "reasons": {
+        "unreachable": "not reachable on foot",
+        "budget": "over the budget",
+        "slope": "too steep"
+      },
+      "reachTitle": "Reach of this pad",
+      "reach": "{budget}-min reach",
+      "reachNone": "No precomputed reach for this pad",
+      "reachLoading": "Loading the reach of this pad…"
+    }
+  }
+}

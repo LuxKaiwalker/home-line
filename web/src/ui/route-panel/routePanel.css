@@ -1,0 +1,52 @@
+/* PORT U1: the Route panel — the Mission Planer's simple card layout (mission/mission.css .mp-card,
+   .mp-row, .mp-tags) on the layout Drawer. Tokens only (kit rule 2). Colour meaning (DESIGN §3.1):
+   green / orange / red = margin states only; the chosen pad is neutral (card-border ground); unknown
+   is never a warning colour. */
+.hl-rp__body { display: grid; gap: var(--space-3); }
+.hl-rp__body[hidden] { display: none; }
+.hl-rp__card {
+  background: var(--color-card); border: 1px solid var(--color-card-border); border-radius: var(--radius-card);
+  padding: var(--space-2) var(--space-3); min-width: 0;
+}
+.hl-rp__h {
+  margin: 0 0 var(--space-2); font-size: var(--font-size-small); line-height: var(--line-height-small);
+  text-transform: uppercase; letter-spacing: 0.08em; color: var(--color-text-muted); font-weight: var(--font-weight-heading);
+}
+.hl-rp__caption { margin: var(--space-2) 0 0; font-size: var(--font-size-small); line-height: var(--line-height-small); color: var(--color-text-muted); }
+.hl-rp__empty { margin: 0; font-size: var(--font-size-body); line-height: var(--line-height-body); color: var(--color-text); }
+
+/* pad picker: the Mission Planer's tag buttons */
+.hl-rp__tags { display: flex; flex-wrap: wrap; gap: var(--space-1); }
+.hl-rp__tags button {
+  background: transparent; color: var(--color-text-muted); border: 1px solid var(--color-card-border); border-radius: var(--radius-chip);
+  padding: var(--space-0) var(--space-2); cursor: pointer; font: inherit; font-size: var(--font-size-small);
+}
+.hl-rp__tags button:hover:not(:disabled) { border-color: var(--color-text-muted); }
+.hl-rp__tags button.on { background: var(--color-card-border); border-color: var(--color-text); color: var(--color-text); }
+.hl-rp__tags button:disabled { opacity: 0.45; cursor: default; }
+.hl-rp__tags button:focus-visible { outline: var(--line-focus-ring) solid var(--color-select); outline-offset: 1px; }
+
+/* estimates: label left, value right (mission .mp-row) */
+.hl-rp__est { display: grid; gap: var(--space-1); }
+.hl-rp__sub { margin-top: var(--space-2); padding-top: var(--space-2); border-top: 1px solid var(--color-card-border); }
+.hl-rp__row { display: flex; justify-content: space-between; align-items: baseline; gap: var(--space-3); font-size: var(--font-size-body); line-height: var(--line-height-body); }
+.hl-rp__row > span { color: var(--color-text-muted); min-width: 0; }
+.hl-rp__row > b { display: inline-flex; align-items: baseline; gap: var(--space-1); font-variant-numeric: tabular-nums; text-align: right; font-weight: var(--font-weight-heading); }
+.hl-rp__row--safe > b { color: var(--color-safe); }
+.hl-rp__row--caution > b { color: var(--color-caution); }
+.hl-rp__row--limit > b { color: var(--color-limit); }
+.hl-rp__estlabel {
+  font-size: var(--font-size-label); line-height: var(--line-height-label); font-weight: var(--font-weight-label);
+  color: var(--color-text-muted); border: 1px solid var(--color-card-border); border-radius: var(--radius-chip); padding: 0 var(--space-1);
+}
+/* notices: neutral rule; the infeasible leg in the limit colour */
+.hl-rp__notice {
+  margin: 0 0 var(--space-2); padding: var(--space-1) var(--space-2); border-left: 3px solid var(--color-text-muted);
+  background: var(--color-sidebar); font-size: var(--font-size-body); line-height: var(--line-height-body);
+}
+.hl-rp__notice--bad { border-left-color: var(--color-limit); }
+.hl-rp__bad { color: var(--color-limit); }
+
+/* collapsed: the header only (the drawer's inline bottom is the bottom drawer's inset) */
+.hl-lay-drawer.hl-rp--collapsed { bottom: auto !important; }
+.hl-rp--collapsed .hl-lay-drawer__body { display: none; }
