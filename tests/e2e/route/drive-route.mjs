@@ -51,7 +51,8 @@ const WP6 = flag('--wp6')
 mkdirSync(OUT, { recursive: true })
 
 // Interface text the checks read (web/src/edit/route/text.ts ROUTE_TEXT / LIMIT_TEXT, R5 #110).
-const TXT = { computed: 'Computed live', infeasibleLeg: (n, from, to) => `Leg ${n}: ${from} → ${to}`, short: (m) => `Short by ${m} min` }
+// WP12 (D117): "O₂ limit on leg 3 (S7 → S6): you would need to set off 25 min earlier (…)"
+const TXT = { computed: 'Computed live', infeasibleLeg: (n, from, to) => `leg ${n} (${from} → ${to})`, short: (m) => `${m} min` }
 const LIMIT_WORD = { O2: 'O₂', daylight: 'Daylight', 'EVA duration': 'EVA length', dose: 'Radiation dose' }
 const PRE_LABEL = 'Precomputed · official plan'
 
@@ -193,7 +194,7 @@ async function pickStops(p, ids) {
   const ms = Math.round(performance.now() - t)
   // the D57 hash shows once /engine/version answered (pending text otherwise)
   await until(async () => { const h = await txt(p.page, S.panelHash); return h && /^[0-9a-f]{16}$/.test(h) ? h : null }, 10000)
-  const shown = await p.page.$$eval(S.checkedRows, (els) => els.map((e) => e.dataset.station))
+  const shown = await p.page.$$eval(S.checkedRows, visitOrder)
   const legs = await p.page.$$eval(S.legs, (els) => els.map((e) => e.innerText.replace(/\s+/g, ' ').trim()))
   return { ms, shown, legs, panelHash: await txt(p.page, S.panelHash) }
 }
@@ -234,6 +235,8 @@ function stageOrder(polls) {
   }
   return { order, inOrder: ok }
 }
+/** WP12 (W-7): the rows keep their places on a tick; the visiting order is the rows' data-index. */
+const visitOrder = (els) => els.slice().sort((a, b) => Number(a.dataset.index) - Number(b.dataset.index)).map((e) => e.dataset.station)
 const routeOf = (post) => post?.body?.inputs?.route ?? null
 const stopIds = (route) => (route?.stops ?? []).map((s) => s.station ?? `(${s.lon},${s.lat})`)
 const legChain = (ids) => ['pad', ...ids, 'pad'].slice(1).map((to, i) => [['pad', ...ids][i], to])
@@ -320,7 +323,7 @@ try {
     const doneAt = p.polls.find((x) => x.status === 'done')?.t
     const label = await txt(p.page, S.label)
     const prov = await attr(p.page, S.prov, 'href')
-    const after = { shown: await p.page.$$eval(S.checkedRows, (els) => els.map((e) => e.dataset.station)) }
+    const after = { shown: await p.page.$$eval(S.checkedRows, visitOrder) }
     const rec = hash ? await apiJson(`/results/${hash}/provenance`) : null
     const feas = rec?.body?.feasibility ?? null
     const routeLegs = p.routeFiles.at(-1)?.legs ?? null
@@ -335,6 +338,7 @@ try {
     }
     const criteria = {
       panelReady: open.ready,
+      exactlyOneJob: p.posts.length === 1, // WP12 (L6 W-1): one compute action, one job
       listInPickOrder: same(pick.shown, ORDERED),
       submittedInOrder: same(routeOf(post), { mode: 'ordered', stops: ORDERED.map((s) => ({ station: s })) }),
       stagesInOrder: st.inOrder && st.order.length > 0 && st.order[0] === 'nominal',
@@ -376,16 +380,16 @@ try {
       return e ? { leg: e.dataset.leg, limit: e.dataset.limit, legText: t('.hl-route__infeasible-leg'), limitText: t('.hl-route__infeasible-limit'), shortText: t('.hl-route__infeasible-short') } : null
     }, S.infeasible)
     const legRows = await p.page.$$eval(S.legs, (els) => els.map((e) => ({ leg: e.dataset.leg, state: e.dataset.state ?? null, failing: e.classList.contains('is-failing'), text: e.innerText.replace(/\s+/g, ' ').trim() })))
-    const shown = await p.page.$$eval(S.checkedRows, (els) => els.map((e) => e.dataset.station))
+    const shown = await p.page.$$eval(S.checkedRows, visitOrder)
     const routeLegs = p.routeFiles.at(-1)?.legs ?? null
     const infeasible = f && f.feasible === false
     const criteria = {
       panelReady: open.ready,
       runRecordInfeasible: !!infeasible, // the order really is infeasible on this API (else pick another with --infeasible)
       panelShowsInfeasible: !!box,
-      namesFailingLeg: !!infeasible && box?.legText === TXT.infeasibleLeg(f.leg + 1, f.from, f.to) && box?.leg === String(f.leg),
+      namesFailingLeg: !!infeasible && !!box?.legText?.includes(TXT.infeasibleLeg(f.leg + 1, f.from === 'pad' ? 'Rover pad' : f.from, f.to === 'pad' ? 'Rover pad' : f.to)) && box?.leg === String(f.leg),
       namesLimit: !!infeasible && !!box?.limitText?.includes(LIMIT_WORD[f.limit] ?? f.limit),
-      namesMinutesShort: !!infeasible && !!box?.shortText?.includes(TXT.short(Number(f.shortfall_min).toFixed(1))),
+      namesMinutesShort: !!infeasible && !!box?.shortText?.includes(TXT.short(Math.round(Number(f.shortfall_min)))),
       legHighlightedInList: !!infeasible && legRows.some((r) => r.leg === String(f.leg) && r.failing && r.state === 'failing'),
       // the map highlight (live/route/map.ts layer hl-route-failing-leg) is not readable without a map
       // handle: judged on the screenshot b-infeasible.png (selector request R5-1)
