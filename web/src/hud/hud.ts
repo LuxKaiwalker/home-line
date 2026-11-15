@@ -35,7 +35,7 @@ export interface MountHudOptions {
   config: HudConfig
   /** Scenario id; default = scenarios/index.json "default". */
   scenario?: string
-  /** Homeline budget (min) for the alarm-3 circle; default crew.yaml walkback_budgets_min[0]. */
+  /** Home line budget (min) for the alarm-3 circle; default crew.yaml walkback_budgets_min[0]. */
   budgetMin?: number
 }
 

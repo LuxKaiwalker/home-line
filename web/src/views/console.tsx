@@ -38,7 +38,7 @@ import './planStation' // L2d: station + rover marker cards
 
 const LAYER_LABELS: Record<LayerGroup, string> = {
   basemap: 'Basemap',
-  bands: 'Homeline band',
+  bands: 'Home line band',
   unknown: 'Unknown terrain (hatched)',
   edges: 'Edge causes',
   stations: 'Stations and pad',
@@ -706,7 +706,7 @@ function Legend(p: {
         {v.bands && (
           <>
             <li>
-              <Swatch kind="fill" color={THEME.variant.conservative} /> {p.budget}-min homeline, conservative (inner; no-go{' '}
+              <Swatch kind="fill" color={THEME.variant.conservative} /> {p.budget}-min home line, conservative (inner; no-go{' '}
               <CfgNum v={CITED.nogoConservativeDeg.value} units="deg" source={CITED.nogoConservativeDeg.source} />, D23)
             </li>
             <li>
