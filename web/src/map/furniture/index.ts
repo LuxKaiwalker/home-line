@@ -244,8 +244,14 @@ export class MapFurniture {
   private drawOn(): void {
     this.stopDraw()
     if (!this.line) return
+    let first = true
     this.stopDraw = playDrawOn(
       (f) => {
+        // L10: only on change. Under capture's frozen clock a frame repeats the same fraction; a setData
+        // per animation frame kept the route source loading, so a capture step never settled (frame 0
+        // took 8.5 min, notes/L10.md)
+        if (!first && f === this.drawFrac) return
+        first = false
         this.drawFrac = f
         this.renderRoute()
       },
