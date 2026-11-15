@@ -247,7 +247,8 @@ export class ConsoleMap {
     this.applyFilters()
     this.applyVisibility()
     void this.initLabels()
-    this.map.addControl(new FlythroughControl(), 'top-right')
+    // L10 (D111): the flythrough shows the route (with the crew marker) and the stations while it flies
+    this.map.addControl(new FlythroughControl({ get: (g) => this.layerVisible(g), set: (g, on) => this.setVisible(g, on) }), 'top-right')
     this.stopStorm = installStorm(this.map)
     this.selectMap = new MapSelection(m as unknown as SelectMap, this.selectSources, { setSelectedLabel, marker: (el) => new Marker({ element: el }) })
     this.selectMap.addLayers()
