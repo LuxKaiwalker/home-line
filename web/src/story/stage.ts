@@ -127,8 +127,9 @@ export class StoryStage {
 
   /**
    * L12 (D111): the map leaves its shell slot for the whole viewport. Its controls (zoom, Flythrough,
-   * scale) stay in the slot's corners (--hl-slot-*, story.css): the invisible chrome lies above the
-   * map, so a control under the top bar or the rail could not take the first click (D9).
+   * scale) stay exactly where they are in the slot (--hl-slot-*, story.css): the invisible chrome lies
+   * above the map, so a control under the top bar or the rail could not take the first click, and a
+   * control that moved when the skip puts the map back would lose the click's mouseup (D9).
    */
   private startFullscreen(): void {
     this.markSlot()
@@ -136,15 +137,17 @@ export class StoryStage {
     document.documentElement.dataset.storyFull = 'on'
   }
 
+  /** The map's rect in its shell slot (measured with the full-screen rule off; no paint in between). */
   private markSlot(): void {
-    const slot = this.map.getContainer().closest('.outlet') ?? this.map.getContainer().parentElement
-    if (!slot) return
-    const r = slot.getBoundingClientRect()
-    const st = document.documentElement.style
-    st.setProperty('--hl-slot-top', `${r.top}px`)
-    st.setProperty('--hl-slot-left', `${r.left}px`)
-    st.setProperty('--hl-slot-width', `${r.width}px`)
-    st.setProperty('--hl-slot-height', `${r.height}px`)
+    const html = document.documentElement
+    const full = html.dataset.storyFull
+    if (full) delete html.dataset.storyFull
+    const r = this.map.getContainer().getBoundingClientRect()
+    if (full) html.dataset.storyFull = full
+    html.style.setProperty('--hl-slot-top', `${r.top}px`)
+    html.style.setProperty('--hl-slot-left', `${r.left}px`)
+    html.style.setProperty('--hl-slot-width', `${r.width}px`)
+    html.style.setProperty('--hl-slot-height', `${r.height}px`)
   }
 
   /** L12 (D111): the map goes back into the shell and the loading screen (with its buttons) goes. */

@@ -90,7 +90,7 @@ html[data-story-full] :is(.hl-topbar, .hl-rail, .hl-sidebar, .hl-dock, .hl-shell
   position: relative;
   z-index: 11;
 }
-/* the map's own controls stay in the corners of the map's shell slot (set by stage.ts), clear of the
+/* the map's own controls stay where they are in the map's shell slot (its rect, set by stage.ts), clear of the
    lifted chrome, so the first click reaches them too; the plan panel inside the slot stays under the map */
 html[data-story-full] .console-map .maplibregl-control-container {
   position: absolute;
