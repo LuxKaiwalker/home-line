@@ -14,12 +14,13 @@
 .mp-sep { border-top: 1px solid var(--line); margin: 0.3rem 0; }
 .mp-notice { border-left: 3px solid var(--warn); background: rgba(233, 185, 73, 0.08); padding: 4px 8px; font-size: 0.85rem; margin: 0.5rem 0; }
 .mp-empty { font-size: 0.85rem; margin: 0.5rem 0 0.2rem; }
-.mp-list { list-style: none; padding: 0; margin: 0.5rem 0; display: grid; gap: 0.35rem; }
-.mp-list li { border: 1px solid var(--line); border-radius: 8px; padding: 0.3rem 0.5rem; }
+.mp-list { list-style: none; padding: 0; margin: 0.5rem 0; display: grid; grid-template-columns: minmax(0, 1fr); gap: 0.35rem; }
+/* min-width 0: a long one-line summary (closed editor) must not widen the list past the panel */
+.mp-list li { border: 1px solid var(--line); border-radius: 8px; padding: 0.3rem 0.5rem; min-width: 0; }
 .mp-list li.mp-li-bad { border-color: var(--bad); }
 .mp-li-head { display: flex; align-items: center; gap: 0.5rem; }
 .mp-num { display: inline-grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; background: var(--accent); color: #1a120e; font: 700 11px system-ui, sans-serif; flex: none; }
-.mp-leg { flex: 1; font-size: 0.85rem; }
+.mp-leg { flex: 1; min-width: 0; font-size: 0.85rem; }
 .mp-actions { display: flex; gap: 2px; }
 .mp-actions button, .mp-clear { background: transparent; color: var(--ink); border: 1px solid var(--line); border-radius: 4px; padding: 1px 6px; cursor: pointer; font-size: 0.8rem; }
 .mp-actions button:disabled { opacity: 0.35; cursor: default; }
@@ -49,8 +50,11 @@
 .mp-swatch { width: 12px; height: 12px; border-radius: 2px; flex: none; display: inline-block; }
 .mp-maps-note { display: block; color: var(--muted); font-size: 11px; }
 /* Waypoint editor: stop time, tags, note */
-.mp-wpe { margin: 0.25rem 0 0.1rem 1.9rem; font-size: 0.82rem; }
-.mp-wpe summary { cursor: pointer; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mp-wpe { margin: 0.25rem 0 0.1rem 1.9rem; font-size: 0.82rem; min-width: 0; }
+.mp-wpe summary { display: block; cursor: pointer; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mp-wpe summary::before { content: '▸ '; color: var(--muted); }
+.mp-wpe[open] summary::before { content: '▾ '; }
+.mp-wpe summary::-webkit-details-marker { display: none; }
 .mp-wpe[open] summary { white-space: normal; }
 .mp-wpe-stop { display: flex; align-items: center; gap: 0.4rem; margin: 0.4rem 0; }
 .mp-wpe-stop span:first-child { color: var(--muted); }
@@ -72,4 +76,4 @@
 .mp-st-pop button { background: #1a120e; color: #fff; border: 0; border-radius: 6px; padding: 3px 8px; cursor: pointer; font: inherit; }
 .mp-st-pop button:disabled { opacity: 0.5; cursor: default; }
 .mp-st-pop a { color: #8a3b12; font-weight: 600; }
-.mp-st-link { margin-left: 0.5rem; font-size: 0.78rem; }
+.mp-st-link { margin-left: 0.5rem; font-size: 0.78rem; white-space: nowrap; }
