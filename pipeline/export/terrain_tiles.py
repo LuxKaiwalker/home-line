@@ -32,7 +32,8 @@ source (relief_lowzoom.py only; counted and recorded).
 files in that order. Size vs budget (``terrain_tiles.budget_mb``, MiB): the scaled heights are
 rounded to the finest power-of-two step, starting at Terrarium's own 1/256 m, whose PNGs fit
 the budget (``precision_m`` in tiles.json, scaled metres; true step = precision_m / factor). If
-even a step of ``MAX_STEP_TRUE_M`` true metres doesn't fit: error, nothing is left behind.
+even a step of ``terrain_tiles.height_step_cap_m.terrain`` true metres doesn't fit: error,
+nothing is left behind.
 Output is deterministic (no timestamps; Pillow PNG with fixed options), and a re-run with
 unchanged sources, config and code is skipped.
 
@@ -69,10 +70,6 @@ NAME = "terrain"
 MIB = 2 ** 20
 TERRARIUM_OFFSET = 32768.0  # Terrarium encoding constant (MapLibre), not a tunable
 MAX_LAT = 85.0511287798066  # Web Mercator limit
-# Coarsest height step allowed when fitting the budget, m of TRUE elevation: the P2 acceptance
-# tolerance (decoded pad pixel = DEM x factor +- 0.1 m x factor). Needs a config home
-# (C-owned config/design.yaml terrain_tiles, assumed) - flagged in the PR.
-MAX_STEP_TRUE_M = 0.1
 BUILD_KEY = ".build_key"  # sidecar in the interim output dir (not published)
 ATTRIBUTION = ("Elevation: USGS Astrogeology MSL Gale merged DEM 1 m v3 (HiRISE/CTX/HRSC on "
                "MOLA), USGS controlled CTX DTMs, HRSC-MOLA blended DEM 200 m v2")
@@ -161,6 +158,8 @@ def load_config() -> dict:
             "bounds": planning_bounds(),
             "focus_bounds": [f["west"], f["south"], f["east"], f["north"]],
             "budget_bytes": int(round(float(tt["budget_mb"]) * MIB)),
+            # coarsest height step, m of TRUE elevation (the brief's +-0.1 m pad tolerance)
+            "max_step_true_m": float(tt["height_step_cap_m"]["terrain"]),
             "sources": band_paths("dem_1m", "ctx_20m", "mola_hrsc_200m")}
 
 
@@ -352,8 +351,8 @@ def render_tile(sources: Sequence[Source], z: int, x: int, y: int, px: int, fact
 def build(*, name: str, sources: Sequence[Path], zooms: tuple[int, int],
           focus_zooms: tuple[int, int] | None, bounds: Sequence[float],
           focus_bounds: Sequence[float] | None, factor: float, tile_px: int,
-          budget_bytes: int, out_dir: Path, edge_extend_last: bool = False,
-          max_step_true_m: float = MAX_STEP_TRUE_M,
+          budget_bytes: int, out_dir: Path, max_step_true_m: float,
+          edge_extend_last: bool = False,
           attribution: str | None = ATTRIBUTION, log: Callable[[str], None] = print) -> dict:
     """Write ``out_dir/{z}/{x}/{y}.png`` and ``out_dir/tiles.json``; returns the tiles.json doc.
 
@@ -473,7 +472,8 @@ def run(cfg: dict, out_dir: Path, *, force: bool, scripts: Sequence[Path],
     if missing:
         raise FileNotFoundError(f"{cfg['name']}: missing sources {missing}")
     args = {k: cfg[k] for k in ("name", "sources", "zooms", "focus_zooms", "bounds",
-                                "focus_bounds", "factor", "tile_px", "budget_bytes")}
+                                "focus_bounds", "factor", "tile_px", "budget_bytes",
+                                "max_step_true_m")}
     doc = build(out_dir=out_dir, log=log, **args, **extra)
     stamp.write_text(key + "\n")
     return doc, True
