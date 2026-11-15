@@ -1026,13 +1026,8 @@
       "caption": "From {file} ({scenario}): the area from which the crew can walk back to the pad within that time."
     },
     "export": {
-      "button": "Download mission.json",
-      "buttonTitle": "mission.json for the EVA simulator (contracts/bundle/mission.schema.json)",
       "routingTitle": "Wait until every leg is routed",
-      "lowestMargin": "lowest margin {margin} min ({binding})",
-      "storm": "Replay the {date} storm during this EVA",
-      "stormTitle": "The storm series is shifted so its tripwire fires at the route's largest T_home; the dose term joins the margin",
-      "stormNoRad": "rad.json is not loaded: no storm series to replay"
+      "lowestMargin": "Lowest margin {margin} min ({binding})"
     },
     "help": {
       "howto": "Click the map to add a waypoint. Each leg is the fastest walk on the {res_m} m grid for {scenario}; the dashed line is the way home from the last waypoint.",
