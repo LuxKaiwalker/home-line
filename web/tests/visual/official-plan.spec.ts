@@ -50,6 +50,13 @@ async function pointOf(page: Page, code: string): Promise<Pt> {
   }, code)
 }
 
+/**
+ * A drop point that changes the plan at any map size: parking option #2's screen point. (A fixed
+ * 60 px offset depended on the map zoom: with the timeline in the plan-bottom drawer (L2b) the Plan map
+ * is taller, the fit zooms in, and 60 px from the pad landed on steep ground, so the rover snapped back.)
+ */
+const awayFrom = (page: Page): Promise<Pt> => pointOf(page, 'P2')
+
 async function open(page: Page): Promise<Pt> {
   await page.goto('/?intro=0&view=2d#/') // L13: written for the 2D map (3D is the Plan default)
   await roverEl(page).waitFor({ timeout: 60_000 })
@@ -90,9 +97,10 @@ test('T9: "Official plan" is disabled with its reason on the official plan, and 
   await expect(page.locator('.hl-officialplan')).toHaveAttribute('title', 'Already showing the official plan')
 
   // move the rover and keep it (Enter)
+  const to = await awayFrom(page)
   await page.mouse.move(at.x, at.y)
   await page.mouse.down()
-  await page.mouse.move(at.x - 60, at.y + 10, { steps: 12 })
+  await page.mouse.move(to.x, to.y, { steps: 12 })
   await page.mouse.up()
   await expect(strip(page)).toContainText('What this change costs', { timeout: 10_000 })
   await expect(btn).toBeEnabled() // an open draft already differs
@@ -117,9 +125,10 @@ test('T9: "Official plan" is disabled with its reason on the official plan, and 
 
 test('T9: "Official plan" discards a released draft that was not kept', async ({ page }) => {
   const at = await open(page)
+  const to = await awayFrom(page)
   await page.mouse.move(at.x, at.y)
   await page.mouse.down()
-  await page.mouse.move(at.x - 60, at.y + 10, { steps: 12 })
+  await page.mouse.move(to.x, to.y, { steps: 12 })
   await page.mouse.up()
   await expect(strip(page)).toContainText('What this change costs', { timeout: 10_000 })
   await page.locator(OFFICIAL_BTN).click()
@@ -132,7 +141,8 @@ test('T2: the drag readout is truthful about the live planner (off vs ready), wi
   const at = await open(page)
   const readout = page.locator('.hl-edit-drag')
   // live off (static build, nothing reported)
-  await hold(page, at, { x: at.x - 60, y: at.y + 10 })
+  const drop = await awayFrom(page)
+  await hold(page, at, drop)
   await expect(readout).toHaveAttribute('data-live', 'off')
   await expect(readout.locator('.hl-edit-drag__snap')).toContainText(STATIC_SNAP)
   await expect(readout).not.toContainText('computing')
@@ -140,7 +150,6 @@ test('T2: the drag readout is truthful about the live planner (off vs ready), wi
   await expect(readout.locator('.hl-edit-pending').first()).toContainText('on release')
   // L6: the readout is compact and clear of the drop point (the pointer)
   const box = (await readout.boundingBox())!
-  const drop = { x: at.x - 60, y: at.y + 10 }
   expect(box.width).toBeLessThanOrEqual(320)
   expect(box.height).toBeLessThanOrEqual(240)
   expect(box.x > drop.x + 12 || box.y > drop.y + 12, `readout ${JSON.stringify(box)} clear of the drop point ${JSON.stringify(drop)}`).toBe(true)
@@ -150,9 +159,8 @@ test('T2: the drag readout is truthful about the live planner (off vs ready), wi
 
   // live ready (what the live layer reports through the seam)
   await page.evaluate(() => window.dispatchEvent(new CustomEvent('hl:live-status', { detail: 'ready' })))
-  // press where the rover rests once it has stopped moving (back on its pad), not where it was mid-update
-  const at2 = await settled(page)
-  await hold(page, at2, { x: at2.x - 60, y: at2.y + 10 })
+  const at2 = await settled(page) // the rover is back on the official pad once the map stops
+  await hold(page, at2, await awayFrom(page))
   await expect(readout).toHaveAttribute('data-live', 'ready')
   await expect(readout.locator('.hl-edit-drag__snap')).toContainText(LIVE_SNAP)
   await expect(readout).not.toContainText('offline')
@@ -169,7 +177,7 @@ test('T2: the drag readout is truthful about the live planner (off vs ready), wi
   await noStrip(page)
   await page.evaluate(() => window.dispatchEvent(new CustomEvent('hl:live-status', { detail: 'offline' })))
   const at3 = await settled(page)
-  await hold(page, at3, { x: at3.x - 60, y: at3.y + 10 })
+  await hold(page, at3, await awayFrom(page))
   await expect(readout.locator('.hl-edit-drag__snap')).toContainText(STATIC_SNAP)
   await page.mouse.up()
 })
