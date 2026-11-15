@@ -84,7 +84,7 @@ afterEach(() => {
 
 describe('plan-bottom drawer (L2b)', () => {
   it('claims the plan-table sections and the summary; each table section names its openers', () => {
-    expect(TABLE_SECTIONS).toEqual(['headline', 'padpicker', 'route', 'roverpad', 'siting', 'stations'])
+    expect(TABLE_SECTIONS).toEqual(['headline', 'padpicker', 'route', 'siting', 'stations'])
     expect(claimed).toEqual([...TABLE_SECTIONS, 'summary'])
     for (const n of TABLE_SECTIONS)
       expect(reveals.get(n)).toEqual([`[aria-controls="hl-lay-${PLAN_BOTTOM}"][aria-expanded="false"]`, `#hl-lay-${PLAN_BOTTOM}-tab-${TAB_TABLE}[aria-selected="false"]`])

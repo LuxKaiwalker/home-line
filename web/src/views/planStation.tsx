@@ -11,6 +11,9 @@
 //                            released draft is open (state/roverCard.ts). Closing it (Esc, ×) = Discard,
 //                            as Escape did in the sidebar. With a selection card open, the strip sits on
 //                            top of it instead (one card at a time), as it sat above the selection card.
+//                            L2f: it also opens from the map-edge Rover button and holds the console's
+//                            "Rover pad" text and, in live builds, a collapsible "Custom pad" section (the
+//                            pad tool of the old live aside), under the strip.
 // Numbers, trust chips and card content are unchanged: only the container moved.
 // J1d (team lead 2026-11-15 16:57): the station card also has "Add to route" -> #/mission?add=<id> (the
 // Mission Planer appends the station to its route, mission/add.ts; ui/cards/selectionCard.tsx).
@@ -18,20 +21,23 @@ import { createPortal, render } from 'preact'
 import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks'
 import { data } from '../data/loader'
 import type { ConsoleMap } from '../map/consoleMap'
-import { hostRoverCard, roverStrip } from '../state/roverCard'
+import { hostRoverCard, roverPadTool, roverStrip } from '../state/roverCard'
 import { clearSelection, type SelectionRef } from '../state/selection'
 import { batch, useSignalValue } from '../state/signal'
 import { anchorLngLat, applyRoom, cardIdFor, cardRoom, cardTitle, SELECTION_CARD, SELECTION_CARDS, SelectionCardBody, sourcesOf, STATION_CARD, SummaryCardBody, wireSelectionCards, type CardSources } from '../ui/cards/selectionCard'
 import { IconButton } from '../ui/components'
 import { t } from '../ui/copy'
-import { closeContainer, domId, layout, MarkerCard, openContainer, registerContainer } from '../ui/layout'
+import { closeContainer, Collapsible, domId, layout, MarkerCard, openContainer, registerContainer } from '../ui/layout'
 import { hostIn } from '../ui/shell/store'
-import { registerPlanMount } from './planSlots'
+import { registerPlanMount, SectionHost, type Sections } from './planSlots'
 import './planStation.css'
 
 export { SELECTION_CARD, STATION_CARD }
 export { StationAddToRoute } from '../ui/cards/selectionCard' // J1d: "Add to route" -> #/mission?add=<id>
 export const ROVER_CARD = 'rover'
+/** L2f: the rover card's collapsible "Custom pad" section (the live pad tool; the crew panel with it while
+ *  no Edit-route drawer hosts the crew) */
+export const CUSTOM_PAD = 'custom-pad'
 
 /**
  * The cards follow the selection and the rover strip (layout store ids 'station', 'selection', 'rover').
@@ -53,7 +59,37 @@ async function loadSources(): Promise<CardSources> {
   return sourcesOf(await m.cardData(data()))
 }
 
-function PlanCards({ cmap, slot, tools, bindClick }: { cmap: ConsoleMap; slot: HTMLElement; tools: HTMLElement; bindClick: (fn: (id: string) => void) => void }) {
+/** L2f: an element owned elsewhere (the live pad tool's panel), shown here while mounted. */
+function ElHost({ el, class: cls }: { el: HTMLElement; class: string }) {
+  const ref = useRef<HTMLDivElement>(null)
+  useLayoutEffect(() => {
+    ref.current?.appendChild(el)
+    return () => el.remove() // its owner keeps rendering into it while detached
+  }, [el])
+  return <div ref={ref} class={cls} />
+}
+
+/**
+ * L2f (L0 rows 5, 8): the rover card's own content, under the drag strip: the console's "Rover pad"
+ * section (official pad, parking-options text) and, in live builds, a collapsible "Custom pad" section
+ * with the pad tool (F24) and the crew panel when no Edit-route drawer hosts it (live/padmount.tsx renders
+ * both into one element; splitting the crew into its own section needs a target change there).
+ */
+function RoverCardBody({ sections }: { sections: Sections }) {
+  const pad = useSignalValue(roverPadTool)
+  return (
+    <>
+      <SectionHost name="roverpad" sections={sections} class="plan-card__roverpad" />
+      {pad && (
+        <Collapsible id={CUSTOM_PAD} title={t('planChrome.customPad')} defaultOpen class="plan-card__custompad">
+          <ElHost el={pad} class="plan-card__padtool" />
+        </Collapsible>
+      )}
+    </>
+  )
+}
+
+function PlanCards({ cmap, slot, tools, sections, bindClick }: { cmap: ConsoleMap; slot: HTMLElement; tools: HTMLElement; sections: Sections; bindClick: (fn: (id: string) => void) => void }) {
   const [src, setSrc] = useState<CardSources | null>(null)
   const [card, setCard] = useState<SelectionRef | null>(null)
   const strip = useSignalValue(roverStrip)
@@ -125,6 +161,9 @@ function PlanCards({ cmap, slot, tools, bindClick }: { cmap: ConsoleMap; slot: H
   const id = card ? cardIdFor(card) : null
   const page = card?.kind === 'station' && !!src?.stations?.some((s) => s.id === card.id)
   const summaryOpen = summary && !!openOpen[SELECTION_CARD]
+  // L2f: the Rover button opens the rover card at any time (anchored at the rover)
+  const roverOpen = !!openOpen[ROVER_CARD]
+  const roverAt = strip?.lngLat ?? (roverOpen ? cmap.padLngLat() : null)
   return (
     <>
       {createPortal(
@@ -153,9 +192,10 @@ function PlanCards({ cmap, slot, tools, bindClick }: { cmap: ConsoleMap; slot: H
           <SelectionCardBody sel={card} L={data()} stationPage={page} />
         </MarkerCard>
       )}
-      {strip && (
-        <MarkerCard id={ROVER_CARD} title={t('edit.roverCard')} at={{ lngLat: strip.lngLat, map: cmap.map }} class="plan-card plan-card--rover">
-          {strip.render()}
+      {roverAt && (strip || roverOpen) && (
+        <MarkerCard id={ROVER_CARD} title={strip ? t('edit.roverCard') : t('planChrome.roverCard')} at={{ lngLat: roverAt, map: cmap.map }} class="plan-card plan-card--rover">
+          {strip?.render()}
+          <RoverCardBody sections={sections} />
         </MarkerCard>
       )}
     </>
@@ -165,6 +205,9 @@ function PlanCards({ cmap, slot, tools, bindClick }: { cmap: ConsoleMap; slot: H
 registerPlanMount('station', (ctx) => {
   for (const id of [...SELECTION_CARDS, ROVER_CARD]) registerContainer({ id, kind: 'card' })
   const offs = [hostIn('station'), hostIn('selection'), hostRoverCard()]
+  // L2f: the "Rover pad" text lives in the rover card (opener: the map-edge Rover button)
+  ctx.claim(['roverpad'])
+  ctx.reveal('roverpad', [`[aria-controls="hl-lay-${ROVER_CARD}"][aria-expanded="false"]`])
   // the Plan summary opener (L2e) joins the map-edge tool column (L2c: Layers, 2D/3D, Flythrough, at
   // the end); without that column it has a slot of its own on the right edge
   const doc = ctx.el.card.ownerDocument
@@ -186,7 +229,7 @@ registerPlanMount('station', (ctx) => {
   place()
   const watch = typeof MutationObserver === 'undefined' ? null : new MutationObserver(place)
   watch?.observe(ctx.el.edge, { childList: true, subtree: true })
-  render(<PlanCards cmap={ctx.cmap} slot={ctx.el.card} tools={tools} bindClick={(fn) => ctx.onStationClick(fn)} />, ctx.el.card)
+  render(<PlanCards cmap={ctx.cmap} slot={ctx.el.card} tools={tools} sections={ctx.sections} bindClick={(fn) => ctx.onStationClick(fn)} />, ctx.el.card)
   return () => {
     ctx.onStationClick(null)
     render(null, ctx.el.card) // effects off first: closing the cards below is no Discard

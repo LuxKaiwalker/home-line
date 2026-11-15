@@ -36,3 +36,12 @@ export function hostRoverCard(): () => void {
 export function setRoverStrip(s: RoverStrip | null): void {
   strip.value = s
 }
+
+// L2f (D111; L0 row 8): the live pad tool (live/padmount.tsx, F24 + the crew panel when no Edit-route
+// drawer hosts it) renders into this element instead of the old live aside; the Plan rover card shows it.
+// Set by the mount call site in views/console.tsx (live builds, shell frame only); null = none.
+const padTool = signal<HTMLElement | null>(null)
+export const roverPadTool: ReadSignal<HTMLElement | null> = padTool
+export function setRoverPadTool(el: HTMLElement | null): void {
+  padTool.value = el
+}

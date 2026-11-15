@@ -443,6 +443,16 @@
     "timeline": "Timeline"
   },
 
+  "planChrome": {
+    "roverCard": "Rover pad",
+    "rover": "Rover pad and pad tool",
+    "customPad": "Custom pad",
+    "fullscreen": "Full screen",
+    "exitFullscreen": "Exit full screen",
+    "cursor": "Cursor readout",
+    "notes": "Data notes"
+  },
+
   "gauges": {
     "oxygen": "O₂",
     "oxygenUsed": "Used",
