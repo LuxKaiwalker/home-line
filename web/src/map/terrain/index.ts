@@ -23,6 +23,7 @@ import { noteFallback, openPose, planView, viewOverride, type View } from '../..
 import { TOKENS } from '../../ui/tokens'
 import { COPY_PENDING, t } from './config'
 import { TerrainControl, TerrainNotice, TERRAIN_TRUST } from './controls'
+import { installTileDebug } from './debug'
 import { FpsWatch } from './fps'
 import { exaggeration, reliefAzimuth, reliefMinute, setView } from './state'
 import { parseTerrainTiles, type TerrainTiles } from './tiles'
@@ -129,6 +130,39 @@ export class TerrainController {
       }),
     )
     map.on('render', this.onRender)
+    installTileDebug(map)
+    this.watchFlight()
+  }
+
+  /**
+   * V1 (D141): preload the tiles along the flythrough path while a flight runs (flythrough/fly.ts marks
+   * the container data-flythrough="on"); the preload stops when the flight ends.
+   */
+  private watchFlight(): void {
+    if (typeof MutationObserver === 'undefined') return
+    const el = this.map.getContainer()
+    let stop: (() => void) | null = null
+    const obs = new MutationObserver(() => {
+      const on = el.getAttribute('data-flythrough') === 'on'
+      if (on && !stop && this.tiles) {
+        const tiles = this.tiles
+        let cancelled = false
+        stop = () => void (cancelled = true)
+        void import('./preload').then((m) => {
+          if (cancelled) return
+          const top = tiles.focus ? Math.min(tiles.maxzoom, tiles.focus.minzoom - 1) : tiles.maxzoom
+          stop = m.preloadFlight(tiles, top)
+        })
+      } else if (!on && stop) {
+        stop()
+        stop = null
+      }
+    })
+    obs.observe(el, { attributes: true, attributeFilter: ['data-flythrough'] })
+    this.stops.push(() => {
+      obs.disconnect()
+      stop?.()
+    })
   }
 
   /** The field layer to drape while 3D is on (null when the polygons are shown). */
@@ -171,8 +205,12 @@ export class TerrainController {
       const ct = res.headers.get('content-type') ?? ''
       if (ct && !ct.includes('json')) return null // dev server SPA fallback
       this.tiles = parseTerrainTiles(await res.json())
+      // V1 (D141): the low-zoom Gale pyramid under the planning extent (3D far field); optional
+      const far = await fetch(dataUrl('terrain_low/tiles.json', DATA_MODE))
+        .then(async (r) => (r.ok && (r.headers.get('content-type') ?? 'json').includes('json') ? parseTerrainTiles(await r.json()) : null))
+        .catch(() => null)
       const mod = await import('./terrain')
-      this.handle = mod.addTerrain(this.map, this.tiles, (p) => dataUrl(p, DATA_MODE), this.beforeId, { exaggeration: exaggeration(), azimuth: this.azimuth() })
+      this.handle = mod.addTerrain(this.map, this.tiles, (p) => dataUrl(p, DATA_MODE), this.beforeId, { exaggeration: exaggeration(), azimuth: this.azimuth() }, far)
       if (this.field) this.handle.drapeField(this.field.id)
       this.requestSun()
       return this.handle
