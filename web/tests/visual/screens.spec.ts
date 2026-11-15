@@ -51,6 +51,11 @@ const SCREENS: Screen[] = [
   { name: 'scorecard', hash: '#/scorecard' },
   { name: 'about', hash: '#/about' },
   { name: 'styleguide', hash: '#/styleguide', optional: true },
+  // A4 (WS15 task 4): the app shell's mode routes (DESIGN §4.2) and the ?legacy switch (U0).
+  { name: 'shell-fly', hash: '#/fly', mask: ['.hl-hud-fps'] },
+  { name: 'shell-report', hash: '#/report' },
+  { name: 'shell-evidence', hash: '#/evidence/about' },
+  { name: 'legacy-trade', hash: '#/trade?legacy=1' },
 ]
 
 /** Wait until the view has loaded its data: no "Loading" text, fonts ready, and the text stable. */
