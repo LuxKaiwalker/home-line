@@ -253,9 +253,9 @@ describe.skipIf(!HAVE)('search palette (real data)', () => {
     expect(ui.view.value).toBe('3d')
     const nav = vi.fn()
     setCommandEnv({ navigate: nav })
-    runItem(cmd('mode.report'), { navigate: () => {} })
+    runItem(cmd('mode.fly'), { navigate: () => {} })
     expect(nav).toHaveBeenCalledTimes(1)
-    expect(labelOf(cmd('mode.report'))).toBe(t('modes.report.label'))
+    expect(labelOf(cmd('mode.fly'))).toBe(t('modes.fly.label'))
   })
 
   it('commands group: every registered command can be found, with its keys beside it', () => {

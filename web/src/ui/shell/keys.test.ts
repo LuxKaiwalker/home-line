@@ -26,13 +26,12 @@ describe('shortcutFor (§4.4 table)', () => {
     [{ key: ']' }, { action: 'history', step: 1 }],
     [{ key: 'p' }, { action: 'mode', mode: 'plan' }],
     [{ key: 'y' }, { action: 'mode', mode: 'fly' }],
-    [{ key: 'r' }, { action: 'mode', mode: 'report' }],
     [{ key: 't' }, { action: 'toggle3d' }],
     [{ key: '?', shiftKey: true }, { action: 'help' }],
   ])('%o -> %o', (e, want) => expect(shortcutFor(e)).toEqual(want))
 
   it('ignores browser shortcuts and unmapped keys', () => {
-    for (const e of [{ key: 'r', ctrlKey: true }, { key: 'p', altKey: true }, { key: '6' }, { key: 'x' }, { key: 'e' } /* EVIDENCE is hidden: no key */, { key: 'P', shiftKey: true }, { key: 'Tab' }]) expect(shortcutFor(e)).toBeNull()
+    for (const e of [{ key: 'r', ctrlKey: true }, { key: 'p', altKey: true }, { key: '6' }, { key: 'x' }, { key: 'r' }, { key: 'e' } /* REPORT and EVIDENCE are hidden: no key */, { key: 'P', shiftKey: true }, { key: 'Tab' }]) expect(shortcutFor(e)).toBeNull()
   })
 
   it('never fires while typing; Escape still does', () => {

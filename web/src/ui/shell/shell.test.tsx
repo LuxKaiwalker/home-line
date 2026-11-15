@@ -123,11 +123,11 @@ describe('shell frame and islands', () => {
     expect(one(byClass(root(), 'hl-dock')).getAttribute('aria-label')).toBe(t('timeline.evaTime'))
   })
 
-  it('focus order: skip link, wordmark, the shown modes in order (EVIDENCE hidden), then the top bar tools, then the rail', () => {
+  it('focus order: skip link, wordmark, the shown modes in order (REPORT and EVIDENCE hidden), then the top bar tools, then the rail', () => {
     const order = all(root(), focusable)
     expect(text(order[0])).toBe(t('nav.skipToMap'))
     expect(text(order[1])).toBe(t('nav.wordmark'))
-    expect(order.slice(2, 5).map((n) => text(n).replace(/[A-Z]$/, '').trim())).toEqual(['plan', 'fly', 'report'].map((m) => t(`modes.${m}.label` as 'modes.plan.label')))
+    expect(order.slice(2, 4).map((n) => text(n).replace(/[A-Z]$/, '').trim())).toEqual(['plan', 'fly'].map((m) => t(`modes.${m}.label` as 'modes.plan.label')))
     const rail = one(byClass(root(), 'hl-rail'))
     const firstRail = order.findIndex((n) => rail.contains(n))
     const lastTop = order.findLastIndex((n) => (f.topbar as unknown as FakeNode).contains(n))
@@ -136,11 +136,11 @@ describe('shell frame and islands', () => {
 
   it('the mode tabs follow the UI store: aria-current on the active mode, links to the mode routes', () => {
     const tabs = () => byClass(root(), 'hl-modes__tab')
-    expect(tabs().map((a) => a.getAttribute('aria-current'))).toEqual(['page', null, null])
-    expect(tabs().map((a) => a.getAttribute('href'))).toEqual(['#/', '#/fly/hud', '#/report/cuff'])
+    expect(tabs().map((a) => a.getAttribute('aria-current'))).toEqual(['page', null])
+    expect(tabs().map((a) => a.getAttribute('href'))).toEqual(['#/', '#/fly/hud'])
     act(() => void applyRoute({ name: 'scorecard', key: 'k' }, '#/evidence/scorecard?key=k'))
     expect(ui.mode.value).toBe('evidence')
-    expect(tabs().map((a) => a.getAttribute('aria-current'))).toEqual([null, null, null]) // EVIDENCE is hidden: still reachable by URL, no tab
+    expect(tabs().map((a) => a.getAttribute('aria-current'))).toEqual([null, null]) // EVIDENCE is hidden: still reachable by URL, no tab
     expect(root().getAttribute('data-mode')).toBe('evidence')
     expect(root().getAttribute('data-dock')).toBe('none') // REPORT/EVIDENCE are documents: no dock
     const views = byClass(root(), 'hl-rail__view')
