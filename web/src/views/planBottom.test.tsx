@@ -133,7 +133,8 @@ describe('plan-bottom drawer (L2b)', () => {
   })
 
   it('writes the drawer height to the shell root for overlay side panels (RR1 issue 1)', () => {
-    act(() => reportInset(PLAN_BOTTOM, { bottom: 40 }) // the drawer's measured height (offsetHeight in a browser))
+    // the drawer's measured height (offsetHeight in a browser; 0 in the fake DOM)
+    act(() => reportInset(PLAN_BOTTOM, { bottom: 40 }))
     expect(shellEl.style['--hl-plan-bottom']).toBe('40px')
     act(() => reportInset(PLAN_BOTTOM, { bottom: 0 }))
     act(() => stop())
