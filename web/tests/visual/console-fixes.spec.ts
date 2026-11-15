@@ -33,7 +33,7 @@ test.describe('console unmount race', () => {
     const cdp = await page.context().newCDPSession(page)
     await cdp.send('Emulation.setCPUThrottlingRate', { rate: 4 })
     for (let delay = 0; delay <= 1000; delay += 100) {
-      await page.goto('/?intro=0#/')
+      await page.goto('/?intro=0&view=2d#/')
       await page.locator('.console-panel .headline-value').waitFor({ timeout: 30_000 })
       await page.waitForTimeout(delay)
       await page.evaluate(() => (location.hash = '#/trade'))
@@ -56,7 +56,7 @@ async function rankSquare(page: Page, id: string) {
 
 test.describe('rank markers', () => {
   test('a click exactly on a rank square reaches the map', async ({ page }) => {
-    await page.goto('/?intro=0#/')
+    await page.goto('/?intro=0&view=2d#/')
     const { x, y } = await rankSquare(page, 'rank3')
     const hitMarker = await page.evaluate(([px, py]) => !!document.elementFromPoint(px, py)?.closest('.pad-option'), [x, y])
     expect(hitMarker, 'the square must not be the pointer target').toBe(false)
@@ -71,7 +71,7 @@ test.describe('rank markers', () => {
   })
 
   test('the rank pill still selects the parking option', async ({ page }) => {
-    await page.goto('/?intro=0#/')
+    await page.goto('/?intro=0&view=2d#/')
     await rankSquare(page, 'rank3')
     const pill = page.locator('.console-map .hl-label[data-code="P3"] .hl-label__pill')
     test.skip((await pill.count()) === 0 || !(await pill.isVisible()), 'P3 pill not placed at this viewport')
@@ -82,7 +82,7 @@ test.describe('rank markers', () => {
 
 test.describe('parking option provenance', () => {
   test('choosing rank 3 never shows the old route under rank-3 keys', async ({ page }) => {
-    await page.goto('/?intro=0#/')
+    await page.goto('/?intro=0&view=2d#/')
     const legs = page.locator('.console-panel .route-legs')
     await legs.waitFor({ timeout: 30_000 })
     await page.evaluate(() => {

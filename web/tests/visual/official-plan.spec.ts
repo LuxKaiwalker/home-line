@@ -49,7 +49,7 @@ async function pointOf(page: Page, code: string): Promise<Pt> {
 }
 
 async function open(page: Page): Promise<Pt> {
-  await page.goto('/?intro=0#/')
+  await page.goto('/?intro=0&view=2d#/') // L13: written for the 2D map (3D is the Plan default)
   await roverEl(page).waitFor({ timeout: 60_000 })
   await expect(roverEl(page)).toHaveAttribute('data-select-pad', 'rank1')
   return settled(page)

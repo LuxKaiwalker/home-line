@@ -76,7 +76,7 @@ test.describe('L10 flythrough chase camera', () => {
   test('live: the Flythrough button draws the route and the crew marker; hover does not stop it', async ({ page }, info) => {
     test.skip(info.project.name !== '1024x768', 'one size is enough')
     test.setTimeout(180_000)
-    await page.goto('/?intro=0#/')
+    await page.goto('/?intro=0&view=2d#/') // L13: the start this test was written for (3D is now the Plan default)
     const btn = page.locator('.hl-fly-btn:not(.hl-fly-speed)').first()
     await btn.waitFor({ state: 'visible', timeout: 60_000 })
     await btn.click()

@@ -6,7 +6,7 @@
 import type { IControl } from 'maplibre-gl'
 import { effect, ui } from '../../state'
 import { COPY_PENDING, factorText, t, TERRAIN, TERRAIN_PENDING } from './config'
-import { exaggeration, setExaggeration, setView, toggleView, type View } from './state'
+import { chooseToggle, chooseView, exaggeration, setExaggeration, type View } from './state'
 import './terrain.css'
 
 /** Trust-chip hook (DESIGN §3.6): the terrain layer group is Real (measured DEM), factor noted. */
@@ -24,7 +24,7 @@ export class TerrainControl implements IControl {
     if ((e as CustomEvent<{ action?: string } | null>).detail?.action !== 'toggle3d') return
     e.preventDefault() // handled here: the shell does not flip ui.view on its own
     if (ui.view.peek() !== '3d' && this.disabledWhy) return
-    toggleView()
+    chooseToggle() // L13: the viewer's choice is remembered
   }
 
   onAdd(): HTMLElement {
@@ -47,13 +47,13 @@ export class TerrainControl implements IControl {
       b.setAttribute('role', 'radio')
       b.textContent = t(v === '2d' ? 'buttons.view2d' : 'buttons.view3d')
       b.setAttribute('aria-keyshortcuts', 'T')
-      b.addEventListener('click', () => setView(v))
+      b.addEventListener('click', () => chooseView(v))
       b.addEventListener('keydown', (e) => {
         if (!['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(e.key)) return
         e.preventDefault()
         const other: View = v === '2d' ? '3d' : '2d'
         if (other === '3d' && this.disabledWhy) return
-        setView(other)
+        chooseView(other)
         this.buttons[other]?.focus()
       })
       this.buttons[v] = b
@@ -121,20 +121,41 @@ export class TerrainControl implements IControl {
   }
 }
 
-/** The one-line notice over the map (fallback reasons, loading). */
+/** The one-line notice over the map (fallback reasons, loading). L13: optionally dismissible (× button). */
 export class TerrainNotice {
   readonly el: HTMLDivElement
+  private readonly text: HTMLSpanElement
+  private readonly close: HTMLButtonElement
   constructor(container: HTMLElement) {
     this.el = document.createElement('div')
     this.el.className = 'hl-terrain-notice'
     this.el.setAttribute('role', 'status')
     this.el.hidden = true
+    this.text = document.createElement('span')
+    this.text.className = 'hl-terrain-notice__text'
+    this.close = document.createElement('button')
+    this.close.type = 'button'
+    this.close.className = 'hl-terrain-notice__close'
+    this.close.textContent = '×'
+    this.close.setAttribute('aria-label', t('buttons.close'))
+    this.close.title = t('buttons.close')
+    this.close.hidden = true
+    this.close.addEventListener('click', () => this.show(null))
+    this.el.appendChild(this.text)
+    this.el.appendChild(this.close)
     container.appendChild(this.el)
   }
-  show(text: string | null): void {
+  show(text: string | null, { dismissible = false }: { dismissible?: boolean } = {}): void {
     this.el.hidden = text === null
-    this.el.textContent = text ?? ''
+    this.text.textContent = text ?? ''
     this.el.title = text ?? ''
+    this.close.hidden = text === null || !dismissible
+    if (text !== null && dismissible) this.el.setAttribute('data-dismissible', 'true')
+    else this.el.removeAttribute('data-dismissible')
+  }
+  /** The text shown, '' when hidden. */
+  get message(): string {
+    return this.el.hidden ? '' : (this.text.textContent ?? '')
   }
   destroy(): void {
     this.el.remove()
