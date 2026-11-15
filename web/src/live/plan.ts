@@ -57,6 +57,8 @@ export type PlanLoad =
 export interface LoadPlanOptions {
   loaderFor?: LoaderFor
   signal?: AbortSignal
+  /** Called once the run record has passed its checks, before the result tree loads (origin label). */
+  onRecord?: (record: RunRecord) => void
 }
 
 const msg = (e: unknown) => (e instanceof Error ? e.message : String(e))
@@ -75,6 +77,7 @@ export async function loadPlan(client: ApiClient, hash: string, opts: LoadPlanOp
   const errs = validateRunRecord(record)
   if (errs.length) return { state: 'error', hash, message: `run record fails run_record.schema.json: ${errs.slice(0, 3).join('; ')}` }
   if (record.hash !== hash) return { state: 'error', hash, message: `run record is for ${record.hash}, not ${hash}` }
+  opts.onRecord?.(record)
   const base = client.resultBase({ hash, result_url: null })
   const loaderFor = opts.loaderFor ?? liveLoader
   const tree = await loadStage(base, record.stages.map((s) => s.name), loaderFor)
