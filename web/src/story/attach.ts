@@ -201,7 +201,11 @@ async function settle(stage: StoryStage): Promise<void> {
       map.triggerRepaint()
     })
     const terrain = map.getContainer().getAttribute('data-terrain')
-    if (map.loaded() && map.areTilesLoaded() && terrain !== 'loading') break
+    // L10: not map.loaded(): it is false while a paint transition or the zoom cross-fade runs, and both
+    // run on the clock that capture freezes, so after an integer-zoom change (frame 0) it stayed false
+    // for the whole step and settle ran to its cap (8.5 min for frame 0 in software GL, notes/L10.md).
+    // Tiles, terrain and the style itself are what a complete frame needs.
+    if (map.isStyleLoaded() && map.areTilesLoaded() && terrain !== 'loading') break
   }
   await nextFrame()
   await nextFrame()

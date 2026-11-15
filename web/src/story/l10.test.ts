@@ -89,3 +89,17 @@ describe('L10: what the flythrough draws', () => {
     expect(eff).toContain('if (this.paused) this.clockWhilePaused()')
   })
 })
+
+describe('L10: a capture step settles under the frozen clock', () => {
+  const src = readFileSync(new URL('./attach.ts', import.meta.url), 'utf8')
+  const settle = src.slice(src.indexOf('async function settle('), src.indexOf('function runCapture('))
+  it('waits for the style, the tiles and the terrain, not map.loaded() (false while a transition or the zoom cross-fade runs on the frozen clock)', () => {
+    expect(settle).toContain('map.isStyleLoaded() && map.areTilesLoaded()')
+    expect(settle).not.toMatch(/map\.loaded\(\)/)
+  })
+  it('the furniture writes route data and the pulse paint only on change (no write per animation frame)', () => {
+    const furn = readFileSync(new URL('../map/furniture/index.ts', import.meta.url), 'utf8')
+    expect(furn).toContain('if (!first && f === this.drawFrac) return')
+    expect(furn).toContain('if (key === this.pulseKey) return')
+  })
+})

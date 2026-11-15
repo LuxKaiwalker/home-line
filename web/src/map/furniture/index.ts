@@ -74,6 +74,7 @@ export class MapFurniture {
   /** L10: field grid metric from fields/index.json (= the slope grid's), set before the PNG fields load */
   private metric: Metric | null = null
   private pausedRenderAt = -Infinity
+  private pulseKey = ''
   private readonly stops: (() => void)[] = []
 
   constructor(map: MlMap) {
@@ -373,6 +374,11 @@ export class MapFurniture {
     if (!p.active && !this.pulseWas) return
     this.pulseWas = p.active
     if (!this.map.getLayer('station-pulse')) return
+    // L10: only on change. A paint write marks the style dirty (map.loaded() false); under capture's
+    // frozen clock the pulse repeats the same frame on every rAF, so a capture step never settled
+    const key = `${p.grow},${p.opacity}`
+    if (key === this.pulseKey) return
+    this.pulseKey = key
     this.map.setPaintProperty('station-pulse', 'circle-radius', RING_R + PULSE_GROW * p.grow)
     this.map.setPaintProperty('station-pulse', 'circle-stroke-opacity', p.opacity)
   }
