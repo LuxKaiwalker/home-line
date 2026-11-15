@@ -43,7 +43,7 @@ export function SearchButton({ win = typeof window === 'undefined' ? undefined :
   }, [open])
   return (
     <>
-      <IconButton icon="search" label={t('nav.search')} aria-haspopup="dialog" aria-expanded={open ? 'true' : 'false'} aria-keyshortcuts="Control+K Meta+K /" onPointerEnter={prefetch} onFocus={prefetch} onClick={() => setOpen(true)} />
+      <IconButton icon="search" label={t('nav.search')} title={t('hints.shell.search')} aria-haspopup="dialog" aria-expanded={open ? 'true' : 'false'} aria-keyshortcuts="Control+K Meta+K /" onPointerEnter={prefetch} onFocus={prefetch} onClick={() => setOpen(true)} />
       {open && P && <P {...palette} win={palette?.win ?? win} onClose={() => setOpen(false)} />}
     </>
   )
