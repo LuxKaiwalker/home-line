@@ -702,6 +702,24 @@
     "independence": "Independent team project for the Space Apps Challenge; not affiliated with any space agency."
   },
 
+  "hints": {
+    "badges": {
+      "estimate": { "label": "Estimate", "explanation": "Instant estimate from the precomputed fields, not a computed route; compute the full plan for checked numbers." },
+      "computed": { "label": "Computed live", "explanation": "Computed on request by the same engine as the official plan, but not checked against the scorecard." }
+    },
+    "disabled": {
+      "engineChooses": "The engine chooses the stations; press My order to pick them yourself",
+      "undoEmpty": "Nothing to undo",
+      "redoEmpty": "Nothing to redo",
+      "jobRunning": "A plan is being computed; wait for it or cancel it first",
+      "needsLive": "Needs the live planner, which is not available right now"
+    },
+    "job": {
+      "stage": "{stage} · {elapsed} elapsed",
+      "expected": "Usually takes about {expected}",
+      "overdue": "Taking longer than usual · {elapsed} elapsed"
+    }
+  },
   "layout": {
     "summary": {
       "loading": "Loading the route for {label}…",
