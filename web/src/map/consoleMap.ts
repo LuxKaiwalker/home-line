@@ -21,11 +21,14 @@ import { effect, ui } from '../state'
 import { collapseFade, collapseHeadline, collapseQuery, padGridMetres, playCollapse, setCollapse } from './field/collapse'
 import { CollapseHeadlineOverlay, CollapseToggle } from './field/collapseUi'
 import { MapFurniture, MARKER_LAYERS, ROUTE_LAYERS } from './furniture'
-import { LabelLayer, loadLabels } from './labels/layer'
+import { LabelLayer, loadLabels, setSelectedLabel } from './labels/layer'
+import type { MapLabel } from './labels/model'
 import { TerrainController } from './terrain'
 import type { RoverHandle } from '../edit/roverMap'
 import { FlythroughControl } from './flythrough/control'
 import { storyParams, storyRequest } from '../story/query'
+import { CameraController, type ControllerMap } from './camera'
+import { MapSelection, SELECT_ROUTE_HIT, type SelectMap, type SelectSources } from './select'
 import { activeField, BINDING_LABEL, driveMargin, FIELD_TRUST, fieldModeQuery, fieldRequested, loadFieldData, loadFieldLayer, setActiveField, VARIANT_OF, webgl2Available, zeroEdgeLabels, type FieldData, type MarginState } from './field'
 
 /** The GPU field layer handle (field/layer.ts, loaded lazily). */
@@ -127,6 +130,19 @@ export class ConsoleMap {
   private rover: RoverHandle | null = null
   // WS16 task 10 (M10): U6 flythrough button and story mode (intro, ?demo=1, ?capture=; lazy)
   private stopStory: (() => void) | null = null
+  // WS16 task 9 (M9): map clicks/hover -> A5 selection store, highlight, isolation; camera presets and focus (U14, U16)
+  private selectMap: MapSelection | null = null
+  private camera: CameraController | null = null
+  private lastRoute: RouteFC | null = null
+  private labelRows: MapLabel[] | null = null
+  private readonly selectSources = (): SelectSources => ({
+    labels: this.labelRows,
+    stations: this.lastStations?.stations ?? null,
+    pad: this.lastPad,
+    padOptions: this.lastPadOptions?.[0] ?? null,
+    route: this.lastRoute,
+    edges: this.edges,
+  })
   private destroyed = false
 
   constructor(container: HTMLElement, onStation: (id: string) => void) {
@@ -220,6 +236,10 @@ export class ConsoleMap {
     this.applyVisibility()
     void this.initLabels()
     this.map.addControl(new FlythroughControl(), 'top-right')
+    this.selectMap = new MapSelection(m as unknown as SelectMap, this.selectSources, { setSelectedLabel, marker: (el) => new Marker({ element: el }) })
+    this.selectMap.addLayers()
+    this.groupLayers.route.push(SELECT_ROUTE_HIT)
+    this.camera = new CameraController(m as unknown as ControllerMap, this.selectSources)
     const legacy = !!this.map.getContainer().closest('.hl-frame-legacy')
     const story = storyRequest(storyParams(location.search, location.hash), { reduced: ui.reducedMotion.peek(), introSeen: ui.introSeen.peek(), legacy })
     if (story) void import('../story/attach').then((m) => !this.destroyed && (this.stopStory = m.attachStory(this, story)))
@@ -237,12 +257,14 @@ export class ConsoleMap {
       return null
     })
     if (!ls?.length || this.labels) return
+    this.labelRows = ls
     this.labels = new LabelLayer(this.map)
     this.labels.setLabels(ls)
     if (this.lastPad) this.setPad(this.lastPad)
     if (this.lastPadOptions) this.setPadOptions(...this.lastPadOptions)
     if (this.lastStations) await this.setStations(this.lastStations.stations, this.lastStations.scenarioId)
     this.applyVisibility()
+    this.selectMap?.refresh()
   }
 
   /** Basemap raster sources (tilejson.json, see basemap.ts), under every other layer. */
@@ -421,6 +443,8 @@ export class ConsoleMap {
 
   async setRoute(route: RouteFC | null): Promise<void> {
     await this.ready
+    this.lastRoute = route
+    this.selectMap?.refresh()
     ;(this.map.getSource('route') as GeoJSONSource).setData(route ?? EMPTY)
     await this.furniture?.setRoute(route)
   }
@@ -455,6 +479,7 @@ export class ConsoleMap {
       const el = document.createElement('button')
       el.type = 'button'
       el.className = `station-marker${a.state === 'none' ? ' no-access' : ''}`
+      el.dataset.selectStation = s.id // M9: the map selection reads it (select.ts domRef)
       el.textContent = s.id
       const acc =
         a.state === 'access'
@@ -484,6 +509,7 @@ export class ConsoleMap {
     })
     ;(this.map.getSource('access') as GeoJSONSource).setData({ type: 'FeatureCollection', features: pts })
     this.applyVisibility()
+    this.selectMap?.refresh()
   }
 
   /** F8 siting heatmap (siting.png on siting_png.json corners) and the proposed pad + alternatives. */
@@ -515,6 +541,7 @@ export class ConsoleMap {
     this.padMarker?.remove()
     const el = document.createElement('div')
     el.className = 'pad-marker'
+    el.dataset.selectPad = 'rank1'
     el.textContent = p.label
     el.title = p.title
     if (this.labels?.covers('PAD')) {
@@ -536,6 +563,7 @@ export class ConsoleMap {
       const el = document.createElement('button')
       el.type = 'button'
       el.className = `pad-option${o.selected ? ' on' : ''}`
+      el.dataset.selectPad = o.id
       el.textContent = o.label
       el.title = o.title
       const code = this.labels?.codeForRef(o.id)
@@ -645,6 +673,8 @@ export class ConsoleMap {
   destroy(): void {
     this.destroyed = true
     this.stopStory?.()
+    this.camera?.destroy()
+    this.selectMap?.destroy()
     this.terrain?.destroy()
     this.labels?.destroy()
     this.destroyed = true
