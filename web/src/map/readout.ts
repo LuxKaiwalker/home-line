@@ -52,7 +52,7 @@ export class CursorReadout {
 
   constructor() {
     const el = document.createElement('div')
-    el.className = 'maplibregl-ctrl hl-readout'
+    el.className = 'maplibregl-ctrl hl-cursor-readout'
     el.setAttribute('aria-live', 'off')
     el.hidden = true
     this.el = el
@@ -75,12 +75,12 @@ export class CursorReadout {
       let cell = this.cells.get(r.key)
       if (!cell) {
         const row = document.createElement('div')
-        row.className = `hl-readout-row hl-readout-${r.key}`
+        row.className = `hl-cursor-readout__row hl-cursor-readout__row--${r.key}`
         const k = document.createElement('span')
-        k.className = 'hl-readout-label'
+        k.className = 'hl-cursor-readout__label'
         k.textContent = r.label
         cell = document.createElement('span')
-        cell.className = 'hl-readout-value'
+        cell.className = 'hl-cursor-readout__value'
         if (r.trust) cell.setAttribute('data-trust', r.trust)
         if (r.key === 'timeHome') cell.setAttribute('data-trust-source', 'fields t_home.png (fieldAt)')
         if (r.key === 'slope') cell.setAttribute('data-trust-source', 'fields/shared/slope.png')
