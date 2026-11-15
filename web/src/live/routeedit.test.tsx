@@ -182,8 +182,15 @@ describe('padTool and VITE_ROUTE_EDIT (D116)', () => {
     const client = createApiClient({ base: 'http://api.test', fetch })
     const cmap = fakeConsoleMap()
     off = live.padTool(panel as unknown as Element, fakePort(cmap.cm), client)
-    const tick = async (n: number, done: () => boolean = () => false) => {
-      for (let i = 0; i < n && !done(); i++) await step(async () => void (await flush()))
+    // n flushes, and when a done() predicate is given keep going on a wall-clock deadline (5 s): the
+    // panel mount waits on a dynamic import, which under machine load takes real time, not microtasks
+    const tick = async (n: number, done?: () => boolean) => {
+      const until = done ? Date.now() + 5000 : 0
+      for (let i = 0; !done?.(); i++) {
+        if (i >= n && Date.now() >= until) break
+        await step(async () => void (await flush()))
+        if (i >= n) await new Promise((r) => setTimeout(r, 10))
+      }
     }
     const renderRail = () => {
       for (const s of railSections.peek()) step(() => draw(s.render() as ComponentChildren, root as unknown as Element))
