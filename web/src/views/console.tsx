@@ -32,6 +32,7 @@ import { choosePlanScenario, mission, resolvePlanScenario } from '../state/missi
 import { useSignalValue } from '../state/signal'
 import type { View } from './types'
 import { makeSections, mountPlanSlots, PlanSummary, S, SectionsCtx } from './planSlots'
+import './planLayers' // L2c (D111): layers popover, legend chip, map-edge tools (registers its Plan mount)
 import { HeadlineStrip } from './planStrip' // L2a: the headline strip (registers its Plan mount)
 import './planStation' // L2d: station + rover marker cards
 
