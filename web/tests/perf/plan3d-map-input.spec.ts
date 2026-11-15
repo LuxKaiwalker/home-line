@@ -81,7 +81,7 @@ test.describe('L13: the view Plan mode opens with', () => {
     await page.keyboard.press('t')
     await expect(radio(page, '2D')).toHaveAttribute('aria-checked', 'true')
     await expect(mapEl(page)).toHaveAttribute('data-terrain', 'flat', { timeout: 10_000 })
-    await expect(cam(page)).toHaveAttribute('data-camera-pitch', '0', { timeout: 10_000 })
+    await expect(cam(page)).toHaveAttribute('data-camera-pitch', /^0(\.0+)?$/, { timeout: 10_000 }) // written as "0.0"
   })
 
   test('?view=2d forces 2D: no terrain, the 2D button checked', async ({ page }) => {
