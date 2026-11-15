@@ -1,4 +1,5 @@
 """P2 / WS16: pipeline/export/terrain_tiles.py + relief_lowzoom.py (DESIGN §6.1, U1, §5.4).
+P2c: heights are elevation x factor + terrain_tiles.vertical_offset_m (site near 0 m on the map).
 
 Checks the committed elevation tiles (web/public/data/terrain/, terrain_low/) against the frozen
 contract (contracts/terrain_tiles.schema.json), config/design.yaml (factor, zooms, budgets) and
@@ -41,6 +42,8 @@ needs_dem = pytest.mark.skipif(not DEM_1M.exists(),
 needs_regen = pytest.mark.skipif(os.environ.get("HL_REGEN_TILES") != "1",
                                  reason="heavy re-export; set HL_REGEN_TILES=1 (under flock)")
 CAP = TT["height_step_cap_m"]  # coarsest height step, m of true elevation, per tile set
+OFFSET = TT["vertical_offset_m"]  # P2c: m added after scaling, h = elevation * factor + offset
+PAD_JSON = json.loads((PUBLIC / "pad.json").read_text())  # the official pad (D21)
 
 
 def meta(name: str) -> dict:
@@ -147,7 +150,8 @@ def synth(tmp_path_factory):
              pad["lat"] + half_deg / 3]
     kw = dict(name="terrain", sources=[fine, coarse], zooms=(13, 15), focus_zooms=(16, 16),
               bounds=bounds, focus_bounds=focus, factor=FACTOR, tile_px=TT["tile_px"],
-              budget_bytes=TT["budget_mb"] * MB, max_step_true_m=CAP["terrain"])
+              budget_bytes=TT["budget_mb"] * MB, max_step_true_m=CAP["terrain"],
+              vertical_offset_m=OFFSET)
     a = T.build(out_dir=d / "a" / "terrain", **kw)
     b = T.build(out_dir=d / "b" / "terrain", **kw)
     return {"dir": d, "a": a, "b": b, "kw": kw, "fine": fine, "coarse": coarse}
@@ -158,6 +162,7 @@ def test_synthetic_meta_schema_valid(synth):
     errs = list(Draft202012Validator(SCHEMA).iter_errors(m))
     assert not errs, errs
     assert m["factor"] == FACTOR and m["minzoom"] == 13 and m["maxzoom"] == 16
+    assert m["vertical_offset_m"] == OFFSET
     assert m["focus"] == {"minzoom": 16, "maxzoom": 16, "bounds": synth["kw"]["focus_bounds"]}
     files = sorted((synth["dir"] / "a" / "terrain").rglob("*.png"))
     assert m["total_bytes"] == sum(p.stat().st_size for p in files)
@@ -180,7 +185,7 @@ def test_synthetic_pad_pixel_is_dem_times_factor(synth):
         h = decode_file(synth["dir"] / "a" / "terrain" / str(z) / str(x) / f"{y}.png")[i, j]
         lon, lat = T.pixel_lonlat(z, x, y, 256)
         px, py = T.xy_of_lonlat(lon[i:i + 1, j], lat[i:i + 1, j])
-        want = _plane(float(px[0]), float(py[0])) * FACTOR
+        want = _plane(float(px[0]), float(py[0])) * FACTOR + OFFSET
         assert abs(h - want) <= 0.1 * FACTOR, (z, h, want)
 
 
@@ -198,10 +203,10 @@ def test_synthetic_falls_back_to_coarser_source(synth):
         inside = (np.abs(px - X0) < 350) & (np.abs(py - Y0) < 350)
         if outside.any():
             seen_coarse = True
-            d = h[outside] / FACTOR - plane[outside]
+            d = (h[outside] - OFFSET) / FACTOR - plane[outside]
             assert np.allclose(d, COARSE_OFFSET, atol=0.1)
         if inside.any():
-            assert np.allclose(h[inside] / FACTOR, plane[inside], atol=0.1)
+            assert np.allclose((h[inside] - OFFSET) / FACTOR, plane[inside], atol=0.1)
     assert seen_coarse
     assert synth["a"]["source"][0].endswith("fine_1m.tif")
 
@@ -210,6 +215,37 @@ def test_synthetic_budget_enforced(synth, tmp_path):
     kw = dict(synth["kw"], budget_bytes=1000)
     with pytest.raises(T.BudgetError):
         T.build(out_dir=tmp_path / "terrain", **kw)
+
+
+def test_synthetic_offset_shifts_every_pixel_by_the_constant(synth, tmp_path):
+    """P2c: the offset is a pure vertical shift: a build without it decodes to exactly
+    (with-offset - offset) at every pixel of every tile (same quantisation grid)."""
+    kw = dict(synth["kw"], vertical_offset_m=0.0)
+    m0 = T.build(out_dir=tmp_path / "terrain", log=lambda _: None, **kw)
+    assert m0["vertical_offset_m"] == 0.0 and synth["a"]["vertical_offset_m"] == OFFSET
+    assert m0["precision_m"] == synth["a"]["precision_m"]
+    da = synth["dir"] / "a" / "terrain"
+    n = 0
+    for p in sorted(da.rglob("*.png")):
+        rel = p.relative_to(da)
+        d = decode_file(p) - decode_file(tmp_path / "terrain" / rel)
+        assert np.allclose(d, OFFSET, atol=0.5 / 256 + 1e-9), rel
+        n += 1
+    assert n == sum(m0["tile_count"].values())
+
+
+def test_vertical_offset_comes_from_config_and_centres_the_official_pad():
+    """P2c: one offset for both sets (continuous intro descent), from design.yaml (assumed),
+    chosen so the official pad (pad.json, D21) encodes near 0 m: with the ground at ~-7000 m
+    MapLibre 6.18 selects no tiles above ~62 deg pitch (black map)."""
+    assert T.load_config()["vertical_offset_m"] == OFFSET == RL.load_config()["vertical_offset_m"]
+    line = next(ln for ln in (REPO / "config" / "design.yaml").read_text().splitlines()
+                if ln.strip().startswith("vertical_offset_m:"))
+    assert "assumed: true" in line and "MapLibre" in line
+    assert OFFSET == -round(PAD_JSON["pad"]["elev_m"] * FACTOR)
+    # the build key covers it: a different offset re-exports
+    c = T.load_config()
+    assert T.build_key(c, []) != T.build_key(dict(c, vertical_offset_m=OFFSET + 1), [])
 
 
 def test_source_hash_over_files_in_order(synth):
@@ -249,7 +285,7 @@ def test_run_passes_config_step_cap_to_build(synth, tmp_path):
     fails, the same budget with the cap lifted fits."""
     kw = synth["kw"]
     cfg = {k: kw[k] for k in ("name", "sources", "zooms", "focus_zooms", "bounds",
-                              "focus_bounds", "factor", "tile_px")}
+                              "focus_bounds", "factor", "tile_px", "vertical_offset_m")}
     fine_total = synth["a"]["total_bytes"]  # at the finest step that fits 25 MiB
     cfg["budget_bytes"] = fine_total // 2
     cfg["max_step_true_m"] = synth["a"]["precision_m"] / FACTOR  # no coarser step allowed
@@ -271,6 +307,7 @@ def _check_tileset(name: str, budget_mb: float, max_step_true_m: float):
     assert m["name"] == name and m["encoding"] == "terrarium" and m["format"] == "png"
     assert m["tiles"] == [f"{name}/{{z}}/{{x}}/{{y}}.png"]
     assert m["factor"] == FACTOR and m["tile_px"] == TT["tile_px"]
+    assert m["vertical_offset_m"] == OFFSET  # P2c: equal to config, same in both sets
     files = tile_files(name)
     total = sum(p.stat().st_size for p in files)
     assert m["total_bytes"] == total
@@ -351,7 +388,27 @@ def test_terrain_pad_pixel_is_dem_times_factor():
     dem = (win[0, 0] * (1 - fr) * (1 - fc) + win[0, 1] * (1 - fr) * fc
            + win[1, 0] * fr * (1 - fc) + win[1, 1] * fr * fc)
     assert np.isfinite(dem)
-    assert abs(h - dem * FACTOR) <= 0.1 * FACTOR, (h, dem * FACTOR)
+    assert abs(h - (dem * FACTOR + OFFSET)) <= 0.1 * FACTOR, (h, dem * FACTOR + OFFSET)
+
+
+def _pixel_at(name: str, z: int, lon: float, lat: float) -> float:
+    fx, fy = T.lonlat_to_tile(lon, lat, z)
+    x, y = int(fx), int(fy)
+    return float(decode_file(tile_png(name, z, x, y))[int((fy - y) * 256), int((fx - x) * 256)])
+
+
+def test_official_pad_sits_near_zero_and_sets_hand_over():
+    """P2c: at the official pad the decoded height is ~0 m (pad cell elevation x factor + offset;
+    the tile pixel is not the pad cell, so a few metres of local relief), in terrain/ at every zoom
+    and in terrain_low/ at its finest zoom, and both sets agree at their shared zoom (z10)."""
+    pad = PAD_JSON["pad"]
+    for z in range(TT["zooms_planning_extent"][0], TT["zooms_focus_area"][1] + 1):
+        assert abs(_pixel_at("terrain", z, pad["lon"], pad["lat"])) <= 15 * FACTOR, z
+    z = TT["lowzoom_intro"][1]
+    low = _pixel_at("terrain_low", z, pad["lon"], pad["lat"])
+    assert abs(low) <= 15 * FACTOR
+    if z >= TT["zooms_planning_extent"][0]:
+        assert abs(low - _pixel_at("terrain", z, pad["lon"], pad["lat"])) <= 10 * FACTOR
 
 
 @needs_dem
@@ -368,6 +425,8 @@ def test_manifest_has_factor_and_hash():
         assert man[f"{name}_tiles.factor"]["value"] == m["factor"]
         assert man[f"{name}_tiles.source_hash"]["value"] == m["source_hash"]
         assert man[f"{name}_tiles.factor"]["file"] == f"{name}/tiles.json"
+        assert man[f"{name}_tiles.vertical_offset_m"]["value"] == m["vertical_offset_m"] == OFFSET
+        assert man[f"{name}_tiles.vertical_offset_m"]["units"] == "m"
 
 
 def test_png_bytes_deterministic_encoder():

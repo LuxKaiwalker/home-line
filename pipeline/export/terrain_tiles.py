@@ -2,11 +2,15 @@
 (DESIGN §6.1, §2.2 U1, budget §5.4; contract ``contracts/terrain_tiles.schema.json`` v1; WS16).
 
 Tiles: 256 px RGB PNG, MapLibre ``raster-dem`` Terrarium encoding
-``h = (R * 256 + G + B / 256) - 32768`` m, with ``h = true elevation * factor``.
+``h = (R * 256 + G + B / 256) - 32768`` m, with ``h = true elevation * factor + vertical_offset_m``.
 ``factor`` = ``config/design.yaml scale.elevation_factor`` (Earth / Mars radius = 1.878): Mars
 lon/lat go straight into MapLibre's Earth-sized Web Mercator (D4), which stretches horizontal
 ground metres by that ratio, so the heights are stretched by the same ratio here and terrain
-exaggeration 1 on screen is true shape. Elevation readouts never come from these tiles.
+exaggeration 1 on screen is true shape. ``vertical_offset_m`` = ``terrain_tiles.vertical_offset_m``
+(P2c): a constant added after scaling so the official pad sits near 0 m on the map (with the
+ground at ~-7000 m MapLibre 6.18 selects no tiles at pitch above ~62 deg and the map renders
+black). A constant shift leaves the shape (and exaggeration about it) unchanged. True elevation
+= (h - vertical_offset_m) / factor; elevation readouts never come from these tiles.
 
 Tile scheme: XYZ (top-left origin) WebMercatorQuad with Mars planetocentric lon/lat passed through
 as if they were Earth lon/lat: the scheme of the WS1 HiRISE basemap
@@ -38,8 +42,9 @@ Output is deterministic (no timestamps; Pillow PNG with fixed options), and a re
 unchanged sources, config and code is skipped.
 
 Usage: ``python -m pipeline.export.terrain_tiles`` writes data/interim/export/terrain/ (copied to
-web/public/data/terrain/ by ``make web``) and records ``terrain_tiles.factor``, ``.source_hash``,
-``.total_bytes`` in the manifest. ``--force`` rebuilds even if unchanged.
+web/public/data/terrain/ by ``make web``) and records ``terrain_tiles.factor``,
+``.vertical_offset_m``, ``.source_hash``, ``.total_bytes`` in the manifest. ``--force`` rebuilds
+even if unchanged.
 """
 
 from __future__ import annotations
@@ -160,6 +165,7 @@ def load_config() -> dict:
             "budget_bytes": int(round(float(tt["budget_mb"]) * MIB)),
             # coarsest height step, m of TRUE elevation (the brief's +-0.1 m pad tolerance)
             "max_step_true_m": float(tt["height_step_cap_m"]["terrain"]),
+            "vertical_offset_m": float(tt["vertical_offset_m"]),
             "sources": band_paths("dem_1m", "ctx_20m", "mola_hrsc_200m")}
 
 
@@ -352,11 +358,12 @@ def build(*, name: str, sources: Sequence[Path], zooms: tuple[int, int],
           focus_zooms: tuple[int, int] | None, bounds: Sequence[float],
           focus_bounds: Sequence[float] | None, factor: float, tile_px: int,
           budget_bytes: int, out_dir: Path, max_step_true_m: float,
-          edge_extend_last: bool = False,
+          vertical_offset_m: float, edge_extend_last: bool = False,
           attribution: str | None = ATTRIBUTION, log: Callable[[str], None] = print) -> dict:
     """Write ``out_dir/{z}/{x}/{y}.png`` and ``out_dir/tiles.json``; returns the tiles.json doc.
 
-    Zooms ``zooms[0]..zooms[1]`` over ``bounds``; ``focus_zooms`` over ``focus_bounds`` only."""
+    Zooms ``zooms[0]..zooms[1]`` over ``bounds``; ``focus_zooms`` over ``focus_bounds`` only.
+    Heights written: true elevation * ``factor`` + ``vertical_offset_m`` (scaled metres)."""
     srcs = [Source(p, clamp=edge_extend_last and i == len(sources) - 1)
             for i, p in enumerate(sources)]
     out_dir = Path(out_dir)
@@ -376,7 +383,7 @@ def build(*, name: str, sources: Sequence[Path], zooms: tuple[int, int],
             used = [a + b for a, b in zip(used, counts, strict=True)]
             n_edge += e
             n_px += tile_px * tile_px
-            heights.append((z, x, y, h))
+            heights.append((z, x, y, h + vertical_offset_m))
         tile_count[str(z)] = tile_count.get(str(z), 0) + len(tiles)
         log(f"{name}: z{z} {len(tiles)} tiles")
     # Precision: the finest power-of-two step (from Terrarium's 1/256 m) whose PNGs fit the
@@ -410,7 +417,7 @@ def build(*, name: str, sources: Sequence[Path], zooms: tuple[int, int],
         raise
     keep = [i for i, n in enumerate(used) if n > 0]
     doc = {"name": name, "encoding": "terrarium", "format": "png", "scheme": "xyz",
-           "tile_px": tile_px, "factor": factor,
+           "tile_px": tile_px, "factor": factor, "vertical_offset_m": float(vertical_offset_m),
            "tiles": [f"{name}/{{z}}/{{x}}/{{y}}.png"],
            "minzoom": zooms[0], "maxzoom": max(zooms[1], focus_zooms[1] if focus_zooms else 0),
            "bounds": [float(v) for v in bounds],
@@ -473,19 +480,20 @@ def run(cfg: dict, out_dir: Path, *, force: bool, scripts: Sequence[Path],
         raise FileNotFoundError(f"{cfg['name']}: missing sources {missing}")
     args = {k: cfg[k] for k in ("name", "sources", "zooms", "focus_zooms", "bounds",
                                 "focus_bounds", "factor", "tile_px", "budget_bytes",
-                                "max_step_true_m")}
+                                "max_step_true_m", "vertical_offset_m")}
     doc = build(out_dir=out_dir, log=log, **args, **extra)
     stamp.write_text(key + "\n")
     return doc, True
 
 
 def record_manifest(doc: dict, script: str) -> None:
-    """Rule 6 / DESIGN U1: the factor and source hash (and size) of the tile set."""
+    """Rule 6 / DESIGN U1: the factor, vertical offset and source hash (and size) of the set."""
     from pipeline.provenance.manifest import record
 
     web = f"{doc['name']}/tiles.json"
     k = f"{doc['name']}_tiles"
     record(f"{k}.factor", doc["factor"], "1", web, script)
+    record(f"{k}.vertical_offset_m", doc["vertical_offset_m"], "m", web, script)
     record(f"{k}.source_hash", doc["source_hash"], None, web, script)
     record(f"{k}.total_bytes", doc["total_bytes"], "B", web, script)
 
