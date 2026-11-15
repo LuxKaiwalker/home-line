@@ -17,22 +17,25 @@ export function fromCheck(check: Check): { disabled: boolean; reason: string | n
 
 /** The native `title` for a control: the reason while disabled, else the normal title (if any). */
 export function reasonTitle(disabled: boolean | undefined, reason: string | null | undefined, title?: string): string | undefined {
-  return disabled && reason ? reason : title
+  return disabled && reasdisabled ? reason : title
 }
 
 export interface DisabledReasonProps {
-  /** The reason to show; null/undefined/empty renders the children alone (no wrapper). */
+  /** Why the control is (or would be) disabled; null/undefined/empty renders the children alone. */
   reason?: string | null
+  /** Whether the control is disabled now (default true). Pass the live state rather than toggling
+   * `reason`: the wrapper then stays mounted, so the control is not remounted (focus, refs, tests). */
+  disabled?: boolean
   children: ComponentChildren
 }
 
-/** Wraps a disabled control so its reason shows on hover and reaches assistive tech. */
-export function DisabledReason({ reason, children }: DisabledReasonProps) {
+/** Wraps a control so the reason it is disabled shows on hover and reaches assistive tech. */
+export function DisabledReason({ reason, disabled = true, children }: DisabledReasonProps) {
   if (!reason) return <>{children}</>
   return (
-    <span class="hl-why" title={reason} data-reason={reason}>
+    <span class="hl-why" title={disabled ? reason : undefined} data-reason={disabled ? reason : undefined}>
       {children}
-      <span class="hl-why__sr">{reason}</span>
+      {disabled && <span class="hl-why__sr">{reason}</span>}
     </span>
   )
 }

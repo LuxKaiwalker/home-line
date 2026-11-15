@@ -410,14 +410,20 @@ describe('Disabled reason (D117)', () => {
     expect(btn.getAttribute('title')).toBe(why)
     expect(text(one(byClass(root, 'hl-why__sr')))).toBe(why)
   })
-  it('an enabled Button ignores the reason: no wrapper, its own title kept', () => {
+  it('an enabled Button shows no reason: its own title kept, no hidden text', () => {
     mount(
       <Button reason={why} title="tip">
         Go
       </Button>,
     )
-    expect(byClass(root, 'hl-why')).toHaveLength(0)
+    expect(one(byClass(root, 'hl-why')).hasAttribute('title')).toBe(false)
+    expect(byClass(root, 'hl-why__sr')).toHaveLength(0)
     expect(one(byTag(root, 'button')).getAttribute('title')).toBe('tip')
+  })
+  it('no reason: no wrapper at all (DOM unchanged for existing callers)', () => {
+    mount(<Button disabled>Go</Button>)
+    expect(byClass(root, 'hl-why')).toHaveLength(0)
+    expect(one(byTag(root, 'button')).hasAttribute('title')).toBe(false)
   })
   it('IconButton takes a reason too', () => {
     mount(<IconButton icon="undo-2" label={t('buttons.undo')} disabled reason={t('hints.disabled.undoEmpty')} />)
@@ -438,6 +444,12 @@ describe('Disabled reason (D117)', () => {
     )
     expect(byClass(root, 'hl-why')).toHaveLength(0)
     one(byTag(root, 'input'))
+    mount(
+      <DisabledReason reason={t('hints.disabled.engineChooses')} disabled={false}>
+        <input type="checkbox" />
+      </DisabledReason>,
+    )
+    expect(one(byClass(root, 'hl-why')).hasAttribute('data-reason')).toBe(false)
   })
   it('reasonTitle and fromCheck', () => {
     expect(reasonTitle(true, why, 'tip')).toBe(why)

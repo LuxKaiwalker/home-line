@@ -22,7 +22,7 @@ export interface ButtonProps extends Native {
 
 export function Button({ variant = 'secondary', icon, busy, disabled, reason, force, children, onClick, class: cls, title, ...rest }: ButtonProps) {
   return (
-    <DisabledReason reason={disabled ? reason : null}>
+    <DisabledReason reason={reason} disabled={!!disabled}>
       <button
         type="button"
         {...rest}
@@ -57,7 +57,7 @@ export interface IconButtonProps extends Native {
 
 export function IconButton({ icon, label, pressed, disabled, reason, force, class: cls, title, ...rest }: IconButtonProps) {
   return (
-    <DisabledReason reason={disabled ? reason : null}>
+    <DisabledReason reason={reason} disabled={!!disabled}>
       <button
         type="button"
         {...rest}

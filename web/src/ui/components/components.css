@@ -227,7 +227,8 @@
 .hl-badge--computed { color: var(--color-live); border-color: var(--color-live); }
 
 /* Disabled reason (D117): the wrapper takes the hover so the tooltip shows on a disabled control. */
-.hl-why { display: inline-flex; cursor: not-allowed; }
+.hl-why { display: inline-flex; }
+.hl-why[data-reason] { cursor: not-allowed; }
 .hl-why > :disabled { pointer-events: none; }
 .hl-why__sr {
   position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden;
