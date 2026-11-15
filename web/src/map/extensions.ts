@@ -97,8 +97,8 @@ export interface OverlaySpec {
   defaultOn: boolean
   /** false = not offered (feature flag; e.g. Curiosity is behind a flag) */
   enabled?: () => boolean
-  /** replaces a built-in overlay (map/overlays/catalog.ts id, e.g. 'slopeClass'): that one is hidden */
-  replaces?: string
+  /** replaces built-in overlays (map/overlays/catalog.ts ids, e.g. 'slopeClass'): those are hidden (F3: one id or several) */
+  replaces?: string | readonly string[]
   install(ctx: MapExtensionContext): OverlayHandle
 }
 
@@ -148,7 +148,7 @@ export const registerPadEnvironment = (h: PadEnvironmentHandler): Dispose => add
 export const registerRouteLayer = (s: RouteLayerSpec): Dispose => add('routes', s)
 export const registerEditHandlers = (h: EditHandlers): Dispose => add('edit', h)
 const replaced = signal<ReadonlySet<string>>(new Set())
-const syncReplaced = () => void (replaced.value = new Set(reg.overlays.flatMap((o) => (o.replaces ? [o.replaces] : []))))
+const syncReplaced = () => void (replaced.value = new Set(reg.overlays.flatMap((o) => (o.replaces === undefined ? [] : typeof o.replaces === 'string' ? [o.replaces] : [...o.replaces]))))
 export function registerOverlay(s: OverlaySpec): Dispose {
   const off = add('overlays', s)
   syncReplaced()

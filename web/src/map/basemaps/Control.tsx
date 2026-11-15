@@ -3,7 +3,7 @@
 // chosen relief map with its source and trust note (topography: modelled from terrain heights;
 // material: simulated, the Unity scene's rock population, not a mineral survey).
 import { useSignalValue } from '../../state/signal'
-import { Segmented, TrustChip, type Option } from '../../ui/components'
+import { Segmented, Toggle, TrustChip, type Option } from '../../ui/components'
 import { t } from '../../ui/copy'
 import { ROCKS_FILE, UNIT_SIGMA_M, type Relief, type Unit } from './relief'
 import { activeBasemap, BASEMAP_IDS, reliefStatus, setBasemap, type BasemapId } from './store'
@@ -32,6 +32,28 @@ export function BasemapControl() {
   )
 }
 
+/** F3 (D146): Material as a layer of the layers popover (off by default; on = the material relief over
+ *  Satellite). It takes the place of the built-in mineral overlays (MATERIAL_REPLACES). Status line and
+ *  legend as in the switcher above. */
+export function MaterialControl() {
+  const on = useSignalValue(activeBasemap) === 'material'
+  const s = useSignalValue(reliefStatus).material
+  const name = label('material')
+  return (
+    <div class="hl-basemaps hl-ovl__layer" data-overlay="material" data-chip="simulated">
+      <div class="hl-ovl__head">
+        <Toggle label={name} checked={on} onChange={(v) => setBasemap(v ? 'material' : 'satellite')} />
+        <TrustChip kind="simulated" />
+      </div>
+      <div role="status" data-live="basemap">
+        {on && s.kind === 'rendering' && <p class="hl-basemaps__muted">{t('route.basemaps.rendering', { type: name.toLowerCase() })}</p>}
+        {on && s.kind === 'error' && <p class="hl-basemaps__error">{t('route.basemaps.error', { type: name.toLowerCase(), reason: s.message })}</p>}
+      </div>
+      {on && s.kind === 'ready' && <MaterialLegend r={s.relief} units={s.units} chip={false} />}
+    </div>
+  )
+}
+
 function TopoLegend({ r, resM }: { r: Relief; resM: number }) {
   return (
     <div class="hl-basemaps__legend" data-legend="topo">
@@ -44,13 +66,14 @@ function TopoLegend({ r, resM }: { r: Relief; resM: number }) {
   )
 }
 
-function MaterialLegend({ r, units }: { r: Relief; units: Unit[] }) {
+/** chip=false: the row header already carries the trust chip (layers popover). */
+function MaterialLegend({ r, units, chip = true }: { r: Relief; units: Unit[]; chip?: boolean }) {
   const shown = units.filter((u) => (r.unitCells.get(u.id) ?? 0) > 0)
   return (
     <div class="hl-basemaps__legend" data-legend="material">
       <div class="hl-basemaps__head">
         <b>{t('route.basemaps.materialTitle')}</b>
-        <TrustChip kind="simulated" />
+        {chip && <TrustChip kind="simulated" />}
       </div>
       <ul class="hl-basemaps__units">
         {shown.length ? (

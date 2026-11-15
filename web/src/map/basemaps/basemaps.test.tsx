@@ -1,15 +1,19 @@
-// L1c: three base maps registered (satellite default, nothing added to the map until the user
-// switches), the map-edge switcher changes the active base map, the relief raster lands just above
-// `basemap` and hides again on Satellite; legends with their trust note; strings from copy.L1c.json.
+// L1c: base maps registered (satellite default, nothing added to the map until the user switches), the
+// relief raster lands just above `basemap` and hides again on Satellite; legends with their trust note.
+// F3 (D146): Topography is not registered and the map-edge switcher is not mounted (code kept, still
+// tested directly); Material is a layer of the layers popover (off by default) that replaces the three
+// built-in mineral overlays.
 import { render } from 'preact'
 import { act } from 'preact/test-utils'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { installMapExtensions, mapControlsIn, resetMapExtensions, type MapExtensionContext } from '../extensions'
+import { installMapExtensions, mapControlsIn, registerBasemap, replacedOverlays, resetMapExtensions, type MapExtensionContext } from '../extensions'
+import { OVERLAYS } from '../overlays/catalog'
 import { FieldGrid } from '../../hud/fields'
-import { byRole, installDom, type FakeNode } from '../../ui/testing/dom'
+import { all, byClass, byRole, installDom, type FakeNode } from '../../ui/testing/dom'
 import copyJson from '../../ui/copy.json'
-import { install } from './install'
-import { reliefLayerId, reliefSourceId, resetReliefCache, type ReliefDeps } from './layer'
+import { BasemapControl } from './Control'
+import { install, MATERIAL_REPLACES } from './install'
+import { reliefBasemap, reliefLayerId, reliefSourceId, resetReliefCache, type ReliefDeps } from './layer'
 const own = { basemaps: copyJson.route.basemaps }
 import { activeBasemap, DEFAULT_BASEMAP, reliefStatus, resetBasemaps, setBasemap } from './store'
 
@@ -56,23 +60,38 @@ afterEach(() => {
 })
 
 describe('L1c base maps', () => {
-  it('registers satellite (default), topography and material; nothing is added to the map by default', () => {
+  it('registers satellite (default) and material, not topography; nothing is added to the map by default', () => {
     const d = deps()
     off = install(d)
     const { ctx, layers, sources } = fakeMap()
     const host = installMapExtensions(ctx)
-    for (const id of ['satellite', 'topo', 'material']) expect(host.basemap(id)).toBeDefined()
+    for (const id of ['satellite', 'material']) expect(host.basemap(id)).toBeDefined()
+    expect(host.basemap('topo')).toBeUndefined()
     expect(DEFAULT_BASEMAP).toBe('satellite')
     expect(activeBasemap.peek()).toBe('satellite')
+    expect(host.overlay('material')).toBeDefined()
     expect(layers.size).toBe(0)
     expect(sources.size).toBe(0)
     expect(d.loads).toBe(0)
     host.destroy()
   })
 
-  it('topography renders once, sits just above the basemap, hides on satellite and shows again without re-rendering', async () => {
+  it('material replaces the three mineral overlays (their catalog entries stay)', () => {
+    off = install(deps())
+    expect([...MATERIAL_REPLACES]).toEqual(['mineralSulfate', 'mineralClay', 'mineralPatches'])
+    for (const id of MATERIAL_REPLACES) {
+      expect(replacedOverlays.peek().has(id)).toBe(true)
+      expect(OVERLAYS.some((o) => o.id === id)).toBe(true)
+    }
+    off()
+    off = () => {}
+    expect(replacedOverlays.peek().size).toBe(0)
+  })
+
+  it('relief rasters (topography code kept) render once, sit just above the basemap, hide on satellite and show again without re-rendering', async () => {
     const d = deps()
     off = install(d)
+    const offTopo = registerBasemap(reliefBasemap('topo', d)) // not registered by install() any more (D146)
     const { ctx, layers, sources } = fakeMap()
     const host = installMapExtensions(ctx)
     setBasemap('topo')
@@ -92,6 +111,7 @@ describe('L1c base maps', () => {
     expect(layers.get(reliefLayerId('material'))!.layout.visibility).toBe('none')
     expect(d.loads).toBe(2) // one raster per type, never re-rendered
     host.destroy()
+    offTopo()
     expect(layers.size).toBe(0)
     expect(sources.size).toBe(0)
   })
@@ -108,37 +128,44 @@ describe('L1c base maps', () => {
   })
 })
 
-describe('L1c switcher (map-edge control)', () => {
+describe('Material in the layers popover (F3, D146)', () => {
   let root: FakeNode
   beforeEach(() => {
     ;({ container: root } = installDom())
   })
   afterEach(() => render(null, root as unknown as Element))
 
-  it('is one map-edge control; clicking a choice changes the active base map; legends carry the trust note', async () => {
+  it('no map-edge switcher; one layers-popover row, off by default; the toggle shows the material map with its legend and trust note', async () => {
     off = install(deps())
-    const { ctx } = fakeMap()
+    const { ctx, layers } = fakeMap()
     const host = installMapExtensions(ctx)
-    const ctl = mapControlsIn('map-edge')
-    expect(ctl.map((c) => c.id)).toEqual(['basemaps'])
-    expect(mapControlsIn('layers-popover')).toEqual([])
+    expect(mapControlsIn('map-edge')).toEqual([])
+    const ctl = mapControlsIn('layers-popover')
+    expect(ctl.map((c) => c.id)).toEqual(['l1c-material'])
     act(() => render(<>{ctl[0].render()}</>, root as unknown as Element))
-    const radios = () => byRole(root, 'radio')
-    expect(radios().map((r) => r.textContent)).toEqual([own.basemaps.satellite, own.basemaps.topo, own.basemaps.material])
-    expect(radios()[0].getAttribute('aria-checked')).toBe('true')
-    act(() => void radios()[1].dispatch('click', {}))
-    expect(activeBasemap.peek()).toBe('topo')
-    await act(settle)
-    expect(root.textContent).toContain('Contours every')
-    expect(root.textContent).toContain('not a survey')
-    act(() => void radios()[2].dispatch('click', {}))
+    const sw = () => byRole(root, 'switch')[0]
+    expect(sw()).toBeDefined()
+    expect(root.textContent).toContain(own.basemaps.material)
+    expect(root.textContent).not.toContain(own.basemaps.topo)
+    expect(activeBasemap.peek()).toBe('satellite')
+    expect(layers.size).toBe(0)
+    act(() => void sw().dispatch('click', {}))
     expect(activeBasemap.peek()).toBe('material')
     await act(settle)
+    expect(layers.get(reliefLayerId('material'))!.layout.visibility).toBe('visible')
     expect(root.textContent).toContain(own.basemaps.materialTitle)
     expect(root.textContent).toContain('Not a mineral survey')
-    act(() => void radios()[0].dispatch('click', {}))
+    expect(all(root, (n) => n.getAttribute('data-overlay') === 'material')).toHaveLength(1)
+    expect(byClass(root, 'hl-chip--simulated')).toHaveLength(1)
+    act(() => void sw().dispatch('click', {}))
     expect(activeBasemap.peek()).toBe('satellite')
-    expect(root.textContent).not.toContain('Contours every')
+    expect(layers.get(reliefLayerId('material'))!.layout.visibility).toBe('none')
+    expect(root.textContent).not.toContain(own.basemaps.materialTitle)
     host.destroy()
+  })
+
+  it('the old switcher component still renders (code kept, not mounted)', () => {
+    act(() => render(<BasemapControl />, root as unknown as Element))
+    expect(byRole(root, 'radio').map((r) => r.textContent)).toEqual([own.basemaps.satellite, own.basemaps.topo, own.basemaps.material])
   })
 })

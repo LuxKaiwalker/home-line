@@ -64,7 +64,7 @@ export function installPlanPort(): void {
   installCuriosity() // L1b: off by default, no request until turned on
   installSlope() // L1a: replaces the U7 slope-classes overlay (its row is hidden, it stays off)
   if (overlayOn.peek().slopeClass) setOverlay('slopeClass', false)
-  installBasemaps() // L1c: satellite (default) / topography / material, map-edge switcher
+  installBasemaps() // L1c: satellite base + Material layer in the layers popover (replaces the mineral overlays, D146)
   registerRoutePanelSection('list', WaypointList) // U2: waypoint list
   registerRoutePanelSection('settings', PlanRouteSettings) // U3 (EVA start + storm; boundary: see below): EVA start, storm (D143 default on), boundary
   installExport() // U4: Send to MARVIS / Download mission.json + share link (Route panel section)

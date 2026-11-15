@@ -18,6 +18,8 @@ import { t } from '../../ui/copy'
 import { byClass, installDom, type FakeNode } from '../../ui/testing/dom'
 import { color, TOKENS } from '../../ui/tokens'
 import { railSections } from '../../ui/shell/store'
+import { install as installBasemaps } from '../basemaps/install'
+import { resetMapExtensions } from '../extensions'
 import { DEFAULT_OPACITY, OPACITY, OVERLAY_CFG, OVERLAYS, ROUGH_MIN_DEG, SLOPE_TOKENS, type OverlayId } from './catalog'
 import { installOverlays } from './index'
 import { LayerPanel, legendText } from './LayerPanel'
@@ -214,6 +216,32 @@ describe('layer manager panel', () => {
     click('mineralSulfate')
     expect(overlayOn.peek().slopeClass).toBe(false)
     expect(txt(byClass(root, 'hl-ovl__notice')[0])).toBe(t('tooltips.layerCap', { max: 2, layer: t('layers.slopeClass.name') }))
+  })
+})
+
+describe('layer manager with the Plan port registrations (F3, D146)', () => {
+  let root: FakeNode
+  beforeEach(() => {
+    ;({ container: root } = installDom())
+    setManifest(MANIFEST)
+  })
+  afterEach(() => {
+    act(() => render(null, root as unknown as Element))
+    setManifest(null)
+    resetMapExtensions()
+  })
+  it('Material (L1c) replaces the three mineral overlays: their rows are hidden, the other rows stay, catalog entries stay', () => {
+    const off = installBasemaps({ load: async () => Promise.reject(new Error('unused')), toUrl: async () => '' })
+    act(() => render(<LayerPanel />, root as unknown as Element))
+    const ids = byClass(root, 'hl-ovl__layer').map((n) => n.getAttribute('data-overlay'))
+    for (const id of ['mineralSulfate', 'mineralClay', 'mineralPatches']) {
+      expect(ids).not.toContain(id)
+      expect(OVERLAYS.some((o) => o.id === id)).toBe(true)
+    }
+    expect(ids).toEqual(OVERLAYS.map((o) => o.id).filter((id) => !id.startsWith('mineral')))
+    off()
+    act(() => render(<LayerPanel />, root as unknown as Element))
+    expect(byClass(root, 'hl-ovl__layer').map((n) => n.getAttribute('data-overlay'))).toEqual(OVERLAYS.map((o) => o.id))
   })
 })
 
