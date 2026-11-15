@@ -16,6 +16,9 @@ import { runShortcut, type ShortcutAction } from '../shell/keys'
 import { isMapMode, modeHash, openSidebar } from '../shell/store'
 import { expandedIndex, resetExpandedIndex } from './index/lazy'
 import { commandItems, GROUP_LABEL, loadObjectIndex, rank, type RunEnv, type SearchItem } from './search'
+// S3a: answer rows (search.md §2) above the fuzzy results
+import { completePrefix, runQueries, useQueryContext, type QueryContext } from './queries'
+import { AnswerRow } from './queries/row'
 import './search.css'
 
 /** Shown text of an item: the file's name for objects, copy.json for commands. */
@@ -62,13 +65,17 @@ export interface PaletteProps {
   win?: Window
   /** Tests: a ready index instead of loading one. */
   items?: SearchItem[]
+  /** S3a: live planning reachable. TODO(S2): wire liveStatus.value.reachable here once S2 is on design. */
+  live?: boolean
+  /** Tests: a ready query context instead of loading one. */
+  queryContext?: QueryContext
 }
 
 const defaultNavigate = (hash: string): void => {
   if (location.hash !== hash) location.hash = hash
 }
 
-export function Palette({ onClose, loader, navigate = defaultNavigate, win = typeof window === 'undefined' ? undefined : window, items: given }: PaletteProps) {
+export function Palette({ onClose, loader, navigate = defaultNavigate, win = typeof window === 'undefined' ? undefined : window, items: given, live = false, queryContext }: PaletteProps) {
   const [items, setItems] = useState<SearchItem[] | null>(given ?? null)
   const [failed, setFailed] = useState(false)
   const [q, setQ] = useState('')
@@ -102,8 +109,12 @@ export function Palette({ onClose, loader, navigate = defaultNavigate, win = typ
     }
   }, [])
 
+  const qctx = useQueryContext(loader ?? (given ? null : data()), live, queryContext) // S3a (tests: given items, no loader → none)
+  const answers = useMemo(() => (qctx ? runQueries(q, qctx) : []), [qctx, q])
+  const off = answers.length
   const results = useMemo(() => (items ? rank(items, q, labelOf) : []), [items, q])
-  const cur = Math.min(active, Math.max(results.length - 1, 0))
+  const total = off + results.length
+  const cur = Math.min(active, Math.max(total - 1, 0))
   const optId = (i: number) => `hl-search-opt-${i}`
 
   const choose = (item: SearchItem | undefined) => {
@@ -112,8 +123,16 @@ export function Palette({ onClose, loader, navigate = defaultNavigate, win = typ
     runItem(item, { navigate, win })
   }
 
+  const chooseAt = (i: number) => {
+    if (i >= off) return choose(results[i - off]?.item)
+    const r = answers[i]
+    if (r.disabledReason) return
+    onClose()
+    r.run({ navigate, win })
+  }
+
   const onKeyDown = (e: KeyboardEvent) => {
-    const n = results.length
+    const n = total
     switch (e.key) {
       case 'ArrowDown':
       case 'ArrowUp':
@@ -121,14 +140,16 @@ export function Palette({ onClose, loader, navigate = defaultNavigate, win = typ
         break
       case 'Enter':
         if (e.target === closeBtn.current) return
-        choose(results[cur]?.item)
+        chooseAt(cur)
         break
       case 'Escape':
         onClose()
         break
       case 'Tab': {
         const a = globalThis.document?.activeElement
-        if (!e.shiftKey && a === closeBtn.current) input.current?.focus()
+        const done = !e.shiftKey && a === input.current ? completePrefix(q) : null // §2.3 Tab completes a pattern
+        if (done) setQ(done), setActive(0)
+        else if (!e.shiftKey && a === closeBtn.current) input.current?.focus()
         else if (e.shiftKey && a === input.current) closeBtn.current?.focus()
         else return
         break
@@ -140,7 +161,7 @@ export function Palette({ onClose, loader, navigate = defaultNavigate, win = typ
     e.stopPropagation() // the shell's window listener skips handled keys (Escape must not clear the selection)
   }
 
-  const expanded = results.length > 0
+  const expanded = total > 0
   return (
     <dialog
       ref={dlg}
@@ -180,16 +201,19 @@ export function Palette({ onClose, loader, navigate = defaultNavigate, win = typ
         </button>
       </div>
       <ul id="hl-search-list" class="hl-search__list" role="listbox" aria-label={t('nav.search')}>
+        {answers.map((r, i) => (
+          <AnswerRow key={r.id} row={r} id={optId(i)} active={i === cur} onChoose={() => chooseAt(i)} onHover={() => setActive(i)} />
+        ))}
         {results.map(({ item }, i) => (
           <li
             key={item.id}
-            id={optId(i)}
+            id={optId(off + i)}
             role="option"
-            aria-selected={i === cur ? 'true' : 'false'}
-            class={cx('hl-search__opt', i === cur && 'is-active')}
+            aria-selected={off + i === cur ? 'true' : 'false'}
+            class={cx('hl-search__opt', off + i === cur && 'is-active')}
             data-id={item.id}
             onMouseDown={(e) => e.preventDefault() /* keep focus in the input */}
-            onMouseMove={() => i !== cur && setActive(i)}
+            onMouseMove={() => off + i !== cur && setActive(off + i)}
             onClick={() => choose(item)}
           >
             <Icon name={item.icon} />
@@ -213,7 +237,7 @@ export function Palette({ onClose, loader, navigate = defaultNavigate, win = typ
           ? t('states.error.generic', { what: t('nav.search') })
           : !items
             ? t('states.loading.generic', { what: t('nav.search') })
-            : q.trim() && !results.length
+            : q.trim() && !total
               ? t('search.noResults', { query: q.trim() })
               : ''}
       </p>
