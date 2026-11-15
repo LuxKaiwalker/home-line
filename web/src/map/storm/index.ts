@@ -11,6 +11,7 @@ import { fmtEva } from '../../ui/timeline/model'
 import { t } from '../../ui/copy'
 import type { StormHandle } from './mode'
 import type { StormModel } from './model'
+import './storm.css'
 
 /** The storyboard id that runs with the storm on (web/public/story/storm.json). */
 export const STORM_STORY_ID = 'storm'

@@ -21,7 +21,7 @@ import { activeField, fieldAt, onFieldChange, type FieldData } from '../field'
 import { buildStormModel, stormView, stormVisuals, threadRed, type StormModel, type StormRad, type StormTimelineRow, type StormView } from './model'
 import { StormCurve, StormPanel } from './Panel'
 import { ringBoundary, ringCount, ringLattice, ringMask, type LonLat, type RingLattice } from './ring'
-import './storm.css'
+
 
 export const RING_SOURCE = 'storm-ring'
 export const RING_LAYER = 'storm-ring-line'

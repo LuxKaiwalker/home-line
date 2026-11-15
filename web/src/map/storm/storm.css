@@ -87,7 +87,7 @@
   line-height: var(--line-height-small);
   pointer-events: auto;
 }
-.hl-storm-curve__sep { color: var(--color-text-faint); }
+.hl-storm-curve__sep { color: var(--color-text-muted); }
 
 /* the map is outside .hl-ui, so the sprite icons need their size here (as the timeline dock does) */
 .hl-storm .icon {
