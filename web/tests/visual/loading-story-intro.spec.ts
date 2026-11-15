@@ -14,7 +14,7 @@ import { expect, test, type Page } from 'playwright/test'
 const LOADING = '#hl-loading'
 
 async function introPlaying(page: Page): Promise<void> {
-  await page.goto('/#/')
+  await page.goto('/?view=2d#/')
   await page.locator('html[data-story-chrome="hide"]').waitFor({ state: 'attached', timeout: 60_000 })
 }
 
@@ -24,7 +24,7 @@ test.describe('intro loading screen (L12)', () => {
   test('the loading screen is visible before any JS runs', async ({ browser }) => {
     const ctx = await browser.newContext({ javaScriptEnabled: false, reducedMotion: 'no-preference', baseURL: test.info().project.use.baseURL })
     const page = await ctx.newPage()
-    await page.goto('/#/')
+    await page.goto('/?view=2d#/')
     const el = page.locator(LOADING)
     await expect(el).toBeVisible()
     await expect(el.locator('.hl-loading__mark')).toHaveText('HOMELINE')
@@ -44,7 +44,7 @@ test.describe('intro loading screen (L12)', () => {
         ;(window as unknown as { __firstFrame: boolean }).__firstFrame = !!el && getComputedStyle(el).display !== 'none' && getComputedStyle(el).position === 'fixed'
       })
     })
-    await page.goto('/#/')
+    await page.goto('/?view=2d#/')
     await page.waitForFunction(() => (window as unknown as { __firstFrame?: boolean }).__firstFrame !== undefined)
     expect(await page.evaluate(() => (window as unknown as { __firstFrame: boolean }).__firstFrame)).toBe(true)
   })
@@ -86,7 +86,7 @@ test.describe('intro loading screen (L12)', () => {
   })
 
   test('Skip intro on the loading screen: no intro plays', async ({ page }) => {
-    await page.goto('/#/')
+    await page.goto('/?view=2d#/')
     await page.locator('html[data-hl-intro="loading"]').waitFor({ state: 'attached', timeout: 30_000 })
     await page.locator(`${LOADING} [data-hl-act=skip]`).click({ timeout: 5_000 })
     await expect(page.locator(LOADING)).toHaveCount(0)
@@ -135,14 +135,14 @@ test.describe('intro loading screen (L12)', () => {
 
 test.describe('no intro, no loading screen (L12)', () => {
   test('reduced motion: removed at boot', async ({ page }) => {
-    await page.goto('/#/')
+    await page.goto('/?view=2d#/')
     await page.locator('.hl-tl__play').waitFor({ timeout: 30_000 })
     await expect(page.locator(LOADING)).toHaveCount(0)
   })
 
   test('?intro=0: removed at boot', async ({ page }) => {
     await page.emulateMedia({ reducedMotion: 'no-preference' })
-    await page.goto('/?intro=0#/')
+    await page.goto('/?intro=0&view=2d#/')
     await page.locator('.hl-tl__play').waitFor({ timeout: 30_000 })
     await expect(page.locator(LOADING)).toHaveCount(0)
   })

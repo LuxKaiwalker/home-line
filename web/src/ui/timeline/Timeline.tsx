@@ -117,6 +117,7 @@ export function Timeline({ model, clock, ticker, amberMin }: TimelineProps) {
             icon={playing ? 'pause' : 'play'}
             label={t(playing ? 'buttons.pause' : 'buttons.play')}
             pressed={playing}
+            title={t('hints.timeline.play')}
             aria-keyshortcuts="Space"
             onClick={play}
             onKeyDown={(e: KeyboardEvent) => {
@@ -150,6 +151,7 @@ export function Timeline({ model, clock, ticker, amberMin }: TimelineProps) {
         role="slider"
         tabIndex={0}
         aria-label={t('timeline.title')}
+        title={t('hints.timeline.scrub')}
         aria-valuemin={0}
         aria-valuemax={tMax}
         aria-valuenow={+tNow.toFixed(2)}
