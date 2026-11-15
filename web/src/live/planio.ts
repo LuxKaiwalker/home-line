@@ -3,10 +3,7 @@
 // trailing newline), so import(export(x)) gives x back and export(import(file)) gives the same bytes.
 // Import checks the file client-side before anything is sent: size cap and title cap from
 // config/backend.yaml limits, JSON, and plan_inputs.schema.json (unknown fields refused).
-// The route (D97, v1.2.0) travels in the same file and is checked by the schema; its errors are
-// replaced by plans/route.ts checkRoute's, which name the stop in plain words.
 import { TITLE_MAX_CHARS, UPLOAD_MAX_BYTES } from './config'
-import { checkRoute } from './plans/route'
 import { validatePlanInputs } from './schemacheck'
 import type { PlanInputs } from './types'
 
@@ -57,24 +54,11 @@ export function checkPlanInputsText(text: string, bytes = utf8Bytes(text)): Impo
   } catch (e) {
     return { ok: false, errors: [`not JSON: ${e instanceof Error ? e.message : String(e)}`] }
   }
-  const errors = checkPlanInputsDoc(doc)
-  if (errors.length) return { ok: false, errors }
+  const errors = validatePlanInputs(doc)
+  if (errors.length) return { ok: false, errors: errors.map((e) => `plan_inputs.schema.json: ${e}`) }
   const title = (doc as { title?: string }).title
   if (title !== undefined && [...title].length > TITLE_MAX_CHARS) return { ok: false, errors: [`title is longer than ${TITLE_MAX_CHARS} characters (limits.title_max_chars)`] }
   return { ok: true, inputs: doc as PlanInputs }
-}
-
-/**
- * Errors of a parsed plan_inputs document against plan_inputs.schema.json; errors inside `route` are
- * given as checkRoute's readable messages (the schema's stay when checkRoute finds nothing). [] = valid.
- */
-export function checkPlanInputsDoc(doc: unknown): string[] {
-  const schema = validatePlanInputs(doc)
-  const inRoute = (e: string) => /^\$\.route(\.|\[|:)/.test(e)
-  const route = doc && typeof doc === 'object' && !Array.isArray(doc) ? (doc as Record<string, unknown>).route : undefined
-  const readable = route === undefined ? [] : checkRoute(route, '$.route')
-  const errors = schema.filter((e) => !(readable.length && inRoute(e))).map((e) => `plan_inputs.schema.json: ${e}`)
-  return [...errors, ...readable.map((e) => `route: ${e}`)]
 }
 
 const tooLarge = (bytes: number) => `file is ${bytes} bytes; the limit is ${UPLOAD_MAX_BYTES} bytes (limits.upload_max_bytes)`

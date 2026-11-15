@@ -11,10 +11,8 @@ import type { LiveState } from './health'
 import type { ScenarioLayers } from './mapPort'
 import { importPlanFile, loadPlan, parsePlanRoute, permalink, type ImportState, type PlanLoad, type PlanRoute, type PlanTree } from './plan'
 import { ImportPage, PlanLoading, PlanPage, PlanProblem, PlayHeader, ProvenancePage } from './planview'
-import { createPlansStore, type PlansResult, type PlansStore } from './plans/store'
-import type { MyPlansProps } from './plans/view'
 import type { LoaderFor } from './stage'
-import type { PlanInputs, RunOrigin } from './types'
+import type { RunOrigin } from './types'
 
 type OkLoad = Extract<PlanLoad, { state: 'ok' }>
 type Cleanup = () => void
@@ -83,8 +81,6 @@ export interface PlanRouteOptions {
    * session (no Play, Export or simulator slot); the view is shown again when health comes back.
    */
   onLiveState?: (fn: (s: LiveState) => void) => () => void
-  /** "My plans" store (D97; default: this browser's storage, createPlansStore()). */
-  plans?: PlansStore
   /** Test seam: draw into the box (default preact's render). */
   render?: (vnode: ComponentChildren, el: HTMLElement) => void
 }
@@ -107,20 +103,6 @@ export function mountPlanRoute(app: HTMLElement, opts: PlanRouteOptions): Cleanu
   let teardown: Cleanup | undefined
   let importState: ImportState = { kind: 'idle' }
   let importAbort: AbortController | undefined
-  const store = opts.plans ?? createPlansStore()
-  let plansError: string | null = null
-  const act = (r: PlansResult) => {
-    plansError = r.ok ? null : r.error
-    rerender?.()
-  }
-  /** "My plans" props, read fresh on every draw; `current` = the plan on screen (for Save). */
-  const plansProps = (current?: { hash: string; inputs: PlanInputs }): MyPlansProps => ({
-    snap: store.list(),
-    error: plansError,
-    onSave: (hash) => current && current.hash === hash && act(store.save(current)),
-    onRename: (id, title) => act(store.rename(id, title)),
-    onRemove: (id) => act(store.remove(id)),
-  })
 
   const getLoad = (hash: string) => {
     let p = loads.get(hash)
@@ -158,14 +140,13 @@ export function mountPlanRoute(app: HTMLElement, opts: PlanRouteOptions): Cleanu
 
   async function show(route: PlanRoute, my: number) {
     if (route.view === 'import') {
-      rerender = () => render(<ImportPage state={importState} onFile={onFile} plans={plansProps()} />, box)
+      rerender = () => render(<ImportPage state={importState} onFile={onFile} />, box)
       rerender()
       return
     }
     if (offline) {
-      const load = { state: 'offline', hash: route.hash, message: 'the health check says the live server is offline' } as const
-      rerender = () => render(<PlanProblem load={load} plans={plansProps()} />, box)
-      rerender()
+      rerender = undefined
+      render(<PlanProblem load={{ state: 'offline', hash: route.hash, message: 'the health check says the live server is offline' }} />, box)
       return
     }
     rerender = () => render(<PlanLoading hash={route.hash} origin={records.get(route.hash) ?? null} />, box)
@@ -173,8 +154,8 @@ export function mountPlanRoute(app: HTMLElement, opts: PlanRouteOptions): Cleanu
     const load = await getLoad(route.hash)
     if (my !== seq) return
     if (load.state !== 'ok') {
-      rerender = () => render(<PlanProblem load={load} plans={plansProps()} />, box)
-      rerender()
+      rerender = undefined
+      render(<PlanProblem load={load} />, box)
       return
     }
     if (route.view === 'provenance') {
@@ -206,14 +187,7 @@ export function mountPlanRoute(app: HTMLElement, opts: PlanRouteOptions): Cleanu
       render(
         <>
           {mountMap && <div class="live-plan-map" />}
-          <PlanPage
-            load={load}
-            permalink={link}
-            simEnabled={opts.simEnabled}
-            importState={importState}
-            onImportFile={onFile}
-            plans={plansProps({ hash: load.hash, inputs: load.record.inputs })}
-          />
+          <PlanPage load={load} permalink={link} simEnabled={opts.simEnabled} importState={importState} onImportFile={onFile} />
         </>,
         box,
       )
@@ -235,7 +209,6 @@ export function mountPlanRoute(app: HTMLElement, opts: PlanRouteOptions): Cleanu
     teardown?.()
     teardown = undefined
     rerender = undefined
-    plansError = null
     const route = parsePlanRoute(location.hash)
     if (!route) {
       if (!box.hidden) {

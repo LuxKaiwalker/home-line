@@ -4,7 +4,7 @@
 // - mountPrivacy puts the note before the about page's "Licences" heading, once, and nowhere else;
 // - the about view mounts it with the flag on and never touches src/live with the flag off.
 import { readdirSync, readFileSync, statSync } from 'node:fs'
-import { join, resolve, sep } from 'node:path'
+import { join, resolve } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { mountPrivacy, PRIVACY_TEXT, PRIVACY_TITLE } from './privacy'
 
@@ -116,7 +116,7 @@ describe('privacy note text', () => {
   })
 
   // Each statement against the code it describes (a change there must revisit the note).
-  it('no cookies: the server sets none and the web app reads or writes none; browser storage only in live/plans/ (D97)', () => {
+  it('no cookies: the server sets none and the web app reads or writes none, nor any browser storage', () => {
     const py = (dir: string): string[] =>
       readdirSync(resolve(REPO, dir)).flatMap((n) => {
         const p = join(dir, n)
@@ -132,35 +132,8 @@ describe('privacy note text', () => {
         if (statSync(p).isDirectory()) return ts(p)
         return /\.(ts|tsx)$/.test(n) && !/\.test\.tsx?$/.test(n) ? [p] : []
       })
-    const plansDir = resolve(__dirname, 'plans') + sep
-    const storageUsers: string[] = []
-    for (const f of ts(resolve(__dirname, '..'))) {
-      const src = readFileSync(f, 'utf8')
-      expect(src, f).not.toMatch(/document\.cookie|sessionStorage|indexedDB|serviceWorker/)
-      if (/localStorage/.test(src)) storageUsers.push(f)
-    }
-    // the one sanctioned exception: "My plans" (live/plans/), nowhere else
-    expect(storageUsers.length).toBeGreaterThan(0)
-    for (const f of storageUsers) expect(f.startsWith(plansDir), `${f} uses browser storage outside live/plans/`).toBe(true)
-  })
-
-  it('"My plans": the note says saved plans stay in this browser; the store touches storage only inside try', () => {
-    expect(text).toMatch(/saved plans stay in this browser only/i)
-    expect(text).toMatch(/nothing else uses browser storage/i)
-    const src = read('web/src/live/plans/store.ts')
-    // the storage object is obtained in one place, inside try, and every getItem/setItem call sits in a try block
-    const body = src.replace(/\/\/.*$/gm, '').replace(/\/\*\*?[\s\S]*?\*\//g, '')
-    const uses = [...body.matchAll(/localStorage|\.getItem\(|\.setItem\(|storage\(\)/g)]
-    expect(uses.length).toBeGreaterThanOrEqual(4)
-    for (const m of uses) {
-      const before = body.slice(0, m.index)
-      const opened = (before.match(/\btry \{/g) ?? []).length
-      const closed = (before.match(/\} catch\b/g) ?? []).length
-      expect(opened - closed, `${m[0]} at offset ${m.index} is not inside try`).toBe(1)
-    }
-    // nothing in plans/ sends anything
-    for (const n of readdirSync(resolve(__dirname, 'plans')).filter((f) => !/\.test\./.test(f)))
-      expect(readFileSync(resolve(__dirname, 'plans', n), 'utf8'), n).not.toMatch(/fetch\(|client\.|XMLHttpRequest|sendBeacon/)
+    for (const f of ts(resolve(__dirname, '..')))
+      expect(readFileSync(f, 'utf8'), f).not.toMatch(/document\.cookie|localStorage|sessionStorage|indexedDB|serviceWorker/)
   })
 
   it('rate limit: salted hashes of the address, salt random per process, kept in memory', () => {
