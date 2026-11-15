@@ -2,7 +2,7 @@
 import './style.css'
 import { DATA_MODE, IS_DEV } from './env'
 import { clearUnbacked, onUnbackedChange, unbackedNumbers } from './prov/store'
-import { href, isSpikeHash, NAV_ITEMS, parseRoute, type Route } from './router'
+import { href, isSpikeHash, isStyleguideHash, NAV_ITEMS, parseRoute, type Route } from './router'
 import { VIEWS } from './views'
 
 const app = document.querySelector<HTMLDivElement>('#app')!
@@ -52,14 +52,15 @@ async function render(): Promise<void> {
   const seq = ++renderSeq
   const route: Route = parseRoute(location.hash)
   const spike = isSpikeHash(location.hash)
+  const styleguide = !spike && isStyleguideHash(location.hash)
   cleanup?.()
   cleanup = undefined
   clearUnbacked()
   outlet.replaceChildren()
-  outlet.dataset.route = document.body.dataset.route = spike ? 'spike' : route.name
+  outlet.dataset.route = document.body.dataset.route = spike ? 'spike' : styleguide ? 'styleguide' : route.name
   for (const a of nav.querySelectorAll<HTMLAnchorElement>('a')) a.classList.toggle('active', a.dataset.route === route.name)
   try {
-    const view = spike ? (await import('./map/spike/view')).view : await VIEWS[route.name]()
+    const view = spike ? (await import('./map/spike/view')).view : styleguide ? (await import('./ui/styleguide/view')).view : await VIEWS[route.name]()
     if (seq !== renderSeq) return
     const c = await view(outlet, route)
     if (seq !== renderSeq) {

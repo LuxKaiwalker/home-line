@@ -1,18 +1,29 @@
-"""Job type ``plan`` (WS11 plan row 2.4, brief tasks 8-9; F23, F24, F35; D76, D81).
+"""Job type ``plan`` (WS11 plan rows 2.4 and 3.2, brief tasks 8-9 and 11; F23, F24, F26, F35; D76,
+D81).
 
 A plan for one pad with the default crew is ONE call of ``pipeline.engine.plan.build_plan``
 (WS11 rule 1: no engine code here). ``build`` maps canonical plan_inputs to that call; the parity
 harness (server/tests/parity_harness.py ``server_build``) calls the same function, so parity
 tests exactly what the server runs.
 
-Scenario set (D81): the official pad keeps the full official set (variants.yaml scenarios.ids);
-any other pad computes only the three variants at the default scenario's suit mass (104 kg).
+Scenario set (D81, F26): the official pad with the default crew keeps the full official set
+(variants.yaml scenarios.ids); any other pad or crew computes only the three variants at the
+default scenario's suit mass (104 kg) ("the three variants always run").
 
-Supported inputs (brief task 8): the pad. Every other plan_inputs field must equal its default
-(route inputs are task 10, custom crew task 11); otherwise the job fails with
-``UnsupportedInputs`` naming the fields, never silently ignoring them. Inputs outside the config
-ranges (config/backend.yaml ``ranges``) are reported as run-record ``range_flags``; nothing is
-clamped.
+Supported inputs: the pad (task 8) and the crew (task 11, server.engine.crew): body_mass_kg,
+tools_kg, vo2max_ml_kg_min and effort_cap_frac go to build_plan's ``crew`` (physio.params
+overrides, D48 crew-as-parameter); the default crew passes ``crew=None``, so its call and tree are
+exactly the ones before task 11. crew.suit_kg (no build_plan path, server.engine.crew) and every
+other plan_inputs field must equal its default (route inputs, task 10, are cut by D69);
+otherwise the job fails with ``UnsupportedInputs`` naming the fields, never silently ignoring
+them. Inputs outside the config ranges (config/backend.yaml ``ranges``) are reported as
+run-record ``range_flags`` (anchored_flag_note); nothing is clamped and the plan runs.
+
+Station fields (F26): for a non-default crew the server data's fields (default crew) do not
+apply; before the summary stage the job fills the crew's station-field cache
+(server.engine.crew.ensure_station_fields) for the scenarios build_plan routes (the default
+scenario), reused by every later job with the same crew. build_plan cannot take them yet
+(server.engine.crew LIMITATION).
 
 Stages (D81: the map fills in early; job.schema.json ``stages_done``):
 1. ``nominal``: a preview build_plan call with the default scenario only (partner line on, so the
@@ -47,6 +58,7 @@ import shutil
 from datetime import UTC, datetime
 from pathlib import Path
 
+from server.engine import crew as crew_mod
 from server.engine import exporters, version
 from server.engine.defaults import ranges as config_ranges
 from server.engine.hashing import canonical_inputs, official_inputs
@@ -92,19 +104,22 @@ def is_official_pad(inputs: dict) -> bool:
 
 
 def unsupported(inputs: dict) -> list[str]:
-    """Top-level plan_inputs blocks (other than the pad) that differ from the defaults."""
+    """Top-level plan_inputs blocks (other than the pad and the crew) that differ from the
+    defaults, and the dotted crew fields build_plan has no parameter for (crew.suit_kg)."""
     c, d = canonical_inputs(inputs), _official()
-    return sorted(k for k in set(c) | set(d) if k not in ("pad", "contract_version")
-                  and c.get(k) != d.get(k))
+    blocks = sorted(k for k in set(c) | set(d) if k not in ("pad", "crew", "contract_version")
+                    and c.get(k) != d.get(k))
+    return sorted(blocks + crew_mod.unsupported(inputs))
 
 
 def scenario_set(inputs: dict) -> list[str]:
-    """D81: the official pad keeps the official set; other pads the default suit's variants."""
+    """D81: the official pad with the default crew keeps the official set; any other pad or crew
+    gets the default suit's three variants (F26: the three variants always run)."""
     from pipeline.engine import physio
     from pipeline.engine.config import load
 
     sc = load("variants")["scenarios"]
-    if is_official_pad(inputs):
+    if is_official_pad(inputs) and crew_mod.is_default(inputs):
         return list(sc["ids"])
     suit = physio.parse_scenario(sc["default"])[1]
     return [s for s in sc["ids"] if physio.parse_scenario(s)[1] == suit]
@@ -149,7 +164,8 @@ def build(inputs: dict, *, terrain_dir: Path, out_dir: Path, public_dir: Path | 
     bad = unsupported(inputs)
     if bad:
         raise UnsupportedInputs(f"plan_inputs {bad} differ from the defaults; this server plans "
-                                "a custom pad with the default crew and route only")
+                                "a custom pad and crew (body mass, tools, VO2max, effort cap) "
+                                "with the default suit mass and route only")
     pad = canonical_inputs(inputs)["pad"]
     grid = load_ws1_grid(terrain_dir) if grid is None else grid
     ids = [load("variants")["scenarios"]["default"]] if preview else scenario_set(inputs)
@@ -163,7 +179,8 @@ def build(inputs: dict, *, terrain_dir: Path, out_dir: Path, public_dir: Path | 
                       settings=scenarios.settings_from_config(None), out_dir=out_dir,
                       public_dir=public_dir if public_dir is not None else out_dir / "public",
                       terrain_dir=terrain_dir, cond=cond, dose_fn=dose_fn, partner=True,
-                      siting=False, d21=None, skipped=skipped, rmse=None,
+                      siting=False, d21=None, crew=crew_mod.overrides(inputs),
+                      skipped=skipped, rmse=None,
                       manifest_dir=manifest_dir, on_stage=on_stage, verbose=False)
 
 
@@ -274,6 +291,15 @@ def run_plan_job(inputs: dict, ctx: JobContext) -> dict:
           on_stage=on_stage, **common)
     if len(ctx.done) < STAGES.index("summary"):  # a build_plan stage was skipped (no stations)
         flush(STAGES[STAGES.index("summary") - 1])
+
+    # F26: a custom crew's station fields, on demand and cached by crew hash (reused by later
+    # jobs with the same crew); the default crew's are the server data's fields/
+    crew = crew_mod.overrides(inputs)
+    if crew is not None and (terrain / "stations.json").is_file():
+        from pipeline.engine.config import load
+
+        crew_mod.ensure_station_fields(grid, terrain / "stations.json",
+                                       [load("variants")["scenarios"]["default"]], crew)
 
     # 5. summary: the held files, exporters (D76), manifest.json, then the runner's run record
     _copy(ctx, pub, _files(pub))
