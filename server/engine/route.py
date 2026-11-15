@@ -1,5 +1,5 @@
-"""plan_inputs ``route`` on the server (D97 waypoint block, package R3; contracts/backend/README.md
-"Route (v1.2.0, D97)", openapi.yaml ``Error.stop``).
+"""plan_inputs ``route`` on the server (D97 waypoint block, packages WP3 and WP4;
+contracts/backend/README.md "Route (v1.2.0, D97)", openapi.yaml ``Error.stop``).
 
 A missing route and ``mode: auto`` are the same plan (the engine picks stations and order, F9):
 nothing here applies to them. An ``ordered`` route is checked where plan_inputs are accepted
@@ -14,30 +14,33 @@ concerns the whole route). Checks, in this order (the first failing one answers)
    first free point over;
 4. per stop, in visiting order: ``route_label_too_long`` (a free point's label longer than
    ``limits.title_max_chars``), ``route_station_unknown`` (not in stations.json),
-   ``route_station_duplicate`` (the same station again; stop = the repeat),
-   ``route_stop_spacing`` (closer than ``route.min_stop_spacing_m`` to the pad or to an earlier
-   stop; stop = the later one).
+   ``route_station_duplicate`` (the same station again; stop = the repeat);
+5. ``route_stop_spacing``: two stops, or a stop and the pad, closer than
+   ``route.min_stop_spacing_m``: ``pipeline.engine.waypoints.stop_spacing_violations`` (great
+   circle on the Mars sphere; a station at its stations.json position), and of several pairs the
+   one the engine's own check picks (``traverse.check_spacing``, WP2b): the lowest later stop of
+   a pair (the stop itself for a pad pair). stop = that later stop; the detail names both;
+6. per free point, in visiting order, the cheap grid checks 1-3 of ``pipeline.engine.waypoints``
+   under the DEFAULT scenario (variants.yaml ``scenarios.default``: the plan the user sees):
+   ``route_point_outside_grid``, ``route_point_unassessed``, ``route_point_not_walkable``. They
+   read only the cells within the D27 access radius of the server data routing grid
+   (``routing_grid``: memory maps opened once per process; without server data
+   ``pads.ServerDataMissing``, which the routes answer 503 ``server_data_missing``).
 
-Every limit comes from config/backend.yaml (``settings()``), never a literal. Distances are metres
-in the analysis projection (config/site.yaml ``crs.analysis_proj``, the planner's frame) between
-the stops' lon/lat (a station's stations.json position) and the pad.
+Every limit comes from config/backend.yaml (``settings()``), never a literal.
 
-Free points (``{lon, lat, label?}``) pass the checks above (their grid checks,
-route_point_outside_grid / unassessed / not_walkable / unreachable, come with them in R4) but this
-server does not plan them yet: ``unsupported_stop`` names the first one and the routes answer 422
-``unsupported_inputs`` with ``Error.stop`` set, as the server refuses every other input it cannot
-plan (never silently ignored).
-
-``route_point_unreachable`` for a station (no access cell in a scenario, no walk home) is only
-known inside the job (pipeline.engine.traverse.RouteStopError): the job ends ``error`` with the
-code and the stop in its message (server.engine.plan_job).
+``route_point_unreachable`` (waypoints check 4: no walk from the pad; it runs the station Dijkstra
+pair, as costly as the fields, ~7 s per point) is not checked at submit: the engine raises it in
+the job (pipeline.engine.traverse.RouteStopError, for a station or a free point), and the job
+ends ``error`` with the code and the stop in its message (server.engine.plan_job).
 """
 
 from __future__ import annotations
 
-import math
+import threading
 
 from pipeline.engine.config import load as load_config
+from server.engine import version
 from server.engine.defaults import stations
 from server.engine.hashing import canonical_inputs
 from server.settings import BackendConfig, settings
@@ -64,15 +67,14 @@ def is_free(stop: dict) -> bool:
     return "station" not in stop
 
 
-def station_ids(plan_inputs: dict) -> list[str] | None:
-    """The ordered route's station ids in visiting order (what build_plan's ``route`` takes), or
-    None for auto. Raises ValueError for a route with free points (not planned yet)."""
+def engine_route(plan_inputs: dict) -> list | None:
+    """The ordered route as build_plan's ``route`` takes it, or None for auto: the stops in
+    visiting order, a station as its id (``"S4"``), a free point as ``{"lon", "lat"}`` (its
+    label stays out of the engine; ``record_inputs`` puts it back in the run record)."""
     if mode(plan_inputs) != ORDERED:
         return None
-    stops = plan_inputs["route"]["stops"]
-    if any(is_free(s) for s in stops):
-        raise ValueError("free points are not planned by this server yet (R4)")
-    return [s["station"] for s in stops]
+    return [{"lon": s["lon"], "lat": s["lat"]} if is_free(s) else s["station"]
+            for s in plan_inputs["route"]["stops"]]
 
 
 def stop_name(stops: list[dict], i: int) -> str:
@@ -89,21 +91,76 @@ def _say(stops: list[dict], i: int, what: str) -> str:
     return f"stop {i} ({stop_name(stops, i)}): {what}"
 
 
-def _metres() -> str:
-    return load_config("site")["crs"]["analysis_proj"]
+# ------------------------------------------------------------------------- the grid ----
+_GRID_LOCK = threading.Lock()
+_GRID: tuple | None = None  # (server data key, Grid)
 
 
-def _xy(lon: float, lat: float) -> tuple[float, float]:
-    from pipeline.engine.geo import xy_of_lonlat
+def routing_grid():
+    """The server data routing grid (pads.open_grid: read-only memory maps), opened once per
+    process and again only when the server data manifest changes (the pad tool's rule).
+    Raises pads.ServerDataMissing without server data."""
+    from server.engine import pads
 
-    x, y = xy_of_lonlat(lon, lat, _metres())
-    return float(x), float(y)
+    global _GRID
+    root = version.server_data_dir()
+    key = pads._key(root)
+    with _GRID_LOCK:
+        if _GRID is None or _GRID[0] != key:
+            _GRID = None
+            _GRID = (key, pads.open_grid(root))
+        return _GRID[1]
+
+
+def default_scenario() -> str:
+    return str(load_config("variants")["scenarios"]["default"])
+
+
+def point_problem(grid, lon: float, lat: float, scenario: str) -> tuple[str, str] | None:
+    """(code, message) of the cheap free-point checks 1-3 (waypoints module doc) under
+    ``scenario``, or None. No Dijkstra: only the cells within the access radius are read.
+
+    pipeline.engine.waypoints exports no cheap check (its point_validity adds check 4, the
+    station Dijkstra pair, ~7 s on the real grid); until it does (``point_precheck``, asked of the
+    waypoint orchestrator), this calls its checks 1-3 (``waypoints._check``) with the scenario's
+    no-go slope and the D27 access radius, exactly as point_validity does."""
+    from pipeline.engine import padpick, physio, waypoints
+
+    public = getattr(waypoints, "point_precheck", None)
+    if public is not None:
+        return public(grid, float(lon), float(lat), scenario=scenario)
+    radius = padpick.settings_from_config().access_radius_m
+    return waypoints._check(grid, float(lon), float(lat),
+                            physio.scenario_params(scenario).nogo_deg, radius)
 
 
 # ----------------------------------------------------------------------------- checking ----
-def check(plan_inputs: dict, cfg: BackendConfig | None = None) -> None:
+def _spacing(stops: list[dict], where: list[tuple[float, float]], pad: tuple[float, float],
+             min_m: float) -> RouteError | None:
+    """The route_stop_spacing refusal (module doc, check 5), or None."""
+    from pipeline.engine.stations import bearing_dist
+    from pipeline.engine.waypoints import stop_spacing_violations
+
+    pairs = stop_spacing_violations(where, pad, min_m)
+    if not pairs:
+        return None
+    # traverse.check_spacing's pick (WP2b), so the server and the engine name the same stop
+    i, j = min(pairs, key=lambda ij: (ij[1] if ij[1] >= 0 else ij[0], ij[0]))
+    if j < 0:
+        at, other, q = i, "the pad", pad
+    else:
+        at, other, q = j, f"stop {i} ({stop_name(stops, i)})", where[i]
+    d = bearing_dist(*where[at], *q)[1]
+    return RouteError("route_stop_spacing", at, _say(
+        stops, at, f"{d:.1f} m from {other}; stops are at least {min_m:g} m apart "
+        "(route.min_stop_spacing_m, great circle)"))
+
+
+def check(plan_inputs: dict, cfg: BackendConfig | None = None, grid=None) -> None:
     """Raise RouteError for the first bad stop of an ordered route (module doc). ``plan_inputs``
-    must already validate against plan_inputs.schema.json (canonical_inputs). Auto: no check."""
+    must already validate against plan_inputs.schema.json (canonical_inputs). Auto: no check.
+    ``grid``: the routing grid for the free-point checks (default ``routing_grid()``, opened only
+    when the route has a free point and every earlier check passed)."""
     route = plan_inputs.get("route")
     if not route or route.get("mode", AUTO) != ORDERED:
         return
@@ -131,10 +188,8 @@ def check(plan_inputs: dict, cfg: BackendConfig | None = None) -> None:
                               f"(route.max_free_points); this one has {len(free)}"))
 
     known = {s["id"]: s for s in stations()}
-    pad = c["pad"]
-    pad_xy = _xy(pad["lon"], pad["lat"])
     seen: dict[str, int] = {}
-    placed: list[tuple[int, tuple[float, float]]] = []
+    where: list[tuple[float, float]] = []
     for i, s in enumerate(stops):
         if is_free(s):
             label = s.get("label")
@@ -142,48 +197,38 @@ def check(plan_inputs: dict, cfg: BackendConfig | None = None) -> None:
                 raise RouteError("route_label_too_long", i, _say(
                     stops, i, f"the label has {len(label)} characters; at most "
                     f"{cfg.limits.title_max_chars} (limits.title_max_chars)"))
-            xy = _xy(s["lon"], s["lat"])
-        else:
-            sid = s["station"]
-            if sid not in known:
-                raise RouteError("route_station_unknown", i, _say(
-                    stops, i, f"unknown station (stations.json has {sorted(known)})"))
-            if sid in seen:
-                raise RouteError("route_station_duplicate", i, _say(
-                    stops, i, f"station {sid} is already stop {seen[sid]}; a route visits each "
-                    "station once"))
-            seen[sid] = i
-            xy = _xy(known[sid]["lon"], known[sid]["lat"])
-        near = [("the pad", math.dist(xy, pad_xy))] + [
-            (f"stop {j} ({stop_name(stops, j)})", math.dist(xy, q)) for j, q in placed]
-        for other, d in near:
-            if d < lim.min_stop_spacing_m:
-                raise RouteError("route_stop_spacing", i, _say(
-                    stops, i, f"{d:.1f} m from {other}; stops are at least "
-                    f"{lim.min_stop_spacing_m:g} m apart (route.min_stop_spacing_m)"))
-        placed.append((i, xy))
+            where.append((float(s["lon"]), float(s["lat"])))
+            continue
+        sid = s["station"]
+        if sid not in known:
+            raise RouteError("route_station_unknown", i, _say(
+                stops, i, f"unknown station (stations.json has {sorted(known)})"))
+        if sid in seen:
+            raise RouteError("route_station_duplicate", i, _say(
+                stops, i, f"station {sid} is already stop {seen[sid]}; a route visits each "
+                "station once"))
+        seen[sid] = i
+        where.append((float(known[sid]["lon"]), float(known[sid]["lat"])))
 
-
-def unsupported_stop(plan_inputs: dict) -> RouteError | None:
-    """The refusal (code ``unsupported_inputs``) of the first free point of an ordered route, or
-    None. Free points pass ``check`` but are not planned yet (R4)."""
-    if mode(plan_inputs) != ORDERED:
-        return None
-    stops = plan_inputs["route"]["stops"]
-    for i, s in enumerate(stops):
-        if is_free(s):
-            return RouteError("unsupported_inputs", i, _say(
-                stops, i, "free points ({lon, lat}) are not planned by this server yet; an "
-                "ordered route takes station stops ({station}) only"))
-    return None
-
-
-def validate(plan_inputs: dict, cfg: BackendConfig | None = None) -> None:
-    """``check`` then the free-point refusal: what POST /jobs and POST /plans/import run."""
-    check(plan_inputs, cfg)
-    err = unsupported_stop(plan_inputs)
+    pad = (float(c["pad"]["lon"]), float(c["pad"]["lat"]))
+    err = _spacing(stops, where, pad, float(lim.min_stop_spacing_m))
     if err is not None:
         raise err
+
+    if not free:
+        return
+    grid = routing_grid() if grid is None else grid
+    scenario = default_scenario()
+    for i in free:
+        bad = point_problem(grid, stops[i]["lon"], stops[i]["lat"], scenario)
+        if bad is not None:
+            raise RouteError(bad[0], i, _say(stops, i, f"{bad[1]} ({scenario}, the default "
+                                                        "scenario)"))
+
+
+def validate(plan_inputs: dict, cfg: BackendConfig | None = None, grid=None) -> None:
+    """What POST /jobs and POST /plans/import run (``check``; free points are planned, D97)."""
+    check(plan_inputs, cfg, grid)
 
 
 def record_inputs(plan_inputs: dict, canonical: dict) -> dict:

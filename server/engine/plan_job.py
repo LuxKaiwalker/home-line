@@ -13,11 +13,14 @@ default scenario's suit mass (104 kg) ("the three variants always run").
 Supported inputs: the pad (task 8) and the crew (task 11, server.engine.crew): body_mass_kg,
 tools_kg, vo2max_ml_kg_min and effort_cap_frac go to build_plan's ``crew`` (physio.params
 overrides, D48 crew-as-parameter); the default crew passes ``crew=None``, so its call and tree are
-exactly the ones before task 11. An ordered route of stations (D97, server.engine.route; checked
-at submit) goes to build_plan's ``route`` as the station ids in visiting order, in the preview and
-the full call alike; a missing or auto route makes exactly the call before D97 (no ``route``
-argument). crew.suit_kg (no build_plan path, server.engine.crew) and every other plan_inputs
-field must equal its default (free points in a route: R4); otherwise the job fails with
+exactly the ones before task 11. An ordered route (D97, server.engine.route; checked at submit)
+goes to build_plan's ``route`` in visiting order (server.engine.route.engine_route: a station as
+its id, a free point as ``{lon, lat}`` without its label), with ``route_min_spacing_m`` =
+backend.yaml ``route.min_stop_spacing_m`` (the engine's own spacing check, WP2b), in the preview
+and the full call alike; a missing or auto route makes exactly the call before D97 (no ``route``
+argument). Free-point labels go back into the run record's inputs (route.record_inputs), never
+into the engine. crew.suit_kg (no build_plan path, server.engine.crew) and every other plan_inputs
+field must equal its default; otherwise the job fails with
 ``UnsupportedInputs`` naming the fields, never silently ignoring them. Inputs outside the config
 ranges (config/backend.yaml ``ranges``) are reported as run-record ``range_flags``
 (anchored_flag_note); nothing is clamped and the plan runs.
@@ -32,8 +35,11 @@ scenario's block; ``route.feasibility`` is keyed by scenario id) becomes the run
 ``feasibility``, mirrored to the v1.1 ``infeasible`` when false (binding = limit,
 margin_min = -shortfall_min); ``route_mode`` is on every record. An infeasible order is a result:
 the job ends ``done`` with the legs planned before the failing one. A stop the engine cannot route
-at all (traverse.RouteStopError, e.g. route_point_unreachable) ends the job ``error`` with its
-code and the stop named (``RouteStopFailed``).
+at all (traverse.RouteStopError, e.g. route_point_unreachable for a station or a free point W1..)
+ends the job ``error`` with its code and the stop named (``RouteStopFailed``). The server routes
+the default scenario only (build_plan ``route_scenarios=None``), so the engine's skip of a
+non-default scenario for a stop without an access cell (summary ``route.skipped``, WP2b) does not
+arise here; the record carries the default scenario's feasibility either way.
 
 Stages (D81: the map fills in early; job.schema.json ``stages_done``):
 1. ``nominal``: a preview build_plan call with the default scenario only (partner line on, so the
@@ -136,18 +142,12 @@ def is_official_pad(inputs: dict) -> bool:
     return (pad["lon"], pad["lat"]) == (off["lon"], off["lat"])
 
 
-def _route_planned(c: dict) -> bool:
-    """An ordered route of stations (D97): planned, so not a difference from the defaults."""
-    return route_mod.mode(c) == route_mod.ORDERED and not any(
-        route_mod.is_free(s) for s in c["route"]["stops"])
-
-
 def unsupported(inputs: dict) -> list[str]:
-    """Top-level plan_inputs blocks (other than the pad, the crew and an ordered route of
-    stations) that differ from the defaults, and the dotted crew fields build_plan has no
-    parameter for (crew.suit_kg)."""
+    """Top-level plan_inputs blocks (other than the pad, the crew and the route, D97) that
+    differ from the defaults, and the dotted crew fields build_plan has no parameter for
+    (crew.suit_kg)."""
     c, d = canonical_inputs(inputs), _official()
-    planned = {"pad", "crew", "contract_version"} | ({"route"} if _route_planned(c) else set())
+    planned = {"pad", "crew", "contract_version", "route"}
     blocks = sorted(k for k in set(c) | set(d) if k not in planned and c.get(k) != d.get(k))
     return sorted(blocks + crew_mod.unsupported(inputs))
 
@@ -195,8 +195,9 @@ def build(inputs: dict, *, terrain_dir: Path, out_dir: Path, public_dir: Path | 
     """Canonical plan_inputs -> one build_plan call (the server path; parity calls this).
 
     ``preview``: only the default scenario (the job's nominal stage). An ordered route passes
-    ``route=[station ids in visiting order]``; auto passes no ``route`` (the pre-D97 call).
-    Returns the run summary."""
+    ``route`` (route.engine_route: station ids and {lon, lat} free points in visiting order) and
+    ``route_min_spacing_m`` (when build_plan takes it, WP2b); auto passes neither (the pre-D97
+    call). Returns the run summary."""
     from pipeline.engine import scenarios
     from pipeline.engine.config import load
     from pipeline.engine.graph import load_ws1_grid
@@ -207,11 +208,10 @@ def build(inputs: dict, *, terrain_dir: Path, out_dir: Path, public_dir: Path | 
     if bad:
         raise UnsupportedInputs(f"plan_inputs {bad} differ from the defaults; this server plans "
                                 "a custom pad and crew (body mass, tools, VO2max, effort cap) "
-                                "with the default suit mass, and a route of stations (D97)")
+                                "with the default suit mass, and a route (D97)")
     c = canonical_inputs(inputs)
     pad = c["pad"]
-    ids_route = route_mod.station_ids(c)
-    route_kw = {} if ids_route is None else {"route": ids_route}
+    route_kw = _route_kwargs(c, build_plan)
     grid = load_ws1_grid(terrain_dir) if grid is None else grid
     ids = [load("variants")["scenarios"]["default"]] if preview else scenario_set(inputs)
     sids, skipped = scenarios.runnable(ids, None)
@@ -227,6 +227,22 @@ def build(inputs: dict, *, terrain_dir: Path, out_dir: Path, public_dir: Path | 
                       siting=False, d21=None, crew=crew_mod.overrides(inputs),
                       skipped=skipped, rmse=None,
                       manifest_dir=manifest_dir, on_stage=on_stage, verbose=False, **route_kw)
+
+
+def _route_kwargs(c: dict, build_plan) -> dict:
+    """build_plan's route keywords for canonical inputs ``c`` (``build``'s doc)."""
+    import inspect
+
+    stops = route_mod.engine_route(c)
+    if stops is None:
+        return {}
+    kw: dict = {"route": stops}
+    params = inspect.signature(build_plan).parameters
+    if "route_min_spacing_m" in params or any(p.kind is p.VAR_KEYWORD for p in params.values()):
+        from server.settings import settings
+
+        kw["route_min_spacing_m"] = float(settings().route.min_stop_spacing_m)
+    return kw
 
 
 def route_answer(inputs: dict, summary: dict | None) -> dict:
