@@ -8,7 +8,7 @@
 .hl-ovl__layer { display: flex; flex-direction: column; gap: var(--space-1); padding: var(--space-2) 0; border-top: 1px solid var(--color-card-border); }
 .hl-ovl__head { display: flex; align-items: center; gap: var(--space-2); }
 .hl-ovl__head .hl-toggle { flex: 1; min-width: 0; }
-.hl-ovl__what { margin: 0; font-size: var(--font-size-small); line-height: var(--line-height-small); color: var(--color-text-faint); }
+.hl-ovl__what { margin: 0; font-size: var(--font-size-small); line-height: var(--line-height-small); color: var(--color-text-muted); }
 .hl-ovl__legend { padding-left: var(--space-2); }
 .hl-swatch--none { border: 1px solid var(--color-text-faint); }
 .hl-swatch--heavy { border-top-width: calc(var(--line-thread) * 1.5); }
