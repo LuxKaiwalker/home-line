@@ -6,7 +6,8 @@
  *     thread from the pointer, the clock, the address and the selection card are unchanged.
  *   - Plan: the thread from the pointer appears only with Alt held (the explicit mode).
  *   - Fly (HUD): hovering its map leaves the replay running; a click on the map stops it (as designed).
- *   - Flythrough: hovering the map leaves it flying; a key stops it (as designed).
+ *   - Flythrough: checked in src/map/flythrough/hover.test.ts (the 3D flight in software GL is too slow
+ *     for real pointer moves in CI: each mouse event waits for a frame, #131).
  * Not a screenshot test: it lives here so the visual config runs it on both projects against the
  * built app. The thread's start is read from the map container's data-thread-from (map/furniture).
  * Run: cd web && npm run build && npx playwright test tests/visual/hover-replay.spec.ts
@@ -111,19 +112,4 @@ test('Fly: hover over the HUD map leaves the replay running; a click stops it', 
   const stopped = await time.innerText()
   await page.waitForTimeout(800)
   expect(await time.innerText()).toBe(stopped)
-})
-
-test('Flythrough: hover leaves it flying; a key stops it', async ({ page }) => {
-  const box = await openPlan(page)
-  const fly = page.locator('.hl-fly-btn:not(.hl-fly-speed)')
-  const clock = page.locator('.hl-tl__clockvalue').first()
-  await fly.click()
-  await expect(fly).toHaveAttribute('aria-pressed', 'true', { timeout: 30_000 })
-  let last = await expectAdvancing(clock, await clock.innerText())
-  await hoverAcross(page, box)
-  await expect(fly).toHaveAttribute('aria-pressed', 'true')
-  last = await expectAdvancing(clock, last)
-  // an explicit key stops it, as designed (DESIGN §3.4)
-  await page.keyboard.press('Escape')
-  await expect(fly).toHaveAttribute('aria-pressed', 'false')
 })
