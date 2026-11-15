@@ -40,7 +40,7 @@
         "waypoints_skipped": {"type": "integer", "minimum": 0},
         "stops_left_early": {"type": "integer", "minimum": 0},
         "lowest_margin_min": {"$ref": "#/$defs/num_or_null"},
-        "lowest_binding": {"enum": ["O2", "daylight", "EVA duration", null]},
+        "lowest_binding": {"enum": ["O2", "daylight", "dose", "EVA duration", null]},
         "max_cross_track_m": {"$ref": "#/$defs/num_or_null"},
         "max_behind_min": {"$ref": "#/$defs/num_or_null"},
         "o2_used_l": {"$ref": "#/$defs/num_or_null"},

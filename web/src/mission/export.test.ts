@@ -1,11 +1,14 @@
 // Known answers for the mission.json export (contracts/bundle/mission.schema.json): a 10 m leg due
 // east of the pad on a 5 m grid, a 5-min stop, and the way home back along the same cells.
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { CONFIG } from '../config'
 import { lonLatToXY, parseEqc, xyToLonLat } from '../fp3d/geo'
 import { BUDGET_CONSTANTS, missionBudget } from './budget'
 import { buildMission, finalizeMission, type MissionExportInput } from './export'
-import { buildTrack, legProfile, missionMargin } from './margin'
+import { buildTrack, doseTimingFromRad, legProfile, missionMargin } from './margin'
+import type { Rad } from '../data/types'
 import type { LonLat, Waypoint } from './plan'
 import type { Leg } from './router'
 
@@ -84,7 +87,9 @@ describe('buildMission', () => {
     expect(doc.timeline.rows.at(-1)[1]).toBe('return')
     expect(doc.timeline.rows.find((r: unknown[]) => r[1] === 'arrive')[2]).toBe(1) // 1-based waypoint
     expect(doc.summary.feasible).toBe(true)
-    expect(doc.conditions).toEqual({ eva_start_lmst: '09:00:00', t_dark_min: 500, storm_replay: false, t_star_min: null })
+    expect(doc.conditions).toEqual({
+      eva_start_lmst: '09:00:00', t_dark_min: 500, storm_replay: false, t_star_min: null, eva_start_utc: null, msl_sol: null, dose: null,
+    })
   })
 
   it('marks an unrouted leg: nulls, no timeline, not feasible', () => {
@@ -93,6 +98,35 @@ describe('buildMission', () => {
     expect(bad.waypoints[0].arrive_t_min).toBeNull()
     expect(bad.timeline).toBeNull()
     expect(bad.summary.feasible).toBe(false)
+  })
+})
+
+describe('EVA clock and storm replay for the simulator', () => {
+  const rad = JSON.parse(readFileSync(resolve(__dirname, '../../public/data/conditions/rad.json'), 'utf8')) as Rad
+
+  it('passes the EVA start instant and MSL sol through', () => {
+    const inp = input([LEG])
+    inp.conditions = { ...inp.conditions, evaStartUtc: '2026-11-14T10:51:18Z', mslSol: 5074 }
+    const c = (buildMission(inp) as Doc).conditions
+    expect(c.eva_start_utc).toBe('2026-11-14T10:51:18Z')
+    expect(c.msl_sol).toBe(5074)
+  })
+
+  it('exports the D39 dose series on the EVA clock only with the storm switch on', () => {
+    const inp = input([LEG])
+    const legs = [LEG]
+    const cellHome = (c: number) => homeAt(...cellLonLat(c))
+    const track = buildTrack(legs.map((l) => legProfile(l, cellHome)), [WP.stopMin])
+    const stormy = { ...inp, margin: missionMargin(track, { tDarkMin: 500, rad, storm: true }), conditions: { ...inp.conditions, storm: true, rad } }
+    const c = (buildMission(stormy) as Doc).conditions
+    const dt = doseTimingFromRad(c.t_star_min, rad)
+    expect(c.storm_replay).toBe(true)
+    expect(c.dose.d_allow_mgy).toBe(dt.dAllowMgy)
+    expect(c.dose.series.length).toBe(dt.evaMin.length)
+    expect(c.dose.series[0][0]).toBeCloseTo(dt.evaMin[0], 3)
+    expect(c.dose.series[0][1]).toBeCloseTo(dt.rateMgyH[0], 6)
+    // same mission, switch off: no series
+    expect((buildMission({ ...stormy, conditions: { ...stormy.conditions, storm: false } }) as Doc).conditions.dose).toBeNull()
   })
 })
 

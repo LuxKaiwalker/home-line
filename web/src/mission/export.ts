@@ -5,7 +5,8 @@
 // elevation) and rounded. Nothing is recomputed except running sums along the legs. Unknown = null.
 import { lonLatToXY, parseEqc } from '../fp3d/geo'
 import type { MissionBudget } from './budget'
-import type { MarginProfile, Term } from './margin'
+import type { Rad } from '../data/types'
+import { doseTimingFromRad, type MarginProfile, type Term } from './margin'
 import type { LonLat, Waypoint } from './plan'
 import type { Leg } from './router'
 
@@ -24,7 +25,16 @@ export interface MissionExportInput {
   scenario: { id: string; variant: string; suit_kg: number }
   planner: { gridResM: number; elevationResM: number; files: Record<string, string | null>; appCommit?: string | null; configHash?: string | null }
   constants: { o2CapacityL: number; effortRateLMin: number; stationRateLMin: number; reserveL: number; evaLimitMin: number; marginAmberMin: number }
-  conditions: { evaStartLmst: string | null; tDarkMin: number | null; storm: boolean }
+  conditions: {
+    evaStartLmst: string | null
+    tDarkMin: number | null
+    storm: boolean
+    /** EVA start instant (clock.json eva.start_utc) and MSL sol; optional for older callers */
+    evaStartUtc?: string | null
+    mslSol?: number | null
+    /** WS4 rad.json: the D39 storm series, exported on the EVA clock when the storm switch is on */
+    rad?: Rad | null
+  }
   wps: Waypoint[]
   legs: (Leg | null)[]
   /** WS2 pointer path from the last waypoint to the pad (first point = the waypoint), or null */
@@ -45,6 +55,17 @@ export interface MissionExportInput {
 type Num = number | null
 const r = (v: Num | undefined, d: number): Num => (v === null || v === undefined || !Number.isFinite(v) ? null : Math.round(v * 10 ** d) / 10 ** d)
 const add = (a: Num, b: Num): Num => (a === null || b === null ? null : a + b)
+
+/** D39 storm series on the EVA clock (margin.ts doseTimingFromRad at this mission's t*), or null when the storm is off. */
+function doseBlock(inp: MissionExportInput, m: MarginProfile | null): Record<string, unknown> | null {
+  if (!inp.conditions.storm || !m?.dose || !inp.conditions.rad) return null
+  const dt = doseTimingFromRad(m.dose.tStarMin, inp.conditions.rad)
+  return {
+    d_allow_mgy: dt.dAllowMgy,
+    series: dt.evaMin.map((t, i) => [r(t, 3), r(dt.rateMgyH[i], 6)]),
+    source: dt.source,
+  }
+}
 
 /** The mission document without mission_id / created_utc (see finalizeMission). */
 export function buildMission(inp: MissionExportInput): Record<string, unknown> {
@@ -211,6 +232,9 @@ export function buildMission(inp: MissionExportInput): Record<string, unknown> {
       t_dark_min: inp.conditions.tDarkMin,
       storm_replay: inp.conditions.storm && !!m?.dose,
       t_star_min: m?.dose ? r(m.dose.tStarMin, 3) : null,
+      eva_start_utc: inp.conditions.evaStartUtc ?? null,
+      msl_sol: inp.conditions.mslSol ?? null,
+      dose: doseBlock(inp, m),
     },
     waypoints: wpsOut,
     legs: legsOut,

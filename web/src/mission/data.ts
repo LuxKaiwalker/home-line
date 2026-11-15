@@ -47,6 +47,21 @@ export interface MissionData {
   padElevM: number | null
   /** clock.json eva.start_lmst (D31), or null */
   evaStartLmst: string | null
+  /** clock.json eva.start_utc and msl_sol (WS4): the EVA start as an instant, for the simulator's sky; null when missing */
+  evaStartUtc: string | null
+  mslSol: number | null
+}
+
+/** clock.json eva.start_utc (WS4), or null. */
+export function evaStartUtcOf(clock: unknown): string | null {
+  const v = (clock as { eva?: { start_utc?: unknown } } | null)?.eva?.start_utc
+  return typeof v === 'string' && /^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$/.test(v) ? v : null
+}
+
+/** clock.json eva.msl_sol (WS4), or null. */
+export function mslSolOf(clock: unknown): number | null {
+  const v = (clock as { eva?: { msl_sol?: unknown } } | null)?.eva?.msl_sol
+  return typeof v === 'number' && Number.isInteger(v) ? v : null
 }
 
 /** clock.json eva.start_lmst (WS4), or null. */
@@ -151,5 +166,7 @@ export async function loadMissionData(scenarioId?: string, onStep?: (what: strin
     padKind: !padFile ? 'config_default' : citesD21(padFile.pad.source) ? 'official' : 'custom',
     padElevM: padFile && typeof padFile.pad.elev_m === 'number' ? padFile.pad.elev_m : null,
     evaStartLmst: evaStartLmstOf(clock),
+    evaStartUtc: evaStartUtcOf(clock),
+    mslSol: mslSolOf(clock),
   }
 }

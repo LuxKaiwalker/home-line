@@ -177,6 +177,10 @@ The numbers are **browser estimates** on the 5 m routing grid (`mission/data.ts`
 validated 3 m results: `origin` is always `mission_planer`, and `origin_label` says so on screen.
 Unknown values are `null`; an unrouted leg makes `feasible` false and `timeline` null.
 
+Added 2026-11-15 (optional, additive): `conditions.eva_start_utc` and `msl_sol` (clock.json) so the
+simulator's sky starts at the planned instant, and `conditions.dose` (the D39 storm series on the
+EVA clock, only with the storm switch on) so the simulator's live margin has the dose term too.
+
 ## EVA log (v1.1.0, draft — additive, awaiting C; written unattended 2026-11-15)
 
 `eva_log.schema.json` validates **`eva_log.json`**, the way back: one EVA walked in the Unity
@@ -194,8 +198,8 @@ incomplete when a new mission, Clear or the end of the scene interrupts it.
 Positions are map coordinates (lon/lat, MOLA elevation), because the simulator's world origin is
 its spawn, not the pad. O₂ is the simulator's own suit model (`o2_model` says so), so `o2_delta_l`
 compares two different models on purpose: it shows how the walk differed from the plan. The live
-margin uses the planner's terms (O₂, daylight, EVA duration); the dose term is left out because
-`mission.json` carries no storm series. Status words and thresholds are the simulator's
+margin uses the planner's terms (O₂, daylight, dose, EVA duration); the dose term needs the series, and
+older `mission.json` files carry no storm series (newer ones do: `conditions.dose`). Status words and thresholds are the simulator's
 (`MissionTracker.cs`): TURN BACK below `margin_amber_min`, RETURN NOW below 0 (SPEC F18), REPLAN
 when the rest of the plan no longer fits, OFF ROUTE beyond 25 m, BEHIND beyond 5 min (assumed).
 

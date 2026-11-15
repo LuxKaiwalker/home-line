@@ -133,7 +133,19 @@
         "eva_start_lmst": {"type": ["string", "null"], "pattern": "^[0-9]{2}:[0-9]{2}:[0-9]{2}$", "description": "D31: 09:00:00"},
         "t_dark_min": {"$ref": "#/$defs/num_or_null", "description": "minutes from EVA start to darkness (clock.json eva.t_dark_min); null = no daylight term"},
         "storm_replay": {"type": "boolean", "description": "D39 storm switch was on when exported: the dose term is in the margin"},
-        "t_star_min": {"$ref": "#/$defs/num_or_null", "description": "D39: EVA minute the storm tripwire fires (this mission's largest T_home); null when the storm is off"}
+        "t_star_min": {"$ref": "#/$defs/num_or_null", "description": "D39: EVA minute the storm tripwire fires (this mission's largest T_home); null when the storm is off"},
+        "eva_start_utc": {"type": ["string", "null"], "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$", "description": "optional (added 2026-11-15): clock.json eva.start_utc, the EVA start as an instant; the simulator puts its sky there"},
+        "msl_sol": {"type": ["integer", "null"], "description": "optional (added 2026-11-15): clock.json eva.msl_sol"},
+        "dose": {
+          "type": ["object", "null"],
+          "description": "optional (added 2026-11-15): the D39 storm series on the EVA clock (margin.ts doseTimingFromRad at t_star_min), present when storm_replay is true; the simulator adds the dose term tau_dose(t) - T_home and replays the dose rate",
+          "properties": {
+            "d_allow_mgy": {"type": "number", "exclusiveMinimum": 0},
+            "series": {"type": "array", "minItems": 1, "items": {"type": "array", "prefixItems": [{"type": "number"}, {"type": "number", "exclusiveMinimum": 0}], "minItems": 2, "maxItems": 2}, "description": "[eva_min, dose rate mGy/h], ascending in eva_min; linear between, clamped outside"},
+            "source": {"type": "string"}
+          },
+          "required": ["d_allow_mgy", "series"]
+        }
       },
       "required": ["t_dark_min", "storm_replay", "t_star_min"]
     },

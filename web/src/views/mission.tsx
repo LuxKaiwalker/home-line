@@ -287,7 +287,7 @@ function MissionPanel({ mmap, handlers, mapsEl, initial }: { mmap: MissionMap; h
       scenario: { id: d.scenario.id, variant: d.scenario.variant, suit_kg: d.scenario.suit_kg },
       planner: { gridResM: d.grid.resM, elevationResM: d.elevationResM, files: d.files },
       constants: { ...BUDGET_CONSTANTS, marginAmberMin: CONFIG.marginAmberMin },
-      conditions: { evaStartLmst: d.evaStartLmst, tDarkMin: d.tDarkMin, storm },
+      conditions: { evaStartLmst: d.evaStartLmst, tDarkMin: d.tDarkMin, storm, evaStartUtc: d.evaStartUtc, mslSol: d.mslSol, rad: d.rad },
       wps,
       legs,
       homePath: home.path?.coords ?? null,
