@@ -76,8 +76,8 @@ jobs:
           # never depends on the backend (D48).
           VITE_LIVE: "1"
           VITE_API_BASE: ${{ vars.HL_API_URL }}
-          # route editing hidden on the published site until the team lead's OK (D115/D116)
-          VITE_ROUTE_EDIT: "0"
+          # route editing on the published site: team lead 14:10 (D125), after the hl-prod smoke test
+          VITE_ROUTE_EDIT: "1"
       - name: Built site has no dummy tree and no dummy-flagged file
         run: |
           test ! -e web/dist/data-dummy || { echo "::error::dist contains data-dummy/"; exit 1; }
