@@ -13,6 +13,7 @@ import { readdirSync, readFileSync } from 'node:fs'
 import { join, relative } from 'node:path'
 import { h, render, type VNode } from 'preact'
 import { act } from 'preact/test-utils'
+import { parse as parseYaml } from 'yaml'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { contrastRatio, MIN_RATIO, USED_PAIRS } from '../../src/ui/contrast'
 import { TOKENS, type ColorToken } from '../../src/ui/tokens'
@@ -26,11 +27,16 @@ const C = TOKENS.color as Record<ColorToken, string>
 
 /**
  * Minimum CIEDE2000 difference for state colours to count as distinguishable at a glance on map-sized
- * marks. assumed: true (Q1): ΔE00 ≈ 1 is a just-noticeable difference for large patches side by side;
- * 10 is the conventional "clearly different" level for small marks seen apart. Belongs in
- * config/design.yaml (C) — flagged in the Q1 notes.
+ * marks: config/design.yaml `quality.cvd_min_delta_e00` (assumed: true, Q1; the rationale is there).
  */
-export const CVD_MIN_DELTA_E = 10
+export const CVD_MIN_DELTA_E = readCvdMinDeltaE()
+
+function readCvdMinDeltaE(): number {
+  const design = parseYaml(readFileSync(new URL('../config/design.yaml', WEB), 'utf8')) as { quality?: { cvd_min_delta_e00?: unknown } }
+  const v = design.quality?.cvd_min_delta_e00
+  if (typeof v !== 'number' || !Number.isFinite(v) || v <= 0) throw new Error(`config/design.yaml quality.cvd_min_delta_e00 must be a positive number, got ${JSON.stringify(v)}`)
+  return v
+}
 const STATE_COLOURS: readonly ColorToken[] = ['safe', 'caution', 'limit', 'select']
 const VISIONS: readonly Vision[] = ['normal', 'protanopia', 'deuteranopia', 'tritanopia']
 
