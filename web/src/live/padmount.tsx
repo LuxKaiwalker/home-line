@@ -9,9 +9,16 @@ import { CrewPanel, crewBlockedText } from './crewview'
 import type { MapPort } from './mapPort'
 import { createPadTool, type PadTool, type PadToolOptions } from './padtool'
 import type { LiveState } from './health'
-import { PadToolPanel } from './view'
+import { PadToolPanel, type RouteLinkView } from './view'
 import { editRouteHosted, setEditRouteCrew } from '../ui/shell/editroute'
 import { officialPart } from '../state/official'
+
+/** WP12 (L6 W-1): the Edit-route panel as the card sees it (index.ts bridges it to the route mount). */
+export interface RouteLink {
+  compute(): void
+  status(): RouteLinkView['status']
+  subscribe(fn: () => void): () => void
+}
 
 export interface MountPadToolOptions extends Omit<PadToolOptions, 'client' | 'port' | 'jobInputs'> {
   client: ApiClient
@@ -19,11 +26,13 @@ export interface MountPadToolOptions extends Omit<PadToolOptions, 'client' | 'po
   onLiveState: (fn: (s: LiveState) => void) => () => void
   /** Show the crew panel next to the pad tool (default true); its changed fields go with the full plan. */
   crew?: boolean
+  /** WP12: the Edit-route panel: the card's one button runs its compute (no job of the card's own) */
+  route?: RouteLink | null
 }
 
 /** Renders the crew panel and the pad tool into `panel` on every state change; returns cleanup. */
 export function mountPadTool(panel: Element, port: MapPort, opts: MountPadToolOptions): { tool: PadTool; crew: CrewModel | null; cleanup: () => void } {
-  const { client, onLiveState, crew: withCrew = true, ...rest } = opts
+  const { client, onLiveState, crew: withCrew = true, route = null, ...rest } = opts
   const crew = withCrew ? createCrew({ client }) : null
   const tool = createPadTool({ client, port, ...rest, ...(crew ? { jobInputs: () => crew.jobInputs() } : {}) })
   const engineHref = `${client.root}/engine/version`
@@ -41,7 +50,13 @@ export function mountPadTool(panel: Element, port: MapPort, opts: MountPadToolOp
     render(
       <>
         {crew && !inDrawer ? <CrewPanel state={crew.state} actions={crew} engineHref={engineHref} /> : null}
-        <PadToolPanel state={tool.state} actions={tool} engineHref={engineHref} computeBlocked={crew ? crewBlockedText(crew.state) : null} />
+        <PadToolPanel
+          state={tool.state}
+          actions={tool}
+          engineHref={engineHref}
+          computeBlocked={crew ? crewBlockedText(crew.state) : null}
+          route={route ? { status: route.status(), compute: () => route.compute() } : undefined}
+        />
       </>,
       panel,
     )
@@ -51,6 +66,7 @@ export function mountPadTool(panel: Element, port: MapPort, opts: MountPadToolOp
   const op = officialPart('live-pad', () => tool.clear())
   const offOp = tool.subscribe((s) => op.set(s.pad !== null || s.plan.kind !== 'idle'))
   const offCrew = crew ? crew.subscribe(draw) : () => {}
+  const offRoute = route ? route.subscribe(draw) : () => {}
   ready = true
   draw()
   const offLive = onLiveState((s) => {
@@ -68,6 +84,7 @@ export function mountPadTool(panel: Element, port: MapPort, opts: MountPadToolOp
       offOp()
       op.dispose()
       offCrew()
+      offRoute()
       tool.dispose()
       crew?.dispose()
       if (inDrawer) setEditRouteCrew(undefined)

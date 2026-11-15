@@ -39,7 +39,7 @@ async function clickPlayAndPause(page: Page): Promise<void> {
 
 test.describe('timeline dock Play', () => {
   test('a real click plays and pauses on the plan map', async ({ page }) => {
-    await page.goto('/?intro=0#/')
+    await page.goto('/?intro=0&view=2d#/')
     await page.locator('.hl-tl__play').waitFor({ timeout: 30_000 })
     await clickPlayAndPause(page)
   })
@@ -47,7 +47,7 @@ test.describe('timeline dock Play', () => {
   test.describe('with the descent intro playing', () => {
     test.use({ reducedMotion: 'no-preference' }) // the intro never plays under reduced motion
     test('the first click on Play skips the intro and plays', async ({ page }) => {
-      await page.goto('/#/')
+      await page.goto('/?view=2d#/')
       await page.locator('.hl-tl__play').waitFor({ timeout: 30_000 })
       await page.locator('html[data-story-chrome="hide"]').waitFor({ state: 'attached', timeout: 30_000 })
       const play = page.locator('.hl-tl__play')
@@ -62,7 +62,7 @@ test.describe('shell layout (§4.3)', () => {
   test('the map region keeps the viewport; a selection never covers the dock', async ({ page }) => {
     const vp = page.viewportSize()!
     const tablet = vp.width < 1280
-    await page.goto('/?intro=0#/')
+    await page.goto('/?intro=0&view=2d#/')
     await page.locator('.hl-tl__play').waitFor({ timeout: 30_000 })
     const main = await box(page, 'main.outlet')
     const rail = await box(page, '.hl-rail')
@@ -125,7 +125,7 @@ test.describe('shell layout (§4.3)', () => {
   })
 
   test('the rail toggle opens the full rail over the map (tablet; desktop Plan too, L2) and closes it again', async ({ page }) => {
-    await page.goto('/?intro=0#/')
+    await page.goto('/?intro=0&view=2d#/')
     await page.locator('.hl-tl__play').waitFor({ timeout: 30_000 })
     const toggle = page.locator('.hl-rail__toggle')
     await expect(toggle).toHaveAttribute('aria-expanded', 'false')

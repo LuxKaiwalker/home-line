@@ -108,8 +108,8 @@ export function descentTiles(poses: CameraPose[], sets: TileSet[], vp: Viewport,
   return ordered.sort((a, b) => a.z - b.z).map((o) => o.u)
 }
 
-/** Fetch URLs into the HTTP cache, a few at a time; resolves when all are done or `signal` aborts. */
-export async function prefetch(urls: string[], o: { concurrency?: number; signal?: AbortSignal; fetcher?: typeof fetch } = {}): Promise<number> {
+/** Fetch URLs into the HTTP cache, a few at a time; resolves when all are done or `signal` aborts. `onEach` after every URL (done or failed). */
+export async function prefetch(urls: string[], o: { concurrency?: number; signal?: AbortSignal; fetcher?: typeof fetch; onEach?: () => void } = {}): Promise<number> {
   const f = o.fetcher ?? fetch
   let next = 0
   let ok = 0
@@ -125,6 +125,7 @@ export async function prefetch(urls: string[], o: { concurrency?: number; signal
       } catch {
         // a missing tile or an abort: MapLibre asks again on its own
       }
+      o.onEach?.() // L12: the loading screen's progress
     }
   }
   await Promise.all(Array.from({ length: Math.min(o.concurrency ?? 6, urls.length) }, worker))

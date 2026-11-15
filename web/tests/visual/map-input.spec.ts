@@ -21,7 +21,7 @@ const center = async (page: Page) => (await cam(page).getAttribute('data-camera-
 
 /** The planning map, loaded, with the rover handle in place; returns the map box. */
 async function open(page: Page) {
-  await page.goto('/?intro=0#/')
+  await page.goto('/?intro=0&view=2d#/')
   await page.locator('.hl-edit-rover').waitFor({ timeout: 60_000 })
   await expect(cam(page)).toHaveAttribute('data-camera-center', /,/)
   return (await page.locator('.maplibregl-canvas').boundingBox())!

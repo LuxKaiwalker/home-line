@@ -6,8 +6,11 @@
 // (waypoint block); this file only decides the container they render in.
 //
 //   live/route/mount.tsx   registers the route panel here (registerEditRoute) instead of the Plan rail;
-//                          it registers only while /health says the live controls are on, so the
-//                          "Edit route" button and the drawer exist only then (kit rule 4)
+//                          I1b (D128, instant browser path): it registers whatever /health says (the
+//                          browser estimate and Send to simulator need no server), so the "Edit route"
+//                          button and the drawer stay with the API down; the offline note
+//                          (RouteOfflineNote, registerEditRouteNote) then sits inside the drawer and says
+//                          only the server's Compute plan is unavailable
 //   live/padmount.tsx      puts the crew panel into the drawer (setEditRouteCrew) while a host is mounted
 //   views/console.tsx      mounts the host inside the console map (mountEditRoute), live builds only
 //
@@ -31,7 +34,7 @@ export const MY_PLANS_ID = 'my-plans'
 export const EDIT_ROUTE_TITLE = 'Edit route'
 export const MY_PLANS_SECTION_TITLE = 'My plans'
 
-/** The route panel (R5) while its live controls are on; undefined = offline / checking / not loaded. */
+/** The route panel (R5); undefined = not loaded (I1b: registered with the API up or down). */
 const routeRender = signal<Render | undefined>(undefined)
 /** The crew panel (F26) and whether its fields differ from the defaults ("Crew: default · Edit"). */
 export interface CrewSlot {
@@ -145,6 +148,7 @@ export function EditRouteHost<Snap>({ plans, simMode = 'off' }: { plans: MyPlans
         <EditRouteButton />
       </div>
       <Drawer id={EDIT_ROUTE_ID} title={EDIT_ROUTE_TITLE} class="hl-ui hl-editroute__drawer">
+        <EditRouteOfflineNoteSlot />
         {route()}
         <EditRouteSimSlot mode={simMode} />
         {crew ? (
