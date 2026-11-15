@@ -27,3 +27,8 @@
 .plan-bottom .hl-tl { min-width: calc(var(--layout-sidebar) * 2); }
 .plan-bottom .hl-tl__track { min-width: var(--layout-sidebar); }
 
+
+/* RR1 issue 1: a side panel never covers the drawer. On desktop the sidebar is a column beside the map
+   (the drawer spans the map); where it overlays the map (tablet, phone) it ends above the drawer. */
+.hl-shell[data-bp=tablet][data-dock=none] .hl-sidebar { margin-bottom: var(--hl-plan-bottom, 0px); }
+.hl-shell[data-bp=phone][data-dock=none] .hl-sidebar { bottom: var(--hl-plan-bottom, 0px); }

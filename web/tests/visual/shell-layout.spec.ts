@@ -6,10 +6,10 @@
  * the rail and the selection card stacked under the map.
  *   - Play takes a real click (Playwright actionability: visible, stable, receives the pointer), also
  *     while the descent intro (M10) hides the chrome, and pauses again while the clock runs.
- *   - Tablet (768–1279): the map region keeps the full width beside a 56 px icon rail and everything
- *     above the 96 px dock; the selection card overlays the map and never covers the dock or the rail.
+ *   - Tablet (768–1279): the map region keeps the full width beside a 56 px icon rail; the selection
+ *     card overlays the map and never covers the plan-bottom drawer (timeline; L2b) or the rail.
  *   - Desktop: 56 px icon rail in Plan (L2, D111: like the tablet; its toggle opens a sheet over the map)
- *     | map | 360 sidebar, 120 dock.
+ *     | map | 360 sidebar; in Plan the timeline is the plan-bottom drawer over the map (L2b), no dock.
  * Run: cd web && npm run build && npx playwright test tests/visual/shell-layout.spec.ts
  */
 import { expect, test, type Page } from 'playwright/test'
@@ -64,15 +64,16 @@ test.describe('shell layout (§4.3)', () => {
     await page.locator('.hl-tl__play').waitFor({ timeout: 30_000 })
     const main = await box(page, 'main.outlet')
     const rail = await box(page, '.hl-rail')
-    const dock = await box(page, '.hl-dock')
-    const dockH = tablet ? 96 : 120
     const railW = 56 // L2 (D111): the icon column in Plan at every size
     expect(Math.round(rail.width)).toBe(railW)
-    expect(Math.round(dock.height)).toBe(dockH)
+    // L2b (D111): the timeline is the plan-bottom drawer over the map (collapsed: one line), not the dock
+    await expect(page.locator('.hl-shell')).toHaveAttribute('data-dock', 'none')
+    const bottom = await box(page, '.plan-layout .plan-bottom')
     expect(Math.round(main.x)).toBe(railW)
     expect(Math.round(main.width)).toBe(vp.width - railW)
-    expect(Math.round(main.height)).toBe(vp.height - TOP_BAR - dockH)
-    expect(Math.round(dock.y)).toBe(vp.height - dockH)
+    expect(Math.round(main.height)).toBe(vp.height - TOP_BAR)
+    expect(Math.round(bottom.y + bottom.height)).toBe(vp.height)
+    expect(bottom.height).toBeLessThanOrEqual(48)
 
     // select station S7 through the search palette (U17: Enter opens the same card as a map click)
     await page.keyboard.press('Control+k')
@@ -85,13 +86,13 @@ test.describe('shell layout (§4.3)', () => {
     const side = await box(page, '.hl-sidebar')
     const main2 = await box(page, 'main.outlet')
     expect(Math.round(side.width)).toBe(360)
-    expect(overlaps(side, await box(page, '.hl-dock'))).toBe(false)
+    expect(overlaps(side, await box(page, '.plan-layout .plan-bottom'))).toBe(false) // RR1 issue 1: never over the timeline
     expect(overlaps(side, await box(page, '.hl-rail'))).toBe(false)
     if (tablet) {
       // overlay on the right of the map region: the map region itself keeps its size
       expect(Math.round(main2.width)).toBe(vp.width - railW)
       expect(Math.round(side.x + side.width)).toBe(vp.width)
-      expect(Math.round(side.height)).toBe(Math.round(main2.height))
+      expect(Math.round(side.height)).toBe(Math.round(main2.height - bottom.height)) // ends above the drawer (L2b)
     } else {
       expect(Math.round(main2.width)).toBe(vp.width - railW - 360)
     }

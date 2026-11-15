@@ -14,7 +14,7 @@ import { useSignalValue } from '../state/signal'
 import { missionClock } from '../state/mission'
 import { IconButton, TrustChip } from '../ui/components'
 import { t } from '../ui/copy'
-import { BottomDrawer } from '../ui/layout'
+import { BottomDrawer, layoutInsets, onLayoutChange, type LayoutInsets } from '../ui/layout'
 import { dockContent, hostIn } from '../ui/shell/store'
 import { fmtEva } from '../ui/timeline/model'
 import { registerPlanMount, SectionHost, type PlanMountCtx, type SectionName } from './planSlots'
@@ -24,6 +24,9 @@ import './planBottom.css'
 export const PLAN_BOTTOM = 'plan-bottom'
 export const TAB_TABLE = 'plan-table'
 export const TAB_TIMELINE = 'timeline'
+
+/** Shell-root CSS variable: the bottom drawer's height (planBottom.css keeps overlay side panels above it). */
+const INSET_VAR = '--hl-plan-bottom'
 
 /** Console sections shown in the plan table, in the old side-panel order. */
 export const TABLE_SECTIONS: readonly SectionName[] = ['headline', 'padpicker', 'route', 'roverpad', 'siting', 'stations']
@@ -115,9 +118,16 @@ export function mountPlanBottom(ctx: PlanMountCtx): () => void {
   for (const n of TABLE_SECTIONS) ctx.reveal(n, TABLE_REVEAL)
   const unhost = hostIn('timeline')
   const host = ctx.el.bottom
+  // RR1 issue 1: a side panel that overlays the map (tablet / phone sidebar) ends above the drawer
+  const shellEl = ctx.mapEl.closest?.<HTMLElement>('.hl-shell')
+  const inset = (i: LayoutInsets) => shellEl?.style.setProperty(INSET_VAR, `${i.bottom}px`)
+  inset(layoutInsets.peek())
+  const off = onLayoutChange(inset)
   render(<PlanBottom ctx={ctx} />, host)
   return () => {
+    off()
     render(null, host)
+    shellEl?.style.setProperty(INSET_VAR, '') // '' removes it
     unhost()
   }
 }
