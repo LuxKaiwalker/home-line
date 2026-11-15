@@ -5,7 +5,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createPlanningStore, makeStop, PLAN_TAGS, type PlanningStore } from '../../../state/planning'
 import { all, byClass, byTag, hasClass, installDom, one, type FakeDocument, type FakeNode } from '../../testing/dom'
 import { STOP_MIN_MAX } from './model'
-import { MOCK_ROUTE_RESULTS, type RouteResults } from './routeResults'
+import { MOCK_ROUTE_RESULTS, publishRouteResults, type RouteResults } from './routeResults'
+import { resetRouteResults } from '../../../state/routeResults'
 import { tl, WaypointList } from './WaypointList'
 import { register } from './index'
 
@@ -222,6 +223,20 @@ describe('route results (§9)', () => {
     expect(hasClass(a, 'is-infeasible')).toBe(false)
     expect(hasClass(b, 'is-infeasible')).toBe(true)
     expect(text(b)).toContain(tl('unreachable.unreachable'))
+  })
+})
+
+describe('app route results (no prop)', () => {
+  it('reads what the runner publishes (state/routeResults)', () => {
+    store.replaceRoute({ stops: [W1(), S3()], startUtc: null, storm: false })
+    publishRouteResults(MOCK_ROUTE_RESULTS)
+    try {
+      act(() => render(<WaypointList store={store} stationName={names} />, root as unknown as Element))
+      expect(hasClass(one(byClass(root, 'rpl-home')), 'is-infeasible')).toBe(true)
+      expect(text(rows()[0])).toContain(tl('estimate', { minutes: '18.5' }))
+    } finally {
+      resetRouteResults()
+    }
   })
 })
 
