@@ -128,7 +128,7 @@ PASS, d SKIP, and **f now PASS** (the route panel hides offline on design: R5-A 
 | f | **FAIL** (one criterion) | | static headline 23 % unchanged; offline banner after 0.2 s; **the route panel stays visible with 11 controls (2 enabled), Compute disabled** (finding R5-A) |
 | g | **PASS** | | "Precomputed · official plan", 23 / 15.2 / 28.7 %, the same as the static console |
 | h | **FAIL** (WP8c run1, run2: design before S1, see "Simulator export") | | control found only on `#/plan/{hash}` (A5s link `.live-sim-file`, no `data-sim-export`); click → **no download**: Chrome ignored `download` on the cross-origin link and opened the JSON in the tab. The file itself (fetched for the record) is schema-valid, `computed_live`, waypoints S4, S1, S2, feasible = run record, `mission_id` by the rule, = the result file |
-| h-infeasible | (WP8c run3) | | |
+| h-infeasible | **FAIL** (WP8c run3: design before S1) | | same three S1 criteria as h; the file passes every content check: valid, waypoints S4, S1, S2, S7, S8, `summary.feasible` false = run record (leg 4 S7 → S8), legs pad→wp1…wp3→wp4 routed, wp4→wp5 and wp5→pad `routed: false` |
 | i | **FAIL** (WP8c run1, run2: design before S1) | | no control on `#/plan/{official}` or the console: the official manifest has no `sim_plan` entry (WP9c leaves it untouched), the S1 path is not there yet. Static first: no control (reported, not judged) |
 
 ## UI under test (mock run)
@@ -181,7 +181,7 @@ downloads its `sim_plan` file; the official plan uses `/api/v1/results/{official
 the API answers, else `sim/official/mission.json`; a 404 shows "Simulator file not available for this
 plan". The flag comes from a live-demo npm script (`VITE_SIM_EXPORT=1`); `serve-web.mjs` sets it.
 
-UI under test, run1 (h, i) and run2 (a–i) (`/tmp/hl-way/wp8c/run{1,2}`, logs `/tmp/hl-way/wp8c-run{1,2}.log`): scratch worktree
+UI under test, run1 (h, i), run2 (a–i) and run3 (h, h-infeasible) (`/tmp/hl-way/wp8c/run{1,2,3}`, logs `/tmp/hl-way/wp8c-run{1,2,3}.log`): scratch worktree
 `/tmp/hl-way/wt/wp8c-ui` = origin/design (471e975) + R7b #126 (56dfcfc, fast-forward), not pushed.
 No open design PR had the S1 change yet, so this is the A5s slot: a plain `<a class="live-sim-file"
 href=… download>` on `#/plan/{hash}`, listing `sim_plan` manifest files, and the console route card
