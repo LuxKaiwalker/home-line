@@ -3,7 +3,7 @@
 // one stop re-routes only its two legs). Every time here is an ESTIMATE (honesty rule): coarser
 // terrain than the engine's 3 m graph, walking time only, no dwell and no margin. The live job's run
 // record (feasibility, legs) is the answer; the ghost is hidden once a computed result is shown.
-import { ROUTE_LIMITS, stopAt, stopNames, type PlanRoute, type StationGeo } from '../model'
+import { stopAt, stopNames, type PlanRoute, type StationGeo } from '../model'
 import { closedPairs, routeLegs } from './legs'
 import type { Leg } from './router'
 
@@ -65,5 +65,5 @@ export function ghostData(g: Ghost | null): GeoJSON.FeatureCollection {
   }
 }
 
-/** The access radius a stop is routed from (= the D27 access radius = route.min_stop_spacing_m). */
-export const ACCESS_RADIUS_M = ROUTE_LIMITS.minStopSpacingM
+/** The access radius a stop is routed from (variants.yaml route.access_radius_m, D27). */
+export { ACCESS_RADIUS_M } from './validity'

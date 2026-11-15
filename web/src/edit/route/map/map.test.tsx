@@ -239,6 +239,15 @@ describe('panel rows (R5 list) with free points: the e2e selectors', () => {
     act(() => void input.dispatch('keydown', { key: 'Enter' }))
     expect(store.route.value.stops[0]).toMatchObject({ label: 'Dark sand edge' })
     expect(store.step.value.inputs.route?.stops[0]).toMatchObject({ label: 'Dark sand edge' })
+    // the label field owns its presses: a drag that starts in it never starts R5's row drag
+    const heard: string[] = []
+    r1.addEventListener('pointerdown', () => heard.push('pointerdown'))
+    r1.addEventListener('dragstart', () => heard.push('dragstart'))
+    act(() => void input.dispatch('pointerdown', { button: 0 }))
+    const ds = input.dispatch('dragstart', { dataTransfer: { setData() {} } })
+    expect(ds.defaultPrevented).toBe(true)
+    expect(heard).toEqual([])
+    expect(ctl.dragging.value).toBeNull()
     // the ghost summary says "estimate" (here: no grid in the browser, so no times at all)
     const ghost = all(container, (x) => x.getAttribute('data-route-ghost') !== null)
     expect(ghost).toHaveLength(1)

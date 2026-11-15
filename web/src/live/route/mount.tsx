@@ -7,20 +7,20 @@
 //            is the one the console shows (mission state), read at every step
 //   jobs     live/route/jobs.ts (startJob + loadStage + run record feasibility)
 //   map      live/route/map.ts over the console map (staged layers, failing leg)
-//   validity fieldAt at each stop (published field of the plan shown) + stations.json
+//   validity the published field of the plan shown, over each stop's access disc (WP6) + stations.json
 import { h } from 'preact'
 import { createRouteController, type RouteController } from '../../edit/route/controller'
 import type { StationGeo, StopProbe } from '../../edit/route/model'
 import { RoutePanel } from '../../edit/route/panel'
 import { createRouteStore } from '../../edit/route/store'
 import { installWaypointMap } from '../../edit/route/map'
-import { probeFromSample } from '../../edit/route/map/validity'
+import { discProbe } from '../../edit/route/map/validity'
 import { ROUTE_TEXT } from '../../edit/route/text'
 import { identityOf } from '../../edit/live'
 import { loadEditCatalog, planAvailability, type EditCatalog, type EditPlan } from '../../edit/options'
 import { data } from '../../data/loader'
 import type { Station } from '../../data/types'
-import { fieldAt, VARIANT_OF } from '../../map/field'
+import { activeField, VARIANT_OF } from '../../map/field'
 import { mission } from '../../state/mission'
 import { effect, signal } from '../../state/signal'
 import { dockContent, registerRailSection, setDockContent, type Render } from '../../ui/shell/store'
@@ -58,8 +58,10 @@ export function missionPlan(c: EditCatalog): EditPlan {
 
 /** Validity lookups at a stop from the published field (null where the browser has no field). */
 export function fieldProbe(lon: number, lat: number): StopProbe {
-  // WP6: the same rule, moved to edit/route/map/validity.ts (tested on a synthetic field there)
-  return probeFromSample(fieldAt(lon, lat), VARIANT_OF[mission.plan.variant.peek() ?? 'nominal'] ?? 'nom')
+  // WP6: judged over the access disc (variants.yaml route.access_radius_m, D27) as the engine does
+  // (edit/route/map/validity.ts, KATs on a synthetic field there), so the browser never refuses a
+  // stop the engine accepts
+  return discProbe(activeField(), lon, lat, VARIANT_OF[mission.plan.variant.peek() ?? 'nominal'] ?? 'nom')
 }
 
 /** Put the console's own static plan back after a live result (bands, isochrones, edges, partner, route). */

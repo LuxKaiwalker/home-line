@@ -23,6 +23,24 @@ export interface PointRowProps {
   disabled: boolean
 }
 
+/**
+ * A press in the label field belongs to the field (text selection), never to R5's row drag: the press
+ * does not reach the row, and the row is not draggable until the button is released.
+ */
+function holdRow(e: Event): void {
+  e.stopPropagation()
+  const li = (e.currentTarget as Element | null)?.closest?.('li') as HTMLElement | null | undefined
+  if (!li || !li.draggable || typeof window === 'undefined') return
+  li.draggable = false
+  const back = (): void => {
+    li.draggable = true
+    window.removeEventListener('pointerup', back, true)
+    window.removeEventListener('pointercancel', back, true)
+  }
+  window.addEventListener('pointerup', back, true)
+  window.addEventListener('pointercancel', back, true)
+}
+
 export function PointRowBody({ ctl, index, name, label, disabled }: PointRowProps) {
   const ed = editorOf(ctl)
   const commit = (el: HTMLInputElement) => {
@@ -51,7 +69,13 @@ export function PointRowBody({ ctl, index, name, label, disabled }: PointRowProp
             commit(e.currentTarget as HTMLInputElement)
           } else if (e.key === 'Escape') (e.currentTarget as HTMLInputElement).value = label ?? ''
         }}
-        onDragStart={(e) => e.preventDefault()}
+        onPointerDown={holdRow}
+        onMouseDown={(e) => e.stopPropagation()}
+        onDragStart={(e) => {
+          // selecting text never starts a row drag (R5's onDragStart on the <li> never hears it)
+          e.preventDefault()
+          e.stopPropagation()
+        }}
       />
       <IconButton icon="x" label={fill(W.delete, { name })} class="hl-route__delete" data-route-action="delete-point" disabled={disabled} onClick={() => ed.remove(index)} />
     </span>

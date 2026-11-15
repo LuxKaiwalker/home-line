@@ -20,7 +20,8 @@ import { gradeModel, scenarioParams } from './physio'
 import { addBlocked, addPoint, cleanLabel, deletePoint, freePoints, LABEL_MAX_CHARS, movePoint, pointNames, renamePoint } from './points'
 import { LegRouter, type Leg } from './router'
 import { estimateMin } from './text'
-import { probeFromSample, STOP_PROBLEM_CODE } from './validity'
+import { ACCESS_RADIUS_M, discProbe, STOP_PROBLEM_CODE } from './validity'
+import { CONFIG } from '../../../config'
 
 const PUB = resolve(__dirname, '../../../../public/data')
 const json = (p: string) => JSON.parse(readFileSync(resolve(PUB, p), 'utf8'))
@@ -154,7 +155,7 @@ function syntheticField(): { field: FieldData; lonOf: (col: number) => number; l
 
 describe('validity per contract code (field lookups only)', () => {
   const { field, lonOf, lat } = syntheticField()
-  const probe = (lon: number, la: number) => probeFromSample(field.at(lon, la), 'nom')
+  const probe = (lon: number, la: number) => discProbe(field, lon, la, 'nom')
   const one = (lon: number) => checkRoute({ mode: 'ordered', stops: [{ lon, lat }] }, { stations, pad: { lon: 0, lat: 0 }, probe }).stops[0]
 
   it('valid; unreachable (no T_home); not walkable (blocked at 20°); unassessed; outside the grid', () => {
@@ -166,8 +167,8 @@ describe('validity per contract code (field lookups only)', () => {
   })
 
   it('no field in the browser: unknown (null), never shown as invalid', () => {
-    expect(probeFromSample(null, 'nom')).toEqual({ inGrid: null, assessed: null, walkable: null, reachable: null })
-    const c = checkRoute({ mode: 'ordered', stops: [{ lon: lonOf(0), lat }] }, { stations, pad: { lon: 0, lat: 0 }, probe: () => probeFromSample(null, 'nom') })
+    expect(discProbe(null, 0, 0, 'nom')).toEqual({ inGrid: null, assessed: null, walkable: null, reachable: null })
+    const c = checkRoute({ mode: 'ordered', stops: [{ lon: lonOf(0), lat }] }, { stations, pad: { lon: 0, lat: 0 }, probe: () => discProbe(null, 0, 0, 'nom') })
     expect(c.stops[0].valid).toBeNull()
     expect(c.ok).toBe(true)
   })
@@ -179,6 +180,55 @@ describe('validity per contract code (field lookups only)', () => {
       expect(STOP_PROBLEM_TEXT[p as keyof typeof STOP_PROBLEM_TEXT], p).toBeTruthy()
     }
     expect(Object.values(STOP_PROBLEM_CODE)).toEqual(expect.arrayContaining(['route_point_outside_grid', 'route_point_unassessed', 'route_point_not_walkable', 'route_point_unreachable', 'route_stop_spacing']))
+  })
+})
+
+/**
+ * 5 m cells, 41 x 41, the point at the centre of cell (20, 20). Every cell has `base` terrain and no
+ * T_home; `cells` lists [east offset in cells, state, T_home known] overrides on the point's row.
+ */
+function discField(base: number, cells: [number, number, boolean][]) {
+  const N = 41
+  const RES = 5
+  const P = { lon: 137.4, lat: -4.78 }
+  const mPerDegLat = (CONFIG.marsRadiusM * Math.PI) / 180
+  const dLat = RES / mPerDegLat
+  const dLon = RES / (mPerDegLat * Math.cos((P.lat * Math.PI) / 180))
+  const bounds: [number, number, number, number] = [P.lon - 20.5 * dLon, P.lat - 20.5 * dLat, P.lon + 20.5 * dLon, P.lat + 20.5 * dLat]
+  const code = new Uint8Array(N * N).fill(base)
+  const known = new Uint8Array(N * N)
+  for (const [dc, st, t] of cells) {
+    code[20 * N + 20 + dc] = st
+    known[20 * N + 20 + dc] = t ? 1 : 0
+  }
+  const g: DecodedGrid = { width: N, height: N, bounds, scale: 0.1, counts: new Uint16Array(N * N), known }
+  const field = { t: { opt: g, nom: g, con: g }, state: { width: N, height: N, bounds, code } }
+  const check = () => checkRoute({ mode: 'ordered', stops: [P] }, { stations, pad: { lon: 0, lat: 0 }, probe: (lon, lat) => discProbe(field, lon, lat, 'nom') }).stops[0]
+  return { field, P, check }
+}
+
+describe('validity over the access disc (variants.yaml route.access_radius_m, D27): never stricter than the engine', () => {
+  it('the radius comes from config: 50 m', () => {
+    expect(ACCESS_RADIUS_M).toBe(CONFIG.accessRadiusM)
+    expect(ACCESS_RADIUS_M).toBe(50)
+  })
+  it('a point on a steep cell with a walkable cell 30 m away is VALID', () => {
+    expect(discField(STATE.blocked, [[6, STATE.assessed, true]]).check()).toMatchObject({ valid: true, problems: [] })
+  })
+  it('the same with the nearest walkable cell 60 m away is not walkable', () => {
+    expect(discField(STATE.blocked, [[12, STATE.assessed, true]]).check().problems).toEqual(['notWalkable'])
+  })
+  it('walkable within the disc but no known T_home within it: unreachable', () => {
+    expect(discField(STATE.blocked, [[6, STATE.assessed, false], [12, STATE.assessed, true]]).check().problems).toEqual(['unreachable'])
+  })
+  it('unknown terrain everywhere in the disc: unassessed; one known (blocked) cell 30 m away makes it assessed', () => {
+    expect(discField(STATE.unknown, []).check().problems).toEqual(['unassessed'])
+    expect(discField(STATE.unknown, [[6, STATE.blocked, false]]).check().problems).toEqual(['notWalkable'])
+  })
+  it('outside the grid is the point\'s own cell only', () => {
+    const { field, P } = discField(STATE.assessed, [[0, STATE.assessed, true]])
+    expect(discProbe(field, P.lon, P.lat, 'nom').inGrid).toBe(true)
+    expect(discProbe(field, P.lon + 1, P.lat, 'nom').inGrid).toBe(false)
   })
 })
 
