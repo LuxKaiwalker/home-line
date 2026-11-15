@@ -13,6 +13,7 @@ import type { LayerGroup } from '../consoleMap'
 import { exaggeration, setView } from '../terrain/state'
 import { jumpToPose } from './camera'
 import { loadFlightPath } from './route'
+import type { UserFlight } from './userRoute'
 
 const INPUTS = ['pointerdown', 'wheel', 'touchstart', 'keydown'] as const
 
@@ -38,8 +39,8 @@ export function cutGate(cutMs: number): (now: number, playing: boolean) => boole
   }
 }
 
-export async function startFlythrough(map: MlMap, onEnd: () => void, layers?: FlyLayers): Promise<{ stop(): void } | null> {
-  const fp = await loadFlightPath().catch((e) => {
+export async function startFlythrough(map: MlMap, onEnd: () => void, layers?: FlyLayers, mine?: UserFlight | null): Promise<{ stop(): void } | null> {
+  const fp = await loadFlightPath(mine).catch((e) => {
     console.warn('flythrough unavailable:', e)
     return null
   })
@@ -48,7 +49,9 @@ export async function startFlythrough(map: MlMap, onEnd: () => void, layers?: Fl
     return null
   }
   setView('3d')
-  const savedLayers = layers ? FLY_GROUPS.map((g) => [g, layers.get(g)] as const) : []
+  // PORT I2: flying the user's route, the official route group stays as it was (the Plan map's
+  // "Your route" layer shows the user's legs)
+  const savedLayers = layers ? FLY_GROUPS.filter((g) => !mine || g !== 'route').map((g) => [g, layers.get(g)] as const) : []
   for (const [g, on] of savedLayers) if (!on) layers?.set(g, true)
   if (missionClock.t >= fp.plan.tEnd) missionClock.seek(0)
   missionClock.play()
@@ -91,7 +94,7 @@ export async function startFlythrough(map: MlMap, onEnd: () => void, layers?: Fl
     if (stopped) return
     if (last >= 0) missionClock.tick(now - last)
     last = now
-    if (missionClock.t >= fp.plan.tEnd) return stop()
+    if (missionClock.t >= Math.min(fp.plan.tEnd, missionClock.tMax)) return stop() // I2: a user route may outlast the clock
     raf = requestAnimationFrame(frame)
   }
   raf = requestAnimationFrame(frame)

@@ -7,6 +7,11 @@ import { installActivityClock } from '../../state/activityClock'
 import { t } from '../../ui/copy'
 import { iconSvg } from '../../ui/icons/icons'
 import type { FlyLayers } from './fly'
+import { planning } from '../../state/planning'
+import { getRouteResults, subscribeRouteResults } from '../../state/routeResults'
+import { flyMine, userFlight } from './userRoute'
+import copyI2 from './copy.I2.json'
+import { copyFrom } from '../../ui/copy'
 import './flythrough.css'
 
 export class FlythroughControl implements IControl {
@@ -35,6 +40,25 @@ export class FlythroughControl implements IControl {
     speed.type = 'button'
     speed.className = 'hl-fly-btn hl-fly-speed'
     speed.hidden = true
+    // PORT I2: "Your route" toggle (shown only while a user route is computed): fly it, not the official one
+    const tf = copyFrom(copyI2)
+    const mine = document.createElement('button')
+    mine.type = 'button'
+    mine.className = 'hl-fly-btn hl-fly-mine'
+    mine.textContent = tf('mine')
+    mine.title = tf('mineTip')
+    mine.hidden = true
+    mine.addEventListener('click', () => {
+      flyMine.value = !flyMine.peek()
+    })
+    const mineFlight = () => userFlight(getRouteResults(), planning.doc.peek().route, planning.doc.peek().padId)
+    const syncMine = () => {
+      const has = mineFlight() !== null
+      mine.hidden = !has
+      mine.setAttribute('aria-pressed', String(has && flyMine.peek()))
+    }
+    syncMine()
+    this.stops.push(subscribeRouteResults(syncMine), planning.doc.subscribe(syncMine), flyMine.subscribe(syncMine))
     // L7c: the flythrough is a player of the activity store (state/activity.ts): starting it stops the
     // replay / intro; the store stops it when another player starts, on an edit or a mode switch
     installActivityClock()
@@ -66,6 +90,7 @@ export class FlythroughControl implements IControl {
             setFlying(false)
           },
           this.layers,
+          flyMine.peek() ? mineFlight() : null,
         )
         // stopped (store or button) while the path loaded: land at once; its stop pauses the mission
         // clock, so a replay started meanwhile plays on (the clock observer registers it again)
@@ -98,7 +123,7 @@ export class FlythroughControl implements IControl {
         speed.title = label
       }),
     )
-    box.append(go, speed)
+    box.append(go, mine, speed)
     this.el = box
     return box
   }
