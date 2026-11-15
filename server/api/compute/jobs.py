@@ -9,14 +9,16 @@ Responses of POST /jobs:
 - 202 Job: queued, attached to the queued or running job with the same result hash
   (``attached: true``), or ``done`` at once when the hash's result tree is complete.
 - 422 Error: invalid_request (not a JobRequest object: unknown key, missing or unknown type,
-  inputs not an object), invalid_inputs (plan_inputs schema; detail = the error list), a route
-  code (D97, server.engine.route: route_too_many_stops, route_station_unknown, ...; ``stop`` = the
-  index of the stop the detail names, null for the whole route) and unsupported_inputs with
-  ``stop`` for a free point of an ordered route (not planned yet).
+  inputs not an object), invalid_inputs (plan_inputs schema; detail = the error list) and a route
+  code (D97, server.engine.route: route_too_many_stops, route_station_unknown, route_stop_spacing,
+  route_point_outside_grid / unassessed / not_walkable for a free point, ...; ``stop`` = the index
+  of the stop the detail names, null for the whole route). route_point_unreachable is the job's
+  answer (status error naming the stop), not a submit check.
 - 429 Error + Retry-After: queue_full (compute.queue_max_waiting), retry_after_s set.
 - 503 Error: heavy_jobs_off (kill switch deploy.kill_switch_env), job_type_unavailable (a contract
   type with no handler on this server, e.g. siting before its package), server_data_missing /
-  engine_identity_unavailable (the result hash cannot be taken).
+  engine_identity_unavailable (the result hash cannot be taken; server_data_missing also when a
+  free point cannot be checked without the server data grid).
 GET /jobs/{id}: 200 Job, 404 Error unknown_job.
 """
 
@@ -26,7 +28,7 @@ from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
 
 from server.api.compute.results import Identity
-from server.engine import jobs, version
+from server.engine import jobs, pads, version
 from server.engine import route as route_mod
 from server.engine.hashing import EngineIdentity, InvalidPlanInputs, canonical_inputs, result_hash
 from server.settings import settings
@@ -98,6 +100,8 @@ async def create_job(request: Request, identity: Identity) -> JSONResponse:
         route_mod.validate(raw)
     except route_mod.RouteError as e:
         return _error(422, e.code, e.detail, stop=e.stop)
+    except pads.ServerDataMissing as e:  # a free point needs the server data grid
+        return _error(503, "server_data_missing", str(e))
     try:
         ident = EngineIdentity(*identity())
         code = version.code_identity()
