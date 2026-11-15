@@ -34,3 +34,5 @@
    (the drawer spans the map); where it overlays the map (tablet, phone) it ends above the drawer. */
 .hl-shell[data-bp=tablet][data-dock=none] .hl-sidebar { margin-bottom: var(--hl-plan-bottom, 0px); }
 .hl-shell[data-bp=phone][data-dock=none] .hl-sidebar { bottom: var(--hl-plan-bottom, 0px); }
+/* marker cards (station, rover; L2d) are placed inside their slot's box: end it at the drawer too */
+.plan-layout > .plan-layout__card { bottom: var(--plan-inset-bottom, 0); }

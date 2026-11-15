@@ -24,3 +24,6 @@ web/dist/
 .env.*
 web/test-results/
 web/playwright-report/
+
+# worktree symlinks to a shared install must never be committed (#157 hotfix)
+web/node_modules

@@ -33,6 +33,7 @@ import { useSignalValue } from '../state/signal'
 import type { View } from './types'
 import { makeSections, mountPlanSlots, PlanSummary, S, SectionsCtx } from './planSlots'
 import './planBottom' // L2b: the plan-bottom drawer (plan table + timeline tabs)
+import './planStation' // L2d: station + rover marker cards
 
 const LAYER_LABELS: Record<LayerGroup, string> = {
   basemap: 'Basemap',

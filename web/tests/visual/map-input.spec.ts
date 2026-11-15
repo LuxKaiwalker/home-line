@@ -2,8 +2,10 @@
  * I1 (WS16-map, team lead Sun 10:50): the planning map's mouse model on the built app.
  *   - right drag moves the map (centre changes); no browser context menu on the map
  *   - a left drag on the empty map does nothing (centre unchanged, no selection)
- *   - a left drag on the rover moves the rover (drag readout appears)
- *   - a left click on the S7 pill opens its card
+ *   - a left drag on the rover moves the rover (drag readout appears; on release the delta strip opens
+ *     in the rover card on the map, L2d)
+ *   - a left click on the S7 pill opens its card (L2d, D111: the station marker card on the map; the
+ *     click selects only, the full page is the card's "Open station" link)
  *   - Ctrl + right drag in 3D changes the bearing
  * The camera is read from the map container's data-camera-* attributes (map/input). Not a screenshot
  * test: it lives here so the visual config runs it on both projects against the built app.
@@ -12,6 +14,8 @@
 import { expect, test, type Page } from 'playwright/test'
 
 const card = (page: Page) => page.locator('.hl-sidebar__body')
+const roverCard = (page: Page) => page.locator('#hl-lay-rover') // L2d: the delta strip's card
+const stationCard = (page: Page) => page.locator('#hl-lay-station') // L2d: the station marker card
 const cam = (page: Page) => page.locator('[data-camera-center]').first()
 const center = async (page: Page) => (await cam(page).getAttribute('data-camera-center'))!
 
@@ -82,6 +86,7 @@ test('a left drag on the empty map does nothing (no pan, no selection)', async (
   await page.waitForTimeout(500)
   expect(await center(page)).toBe(before)
   expect(await card(page).innerText()).toBe(text)
+  await expect(stationCard(page)).toHaveCount(0) // L2d: nor a station card on the map
 })
 
 /**
@@ -113,18 +118,21 @@ test('a left drag on the rover moves the rover (drag readout appears)', async ({
   await expect(page.locator('.hl-edit-drag-host')).not.toBeEmpty({ timeout: 5_000 })
   await page.mouse.up()
   expect(await center(page)).toBe(before) // the map did not move
-  await expect(card(page)).toContainText('What this change costs', { timeout: 10_000 })
+  await expect(roverCard(page)).toContainText('What this change costs', { timeout: 10_000 })
   await page.keyboard.press('Escape')
+  await expect(roverCard(page)).toHaveCount(0) // Escape discards (closes the card)
 })
 
 test('a left click on the S7 pill opens its card', async ({ page }) => {
   await open(page)
   const s7 = page.getByRole('button', { name: /^S7: / })
   await expect(s7).toBeVisible({ timeout: 10_000 })
-  await expect(card(page)).not.toContainText('Science target')
+  await expect(stationCard(page)).toHaveCount(0)
   await s7.click()
-  await expect(card(page)).toContainText('Science target', { timeout: 5_000 }) // copy cards.station.title
-  await expect(card(page)).toContainText('S7')
+  await expect(stationCard(page)).toContainText('Science target', { timeout: 5_000 }) // copy cards.station.title
+  await expect(stationCard(page)).toContainText('S7')
+  await expect(stationCard(page).getByRole('link', { name: 'Open station' })).toHaveAttribute('href', /#\/station\/S7$/)
+  expect(page.url()).not.toContain('#/station/') // L0 Q1: the click selects only, the map stays
 })
 
 test('Ctrl + right drag in 3D changes the bearing', async ({ page }) => {
