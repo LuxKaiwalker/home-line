@@ -30,7 +30,9 @@ most station value, then least time) WITHOUT the route margin check (O2, dayligh
 per leg), which needs the leg paths and is only in the full plan. A station is reachable when both
 of its times are finite. Only the pad may differ from the defaults (custom crew and route inputs
 need fields the server data does not hold: tasks 10 and 11); other inputs are refused, never
-ignored.
+ignored. An ordered route (D97) is refused too (422 unsupported_inputs naming ``route``): the
+preview is the D21 screening of the engine's own station choice; a missing or auto route is the
+default and screens as before.
 
 The server data are loaded once per process (memory-mapped, read-only) and reloaded only when the
 data manifest changes. Station fields are float32 minutes, as the D21 screening uses them.
@@ -78,8 +80,11 @@ class UnsupportedInputs(ValueError):
 
     def __init__(self, fields: list[str]):
         self.fields = fields
+        why = (" (an ordered route, D97, is planned by the plan job: the preview screens the "
+               "engine's own station choice only)" if "route" in fields else "")
         super().__init__("only the pad may differ from the defaults in a preview (custom crew "
-                         "and route inputs: brief tasks 10-11); differs: " + ", ".join(fields))
+                         "and route inputs: brief tasks 10-11); differs: " + ", ".join(fields)
+                         + why)
 
 
 class InvalidPad(ValueError):
