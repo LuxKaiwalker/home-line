@@ -39,7 +39,7 @@ type ShortcutCommand = Omit<Command, 'run' | 'owner' | 'shortcut'> & { shortcut:
 /** A command that runs its keys.ts action (owner 'shell'). */
 export const shortcutCommand = (c: ShortcutCommand): Command => ({ ...c, owner: 'shell', run: () => viaShortcut(c.shortcut) })
 
-const MODE_ICON: Readonly<Record<Mode, IconName>> = { plan: 'map', fly: 'compass', report: 'file-text', evidence: 'shield-check' }
+const MODE_ICON: Readonly<Record<Mode, IconName>> = { plan: 'map', science: 'flask-conical', fly: 'compass', report: 'file-text', evidence: 'shield-check' }
 
 /** The shell's commands, in palette order. */
 export function shellCommands(): Command[] {

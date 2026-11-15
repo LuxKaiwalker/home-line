@@ -5,8 +5,8 @@ import type { Route } from '../router'
 import { TOKENS } from '../ui/tokens'
 import { signal } from './signal'
 
-export type Mode = 'plan' | 'fly' | 'report' | 'evidence'
-export const MODES: readonly Mode[] = ['plan', 'fly', 'report', 'evidence']
+export type Mode = 'plan' | 'science' | 'fly' | 'report' | 'evidence'
+export const MODES: readonly Mode[] = ['plan', 'science', 'fly', 'report', 'evidence']
 /** Modes left out of this build's interface (no tab, key, command or nav link); their routes still
  *  work by URL and the code stays, so a mode comes back by taking it out of this set. REPORT and EVIDENCE: user, 2026-11-15
  *  (N0CEO 6f6f555, 78928a8). FLY stays shown (D132, team lead: Fly kept). */
@@ -24,6 +24,7 @@ export const ROUTE_MODE: Readonly<Record<string, Mode>> = {
   console: 'plan',
   mission: 'plan',
   station: 'plan',
+  stations: 'science',
   trade: 'report', // L2 (D111, L0 Q2): document content
   conditions: 'fly',
   hud: 'fly',

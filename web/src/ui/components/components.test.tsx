@@ -149,10 +149,10 @@ describe('Segmented control and mode switch', () => {
     mount(<Segmented label="v" options={opts} value="nom" onChange={() => {}} force="focus" />)
     expect(byRole(root, 'radio')[1].getAttribute('data-force')).toBe('focus')
   })
-  it('mode switch: the four modes from copy with icons', () => {
+  it('mode switch: every mode from copy with icons', () => {
     mount(<ModeSwitch value="plan" onChange={() => {}} />)
     const radios = byRole(root, 'radio')
-    expect(radios.map(text)).toEqual(['plan', 'fly', 'report', 'evidence'].map((m) => t(`modes.${m}.label` as 'modes.plan.label')))
+    expect(radios.map(text)).toEqual(['plan', 'science', 'fly', 'report', 'evidence'].map((m) => t(`modes.${m}.label` as 'modes.plan.label')))
     expect(radios[0].getAttribute('aria-checked')).toBe('true')
     expect(radios.every((r) => byTag(r, 'svg').length === 1)).toBe(true)
   })

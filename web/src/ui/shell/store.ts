@@ -38,6 +38,8 @@ export const MODE_VIEWS: Readonly<Record<Mode, readonly ModeView[]>> = {
     { route: { name: 'mission' }, label: 'nav.views.mission', icon: 'mountain' },
     { route: { name: 'console' }, label: 'nav.views.console', icon: 'map' },
   ],
+  // Science stations: its own top-bar tab next to PLAN, a page without a map (user, 2026-11-15)
+  science: [{ route: { name: 'stations' }, label: 'nav.views.stations', icon: 'flask-conical' }],
   fly: [
     { route: { name: 'hud' }, label: 'nav.views.hud', icon: 'gauge' },
     { route: { name: 'conditions' }, label: 'nav.views.conditions', icon: 'sun' },
@@ -52,9 +54,9 @@ export const MODE_VIEWS: Readonly<Record<Mode, readonly ModeView[]>> = {
     { route: { name: 'about' }, label: 'nav.views.about', icon: 'info' },
   ],
 }
-export const MODE_ICON: Readonly<Record<Mode, IconName>> = { plan: 'map', fly: 'compass', report: 'file-text', evidence: 'shield-check' }
+export const MODE_ICON: Readonly<Record<Mode, IconName>> = { plan: 'map', science: 'flask-conical', fly: 'compass', report: 'file-text', evidence: 'shield-check' }
 /** Single-key shortcuts of the modes (§4.4: P, Y, R, E). */
-export const MODE_KEY: Readonly<Record<Mode, string>> = { plan: 'P', fly: 'Y', report: 'R', evidence: 'E' }
+export const MODE_KEY: Readonly<Record<Mode, string>> = { plan: 'P', science: 'S', fly: 'Y', report: 'R', evidence: 'E' }
 
 /** Map modes get the timeline dock and the selection sidebar; REPORT and EVIDENCE are documents (D7 mockups 05, 06). */
 export const isMapMode = (m: Mode): boolean => m === 'plan' || m === 'fly'

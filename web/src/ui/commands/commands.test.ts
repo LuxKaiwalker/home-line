@@ -84,7 +84,7 @@ describe('registration', () => {
     const ids = commands.value.map((c) => c.id)
     expect(new Set(ids).size).toBe(ids.length)
     const expected = [
-      'mode.plan', 'mode.fly', 'view.toggle3d', 'view.focusMode', 'timeline.playPause', 'timeline.back', 'timeline.forward',
+      'mode.plan', 'mode.science', 'mode.fly', 'view.toggle3d', 'view.focusMode', 'timeline.playPause', 'timeline.back', 'timeline.forward',
       'camera.overhead', 'camera.isometric', 'camera.low', 'camera.focus', 'camera.follow', 'selection.back', 'selection.forward', 'app.help',
       ...OVERLAYS.map((o) => `map.layer.${o.id}`), 'map.layers.reset', 'map.exaggeration.more', 'map.exaggeration.less', 'map.exaggeration.reset',
       'story.storm', 'edit.undo', 'edit.redo', 'story.intro', 'view.fullscreen',

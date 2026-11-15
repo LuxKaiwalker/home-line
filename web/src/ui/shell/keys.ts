@@ -34,7 +34,7 @@ export interface KeyLike {
   target?: unknown
 }
 
-const ALL_MODE_KEYS: Record<string, Mode> = { p: 'plan', y: 'fly', r: 'report', e: 'evidence' }
+const ALL_MODE_KEYS: Record<string, Mode> = { p: 'plan', s: 'science', y: 'fly', r: 'report', e: 'evidence' }
 /** Mode keys of the shown modes only (a hidden mode, HIDDEN_MODES, has no key). */
 const MODE_KEYS: Record<string, Mode> = Object.fromEntries(Object.entries(ALL_MODE_KEYS).filter(([, m]) => !HIDDEN_MODES.has(m)))
 
