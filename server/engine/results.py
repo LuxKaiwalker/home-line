@@ -19,6 +19,10 @@ Path safety (``resolve_file``): relative "/"-separated paths only; no empty, "."
 (leading ".") segment, no backslash or NUL; the resolved file (symlinks followed) must lie inside
 the resolved tree root and be a regular file. Hidden names are never served, so a writer may use
 them for temporary files.
+
+The official tree's ``mission.json`` (D110, WP9c) is the one file served from outside
+``web/public/data/``: ``web/public/sim/official/mission.json`` (tools/make_mission.py --official),
+so a simulator export of the official plan needs no live job and the data tree stays unchanged.
 """
 
 from __future__ import annotations
@@ -51,6 +55,8 @@ REPO = Path(__file__).resolve().parents[2]
 PRECOMPUTED_DIR = REPO / "web" / "public" / "data"
 BACKEND_CONTRACTS = REPO / "contracts" / "backend"
 RUN_RECORD = "run_record.json"  # contracts/backend/README.md "Result tree"
+MISSION = "mission.json"  # contracts/bundle mission.schema.json, at the root of a result tree
+OFFICIAL_MISSION = REPO / "web" / "public" / "sim" / "official" / MISSION  # D110, outside DATA
 MAX_PATH_CHARS = 1024
 JSON_SUFFIXES = {".json", ".geojson"}
 
@@ -137,8 +143,12 @@ def resolve_file(tree: ResultTree, path: str) -> Path:
     """The regular file at ``path`` inside ``tree`` (symlinks followed, but never out of it)."""
     parts = safe_parts(path)
     missing = ResultNotFound("file_not_found", f"no file {path!r} in result {tree.hash}")
+    if tree.precomputed and path == MISSION:  # D110: the official plan's mission.json
+        root, parts = OFFICIAL_MISSION.parent, [MISSION]
+    else:
+        root = tree.root
     try:
-        root = tree.root.resolve(strict=True)
+        root = root.resolve(strict=True)
         real = root.joinpath(*parts).resolve(strict=True)
         mode = real.stat().st_mode
     except (OSError, RuntimeError):  # missing, a symlink loop, a name too long
