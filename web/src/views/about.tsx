@@ -18,6 +18,12 @@ const SOURCES: [string, string, string][] = [
   ['Ephemeris; Mars24 algorithm', 'JPL; GISS', 'JPL Horizons; Allison & McEwen 2000'],
 ]
 
+// The sentence after the scorecard link (D86): unchanged in static builds; in live builds it says what
+// does go to a server, in the words of the privacy note (src/live/privacy.tsx) that follows on the page.
+export const STATIC_SENTENCE = 'Nothing is fetched live.'
+export const LIVE_SENTENCE =
+  'In this live build the map data and the scorecard are still precomputed; the live tools send your planning requests to the live server, which the app also checks every few seconds (see Privacy below).'
+
 function About() {
   if (import.meta.env.VITE_LIVE === '1') void import('../live').then((m) => m.mountPrivacy(document))
   return (
@@ -25,7 +31,7 @@ function About() {
       <p class="lead">Mars isn't flat: HOMELINE draws where a suited crew can really go and still get home, and checks it against Curiosity's own photos.</p>
       <p>
         A static site: every number was computed offline during NASA Space Apps 2026 from public data and is listed with its file, script
-        and commit on the <a href="#/scorecard">scorecard</a>. Nothing is fetched live.
+        and commit on the <a href="#/scorecard">scorecard</a>. {import.meta.env.VITE_LIVE === '1' ? LIVE_SENTENCE : STATIC_SENTENCE}
         {DATA_MODE === 'dummy' && <b> This build shows dummy data.</b>}
       </p>
       <h2>Data</h2>
