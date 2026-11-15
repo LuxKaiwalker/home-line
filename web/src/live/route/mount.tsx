@@ -99,7 +99,11 @@ export const missionPlanKey = (c: Pick<EditCatalog, 'defaultScenario' | 'officia
 
 /** Open the Edit-route drawer so the panel is on screen (L3). */
 function revealRail(): void {
-  openContainer(EDIT_ROUTE_ID)
+  try {
+    openContainer(EDIT_ROUTE_ID)
+  } catch {
+    // no drawer host registered (tests, or a console without the L3 host): nothing to open
+  }
 }
 
 /** The plan the console shows now (mission state), if the catalog has it; else the default plan. */
