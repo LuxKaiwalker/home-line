@@ -21,14 +21,42 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v6
+        with:
+          fetch-depth: 2 # the PR merge commit and its parents, so HEAD^1 is the base tip
+      - name: Relevance gate (D129; on PRs the steps below skip when nothing this job tests changed)
+        id: gate
+        env:
+          RELEVANT: '^(pipeline/|server/|contracts/|config/|tests/|tools/|web/public/data|pyproject\.toml$|uv\.lock$|\.python-version$|Makefile$|\.github/workflows/)'
+          IGNORE: '^$'
+        run: |
+          # PR: diff the merge commit against its first parent (the base tip), i.e. what the PR changes
+          # on top of $GITHUB_BASE_REF. Push, no diff, or an empty diff: run (when in doubt, run).
+          run=true; why="event $GITHUB_EVENT_NAME"
+          if [ "$GITHUB_EVENT_NAME" = pull_request ]; then
+            if ! files=$(git diff --name-only HEAD^1 HEAD); then why="diff unavailable"
+            elif [ -z "$files" ]; then why="empty diff"
+            else
+              hits=$(printf '%s\n' "$files" | grep -E "$RELEVANT" | grep -vE "$IGNORE" || true)
+              if [ -n "$hits" ]; then why="relevant changes vs $GITHUB_BASE_REF:"$'\n'"$hits"
+              else run=false; why="nothing this job tests changed vs $GITHUB_BASE_REF; steps skipped, job stays green"
+              fi
+            fi
+          fi
+          echo "run=$run" >> "$GITHUB_OUTPUT"
+          echo "run=$run ($why)"
+      - if: steps.gate.outputs.run == 'true'
+        uses: astral-sh/setup-uv@v6
         with:
           enable-cache: true
-      - name: Install Python 3.11 and deps (dev + server groups)
+      - if: steps.gate.outputs.run == 'true'
+        name: Install Python 3.11 and deps (dev + server groups)
         run: uv sync --locked -p 3.11 --group server
-      - name: Server deps import
+      - if: steps.gate.outputs.run == 'true'
+        name: Server deps import
         run: uv run --no-sync python -c "import fastapi, httpx, jwt, psycopg, pydantic, uvicorn"
-      - name: Backend tests (make server-test)
+      - if: steps.gate.outputs.run == 'true'
+        name: Backend tests (make server-test)
         run: make server-test
-      - name: Synthetic parity, batch == server (make parity-synthetic; D56)
+      - if: steps.gate.outputs.run == 'true'
+        name: Synthetic parity, batch == server (make parity-synthetic; D56)
         run: make parity-synthetic

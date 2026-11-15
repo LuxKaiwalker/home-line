@@ -18,18 +18,47 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v6
+        with:
+          fetch-depth: 2 # the PR merge commit and its parents, so HEAD^1 is the base tip
+      - name: Relevance gate (D129; on PRs the steps below skip when nothing this job tests changed)
+        id: gate
+        env:
+          RELEVANT: '^(pipeline/|server/|contracts/|config/|tests/|tools/|web/public/data|pyproject\.toml$|uv\.lock$|\.python-version$|Makefile$|\.github/workflows/)'
+          IGNORE: '^$'
+        run: |
+          # PR: diff the merge commit against its first parent (the base tip), i.e. what the PR changes
+          # on top of $GITHUB_BASE_REF. Push, no diff, or an empty diff: run (when in doubt, run).
+          run=true; why="event $GITHUB_EVENT_NAME"
+          if [ "$GITHUB_EVENT_NAME" = pull_request ]; then
+            if ! files=$(git diff --name-only HEAD^1 HEAD); then why="diff unavailable"
+            elif [ -z "$files" ]; then why="empty diff"
+            else
+              hits=$(printf '%s\n' "$files" | grep -E "$RELEVANT" | grep -vE "$IGNORE" || true)
+              if [ -n "$hits" ]; then why="relevant changes vs $GITHUB_BASE_REF:"$'\n'"$hits"
+              else run=false; why="nothing this job tests changed vs $GITHUB_BASE_REF; steps skipped, job stays green"
+              fi
+            fi
+          fi
+          echo "run=$run" >> "$GITHUB_OUTPUT"
+          echo "run=$run ($why)"
+      - if: steps.gate.outputs.run == 'true'
+        uses: astral-sh/setup-uv@v6
         with:
           enable-cache: true
-      - name: Install Python 3.11 and deps
+      - if: steps.gate.outputs.run == 'true'
+        name: Install Python 3.11 and deps
         run: uv sync --locked -p 3.11
-      - name: Ruff
+      - if: steps.gate.outputs.run == 'true'
+        name: Ruff
         run: uv run --no-sync ruff check .
-      - name: Pytest (all known-answer tests)
+      - if: steps.gate.outputs.run == 'true'
+        name: Pytest (all known-answer tests)
         run: uv run --no-sync pytest
-      - name: Contract validation (web/public/data, data-dummy), no-dummy-in-public
+      - if: steps.gate.outputs.run == 'true'
+        name: Contract validation (web/public/data, data-dummy), no-dummy-in-public
         run: uv run --no-sync python tools/validate_contracts.py
-      - name: H0 provenance check (no manifest time or data mtime before H0; F16)
+      - if: steps.gate.outputs.run == 'true'
+        name: H0 provenance check (no manifest time or data mtime before H0; F16)
         run: uv run --no-sync python -m pipeline.provenance.check_h0
 
   web:
@@ -39,28 +68,81 @@ jobs:
         working-directory: web
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+        with:
+          fetch-depth: 2 # the PR merge commit and its parents, so HEAD^1 is the base tip
+      - name: Relevance gate (D129; on PRs the steps below skip when nothing this job tests changed)
+        id: gate
+        env:
+          RELEVANT: '^(web/|contracts/|config/|tools/|tests/fixtures/|Makefile$|\.github/workflows/)'
+          IGNORE: '^$'
+        run: |
+          # PR: diff the merge commit against its first parent (the base tip), i.e. what the PR changes
+          # on top of $GITHUB_BASE_REF. Push, no diff, or an empty diff: run (when in doubt, run).
+          run=true; why="event $GITHUB_EVENT_NAME"
+          if [ "$GITHUB_EVENT_NAME" = pull_request ]; then
+            if ! files=$(git diff --name-only HEAD^1 HEAD); then why="diff unavailable"
+            elif [ -z "$files" ]; then why="empty diff"
+            else
+              hits=$(printf '%s\n' "$files" | grep -E "$RELEVANT" | grep -vE "$IGNORE" || true)
+              if [ -n "$hits" ]; then why="relevant changes vs $GITHUB_BASE_REF:"$'\n'"$hits"
+              else run=false; why="nothing this job tests changed vs $GITHUB_BASE_REF; steps skipped, job stays green"
+              fi
+            fi
+          fi
+          echo "run=$run" >> "$GITHUB_OUTPUT"
+          echo "run=$run ($why)"
+      - if: steps.gate.outputs.run == 'true'
+        uses: actions/setup-node@v4
         with:
           node-version: 24
           cache: npm
           cache-dependency-path: web/package-lock.json
-      - run: npm ci
-      - name: Type check
+      - if: steps.gate.outputs.run == 'true'
+        run: npm ci
+      - if: steps.gate.outputs.run == 'true'
+        name: Type check
         run: npx tsc --noEmit
-      - name: vitest (web KATs)
+      - if: steps.gate.outputs.run == 'true'
+        name: vitest (web KATs)
         run: npm test
-      - name: Vite build
+      - if: steps.gate.outputs.run == 'true'
+        name: Vite build
         run: npx vite build
 
   checks:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: No dummy flag in web/public/data
+        with:
+          fetch-depth: 2 # the PR merge commit and its parents, so HEAD^1 is the base tip
+      - name: Relevance gate (D129; on PRs the steps below skip when nothing this job tests changed)
+        id: gate
+        env:
+          RELEVANT: '.'
+          IGNORE: '^docs/'
+        run: |
+          # PR: diff the merge commit against its first parent (the base tip), i.e. what the PR changes
+          # on top of $GITHUB_BASE_REF. Push, no diff, or an empty diff: run (when in doubt, run).
+          run=true; why="event $GITHUB_EVENT_NAME"
+          if [ "$GITHUB_EVENT_NAME" = pull_request ]; then
+            if ! files=$(git diff --name-only HEAD^1 HEAD); then why="diff unavailable"
+            elif [ -z "$files" ]; then why="empty diff"
+            else
+              hits=$(printf '%s\n' "$files" | grep -E "$RELEVANT" | grep -vE "$IGNORE" || true)
+              if [ -n "$hits" ]; then why="relevant changes vs $GITHUB_BASE_REF:"$'\n'"$hits"
+              else run=false; why="nothing this job tests changed vs $GITHUB_BASE_REF; steps skipped, job stays green"
+              fi
+            fi
+          fi
+          echo "run=$run" >> "$GITHUB_OUTPUT"
+          echo "run=$run ($why)"
+      - if: steps.gate.outputs.run == 'true'
+        name: No dummy flag in web/public/data
         run: |
           hits=$(grep -rlE '"dummy"[[:space:]]*:[[:space:]]*true' web/public/data || true)
           if [ -n "$hits" ]; then echo "dummy: true found in public data:"; echo "$hits"; exit 1; fi
-      - name: No tracked file over 50 MB
+      - if: steps.gate.outputs.run == 'true'
+        name: No tracked file over 50 MB
         run: |
           big=$(git ls-files -z | xargs -0 -r stat -c '%s %n' | awk '$1 > 50*1024*1024')
           if [ -n "$big" ]; then echo "Files over 50 MB:"; echo "$big"; exit 1; fi

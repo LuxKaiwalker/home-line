@@ -34,10 +34,36 @@ jobs:
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+        with:
+          fetch-depth: 2 # the PR merge commit and its parents, so HEAD^1 is the base tip
+      - name: Relevance gate (D129; on PRs the steps below skip when nothing this job tests changed)
+        id: gate
+        working-directory: .
+        env:
+          RELEVANT: '^(web/|contracts/|config/|tools/|tests/fixtures/|Makefile$|\.github/workflows/)'
+          IGNORE: '^$'
+        run: |
+          # PR: diff the merge commit against its first parent (the base tip), i.e. what the PR changes
+          # on top of $GITHUB_BASE_REF. Push, no diff, or an empty diff: run (when in doubt, run).
+          run=true; why="event $GITHUB_EVENT_NAME"
+          if [ "$GITHUB_EVENT_NAME" = pull_request ]; then
+            if ! files=$(git diff --name-only HEAD^1 HEAD); then why="diff unavailable"
+            elif [ -z "$files" ]; then why="empty diff"
+            else
+              hits=$(printf '%s\n' "$files" | grep -E "$RELEVANT" | grep -vE "$IGNORE" || true)
+              if [ -n "$hits" ]; then why="relevant changes vs $GITHUB_BASE_REF:"$'\n'"$hits"
+              else run=false; why="nothing this job tests changed vs $GITHUB_BASE_REF; steps skipped, job stays green"
+              fi
+            fi
+          fi
+          echo "run=$run" >> "$GITHUB_OUTPUT"
+          echo "run=$run ($why)"
+      - if: steps.gate.outputs.run == 'true'
+        uses: actions/setup-node@v4
         with:
           node-version: 24
-      - name: Token lint (web/scripts/lint-tokens.mjs, no dependencies)
+      - if: steps.gate.outputs.run == 'true'
+        name: Token lint (web/scripts/lint-tokens.mjs, no dependencies)
         run: npm run lint:tokens
 
   value-snapshot:
@@ -45,28 +71,59 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+        with:
+          fetch-depth: 2 # the PR merge commit and its parents, so HEAD^1 is the base tip
+      - name: Relevance gate (D129; on PRs the steps below skip when nothing this job tests changed)
+        id: gate
+        working-directory: .
+        env:
+          RELEVANT: '^(web/|contracts/|config/|tools/|tests/fixtures/|Makefile$|\.github/workflows/)'
+          IGNORE: '^$'
+        run: |
+          # PR: diff the merge commit against its first parent (the base tip), i.e. what the PR changes
+          # on top of $GITHUB_BASE_REF. Push, no diff, or an empty diff: run (when in doubt, run).
+          run=true; why="event $GITHUB_EVENT_NAME"
+          if [ "$GITHUB_EVENT_NAME" = pull_request ]; then
+            if ! files=$(git diff --name-only HEAD^1 HEAD); then why="diff unavailable"
+            elif [ -z "$files" ]; then why="empty diff"
+            else
+              hits=$(printf '%s\n' "$files" | grep -E "$RELEVANT" | grep -vE "$IGNORE" || true)
+              if [ -n "$hits" ]; then why="relevant changes vs $GITHUB_BASE_REF:"$'\n'"$hits"
+              else run=false; why="nothing this job tests changed vs $GITHUB_BASE_REF; steps skipped, job stays green"
+              fi
+            fi
+          fi
+          echo "run=$run" >> "$GITHUB_OUTPUT"
+          echo "run=$run ($why)"
+      - if: steps.gate.outputs.run == 'true'
+        uses: actions/setup-node@v4
         with:
           node-version: 24
           cache: npm
           cache-dependency-path: web/package-lock.json
-      - run: npm ci
-      - name: Build (real data)
+      - if: steps.gate.outputs.run == 'true'
+        run: npm ci
+      - if: steps.gate.outputs.run == 'true'
+        name: Build (real data)
         run: npm run build
-      - name: Playwright version
+      - if: steps.gate.outputs.run == 'true'
+        name: Playwright version
         id: pw
         run: echo "version=$(node -p "require('./node_modules/playwright/package.json').version")" >> "$GITHUB_OUTPUT"
-      - name: Cache Playwright browsers
+      - if: steps.gate.outputs.run == 'true'
+        name: Cache Playwright browsers
         uses: actions/cache@v4
         with:
           path: ~/.cache/ms-playwright
           key: playwright-${{ runner.os }}-${{ steps.pw.outputs.version }}-chromium
-      - name: Install Chromium (+ system deps)
+      - if: steps.gate.outputs.run == 'true'
+        name: Install Chromium (+ system deps)
         run: npx playwright install --with-deps chromium
-      - name: Value snapshot --check
+      - if: steps.gate.outputs.run == 'true'
+        name: Value snapshot --check
         run: npm run values:snapshot -- --check ../tests/fixtures/values_baseline.json 2>&1 | tee values-diff.txt
       - name: Upload the value diff
-        if: failure()
+        if: failure() && steps.gate.outputs.run == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: values-diff
@@ -78,38 +135,69 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+        with:
+          fetch-depth: 2 # the PR merge commit and its parents, so HEAD^1 is the base tip
+      - name: Relevance gate (D129; on PRs the steps below skip when nothing this job tests changed)
+        id: gate
+        working-directory: .
+        env:
+          RELEVANT: '^(web/|contracts/|config/|tools/|tests/fixtures/|Makefile$|\.github/workflows/)'
+          IGNORE: '^$'
+        run: |
+          # PR: diff the merge commit against its first parent (the base tip), i.e. what the PR changes
+          # on top of $GITHUB_BASE_REF. Push, no diff, or an empty diff: run (when in doubt, run).
+          run=true; why="event $GITHUB_EVENT_NAME"
+          if [ "$GITHUB_EVENT_NAME" = pull_request ]; then
+            if ! files=$(git diff --name-only HEAD^1 HEAD); then why="diff unavailable"
+            elif [ -z "$files" ]; then why="empty diff"
+            else
+              hits=$(printf '%s\n' "$files" | grep -E "$RELEVANT" | grep -vE "$IGNORE" || true)
+              if [ -n "$hits" ]; then why="relevant changes vs $GITHUB_BASE_REF:"$'\n'"$hits"
+              else run=false; why="nothing this job tests changed vs $GITHUB_BASE_REF; steps skipped, job stays green"
+              fi
+            fi
+          fi
+          echo "run=$run" >> "$GITHUB_OUTPUT"
+          echo "run=$run ($why)"
+      - if: steps.gate.outputs.run == 'true'
+        uses: actions/setup-node@v4
         with:
           node-version: 24
           cache: npm
           cache-dependency-path: web/package-lock.json
-      - run: npm ci
-      - name: Build (real data)
+      - if: steps.gate.outputs.run == 'true'
+        run: npm ci
+      - if: steps.gate.outputs.run == 'true'
+        name: Build (real data)
         run: npm run build
-      - name: Playwright version
+      - if: steps.gate.outputs.run == 'true'
+        name: Playwright version
         id: pw
         run: echo "version=$(node -p "require('./node_modules/playwright/package.json').version")" >> "$GITHUB_OUTPUT"
-      - name: Cache Playwright browsers
+      - if: steps.gate.outputs.run == 'true'
+        name: Cache Playwright browsers
         uses: actions/cache@v4
         with:
           path: ~/.cache/ms-playwright
           key: playwright-${{ runner.os }}-${{ steps.pw.outputs.version }}-chromium
-      - name: Install Chromium (+ system deps)
+      - if: steps.gate.outputs.run == 'true'
+        name: Install Chromium (+ system deps)
         run: npx playwright install --with-deps chromium
-      - name: Screenshots (compared where a baseline PNG is committed)
+      - if: steps.gate.outputs.run == 'true'
+        name: Screenshots (compared where a baseline PNG is committed)
         run: |
           n=$(find tests/visual/__screenshots__ -name '*.png' | wc -l)
           echo "committed baseline screenshots: $n"
           npm run test:visual
       - name: Upload current screenshots (adopt as baseline after review)
-        if: always()
+        if: always() && steps.gate.outputs.run == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: visual-screenshots
           path: web/test-results/visual-current/
           if-no-files-found: ignore
       - name: Upload diffs and report
-        if: failure()
+        if: failure() && steps.gate.outputs.run == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: visual-diff
@@ -123,15 +211,43 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+        with:
+          fetch-depth: 2 # the PR merge commit and its parents, so HEAD^1 is the base tip
+      - name: Relevance gate (D129; on PRs the steps below skip when nothing this job tests changed)
+        id: gate
+        working-directory: .
+        env:
+          RELEVANT: '^(web/|contracts/|config/|tools/|tests/fixtures/|Makefile$|\.github/workflows/)'
+          IGNORE: '^$'
+        run: |
+          # PR: diff the merge commit against its first parent (the base tip), i.e. what the PR changes
+          # on top of $GITHUB_BASE_REF. Push, no diff, or an empty diff: run (when in doubt, run).
+          run=true; why="event $GITHUB_EVENT_NAME"
+          if [ "$GITHUB_EVENT_NAME" = pull_request ]; then
+            if ! files=$(git diff --name-only HEAD^1 HEAD); then why="diff unavailable"
+            elif [ -z "$files" ]; then why="empty diff"
+            else
+              hits=$(printf '%s\n' "$files" | grep -E "$RELEVANT" | grep -vE "$IGNORE" || true)
+              if [ -n "$hits" ]; then why="relevant changes vs $GITHUB_BASE_REF:"$'\n'"$hits"
+              else run=false; why="nothing this job tests changed vs $GITHUB_BASE_REF; steps skipped, job stays green"
+              fi
+            fi
+          fi
+          echo "run=$run" >> "$GITHUB_OUTPUT"
+          echo "run=$run ($why)"
+      - if: steps.gate.outputs.run == 'true'
+        uses: actions/setup-node@v4
         with:
           node-version: 24
           cache: npm
           cache-dependency-path: web/package-lock.json
-      - run: npm ci
-      - name: Build (real data)
+      - if: steps.gate.outputs.run == 'true'
+        run: npm ci
+      - if: steps.gate.outputs.run == 'true'
+        name: Build (real data)
         run: npm run build
-      - name: Bundle budget (DESIGN §5.4, config/design.yaml performance)
+      - if: steps.gate.outputs.run == 'true'
+        name: Bundle budget (DESIGN §5.4, config/design.yaml performance)
         run: npm run bundle:budget
 
   # Package Q1 (U12, DESIGN §9 Contrast / Colour vision / Accessibility / Performance, §5.4 lazy loading).
@@ -144,30 +260,62 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+        with:
+          fetch-depth: 2 # the PR merge commit and its parents, so HEAD^1 is the base tip
+      - name: Relevance gate (D129; on PRs the steps below skip when nothing this job tests changed)
+        id: gate
+        working-directory: .
+        env:
+          RELEVANT: '^(web/|contracts/|config/|tools/|tests/fixtures/|Makefile$|\.github/workflows/)'
+          IGNORE: '^$'
+        run: |
+          # PR: diff the merge commit against its first parent (the base tip), i.e. what the PR changes
+          # on top of $GITHUB_BASE_REF. Push, no diff, or an empty diff: run (when in doubt, run).
+          run=true; why="event $GITHUB_EVENT_NAME"
+          if [ "$GITHUB_EVENT_NAME" = pull_request ]; then
+            if ! files=$(git diff --name-only HEAD^1 HEAD); then why="diff unavailable"
+            elif [ -z "$files" ]; then why="empty diff"
+            else
+              hits=$(printf '%s\n' "$files" | grep -E "$RELEVANT" | grep -vE "$IGNORE" || true)
+              if [ -n "$hits" ]; then why="relevant changes vs $GITHUB_BASE_REF:"$'\n'"$hits"
+              else run=false; why="nothing this job tests changed vs $GITHUB_BASE_REF; steps skipped, job stays green"
+              fi
+            fi
+          fi
+          echo "run=$run" >> "$GITHUB_OUTPUT"
+          echo "run=$run ($why)"
+      - if: steps.gate.outputs.run == 'true'
+        uses: actions/setup-node@v4
         with:
           node-version: 24
           cache: npm
           cache-dependency-path: web/package-lock.json
-      - run: npm ci
-      - name: Static checks (contrast, colour vision, second cue)
+      - if: steps.gate.outputs.run == 'true'
+        run: npm ci
+      - if: steps.gate.outputs.run == 'true'
+        name: Static checks (contrast, colour vision, second cue)
         run: npm run test:a11y:static
-      - name: Build (real data, with the Vite manifest for the lazy-loading check)
+      - if: steps.gate.outputs.run == 'true'
+        name: Build (real data, with the Vite manifest for the lazy-loading check)
         run: npm run build -- --manifest
-      - name: Playwright version
+      - if: steps.gate.outputs.run == 'true'
+        name: Playwright version
         id: pw
         run: echo "version=$(node -p "require('./node_modules/playwright/package.json').version")" >> "$GITHUB_OUTPUT"
-      - name: Cache Playwright browsers
+      - if: steps.gate.outputs.run == 'true'
+        name: Cache Playwright browsers
         uses: actions/cache@v4
         with:
           path: ~/.cache/ms-playwright
           key: playwright-${{ runner.os }}-${{ steps.pw.outputs.version }}-chromium
-      - name: Install Chromium (+ system deps)
+      - if: steps.gate.outputs.run == 'true'
+        name: Install Chromium (+ system deps)
         run: npx playwright install --with-deps chromium
-      - name: Accessibility (keyboard, focus, automated checks) and lazy-loading / font budget
+      - if: steps.gate.outputs.run == 'true'
+        name: Accessibility (keyboard, focus, automated checks) and lazy-loading / font budget
         run: npm run test:a11y-perf
       - name: Upload report
-        if: failure()
+        if: failure() && steps.gate.outputs.run == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: a11y-perf-report
