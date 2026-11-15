@@ -23,6 +23,7 @@ import { CollapseHeadlineOverlay, CollapseToggle } from './field/collapseUi'
 import { MapFurniture, MARKER_LAYERS, ROUTE_LAYERS } from './furniture'
 import { LabelLayer, loadLabels } from './labels/layer'
 import { TerrainController } from './terrain'
+import type { RoverHandle } from '../edit/roverMap'
 import { activeField, BINDING_LABEL, driveMargin, FIELD_TRUST, fieldModeQuery, fieldRequested, loadFieldData, loadFieldLayer, setActiveField, VARIANT_OF, webgl2Available, zeroEdgeLabels, type FieldData, type MarginState } from './field'
 
 /** The GPU field layer handle (field/layer.ts, loaded lazily). */
@@ -120,6 +121,9 @@ export class ConsoleMap {
   private lastPadOptions: Parameters<ConsoleMap['setPadOptions']> | null = null
   // WS16 task 8 (M8): U1 terrain; the 3D code loads only when ui.view turns '3d'
   private terrain: TerrainController | null = null
+  // WS18 task 2: drag the rover (U15), shell frame only; lazy chunk
+  private rover: RoverHandle | null = null
+  private destroyed = false
 
   constructor(container: HTMLElement, onStation: (id: string) => void) {
     this.onStation = onStation
@@ -144,6 +148,12 @@ export class ConsoleMap {
     this.map.addControl(new MarsScaleControl(CONFIG.marsRadiusM), 'bottom-left')
     this.ready = new Promise((res) => this.map.once('load', () => res()))
     this.ready.then(() => this.initLayers())
+    if (container.closest('.hl-shell'))
+      void this.ready.then(() => import('../edit/roverMap')).then((m) => {
+        if (this.destroyed) return
+        this.rover = m.installRoverDrag(this.map)
+        if (this.padMarker) this.rover.attach(this.padMarker)
+      })
   }
 
   whenReady(): Promise<void> {
@@ -501,6 +511,7 @@ export class ConsoleMap {
       this.labels.bind('PAD', { title: p.title })
     }
     this.padMarker = new Marker({ element: el }).setLngLat([p.lon, p.lat]).addTo(this.map)
+    this.rover?.attach(this.padMarker)
     this.applyVisibility()
   }
 
@@ -621,6 +632,8 @@ export class ConsoleMap {
   destroy(): void {
     this.terrain?.destroy()
     this.labels?.destroy()
+    this.destroyed = true
+    this.rover?.destroy()
     this.furniture?.destroy()
     this.stopCollapse?.()
     this.headline?.destroy()
