@@ -3,6 +3,7 @@
 import { act } from 'preact/test-utils'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { NAV_ITEMS } from '../../router'
+import { mission } from '../../state/mission'
 import { ui } from '../../state/ui'
 import { t } from '../copy'
 import { all, byClass, byTag, hasClass, installDom, one, type FakeDocument, type FakeNode } from '../testing/dom'
@@ -80,6 +81,30 @@ describe('shell frame and islands', () => {
     act(() => void (h = mountShell(f, () => {}, win as unknown as Window)))
   })
   afterEach(() => act(() => h.destroy()))
+
+  it('L7b (T9): the Plan top bar has one "Official plan" action: disabled with its reason on the official plan, enabled when the plan differs, and it goes back', () => {
+    const btn = () => one(byTag(one(byClass(root(), 'hl-topbar__plan')), 'button'))
+    expect(text(btn())).toBe(t('nav.officialPlan'))
+    expect(btn().hasAttribute('disabled')).toBe(true)
+    expect(btn().getAttribute('title')).toBe(t('edit.officialPlanSame'))
+    expect(one(byClass(root(), 'hl-officialplan')).getAttribute('title')).toBe(t('edit.officialPlanSame'))
+    act(() => void (mission.plan.pad.value = 'rank3'))
+    expect(btn().hasAttribute('disabled')).toBe(false)
+    expect(btn().getAttribute('title')).toBe(t('edit.officialPlanTip'))
+    fire(btn(), 'click')
+    expect(mission.plan.pad.value).toBeNull()
+    expect(btn().hasAttribute('disabled')).toBe(true)
+    // Plan mode only
+    act(() => void applyRoute({ name: 'hud' }, '#/fly/hud'))
+    expect(byClass(root(), 'hl-officialplan')).toHaveLength(0)
+  })
+
+  it('L7b: follows the live-status window event while mounted (state/live.ts seam)', () => {
+    expect(win.count('hl:live-status')).toBe(1)
+    act(() => h.destroy())
+    expect(win.count('hl:live-status')).toBe(0)
+    act(() => void (h = mountShell(f, () => {}, win as unknown as Window)))
+  })
 
   it('keeps the anchors other code relies on: .topbar and main.outlet in one subtree (live layer, value snapshot)', () => {
     expect(hasClass(f.topbar as unknown as FakeNode, 'topbar')).toBe(true)
