@@ -215,3 +215,9 @@ flock /tmp/hl-heavy.lock uv run --no-sync python docs/hardening/load_hosted.py -
 ```
 `--root-pid` only reads `/proc` (RSS of the prod process tree). Run it after the drill (the API is warm
 again), with nobody demoing. No hosting-session action needed.
+
+Readiness: the script's setup (read-only: `/defaults`, the official run record and scenario index,
+40 `/pads/validate`) ran against prod at 13:06 CET: official `016355600dbe194c`, 23 permalink files,
+8 valid pads, `/health` queue 0 after. A local smoke of the whole run (own port 8031, scratch
+`HL_SERVER_DATA`) was not done: `/tmp/hl-heavy.lock` was queued (a W1 run and parity runs) and the
+400 s wait ran out. The guest code is H1's `load.py`, unchanged.
