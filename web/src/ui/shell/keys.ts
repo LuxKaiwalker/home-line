@@ -82,7 +82,7 @@ export interface HelpRow {
   ready: boolean
 }
 export const HELP_ROWS: readonly HelpRow[] = [
-  { keys: ['Ctrl+K', '/'], label: 'shortcuts.search', ready: false }, // U17
+  { keys: ['Ctrl+K', '/'], label: 'shortcuts.search', ready: true }, // U17 (ui/search, A8)
   { keys: ['1–5'], label: 'shortcuts.cameraPresets', ready: false }, // U16
   { keys: ['F'], label: 'shortcuts.focusMode', ready: true },
   { keys: ['Space'], label: 'shortcuts.playPause', ready: true }, // FLY
