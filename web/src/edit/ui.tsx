@@ -213,7 +213,7 @@ export function DeltaStrip({ store, rover, pads }: { store: PlanEditStore; rover
       {!d.availability.ok && <p class="hl-edit-delta__note">{t(d.availability.reason ?? 'states.offline.unavailableHere')}</p>}
       <div class="hl-edit-delta__actions">
         {buttons.map((b) => (
-          <Button key={b.id} variant={b.id === 'keep' ? 'primary' : 'secondary'} disabled={!b.enabled} title={t(b.hint ?? b.label)} onClick={() => (b.id === 'keep' ? rover.keep() : rover.discard())}>
+          <Button key={b.id} variant={b.id === 'keep' ? 'primary' : 'secondary'} disabled={!b.enabled} reason={t(b.reason ?? b.hint ?? b.label)} title={t(b.hint ?? b.label)} onClick={() => (b.id === 'keep' ? rover.keep() : rover.discard())}>
             {t(b.label)}
           </Button>
         ))}
