@@ -1,8 +1,7 @@
-// Mock answers for route jobs (R5, D97), aligned with R0 (PR #105, contracts/backend v1.2.0:
-// plan_inputs.route, run_record.route_mode / feasibility, Error.stop and the route_* 422 codes; the
-// infeasible record mirrors examples/run_record.route_infeasible.json: S4, S1, S2 fails on S1 -> S2,
-// O2, 12.4 min short). R0 adds no web mocks; these are the only ones. Hashes and numbers are
-// placeholders, not results.
+// Mock answers for route jobs (R5, D97) on contracts/backend v1.2.0 (R0, #105): plan_inputs.route,
+// run_record.route_mode / feasibility, Error.stop and the route_* 422 codes. The run record is the
+// recorded example examples/run_record.route_infeasible.json (S4, S1, S2 fails on S1 -> S2, O2);
+// R0 adds no web mocks, these are the only ones. Hashes and numbers are placeholders, not results.
 //
 // withRouteMock(inner) answers, ahead of `inner` (mock/fetch.ts createMockFetch):
 //   POST /jobs with an ordered route   422 for a refused route, else a staged job under its own hash
@@ -12,9 +11,11 @@
 // Anything else goes to `inner`.
 import { API_PREFIX } from '../config'
 import { canonicalJson } from '../planio'
-import type { ApiErrorBody, EngineVersion, Job, JobRequest, PlanInputs, RunRecord } from '../types'
-import { ROUTE_LIMITS_DRAFT, type Feasibility, type PlanRoute, type RouteErrorBody, type RouteRunRecord, type RouteStop } from '../route/types'
-import { crewJobScript, RUN_RECORD_LIVE } from './fixtures'
+import type { ApiErrorBody, EngineVersion, Job, JobRequest, PlanInputs } from '../types'
+import routeInfeasibleExample from '../../../../contracts/backend/examples/run_record.route_infeasible.json'
+import { ROUTE_LIMITS } from '../../edit/route/model'
+import type { Feasibility, PlanRoute, RouteErrorBody, RouteRunRecord, RouteStop } from '../route/types'
+import { crewJobScript } from './fixtures'
 import { mockHash, type MockCall, type MockFetch } from './fetch'
 import { mockResultFile } from './result'
 
@@ -28,8 +29,11 @@ export const MOCK_ENGINE_VERSION: EngineVersion = {
   terrain_hash: `sha256:${'0'.repeat(64)}`,
 }
 
-/** The pair whose leg the mock reports as infeasible (R0 example: S1 -> S2 breaks O2 by 12.4 min). */
-export const MOCK_INFEASIBLE_LEG = { from: 'S1', to: 'S2', limit: 'O2' as const, shortfall_min: 12.4 }
+/** Recorded: contracts/backend/examples/run_record.route_infeasible.json (S4, S1, S2: leg S1 -> S2 breaks O2). */
+export const RUN_RECORD_ROUTE_INFEASIBLE = routeInfeasibleExample as RouteRunRecord
+const EXAMPLE_F = RUN_RECORD_ROUTE_INFEASIBLE.feasibility as Extract<Feasibility, { feasible: false }>
+/** The pair whose leg the mock reports as infeasible, with the example's limit and shortfall. */
+export const MOCK_INFEASIBLE_LEG = { from: EXAMPLE_F.from, to: EXAMPLE_F.to, limit: EXAMPLE_F.limit, shortfall_min: EXAMPLE_F.shortfall_min }
 
 const isStation = (s: RouteStop): s is { station: string } => typeof (s as { station?: unknown }).station === 'string'
 const names = (stops: readonly RouteStop[]) => {
@@ -41,7 +45,7 @@ const names = (stops: readonly RouteStop[]) => {
 export function routeRefusal(route: PlanRoute, stations: readonly string[] = ['S1', 'S2', 'S4', 'S6', 'S7', 'S8']): RouteErrorBody | null {
   const stops = route.stops ?? []
   if (route.mode === 'ordered' && !stops.length) return { error: 'invalid_input', detail: 'route.stops: at least one stop for mode ordered', stop: null }
-  if (stops.length > ROUTE_LIMITS_DRAFT.max_stops) return { error: 'route_too_many_stops', detail: `route: at most ${ROUTE_LIMITS_DRAFT.max_stops} stops`, stop: null }
+  if (stops.length > ROUTE_LIMITS.maxStops) return { error: 'route_too_many_stops', detail: `route: at most ${ROUTE_LIMITS.maxStops} stops`, stop: null }
   const seen = new Set<string>()
   for (const [i, s] of stops.entries()) {
     if (!isStation(s)) continue
@@ -62,10 +66,10 @@ export function routeFeasibility(route: PlanRoute): Feasibility {
   return { feasible: true }
 }
 
-/** The route run record (v1.2.0): the live example with route_mode, feasibility and the v1.1 infeasible block. */
+/** The route run record (v1.2.0): the recorded route example under this hash and inputs, with this answer. */
 export function routeRunRecord(hash: string, inputs: PlanInputs, f: Feasibility): RouteRunRecord {
   return {
-    ...(RUN_RECORD_LIVE as RunRecord),
+    ...RUN_RECORD_ROUTE_INFEASIBLE,
     contract_version: '1.2.0',
     hash,
     inputs,

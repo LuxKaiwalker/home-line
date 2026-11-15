@@ -21,7 +21,9 @@ import { LIVE_LABEL } from '../config'
 import type { LiveState } from '../health'
 import { HEALTH_WARM } from '../mock/fixtures'
 import { createMockFetch } from '../mock/fetch'
-import { MOCK_INFEASIBLE_LEG, routeFeasibility, routeRefusal, withRouteMock } from '../mock/route'
+import { MOCK_INFEASIBLE_LEG, routeFeasibility, routeRefusal, routeRunRecord, RUN_RECORD_ROUTE_INFEASIBLE, withRouteMock } from '../mock/route'
+import { validatePlanInputs, validateRunRecord } from '../schemacheck'
+import orderedExample from '../../../../contracts/backend/examples/plan_inputs.route_ordered.json'
 import { mockLiveLoader } from '../result'
 import { createRouteJobs } from './jobs'
 import { FAILING_LEG_ID, type RouteConsoleMap } from './map'
@@ -258,7 +260,24 @@ describe('422 for a bad stop', () => {
   })
 })
 
-describe('draft contract v1.2.0 (R0 #105) reading', () => {
+describe('contract v1.2.0 (R0 #105): what the panel sends and the mocks answer', () => {
+  it('the submitted inputs and every mock run record validate against the v1.2.0 schemas', async () => {
+    const { fetch } = await setup()
+    mode('ordered')
+    for (const id of ['S4', 'S1', 'S2']) check(id)
+    click(q('hl-route__compute')[0])
+    await until(() => q('hl-route__infeasible').length > 0, 'the answer')
+    const sent = (fetch.calls.find((c) => c.method === 'POST' && c.path === '/jobs')!.body as { inputs: unknown }).inputs as Record<string, unknown>
+    expect(validatePlanInputs(sent)).toEqual([])
+    expect(sent.route).toEqual(orderedExample.route) // the R0 example's route, built by checkbox
+    expect(validateRunRecord(RUN_RECORD_ROUTE_INFEASIBLE)).toEqual([])
+    for (const f of [routeFeasibility({ mode: 'ordered', stops: [{ station: 'S2' }] }), routeFeasibility(orderedExample.route as never)])
+      expect(validateRunRecord(routeRunRecord('0123456789abcdef', sent, f))).toEqual([])
+    expect(routeFeasibility(orderedExample.route as never)).toEqual(RUN_RECORD_ROUTE_INFEASIBLE.feasibility)
+  })
+})
+
+describe('feasibility reading', () => {
   it('feasibility: v1.2.0 block, v1.1 infeasible fallback, malformed = error, never guessed', () => {
     expect(readFeasibility({ feasibility: { feasible: true } })).toEqual({ value: { feasible: true }, error: null })
     const inf = { feasible: false, leg: 2, from: 'S1', to: 'S2', limit: 'O2', shortfall_min: 12.4, legs_planned: 2 }

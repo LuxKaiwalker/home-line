@@ -1,70 +1,30 @@
-// Typed client-side copy of the DRAFT backend contract v1.2.0 for the route (D97; waypoint block
-// §4.2). R0 (contracts/backend v1.2.0 + mocks) is not merged yet: everything route-specific the
-// client reads or writes is declared HERE and nowhere else, so aligning with R0 is one file. Shapes
-// follow the R0 working draft (plan_inputs.route, run_record.route_mode / feasibility, Error.stop).
-// When R0 lands: move these into ../types.ts, add the key maps to contract.test.ts, and replace
-// ROUTE_LIMITS_DRAFT by config/backend.yaml route.* (edit/route/model.ts already reads it first).
+// UI-side route types of the live layer (R5, D97). The contract types (plan_inputs.route,
+// run_record.route_mode / feasibility, Error.stop) are in ../types.ts since R0 (contracts/backend
+// v1.2.0, #105); this file only adds what the panel needs on top: the stop shapes by name, the limit
+// list for checks, the route 422 codes, and the readers below. Limits come from config/backend.yaml
+// route.* (edit/route/model.ts ROUTE_LIMITS).
 import type { PlanRoute as EditPlanRoute, RouteStop as EditRouteStop } from '../../edit/route/model'
-import type { ApiErrorBody, RunRecord } from '../types'
+import type { ApiErrorBody, Feasibility, RouteMode, RouteStop, RunRecord } from '../types'
 
-export const ROUTE_CONTRACT_DRAFT = '1.2.0'
+export type { Feasibility, RouteMode, RouteStop } from '../types'
 
-export const ROUTE_MODES = ['auto', 'ordered'] as const
-export type RouteMode = (typeof ROUTE_MODES)[number]
+export type StationStop = Extract<RouteStop, { station: string }>
+export type PointStop = Exclude<RouteStop, StationStop>
 
-/** plan_inputs.route.stops[i]: a station of stations.json */
-export interface StationStop {
-  station: string
-}
-/** plan_inputs.route.stops[i]: a free point (R6); label is free text, dropped before hashing (D57) */
-export interface PointStop {
-  lon: number
-  lat: number
-  label?: string
-}
-export type RouteStop = StationStop | PointStop
-
-/** plan_inputs.route (v1.2.0, additive). Missing = auto; ordered needs at least one stop; auto has none. */
+/** plan_inputs.route (v1.2.0). Missing = auto; ordered needs at least one stop; auto has none. */
 export interface PlanRoute {
   mode: RouteMode
   stops?: RouteStop[]
 }
 
-/** config/backend.yaml route.* (assumed, D97 item 6) until R0 adds them. */
-export const ROUTE_LIMITS_DRAFT = { max_stops: 8, max_free_points: 4, min_stop_spacing_m: 50 } as const
-
-/** run_record.feasibility.limit: O₂ at the effort-cap rule (D45), daylight, dose, EVA duration (D28). */
-export const FEASIBILITY_LIMITS = ['O2', 'daylight', 'dose', 'EVA duration'] as const
+/** run_record.feasibility.limit values (contract enum): O₂ at the effort-cap rule (D45), daylight, dose, EVA duration (D28). */
+export const FEASIBILITY_LIMITS = ['O2', 'daylight', 'dose', 'EVA duration'] as const satisfies readonly Extract<Feasibility, { feasible: false }>['limit'][]
 export type FeasibilityLimit = (typeof FEASIBILITY_LIMITS)[number]
 
-/** run_record.feasibility (v1.2.0). leg 0 = pad -> stops[0]; leg len(stops) = last stop -> pad. */
-export type Feasibility =
-  | { feasible: true }
-  | {
-      feasible: false
-      leg: number
-      /** 'pad', a station id, or W1, W2, … (free points in their order) */
-      from: string
-      to: string
-      limit: FeasibilityLimit
-      /** minutes short on that limit (positive) */
-      shortfall_min: number
-      /** legs before the failing one whose files are in the tree */
-      legs_planned?: number
-    }
+export type RouteRunRecord = RunRecord
+export type RouteErrorBody = ApiErrorBody
 
-/** run_record.json v1.2.0: v1.1 plus route_mode and feasibility (absent in older records). */
-export interface RouteRunRecord extends RunRecord {
-  route_mode?: RouteMode
-  feasibility?: Feasibility
-}
-
-/** Error body v1.2.0: a 422 on a route names the stop (index into inputs.route.stops; null = whole route). */
-export interface RouteErrorBody extends ApiErrorBody {
-  stop?: number | null
-}
-
-/** 422 codes of a route (openapi v1.2.0 draft, Error.stop description). */
+/** 422 codes of a route (openapi v1.2.0, Error.stop description). */
 export const ROUTE_ERROR_CODES = [
   'route_too_many_stops',
   'route_too_many_free_points',
@@ -80,9 +40,10 @@ export const ROUTE_ERROR_CODES = [
 ] as const
 export type RouteErrorCode = (typeof ROUTE_ERROR_CODES)[number]
 
-// Compile-time alignment: the edit model's route (what the panel builds) fits the draft contract.
+// Compile-time alignment: the edit model's route (what the panel builds) fits the contract.
 type Assert<T extends true> = T
 export type _StopFits = Assert<EditRouteStop extends RouteStop ? true : false>
+export type _StopBack = Assert<RouteStop extends EditRouteStop ? true : false>
 export type _ModeFits = Assert<EditPlanRoute['mode'] extends RouteMode ? true : false>
 
 const isObj = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object' && !Array.isArray(v)
