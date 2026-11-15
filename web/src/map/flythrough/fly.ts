@@ -53,7 +53,13 @@ export async function startFlythrough(map: MlMap, onEnd: () => void, layers?: Fl
   if (missionClock.t >= fp.plan.tEnd) missionClock.seek(0)
   missionClock.play()
   const el = map.getContainer()
-  el.setAttribute('data-flythrough', 'on')
+  // html hook for tests and dry runs (the container may be a bare EventTarget in unit tests)
+  const mark = (on: boolean): void => {
+    if (typeof el.setAttribute !== 'function') return
+    if (on) el.setAttribute('data-flythrough', 'on')
+    else el.removeAttribute('data-flythrough')
+  }
+  mark(true)
   let raf = 0
   let last = -1
   let stopped = false
@@ -77,7 +83,7 @@ export async function startFlythrough(map: MlMap, onEnd: () => void, layers?: Fl
     for (const ev of INPUTS) el.removeEventListener(ev, onInput, true)
     missionClock.pause()
     for (const [g, on] of savedLayers) if (!on) layers?.set(g, false)
-    el.removeAttribute('data-flythrough')
+    mark(false)
     onEnd()
   }
   // the planning map has no other clock ticker (A3: one ticker at a time)
