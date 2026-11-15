@@ -20012,6 +20012,54 @@
     "utc": "2026-11-14T15:34:50Z",
     "value": 15.34
   },
+  "terrain_low_tiles.factor": {
+    "commit": "c62e7e7057f164560bc710e8d97bfa8cf24ab672-dirty",
+    "file": "terrain_low/tiles.json",
+    "script": "pipeline/export/relief_lowzoom.py",
+    "units": "1",
+    "utc": "2026-11-15T00:23:38Z",
+    "value": 1.878
+  },
+  "terrain_low_tiles.source_hash": {
+    "commit": "c62e7e7057f164560bc710e8d97bfa8cf24ab672-dirty",
+    "file": "terrain_low/tiles.json",
+    "script": "pipeline/export/relief_lowzoom.py",
+    "units": null,
+    "utc": "2026-11-15T00:23:38Z",
+    "value": "4527e503a074c666df912dfa426ea64233be6335a1d3c48c318dbe2956b2368a"
+  },
+  "terrain_low_tiles.total_bytes": {
+    "commit": "c62e7e7057f164560bc710e8d97bfa8cf24ab672-dirty",
+    "file": "terrain_low/tiles.json",
+    "script": "pipeline/export/relief_lowzoom.py",
+    "units": "B",
+    "utc": "2026-11-15T00:23:38Z",
+    "value": 5120643
+  },
+  "terrain_tiles.factor": {
+    "commit": "c62e7e7057f164560bc710e8d97bfa8cf24ab672-dirty",
+    "file": "terrain/tiles.json",
+    "script": "pipeline/export/terrain_tiles.py",
+    "units": "1",
+    "utc": "2026-11-15T00:23:09Z",
+    "value": 1.878
+  },
+  "terrain_tiles.source_hash": {
+    "commit": "c62e7e7057f164560bc710e8d97bfa8cf24ab672-dirty",
+    "file": "terrain/tiles.json",
+    "script": "pipeline/export/terrain_tiles.py",
+    "units": null,
+    "utc": "2026-11-15T00:23:09Z",
+    "value": "7babbd07d042a6bc938740818aab1e97d4ca94ec7f756e564e7a4080dd4694f1"
+  },
+  "terrain_tiles.total_bytes": {
+    "commit": "c62e7e7057f164560bc710e8d97bfa8cf24ab672-dirty",
+    "file": "terrain/tiles.json",
+    "script": "pipeline/export/terrain_tiles.py",
+    "units": "B",
+    "utc": "2026-11-15T00:23:09Z",
+    "value": 24985121
+  },
   "timeline.nom_104.0.margin_binding": {
     "commit": "9833420c6592e94b4442d036722558319fdc97aa",
     "file": "timeline_nom_104.json",

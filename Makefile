@@ -37,6 +37,7 @@ fp3d-check:  ## WS8: F20 data checks on the export (eye height on the route, ren
 	cd web && FP3D_REAL_CHECK=1 npx vitest run src/fp3d --silent=false
 web:         ## C: copy/transform data/interim -> web/public/data, merge manifest, validate, H0 check
 	$(PY) -m pipeline.export.labels
+	$(PY) -m pipeline.export.terrain_tiles && $(PY) -m pipeline.export.relief_lowzoom
 	$(PY) tools/make_web.py
 web-plan:    ## C: what make web would copy, and what is missing per owner (no writes)
 	$(PY) tools/make_web.py --plan
