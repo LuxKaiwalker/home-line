@@ -683,6 +683,18 @@
     "independence": "Independent team project for the Space Apps Challenge; not affiliated with any space agency."
   },
 
+  "activity": {
+    "reason": {
+      "jobRunning": "A plan is still computing: its partial result cannot be played. Play, Flythrough and the intro are available when it is ready",
+      "jobBusy": "Another plan is already computing in this view: wait for it, or change the inputs to cancel it",
+      "busy": "Another player is running: stop it first"
+    },
+    "confirm": {
+      "inputChange": "A plan is still computing. Change the inputs and cancel that computation?"
+    },
+    "stormSetting": "Storm is a setting: Play replays the EVA with the storm on"
+  },
+
   "a11y": {
     "mapSummary": "Map: the homeline covers {reachable} of the {budget_min}-minute flat circle around the rover pad",
     "mapSummaryStations": "{reachable_count} of {station_count} science targets are reachable on foot"

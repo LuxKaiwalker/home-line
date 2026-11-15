@@ -3,6 +3,7 @@
 // its timeline, rad.json (D39 storm placement) and clock.json (daylight end), all through the one
 // loader. Starts the dock ticker whenever the mission clock plays, whoever pressed play.
 import { data } from '../../data/loader'
+import { installActivityClock } from '../../state/activityClock'
 import { mission, missionClock } from '../../state/mission'
 import { effect, signal, useSignalValue, type Signal } from '../../state/signal'
 import type { Rad } from '../../hud/types'
@@ -46,6 +47,7 @@ export function installTimelineDock(win: Pick<Window, 'requestAnimationFrame' | 
     caf: (id) => win?.cancelAnimationFrame?.(id),
   })
   const state = signal<DockState>({ kind: 'loading' })
+  installActivityClock() // L7c: the mission clock playing is the replay player (state/activity.ts)
   let alive = true
   setDockContent(() => <Dock state={state} ticker={ticker} />)
   const stop = effect(() => {

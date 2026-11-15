@@ -10,6 +10,7 @@ import { shell } from '../ui/shell/store'
 import type { CopyKey } from '../ui/copy'
 import { isCustomPad, type EditPlan } from './options'
 import type { PlanEditStore, PlanStep, ResultRef } from './store'
+import { noteEdit } from '../state/activity'
 
 // ---- mission state ------------------------------------------------------------------------------
 
@@ -160,6 +161,7 @@ export function installPlanEdit(store: PlanEditStore, o: InstallOptions = {}): (
   const win = o.win ?? (typeof window !== 'undefined' ? window : undefined)
   const offs: (() => void)[] = []
   if (o.mission !== false) offs.push(followMission(store))
+  offs.push(stopPlayersOnEdit(store))
   if (o.actions !== false) offs.push(registerEditActions(store))
   if (win) {
     // capture: at the window target, capturing listeners run before the selection's, so Escape with
@@ -184,6 +186,19 @@ export function installPlanEdit(store: PlanEditStore, o: InstallOptions = {}): (
   return () => {
     for (const f of offs.reverse()) f()
   }
+}
+
+/**
+ * L7c (D111): editing stops the running player (state/activity.ts): a draft opens, its plan changes,
+ * or a drag starts. A refresh of the same draft (live status, result attached) is not an edit.
+ */
+export function stopPlayersOnEdit(store: PlanEditStore): () => void {
+  let prev = store.draft.peek()
+  return store.draft.subscribe((d) => {
+    const p = prev
+    prev = d
+    if (d && (!p || p.step.key !== d.step.key || (d.phase === 'dragging' && p.phase !== 'dragging'))) noteEdit()
+  })
 }
 
 /** onApply for createPlanEditStore: commits go to the mission state. */

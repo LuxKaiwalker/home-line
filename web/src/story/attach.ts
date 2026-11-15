@@ -8,6 +8,7 @@ import type { ConsoleMap } from '../map/consoleMap'
 import { loadLabels } from '../map/labels/layer'
 import { loadFlightPath } from '../map/flythrough/route'
 import { missionClock, ui } from '../state'
+import { end as endPlayer, start as startPlayer } from '../state/activity'
 import { Director, type DirectorState } from './director'
 import { storyParams, storyRequest, type StoryRequest } from './query'
 import { StoryStage, type ChromePolicy } from './stage'
@@ -230,6 +231,15 @@ export function attachStory(cmap: ConsoleMap, req: StoryRequest = storyRequest(s
       window.__capture = runCapture(stage, d, sb)
       return
     }
+    // L7c: the intro (and the kiosk loop) is a player of the activity store (state/activity.ts): another
+    // player, an edit or a mode switch stops it, the app restored at once (before that player starts)
+    const st = stage
+    const stopStory = (): void => {
+      signal.stopped = true
+      st.restore(false)
+    }
+    st.onRestored = () => endPlayer('intro', stopStory)
+    if (!startPlayer('intro', stopStory).ok) stopStory()
     // input during the warm-up skips the story like input during it: the app is restored in the
     // input's own microtasks, before its click lands (the click acts on the restored app, D9)
     let skipped = (): void => undefined

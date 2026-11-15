@@ -2,6 +2,8 @@
 // Small and GL-free; the flight itself (fly.ts) loads with import() on the first press.
 import type { IControl, Map as MlMap } from 'maplibre-gl'
 import { effect, mission, missionClock } from '../../state'
+import { controlState, end as endPlayer, start as startPlayer } from '../../state/activity'
+import { installActivityClock } from '../../state/activityClock'
 import { t } from '../../ui/copy'
 import './flythrough.css'
 
@@ -23,23 +25,37 @@ export class FlythroughControl implements IControl {
     speed.type = 'button'
     speed.className = 'hl-fly-btn hl-fly-speed'
     speed.hidden = true
+    // L7c: the flythrough is a player of the activity store (state/activity.ts): starting it stops the
+    // replay / intro; the store stops it when another player starts, on an edit or a mode switch
+    installActivityClock()
+    const halt = (): void => {
+      if (!this.flying) return
+      this.flying = false // a flight still loading sees this and never starts
+      this.flight?.stop()
+      setFlying(false)
+    }
     const setFlying = (on: boolean): void => {
       this.flying = on
       go.setAttribute('aria-pressed', String(on))
       speed.hidden = !on
+      if (!on) endPlayer('flythrough', halt)
     }
     go.addEventListener('click', () => {
       if (this.flying) {
-        this.flight?.stop()
+        halt()
         return
       }
+      if (!startPlayer('flythrough', halt).ok) return
       setFlying(true)
       void import('./fly').then(async (m) => {
         if (!this.flying) return
-        this.flight = await m.startFlythrough(map, () => {
+        const flight = await m.startFlythrough(map, () => {
           this.flight = null
           setFlying(false)
         })
+        // stopped (store or button) while the path loaded: land at once
+        if (flight && !this.flying) return flight.stop()
+        this.flight = flight
         if (!this.flight) setFlying(false)
       })
     })
@@ -49,6 +65,13 @@ export class FlythroughControl implements IControl {
       missionClock.setSpeed(sp[(sp.indexOf(missionClock.speed) + 1) % sp.length])
     })
     this.stops.push(
+      effect(() => {
+        const st = controlState('flythrough')
+        go.disabled = !st.enabled
+        go.title = st.title
+        if (st.reason) go.dataset.activityReason = st.reason
+        else delete go.dataset.activityReason
+      }),
       effect(() => {
         const label = t('buttons.speed', { factor: mission.clock.speed.value })
         speed.textContent = label
@@ -61,7 +84,11 @@ export class FlythroughControl implements IControl {
   }
 
   onRemove(): void {
-    this.flight?.stop()
+    if (this.flying) {
+      this.flying = false
+      this.flight?.stop()
+      endPlayer('flythrough')
+    }
     for (const s of this.stops) s()
     this.stops = []
     this.el?.remove()
