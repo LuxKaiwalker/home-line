@@ -20,6 +20,14 @@ export interface EstimateLeg {
   /** tightest margin on the leg (min) and its binding term, null = unknown */
   marginMin: number | null
   binding: string | null
+  /**
+   * I1c: the ordered-route check of this leg, the number the "fails first" line quotes (the engine's rule:
+   * O2 used before the leg counted at the effort cap). Minutes of slack (negative = short), its term, pass.
+   * Absent / null = unknown.
+   */
+  checkMin?: number | null
+  checkBinding?: string | null
+  checkOk?: boolean | null
 }
 
 export type EstimateFeasibility = { feasible: true } | { feasible: false; leg: number; from: string; to: string; term: string; shortMin: number | null }

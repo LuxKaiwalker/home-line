@@ -36,7 +36,7 @@ export function fromBrowser(r: BrowserRouteResult): EstimateResult {
   }
   const f = r.feasibility
   return {
-    legs: r.legs.map((l) => ({ leg: l.leg, from: l.from, to: l.to, walkMin: l.walkMin, o2UsedL: l.o2L, marginMin: l.marginMin, binding: l.binding })),
+    legs: r.legs.map((l) => ({ leg: l.leg, from: l.from, to: l.to, walkMin: l.walkMin, o2UsedL: l.o2L, marginMin: l.marginMin, binding: l.binding, checkMin: l.checkMin, checkBinding: l.checkBinding, checkOk: l.checkOk })),
     totals: { walkMin: r.totals.walkMin, evaMin: r.totals.evaMin, o2UsedL: r.totals.o2UsedL, o2LeftL: r.totals.o2LeftL },
     tightest: r.tightest ? { marginMin: r.tightest.marginMin, binding: r.tightest.binding, leg: null } : null,
     feasibility: f.feasible ? { feasible: true } : { feasible: false, leg: f.leg, from: f.from, to: f.to, term: f.limit, shortMin: f.shortfall_min },
