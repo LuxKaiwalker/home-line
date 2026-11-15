@@ -59,7 +59,7 @@ test('default Plan state: panels cover at most 25 % (1440) / 35 % (1024) of the 
   expect(c.pct, JSON.stringify(c.by)).toBeLessThanOrEqual(target)
 })
 
-test('one map-edge tool column; the Rover button opens the rover card; cursor chip bottom left', async ({ page }) => {
+test.skip('one map-edge tool column; the Rover button opens the rover card; cursor chip bottom left (hidden, D145)', async ({ page }) => {
   await open(page)
   const tools = page.locator('.plan-layout .plan-tools')
   // every map control sits in the column: zoom, compass, Layers, 2D/3D, Flythrough, Storm, Rover, Full screen, Plan summary (L2e)

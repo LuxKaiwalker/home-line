@@ -83,7 +83,8 @@ async function settle(page: Page, volatile: string[]): Promise<void> {
 }
 
 for (const s of SCREENS) {
-  test(s.name, async ({ page }, info) => {
+  // hidden, D145: #/fly redirects to Plan while FLY is hidden
+  ;(s.name === 'shell-fly' ? test.skip : test)(s.name === 'shell-fly' ? `${s.name} (hidden, D145)` : s.name, async ({ page }, info) => {
     const errors: string[] = []
     page.on('pageerror', (e) => errors.push(e.message))
     await page.clock.setFixedTime(new Date(FIXED_NOW))

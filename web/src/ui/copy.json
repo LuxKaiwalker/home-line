@@ -599,7 +599,7 @@
     "storm": "Storm replay on / off",
     "fullscreen": "Full screen on / off",
     "reason": {
-      "mapOnly": "Only on the Plan and Fly maps",
+      "mapOnly": "Only on the Plan map",
       "flyOnly": "Only in Fly",
       "only3d": "Only in the 3D map view",
       "noHistory": "No other selection to go to",
@@ -833,7 +833,7 @@
 
   "activity": {
     "reason": {
-      "jobRunning": "A plan is still computing: its partial result cannot be played. Play, Flythrough and the intro are available when it is ready",
+      "jobRunning": "A plan is still computing: its partial result cannot be played. Play and the intro are available when it is ready",
       "jobBusy": "Another plan is already computing in this view: wait for it, or change the inputs to cancel it",
       "busy": "Another player is running: stop it first"
     },

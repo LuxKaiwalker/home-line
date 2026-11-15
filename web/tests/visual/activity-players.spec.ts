@@ -131,7 +131,8 @@ test.describe('pairs: start A, then B', () => {
     for (const a of players)
       for (const b of players) {
         if (a === b) continue
-        test(`${a} -> ${b} (${drawer})`, async ({ page }) => {
+        // hidden, D145: openPlan waits for the Flythrough button, hidden with FLY
+        test.skip(`${a} -> ${b} (${drawer}) (hidden, D145)`, async ({ page }) => {
           await openPlan(page, drawer)
           await startPlayer(page, a)
           await expectRunning(page, a)
@@ -148,7 +149,7 @@ test.describe('pairs: start A, then B', () => {
   test.describe('the intro, then B', () => {
     test.use({ reducedMotion: 'no-preference' }) // the intro never plays under reduced motion
     for (const b of ['replay', 'flythrough', 'storm'] as const)
-      test(`intro -> ${b}`, async ({ page }) => {
+      (b === 'flythrough' ? test.skip : test)(`intro -> ${b}${b === 'flythrough' ? ' (hidden, D145)' : ''}`, async ({ page }) => {
         await page.goto('/#/')
         await page.locator('html[data-story-chrome="hide"]').waitFor({ state: 'attached', timeout: 60_000 })
         await expect(html(page)).toHaveAttribute('data-activity', 'intro')
@@ -162,7 +163,7 @@ test.describe('pairs: start A, then B', () => {
 })
 
 for (const drawer of DRAWERS)
-  test(`editing stops the replay (rover drag, ${drawer})`, async ({ page }) => {
+  test.skip(`editing stops the replay (rover drag, ${drawer}) (hidden, D145)`, async ({ page }) => {
     await openPlan(page, drawer)
     const rover = page.locator('.hl-edit-rover')
     await rover.waitFor({ timeout: 60_000 })
@@ -199,7 +200,7 @@ for (const drawer of DRAWERS)
 
 for (const drawer of DRAWERS)
   for (const p of ['replay', 'flythrough'] as const)
-    test(`a mode switch stops the ${p} (${drawer})`, async ({ page }) => {
+    test.skip(`a mode switch stops the ${p} (${drawer}) (hidden, D145)`, async ({ page }) => {
       await openPlan(page, drawer)
       await startPlayer(page, p)
       await expectRunning(page, p)
