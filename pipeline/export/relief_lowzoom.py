@@ -3,7 +3,8 @@
 WS16).
 
 Same tiles as ``terrain_tiles.py`` (256 px Terrarium PNG, elevation x
-``scale.elevation_factor``, XYZ with Mars lon/lat passed through, D4) at
+``scale.elevation_factor`` + ``terrain_tiles.vertical_offset_m`` (the same offset as terrain/),
+XYZ with Mars lon/lat passed through, D4) at
 ``config/design.yaml terrain_tiles.lowzoom_intro`` (z6-10), no focus area, budget
 ``lowzoom_budget_mb``, height step capped at ``height_step_cap_m.low`` m of true elevation.
 
@@ -23,7 +24,7 @@ striped and uncompressed, 11.4 GB, so a 200 m window reads whole 213 kB rows).
 
 Usage: ``python -m pipeline.export.relief_lowzoom`` writes data/interim/export/terrain_low/
 (copied to web/public/data/terrain_low/ by ``make web``) and records ``terrain_low_tiles.factor``,
-``.source_hash``, ``.total_bytes`` in the manifest.
+``.vertical_offset_m``, ``.source_hash``, ``.total_bytes`` in the manifest.
 """
 
 from __future__ import annotations
@@ -72,6 +73,8 @@ def load_config() -> dict:
             "budget_bytes": int(round(float(tt["lowzoom_budget_mb"]) * T.MIB)),
             # coarsest height step, m of TRUE elevation (assumed: true in design.yaml)
             "max_step_true_m": float(tt["height_step_cap_m"]["low"]),
+            # same offset as terrain/ (P2c), so the intro descent hands over without a jump
+            "vertical_offset_m": float(tt["vertical_offset_m"]),
             "sources": T.band_paths("ctx_20m", "mola_hrsc_200m")}
 
 
