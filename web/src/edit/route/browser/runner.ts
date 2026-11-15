@@ -203,6 +203,10 @@ export function startPlanningRunner(store: PlanningStore, pads: PadService, opts
     workerMs: number | null
     cacheHits: number
     partial: Map<number, WorkerLeg>
+    /** published 'ready' (a refined leg recomputes only then: before, legs may still be missing) */
+    ready: boolean
+    /** the edit's time to 'ready' (kept for the recomputes after refined legs) */
+    totalMs?: number
   } | null = null
 
   const emit = (r: RouteResults) => {
@@ -243,13 +247,16 @@ export function startPlanningRunner(store: PlanningStore, pads: PadService, opts
     return d.storm === route.storm ? d : { ...d, storm: route.storm }
   }
 
-  function finish(c: NonNullable<typeof cur>): void {
+  /** `refined`: a recompute after an idle-refined leg (not an edit: no onTiming) */
+  function finish(c: NonNullable<typeof cur>, refined = false): void {
     const t1 = now()
     const result = computeBrowserRoute(c.d, c.d.fieldsPad, toRouteStops(c.route.stops), { dwellMin: stopDwell(c.route.stops) })
     const computeMs = now() - t1
     last = { result, data: c.d }
-    const totalMs = now() - c.t0
-    opts.onTiming?.({ seq: c.seq, totalMs, workerMs: c.workerMs, computeMs, cacheHits: c.cacheHits, legs: c.cells.length - 1 })
+    const totalMs = c.totalMs ?? now() - c.t0
+    c.totalMs = totalMs
+    c.ready = true
+    if (!refined) opts.onTiming?.({ seq: c.seq, totalMs, workerMs: c.workerMs, computeMs, cacheHits: c.cacheHits, legs: c.cells.length - 1 })
     emit(toRouteResults(result, { seq: c.seq, padId: c.padId, stops: c.route.stops, modes: (a, b) => c.slot.modes.get(k(a, b)), timingMs: totalMs }))
   }
 
@@ -305,7 +312,7 @@ export function startPlanningRunner(store: PlanningStore, pads: PadService, opts
     const pairs = legPairs(padCell, rc.cells.map((x) => ({ cell: x ?? -1 })))
     // pairs with a missing end are never routed (compute.ts caches them as null itself)
     const missing = pairs.filter(([a, b]) => a >= 0 && b >= 0 && !d.legCache.has(k(a, b)))
-    cur = { seq: my, padId, route, d, slot, cells, t0, workerMs: null, cacheHits: pairs.length - missing.length, partial: new Map() }
+    cur = { seq: my, padId, route, d, slot, cells, t0, workerMs: null, cacheHits: pairs.length - missing.length, partial: new Map(), ready: false }
     if (!missing.length) return finish(cur)
     sendEnv(padId, slot, d, padCell)
     port.post({ type: 'route', seq: my, padId, cells, mode, weight, legCapMs, refine: true })
@@ -324,9 +331,10 @@ export function startPlanningRunner(store: PlanningStore, pads: PadService, opts
       void s.data.then((d) => {
         d.legCache.set(k(m.leg.from, m.leg.to), m.leg.leg)
         s.modes.set(k(m.leg.from, m.leg.to), { mode: 'exact', refined: true, capped: false })
-        if (!cur || cur.padId !== m.padId || cur.seq !== seq || !last) return
+        // only a route already published 'ready': one still waiting on the worker gets the leg from the cache
+        if (!cur || cur.padId !== m.padId || cur.seq !== seq || !cur.ready || !last) return
         const idx = cur.cells.findIndex((c, i) => i < cur!.cells.length - 1 && c === m.leg.from && cur!.cells[i + 1] === m.leg.to)
-        if (idx >= 0) finish(cur)
+        if (idx >= 0) finish(cur, true)
       })
       return
     }

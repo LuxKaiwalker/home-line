@@ -101,6 +101,49 @@ describe.skipIf(!HAS_DATA)('planning runner on the official pad (real data, nom_
     expect(runner!.lastResult()?.result.totals.evaMin).toBe(core.totals.evaMin)
   }, 60_000)
 
+  it('fast mode (default): labelled fast, each leg within w x the exact one; the idle refine converges to the exact numbers and clears fastRoute; planning StopIds throughout', async () => {
+    const seen: RouteResults[] = []
+    // no per-leg cap here: the bound under test is w (the cap is a timing matter, per-edit test below)
+    start({ publish: (r) => seen.push(r), legCapMs: 60_000 })
+    await runner!.settled()
+    const w1 = freePointNear(d, d.fieldsPad.lon, d.fieldsPad.lat, 200, 0)
+    store.addStop({ kind: 'station', station: 'S4' })
+    store.addStop({ kind: 'point', ...w1, stopMin: 10 })
+    store.addStop({ kind: 'station', station: 'S1', stopMin: 20 })
+    const r = await runner!.settled()
+    const stops = store.state.peek().route.stops
+    const core = computeBrowserRoute({ ...fresh(d), storm: store.state.peek().route.storm }, d.fieldsPad, toRouteStops(stops), { dwellMin: stopDwell(stops) })
+    expect(r.status).toBe('ready')
+    expect(r.fastRoute).toBe(true)
+    r.legs.slice(0, 3).forEach((l, i) => {
+      expect(l).toMatchObject({ mode: 'fast', refined: false, feasible: true })
+      expect(l.minutes!).toBeGreaterThanOrEqual(core.legs[i].walkMin! - 1e-9)
+      expect(l.minutes!).toBeLessThanOrEqual(1.6 * core.legs[i].walkMin! + 1e-9)
+    })
+    expect(r.legs[3]).toMatchObject({ mode: 'exact', minutes: core.legs[3].walkMin }) // the way home: pointer field
+    // the idle refine (worker, sliced) replaces / confirms the legs; the route is recomputed each time
+    const t0 = Date.now()
+    while (!seen.some((x) => x.seq === r.seq && x.status === 'ready' && !x.fastRoute)) {
+      expect(Date.now() - t0).toBeLessThan(50_000)
+      await new Promise((res) => setTimeout(res, 20))
+    }
+    const done = seen.find((x) => x.seq === r.seq && x.status === 'ready' && !x.fastRoute)!
+    expect(done.legs.every((l) => l.mode === 'exact')).toBe(true)
+    expect(done.legs.slice(0, 3).every((l) => l.refined)).toBe(true)
+    const unflag = (x: RouteResults) => ({ ...strip(x), legs: x.legs.map((l) => ({ ...l, refined: false })) })
+    expect(unflag(done)).toEqual(unflag(toRouteResults(core, { seq: 0, padId: 'official', stops, modes: () => ({ mode: 'exact', refined: false, capped: false }) })))
+    expect(done.totalMinutes).toBe(core.totals.evaMin)
+    expect(done.marginMin).toBe(core.tightest!.marginMin)
+    // U2 / R4 match legs by StopId: every publish (partial, ready, refined) uses the planning store's ids
+    const ids = [PAD_STOP_ID, ...stops.map((s) => s.id), PAD_STOP_ID]
+    expect(seen.filter((y) => y.seq === r.seq && y.status !== 'computing').every((y) => y.legs.length > 0)).toBe(true)
+    for (const x of seen.filter((y) => y.seq === r.seq)) {
+      for (const l of x.legs) expect([l.fromStopId, l.toStopId]).toEqual([ids[l.index], ids[l.index + 1]])
+    }
+    expect(seen.some((x) => x.seq === r.seq && x.status === 'partial')).toBe(true)
+    expect(stops.every((s) => s.id !== PAD_STOP_ID)).toBe(true)
+  }, 60_000)
+
   it('stale results are dropped: only the newest edit lands as ready; older seqs never publish after it', async () => {
     const seen: RouteResults[] = []
     start({ publish: (r) => seen.push(r) })
@@ -149,10 +192,18 @@ describe.skipIf(!HAS_DATA)('planning runner on the official pad (real data, nom_
     expect(r).toMatchObject({ status: 'error', error: 'offline', legs: [] })
   }, 60_000)
 
-  it('per-edit timing (J1h <= 200 ms): 24 edits, worker + core recompute', async () => {
+  it('per-edit timing (J1h <= 200 ms): 23 edits, worker + core recompute; first feedback p95 <= 200 ms (fast mode, sliced idle refine in between)', async () => {
     const timings: { seq: number; totalMs: number; workerMs: number | null; computeMs: number; cacheHits: number; legs: number }[] = []
-    start({ onTiming: (t) => timings.push(t) })
+    // first feedback of an edit = its first publish with legs (partial or ready) after the edit
+    const firstAt = new Map<number, number>()
+    start({
+      onTiming: (t) => timings.push(t),
+      publish: (r) => {
+        if ((r.status === 'partial' || r.status === 'ready') && r.legs.length && !firstAt.has(r.seq)) firstAt.set(r.seq, performance.now())
+      },
+    })
     await runner!.settled()
+    const editAt = new Map<number, number>()
     const p = d.fieldsPad
     const fp = (e: number, n: number) => freePointNear(d, p.lon, p.lat, e, n)
     const edits: (() => void)[] = [
@@ -165,10 +216,18 @@ describe.skipIf(!HAS_DATA)('planning runner on the official pad (real data, nom_
     edits.push(() => void store.reorderStops(0, 5), () => void store.reorderStops(2, 1), () => void store.removeStop(store.state.peek().route.stops[3].id))
     edits.push(() => void store.updateStop(pt(), { stopMin: 15 }), () => void store.setStorm(!store.state.peek().route.storm), () => void store.undo(), () => void store.undo())
     for (const e of edits) {
+      const t0 = performance.now()
       e()
-      await runner!.settled()
+      const r = await runner!.settled()
+      editAt.set(r.seq, t0)
     }
     expect(timings.length).toBe(edits.length)
+    const first = [...editAt].map(([q, t0]) => firstAt.get(q)! - t0)
+    const pct = (xs: number[], p: number) => [...xs].sort((a, b) => a - b)[Math.min(xs.length - 1, Math.ceil((p / 100) * xs.length) - 1)]
+    const fmt = (xs: number[]) => `p50 ${pct(xs, 50).toFixed(1)} / p95 ${pct(xs, 95).toFixed(1)} / max ${Math.max(...xs).toFixed(1)} ms`
+    process.stdout.write(`\nperf: [R1b runner] first feedback ${fmt(first)}; final totals ${fmt(timings.map((t) => t.totalMs))}\n`)
+    expect(first.every((x) => Number.isFinite(x) && x >= 0)).toBe(true)
+    expect(pct(first, 95)).toBeLessThanOrEqual(200)
     const tot = timings.map((t) => t.totalMs).sort((a, b) => a - b)
     const med = tot[Math.floor(tot.length / 2)]
     const over = timings.filter((t) => t.totalMs > 200)
@@ -204,7 +263,8 @@ describe.skipIf(!HAS_DATA)('planning runner on picker pad rank2 (real data, pad 
     // and the runner on that pad
     const store = createPlanningStore()
     store.setPad('rank2')
-    runner = startPlanningRunner(store, createMockPadService(), { connect: inProcess(), loadData: async (id) => (id === 'rank2' ? pd : fresh(base)) })
+    // exact mode: the engine's numbers bit for bit (the fast mode is bounded and converges: test above)
+    runner = startPlanningRunner(store, createMockPadService(), { connect: inProcess(), mode: 'exact', loadData: async (id) => (id === 'rank2' ? pd : fresh(base)) })
     for (const s of ['S4', 'S1', 'S6', 'S7']) store.addStop({ kind: 'station', station: s })
     const r = await runner.settled()
     expect(r).toMatchObject({ padId: 'rank2', status: 'ready', firstInfeasibleLeg: null })

@@ -1,36 +1,49 @@
 // R1 (Plan port): the route worker of the one route core (worker.types.ts contract). Moved from the
-// Mission Planer's J1h worker (mission/legsWorker.ts + legsRoute.ts): the same LegRouter / grade model
-// (physio.ts gradeModel on the scenario's Params), now behind the leg search (legSearch.ts, R2's API)
-// with per-request sequencing, partial answers, a leg cache per pad and an idle refine pass.
+// Mission Planer's J1h worker (mission/legsWorker.ts + legsRoute.ts): the same grade model
+// (physio.ts gradeModel on the scenario's Params), now behind R2's leg search (search.ts via
+// legSearch.ts) with per-request sequencing, partial answers, a leg cache per pad and an idle refine.
 //
 // Per 'route' request: legs already cached answer at once (one 'legs' partial), the rest are routed
-// shortest first, one 'legs' partial per finished leg, yielding between legs so a newer request or a
-// 'cancel' stops the old one; then 'timing' and 'legs' final (every leg; timing first so the main
-// thread has the worker's time when it publishes). When idle, legs that are not
-// exact are refined with exact A* and 'refined' is posted when one got faster. A cell < 0 (no cell:
-// the stop could not be placed) gives a null leg that is never routed. The handler is free of any
-// Worker API (tested directly in worker.test.ts); the bottom of this file wires it to `self`.
-import { gradeModel } from '../map/physio'
-import type { Leg } from '../map/router'
-import { createLegSearch, isBetterLeg, type LegSearch } from './legSearch'
+// shortest first (mode 'fast' = weighted A*, capped per leg; 'exact' = w 1 = LegRouter), one 'legs'
+// partial per finished leg, yielding between legs so a newer request or a 'cancel' stops the old one;
+// then 'timing' and 'legs' final (every leg; timing first so the main thread has the worker's time
+// when it publishes). When idle, legs that are not exact are refined with exact A* in slices
+// (PORT R1b: beginRefine(...).step(REFINE_SLICE_MS) on a separate refine searcher), so a new edit is
+// read between two slices and never waits more than one slice; a refine interrupted by an edit
+// resumes where it stopped when the same leg is still in the route. A finished refine posts
+// 'refined': the exact leg when isBetterLeg says it is faster (savedS > 0), else the current leg,
+// now confirmed the fastest (savedS 0, mode 'exact'). A cell < 0 (no cell: the stop could not be
+// placed) gives a null leg that is never routed. The handler is free of any Worker API (tested
+// directly in worker.test.ts); the bottom of this file wires it to `self`.
+import { gradeModel, type GradeModel } from '../map/physio'
+import type { Leg, RouteGrid } from '../map/router'
+import { createLegSearch, isBetterLeg, savedSeconds, type LegSearch, type RefineJob, type RefineSearch } from './legSearch'
+import { LegSearch as SearchImpl } from './search'
 import { LEG_CAP_MS, type RouteWorkerRequest, type RouteWorkerResponse, type SearchMode, type WorkerLeg, type WorkerPadEnv } from './worker.types'
 
 /** Pads kept in the worker (pads/types.ts PAD_CACHE_SIZE). */
 export const WORKER_PAD_CACHE = 3
-/** Cap of one idle refine, ms: the worker is single-threaded, so a refine delays the next edit by at
- *  most this much (an uncapped exact leg of 3 km takes longer: D137). A refine over the cap is dropped. */
-export const REFINE_CAP_MS = 250
+/** One idle refine slice, ms: the worker is single-threaded, so a new edit waits at most about this
+ *  long (search.ts checks the clock every 512 expansions). */
+export const REFINE_SLICE_MS = 20
+/** Busy-time cap of one idle refine, ms (slices only; the user is not waiting on it). Over it the leg
+ *  stays fast ("may not be the fastest") and is not retried. */
+export const REFINE_CAP_MS = 5000
 
 interface CachedLeg {
   leg: Leg | null
   mode: SearchMode
   capped: boolean
+  /** the leg LegRouter gives (w 1, finished): serves exact requests */
   exact: boolean
+  /** the idle refine has run on it (finished or capped): not queued again */
+  refineDone?: boolean
 }
 
 interface PadSlot {
   env: WorkerPadEnv
   search: LegSearch
+  model: GradeModel
   legs: Map<string, CachedLeg>
 }
 
@@ -39,7 +52,12 @@ export interface RouteWorkerOptions {
   defer?: (fn: () => void) => void
   now?: () => number
   /** the leg search per pad (default legSearch.ts createLegSearch; tests inject a fake fast search) */
-  createSearch?: typeof createLegSearch
+  createSearch?: (grid: RouteGrid, model: GradeModel) => LegSearch
+  /** the sliced refine searcher (default: search.ts LegSearch with its own buffers, sharing the fast
+   *  searcher's move mask; one at a time, for the pad being refined) */
+  createRefine?: (grid: RouteGrid, model: GradeModel) => RefineSearch
+  /** clock of the refine slices (default `now`) */
+  refineNow?: () => number
 }
 
 export interface RouteWorkerHandler {
@@ -51,18 +69,26 @@ export interface RouteWorkerHandler {
 const key = (a: number, b: number) => `${a}-${b}`
 const defaultNow = (): number => (typeof performance !== 'undefined' ? performance.now() : Date.now())
 const defaultDefer = (fn: () => void): void => void setTimeout(fn, 0)
+const sameLeg = (a: Leg | null, b: Leg | null): boolean =>
+  a === b || (a !== null && b !== null && a.timeS === b.timeS && a.o2L === b.o2L && a.cells.length === b.cells.length && a.cells.every((x, i) => x === b.cells[i]))
 
 export function createRouteWorkerHandler(post: (m: RouteWorkerResponse) => void, opts: RouteWorkerOptions = {}): RouteWorkerHandler {
   const defer = opts.defer ?? defaultDefer
   const now = opts.now ?? defaultNow
+  const refineNow = opts.refineNow ?? now
   const slots = new Map<string, PadSlot>() // insertion order = LRU (oldest first)
   /** the newest request seen; requests (and refines) older than it stop */
   let latest = 0
   let cancelledUpTo = 0
   const live = (seq: number) => seq >= latest && seq > cancelledUpTo
-  let refineQueue: { seq: number; padId: string; index: number; from: number; to: number }[] = []
-  let refining = false
-  const abort = { aborted: false }
+  type RefineItem = { seq: number; padId: string; index: number; from: number; to: number }
+  let refineQueue: RefineItem[] = []
+  let refineScheduled = false
+  /** the refine in progress (kept across edits: resumed when its leg is queued again) */
+  let active: (RefineItem & { job: RefineJob }) | null = null
+  /** the one refine searcher (~40 MB on the real grid): for one pad at a time */
+  let refiner: { padId: string; grid: RouteGrid; search: RefineSearch } | null = null
+  const createRefine = opts.createRefine ?? ((g: RouteGrid, m: GradeModel): RefineSearch => new SearchImpl(g, m, createLegSearch(g, m)))
 
   function touch(padId: string): PadSlot | undefined {
     const s = slots.get(padId)
@@ -75,8 +101,7 @@ export function createRouteWorkerHandler(post: (m: RouteWorkerResponse) => void,
 
   function route(msg: Extract<RouteWorkerRequest, { type: 'route' }>): void {
     latest = Math.max(latest, msg.seq)
-    abort.aborted = true // stop a running refine (checked between expansions by R2's search)
-    refineQueue = []
+    refineQueue = [] // a refine slice of an older seq stops (the active job is kept for a resume)
     const slot = touch(msg.padId)
     if (!slot) {
       post({ type: 'error', seq: msg.seq, message: `route worker: no environment for pad ${msg.padId}` })
@@ -84,7 +109,9 @@ export function createRouteWorkerHandler(post: (m: RouteWorkerResponse) => void,
     }
     const t0 = now()
     const { seq, padId, cells, mode } = msg
-    const capMs = msg.legCapMs > 0 ? msg.legCapMs : LEG_CAP_MS
+    // exact = the parity mode: LegRouter has no cap, so neither has it (a capped leg would finish
+    // greedily and break parity on a loaded machine); the cap is the fast mode's
+    const capMs = mode === 'exact' ? Infinity : msg.legCapMs > 0 ? msg.legCapMs : LEG_CAP_MS
     const weight = mode === 'exact' ? 1 : Math.max(1, msg.weight)
     const n = Math.max(0, cells.length - 1)
     const out: (WorkerLeg | undefined)[] = new Array(n)
@@ -124,8 +151,12 @@ export function createRouteWorkerHandler(post: (m: RouteWorkerResponse) => void,
       if (msg.refine !== false) {
         for (const l of out as WorkerLeg[]) {
           const c = l.from >= 0 && l.to >= 0 ? slot.legs.get(key(l.from, l.to)) : undefined
-          if (c && !c.exact) refineQueue.push({ seq, padId, index: l.index, from: l.from, to: l.to })
+          if (c && !c.exact && !c.refineDone) refineQueue.push({ seq, padId, index: l.index, from: l.from, to: l.to })
         }
+        // the leg refined when the edit came in goes first: it resumes where it stopped
+        const a = active
+        const ia = a ? refineQueue.findIndex((j) => j.padId === a.padId && j.from === a.from && j.to === a.to) : -1
+        if (ia > 0) refineQueue.unshift(...refineQueue.splice(ia, 1))
         if (refineQueue.length) scheduleRefine()
       }
     }
@@ -153,30 +184,71 @@ export function createRouteWorkerHandler(post: (m: RouteWorkerResponse) => void,
   }
 
   function scheduleRefine(): void {
-    if (refining) return
-    refining = true
-    defer(refineOne)
+    if (refineScheduled) return
+    refineScheduled = true
+    defer(refineSlice)
   }
 
-  function refineOne(): void {
-    refining = false
-    const job = refineQueue.shift()
-    if (!job) return
-    if (!live(job.seq)) return
-    const slot = slots.get(job.padId)
-    const c = slot?.legs.get(key(job.from, job.to))
-    if (slot && c && !c.exact) {
-      abort.aborted = false
-      const r = slot.search.refineLeg(job.from, job.to, { capMs: REFINE_CAP_MS, signal: abort })
-      if (!r.aborted && r.exact) {
-        const better = isBetterLeg(c.leg, r)
-        const saved = c.leg && r.leg ? c.leg.timeS - r.cost : 0
-        // exact now either way (the cached leg was already the fastest when not better)
-        slot.legs.set(key(job.from, job.to), better ? { leg: r.leg, mode: 'exact', capped: false, exact: true } : { ...c, exact: true })
-        if (better && live(job.seq)) post({ type: 'refined', seq: job.seq, padId: job.padId, leg: { index: job.index, from: job.from, to: job.to, leg: r.leg, mode: 'exact', capped: false }, savedS: saved })
+  function refinerOf(padId: string, slot: PadSlot): RefineSearch {
+    if (!refiner || refiner.padId !== padId || refiner.grid !== slot.env.grid) {
+      refiner = null // free the old pad's buffers before taking new ones
+      refiner = { padId, grid: slot.env.grid, search: createRefine(slot.env.grid, slot.model) }
+    }
+    return refiner.search
+  }
+
+  /** The next refine to run: the active one when it is next in the queue (resume), else a new job. */
+  function nextJob(): boolean {
+    while (refineQueue.length) {
+      const j = refineQueue.shift()!
+      const slot = slots.get(j.padId)
+      const c = slot?.legs.get(key(j.from, j.to))
+      if (!live(j.seq) || !slot || !c || c.exact || c.refineDone) continue
+      if (active && active.padId === j.padId && active.from === j.from && active.to === j.to && !active.job.done) {
+        active = { ...j, job: active.job }
+        return true
+      }
+      active = null
+      active = { ...j, job: refinerOf(j.padId, slot).beginRefine(j.from, j.to, { capMs: REFINE_CAP_MS, now: refineNow }) }
+      return true
+    }
+    return false
+  }
+
+  /** One slice of the idle refine (at most about REFINE_SLICE_MS), then yield. */
+  function refineSlice(): void {
+    refineScheduled = false
+    // an edit came in (active of an older seq): wait for its final, which queues the legs again
+    if ((!active || !live(active.seq)) && !nextJob()) return
+    const a = active!
+    const r = a.job.step(REFINE_SLICE_MS)
+    if (!r) return scheduleRefine()
+    active = null
+    const slot = slots.get(a.padId)
+    const c = slot?.legs.get(key(a.from, a.to))
+    if (slot && c && !c.exact && !r.aborted) {
+      if (!r.exact) {
+        // refine cap hit: the leg stays fast ("may not be the fastest"), not retried
+        slot.legs.set(key(a.from, a.to), { ...c, refineDone: true })
+      } else if (isBetterLeg(c.leg, r)) {
+        slot.legs.set(key(a.from, a.to), { leg: r.leg, mode: 'exact', capped: false, exact: true, refineDone: true })
+        if (live(a.seq)) post({ type: 'refined', seq: a.seq, padId: a.padId, leg: { index: a.index, from: a.from, to: a.to, leg: r.leg, mode: 'exact', capped: false }, savedS: savedSeconds(c.leg, r) })
+      } else {
+        // not faster: the current leg is already a fastest one; it is kept and confirmed. It serves
+        // exact requests only when it is LegRouter's very leg (a tie on another path does not).
+        const same = sameLeg(c.leg, r.leg)
+        slot.legs.set(key(a.from, a.to), { ...c, mode: 'exact', capped: false, exact: same, refineDone: true })
+        if (live(a.seq)) post({ type: 'refined', seq: a.seq, padId: a.padId, leg: { index: a.index, from: a.from, to: a.to, leg: c.leg, mode: 'exact', capped: false }, savedS: 0 })
       }
     }
     if (refineQueue.length) scheduleRefine()
+  }
+
+  function forget(padId: string): void {
+    slots.delete(padId)
+    refineQueue = refineQueue.filter((j) => j.padId !== padId)
+    if (active?.padId === padId) active = null
+    if (refiner?.padId === padId) refiner = null
   }
 
   function handle(msg: RouteWorkerRequest): void {
@@ -186,20 +258,20 @@ export function createRouteWorkerHandler(post: (m: RouteWorkerResponse) => void,
           const old = slots.get(msg.env.padId)
           slots.delete(msg.env.padId)
           const same = old && old.env.scenario === msg.env.scenario && old.env.grid.width === msg.env.grid.width && old.env.grid.height === msg.env.grid.height
-          slots.set(msg.env.padId, { env: msg.env, search: (opts.createSearch ?? createLegSearch)(msg.env.grid, gradeModel(msg.env.params)), legs: same ? old.legs : new Map() })
-          while (slots.size > WORKER_PAD_CACHE) slots.delete(slots.keys().next().value as string)
+          const model = gradeModel(msg.env.params)
+          slots.set(msg.env.padId, { env: msg.env, model, search: (opts.createSearch ?? createLegSearch)(msg.env.grid, model), legs: same ? old.legs : new Map() })
+          while (slots.size > WORKER_PAD_CACHE) forget(slots.keys().next().value as string)
+          if (refiner && (!slots.has(refiner.padId) || slots.get(refiner.padId)!.env.grid !== refiner.grid)) refiner = null
           return
         }
         case 'route':
           return route(msg)
         case 'cancel':
           cancelledUpTo = Math.max(cancelledUpTo, msg.seq)
-          abort.aborted = true
           refineQueue = refineQueue.filter((j) => j.seq > msg.seq)
           return
         case 'drop':
-          slots.delete(msg.padId)
-          refineQueue = refineQueue.filter((j) => j.padId !== msg.padId)
+          forget(msg.padId)
           return
       }
     } catch (e) {
