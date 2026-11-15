@@ -10,7 +10,7 @@ import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { render, type VNode } from 'preact'
 import { act } from 'preact/test-utils'
-import { afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createLoader, type TextFetcher } from '../../data/loader'
 import type { Manifest } from '../../data/types'
 import type { FieldSample } from '../../map/field'
@@ -23,7 +23,7 @@ import { hostIn, openSidebar, shell, sidebarContent } from '../shell/store'
 import { all, byClass, byTag, hasClass, installDom, type FakeNode } from '../testing/dom'
 import { SelectionCard } from './cards'
 import { ensureFor, loadCardData, type CardData, type CellLookup } from './data'
-import { cardData, handleSelectionShortcut, installSelectionSidebar, SelectionPanel } from './sidebar'
+import { cardData, handleSelectionShortcut, installSelectionSidebar, RouteSummaryPanel, SelectionPanel } from './sidebar'
 
 const REAL = resolve(__dirname, '../../../public/data')
 const HAVE = existsSync(resolve(REAL, 'manifest.json'))
@@ -303,6 +303,21 @@ describe.skipIf(!HAVE)('selection cards (real data)', () => {
     stop()
     expect(shell.selectionCards.peek()).toBe(false)
     expect(listeners.has('hl:shortcut')).toBe(false)
+  })
+
+  it('RouteSummaryPanel (L2e Plan summary): the route summary, unchanged, with the official "Send to simulator" slot', async () => {
+    vi.stubEnv('VITE_SIM_EXPORT', '1')
+    vi.stubGlobal('fetch', vi.fn(async () => new Response('', { status: 404 })))
+    try {
+      const n = mount(<RouteSummaryPanel L={L} cell={cell} />)
+      await act(async () => void (await cardData(L, cell)))
+      expect(text(n)).toContain(t('cards.routeSummary.title'))
+      expect(byClass(n, 'hl-selection')[0].getAttribute('data-selected')).toBe('summary')
+      expect(all(n, (x) => x.getAttribute('data-slot') === 'sim')).toHaveLength(1)
+    } finally {
+      vi.unstubAllEnvs()
+      vi.unstubAllGlobals()
+    }
   })
 
   it('installSelectionSidebar (L2e): without the Plan map, a selection opens the centred pop-up card; × clears it; the map hosting it hides it', async () => {

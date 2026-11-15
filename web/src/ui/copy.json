@@ -229,7 +229,9 @@
       "totals": "Totals",
       "feasibility": "Feasibility",
       "budgets": "Budgets",
-      "noRoute": "No planned route for this scenario: no station is reachable on foot"
+      "noRoute": "No planned route for this scenario: no station is reachable on foot",
+      "open": "Plan summary",
+      "openTip": "The planned route at a glance: totals, budgets, stations in order and Send to simulator"
     }
   },
 

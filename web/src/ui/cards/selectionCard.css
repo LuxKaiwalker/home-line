@@ -7,6 +7,12 @@
 }
 .sel-card .hl-lay-card__body { min-height: 0; overflow: auto; }
 
+/* the Plan summary (no object to point at): centred on the map */
+.sel-card--mapcentre.hl-lay-card { left: 50% !important; top: 50% !important; transform: translate(-50%, -50%); max-height: calc(100% - var(--space-4)); }
+/* the Plan map's own tool column (right edge, clear of the MapLibre corner controls): the Plan summary opener */
+.plan-tools { position: absolute; top: 50%; right: var(--space-2); transform: translateY(-50%); display: flex; flex-direction: column; gap: var(--space-1); }
+.plan-tools .hl-iconbtn { background: var(--color-card); border: 1px solid var(--color-card-border); }
+
 /* without the Plan map (Report, Evidence, Fly): a small centred pop-up over the page */
 .sel-pop { position: fixed; inset: 0; z-index: 35; pointer-events: none; }
 .sel-pop > * { pointer-events: auto; }

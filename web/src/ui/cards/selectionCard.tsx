@@ -239,6 +239,23 @@ export function wireSelectionCards(o: WireOptions): () => void {
 
 // ---------------------------------------------------------------- body
 
+/** L2e: the Plan summary card's body (RouteSummaryPanel, lazy cards chunk); focus moves into the card. */
+export function SummaryCardBody({ L }: { L: Loader }) {
+  const [P, setP] = useState<((p: { L: Loader }) => ComponentChildren) | null>(null)
+  const probe = useRef<HTMLDivElement>(null)
+  useEffect(() => focusCard(probe.current), [])
+  useEffect(() => {
+    let live = true
+    void import('./sidebar').then((m) => live && setP(() => m.RouteSummaryPanel as (p: { L: Loader }) => ComponentChildren))
+    return () => void (live = false)
+  }, [])
+  return (
+    <div class="sel-card__content" ref={probe}>
+      {P ? <P L={L} /> : <CardSkeleton />}
+    </div>
+  )
+}
+
 type Panel = (p: { L: Loader; cell?: CellLookup }) => ComponentChildren
 
 /** The sidebar's SelectionPanel (lazy cards chunk) and, for a station with a page, "Open station". */

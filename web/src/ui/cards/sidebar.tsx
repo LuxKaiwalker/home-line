@@ -15,7 +15,7 @@ import { CardSkeleton, IconButton } from '../components'
 import { MarkerCard } from '../layout'
 import { shell } from '../shell/store'
 import type { ShortcutAction } from '../shell/keys'
-import { SelectionCard } from './cards'
+import { RouteSummaryCard, SelectionCard } from './cards'
 import { ensureFor, isReady, loadCardData, type CardData, type CellLookup } from './data'
 import { cardIdFor, cardTitle, SelectionCardBody, sourcesOf, wireSelectionCards } from './selectionCard'
 
@@ -80,6 +80,26 @@ export function SelectionPanel({ L, cell }: { L: Loader; cell?: CellLookup }) {
       ) : (
         <CardSkeleton />
       )}
+    </div>
+  )
+}
+
+/** L2e: the route summary (the sidebar's old "nothing selected" view, with the official plan's "Send to
+ *  simulator" slot), unchanged, for the Plan summary card. */
+export function RouteSummaryPanel({ L, cell }: { L: Loader; cell?: CellLookup }) {
+  const [d, setD] = useState<CardData | null>(null)
+  const [err, setErr] = useState<unknown>(null)
+  useEffect(() => {
+    let live = true
+    cardData(L, cell).then(
+      (x) => live && setD(x),
+      (e) => live && setErr(e),
+    )
+    return () => void (live = false)
+  }, [L])
+  return (
+    <div class="hl-selection" data-selected="summary">
+      {err ? <p class="hl-cardx__muted">{t('states.error.generic', { what: t('cards.routeSummary.title') })}</p> : d ? <RouteSummaryCard d={d} /> : <CardSkeleton />}
     </div>
   )
 }

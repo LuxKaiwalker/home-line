@@ -100,6 +100,32 @@ test('× closes the card and returns focus; a new selection opens one card again
   await expect(page.locator('.hl-shell')).toHaveAttribute('data-sidebar', 'closed')
 })
 
+test('the Plan summary opener shows the route summary (with the simulator slot) in the selection card', async ({ page }) => {
+  await openPlan(page)
+  const opener = page.locator('[data-testid="plan-summary"]')
+  await expect(opener).toBeVisible()
+  await expect(opener).toHaveAttribute('aria-expanded', 'false')
+  await opener.click()
+  const card = page.locator('#hl-lay-selection')
+  await card.locator('.hl-selection[data-selected="summary"] .hl-card').first().waitFor({ timeout: 30_000 })
+  await expect(opener).toHaveAttribute('aria-expanded', 'true')
+  await expect(page.locator('.sel-card')).toHaveCount(1)
+  expect(await focusInCard(page)).toBe(true)
+  await expect(page.locator('.hl-shell')).toHaveAttribute('data-sidebar', 'closed')
+  // "Send to simulator" for the official plan renders there whenever the build turns the export on
+  const sim = await page.evaluate(() => document.querySelectorAll('[data-slot="sim"]').length)
+  expect(sim).toBeLessThanOrEqual(1)
+  if (sim) await expect(card.locator('[data-slot="sim"]')).toHaveCount(1)
+  // Esc closes it; focus goes back to the opener
+  await page.keyboard.press('Escape')
+  await expect(card).toHaveCount(0)
+  expect(await page.evaluate(() => document.activeElement?.getAttribute('data-testid'))).toBe('plan-summary')
+  // × closes it too
+  await opener.click()
+  await card.locator('.hl-lay-close').click()
+  await expect(card).toHaveCount(0)
+})
+
 test('?legacy=1 keeps the old layout: its side panel, no pop-up card', async ({ page }) => {
   await page.goto('/?intro=0&legacy=1&view=2d#/')
   await expect(page.locator('.console-panel')).toBeVisible({ timeout: 60_000 })

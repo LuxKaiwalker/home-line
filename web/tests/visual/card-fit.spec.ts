@@ -7,7 +7,7 @@
  * two-column grid.
  * For every card kind reachable from search with real data (official pad, the four parking options,
  * route stations, a station, a scored site, every landmark, a terrain cell by coordinates) and the
- * (L2e: no route summary any more: nothing selected = no card), every readout must:
+ * route summary (L2e: the Plan summary opener), every readout must:
  *   - not overflow (scrollWidth ≤ clientWidth on the readout and its value; the card does not overflow);
  *   - keep every glyph of its label and value inside its own box (no clipping, no ellipsis);
  *   - never break inside a number (a value may wrap between number and unit, or after a range dash).
@@ -109,9 +109,15 @@ async function checkAllCards(page: Page): Promise<void> {
     total += readouts
     all.push(...problems.map((p) => ({ ...p, card: `${q}: ${p.card}` })))
   }
-  // L2e: nothing selected = no card (the route summary was the sidebar's empty state)
+  // L2e: nothing selected = no card; the route summary opens from the Plan summary opener
   await page.keyboard.press('Escape')
   await expect(page.locator('.sel-card')).toHaveCount(0)
+  await page.locator('[data-testid="plan-summary"]').click()
+  await page.locator('.hl-selection[data-selected="summary"] .hl-card').first().waitFor({ timeout: 15_000 })
+  await page.waitForLoadState('networkidle')
+  const summary = await measure(page)
+  total += summary.readouts
+  all.push(...summary.problems.map((p) => ({ ...p, card: `summary: ${p.card}` })))
   expect(total, 'readouts measured').toBeGreaterThan(40)
   expect(all).toEqual([])
 }

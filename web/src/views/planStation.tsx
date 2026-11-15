@@ -12,16 +12,17 @@
 //                            as Escape did in the sidebar. With a selection card open, the strip sits on
 //                            top of it instead (one card at a time), as it sat above the selection card.
 // Numbers, trust chips and card content are unchanged: only the container moved.
-import { render } from 'preact'
+import { createPortal, render } from 'preact'
 import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks'
 import { data } from '../data/loader'
 import type { ConsoleMap } from '../map/consoleMap'
 import { hostRoverCard, roverStrip } from '../state/roverCard'
-import { type SelectionRef } from '../state/selection'
+import { clearSelection, type SelectionRef } from '../state/selection'
 import { batch, useSignalValue } from '../state/signal'
-import { anchorLngLat, applyRoom, cardIdFor, cardRoom, cardTitle, SELECTION_CARD, SELECTION_CARDS, SelectionCardBody, sourcesOf, STATION_CARD, wireSelectionCards, type CardSources } from '../ui/cards/selectionCard'
+import { anchorLngLat, applyRoom, cardIdFor, cardRoom, cardTitle, SELECTION_CARD, SELECTION_CARDS, SelectionCardBody, sourcesOf, STATION_CARD, SummaryCardBody, wireSelectionCards, type CardSources } from '../ui/cards/selectionCard'
+import { IconButton } from '../ui/components'
 import { t } from '../ui/copy'
-import { closeContainer, MarkerCard, openContainer, registerContainer } from '../ui/layout'
+import { closeContainer, domId, layout, MarkerCard, openContainer, registerContainer } from '../ui/layout'
 import { hostIn } from '../ui/shell/store'
 import { registerPlanMount } from './planSlots'
 import './planStation.css'
@@ -49,10 +50,20 @@ async function loadSources(): Promise<CardSources> {
   return sourcesOf(await m.cardData(data()))
 }
 
-function PlanCards({ cmap, slot, bindClick }: { cmap: ConsoleMap; slot: HTMLElement; bindClick: (fn: (id: string) => void) => void }) {
+function PlanCards({ cmap, slot, tools, bindClick }: { cmap: ConsoleMap; slot: HTMLElement; tools: HTMLElement; bindClick: (fn: (id: string) => void) => void }) {
   const [src, setSrc] = useState<CardSources | null>(null)
   const [card, setCard] = useState<SelectionRef | null>(null)
   const strip = useSignalValue(roverStrip)
+  // the Plan summary (route totals, budgets, "Send to simulator" for the official plan) in the selection
+  // card, centred on the map: the sidebar's old "nothing selected" view, opened from the map's tool column
+  const [summary, setSummary] = useState(false)
+  const openOpen = useSignalValue(layout.open)
+  const openSummary = (e: MouseEvent) => {
+    const btn = e.currentTarget as HTMLElement
+    clearSelection()
+    setSummary(true)
+    batch(() => openContainer(SELECTION_CARD, btn))
+  }
   // where the map was last clicked: the anchor of a selection without a point of its own
   const click = useRef<[number, number] | null>(null)
 
@@ -70,7 +81,14 @@ function PlanCards({ cmap, slot, bindClick }: { cmap: ConsoleMap; slot: HTMLElem
     }
   }, [])
 
-  useEffect(() => wirePlanCards(setCard, bindClick), [])
+  useEffect(
+    () =>
+      wirePlanCards((r) => {
+        setSummary(false)
+        setCard(r)
+      }, bindClick),
+    [],
+  )
 
   const center = (): [number, number] | null => {
     try {
@@ -80,7 +98,7 @@ function PlanCards({ cmap, slot, bindClick }: { cmap: ConsoleMap; slot: HTMLElem
       return null
     }
   }
-  const ll = card ? anchorLngLat(card, src ?? {}, click.current ?? center()) : null
+  const ll = card && !summary ? anchorLngLat(card, src ?? {}, click.current ?? center()) : null
 
   // the room beside the object (never covering it), kept up to date while the map moves
   useLayoutEffect(() => {
@@ -103,9 +121,30 @@ function PlanCards({ cmap, slot, bindClick }: { cmap: ConsoleMap; slot: HTMLElem
 
   const id = card ? cardIdFor(card) : null
   const page = card?.kind === 'station' && !!src?.stations?.some((s) => s.id === card.id)
+  const summaryOpen = summary && !!openOpen[SELECTION_CARD]
   return (
     <>
-      {card && ll && id && (
+      {createPortal(
+        <div class="plan-tools">
+          <IconButton
+            icon="file-text"
+            label={t('cards.routeSummary.open')}
+            title={t('cards.routeSummary.openTip')}
+            data-testid="plan-summary"
+            aria-haspopup="dialog"
+            aria-expanded={summaryOpen ? 'true' : 'false'}
+            aria-controls={summaryOpen ? domId(SELECTION_CARD) : undefined}
+            onClick={openSummary}
+          />
+        </div>,
+        tools,
+      )}
+      {summary ? (
+        <MarkerCard key={SELECTION_CARD} id={SELECTION_CARD} title={t('cards.routeSummary.title')} at={{ x: 0, y: 0 }} class="plan-card sel-card sel-card--mapcentre plan-card--selection">
+          {strip?.render()}
+          <SummaryCardBody L={data()} />
+        </MarkerCard>
+      ) : card && ll && id && (
         <MarkerCard key={id} id={id} title={cardTitle(card, src ?? {})} at={{ lngLat: ll, map: cmap.map }} class={`plan-card sel-card plan-card--${id}`}>
           {strip?.render()}
           <SelectionCardBody sel={card} L={data()} stationPage={page} />
@@ -123,12 +162,18 @@ function PlanCards({ cmap, slot, bindClick }: { cmap: ConsoleMap; slot: HTMLElem
 registerPlanMount('station', (ctx) => {
   for (const id of [...SELECTION_CARDS, ROVER_CARD]) registerContainer({ id, kind: 'card' })
   const offs = [hostIn('station'), hostIn('selection'), hostRoverCard()]
-  render(<PlanCards cmap={ctx.cmap} slot={ctx.el.card} bindClick={(fn) => ctx.onStationClick(fn)} />, ctx.el.card)
+  // the map's own tool column (L2e: the Plan summary opener), a slot of its own over the map
+  const tools = ctx.el.card.ownerDocument.createElement('div')
+  tools.className = 'plan-layout__tools'
+  tools.setAttribute('data-plan-slot', 'tools')
+  ctx.el.card.parentElement?.insertBefore(tools, ctx.el.card)
+  render(<PlanCards cmap={ctx.cmap} slot={ctx.el.card} tools={tools} bindClick={(fn) => ctx.onStationClick(fn)} />, ctx.el.card)
   return () => {
     ctx.onStationClick(null)
     render(null, ctx.el.card) // effects off first: closing the cards below is no Discard
     for (const id of [...SELECTION_CARDS, ROVER_CARD]) closeContainer(id, { restoreFocus: false })
     applyRoom(ctx.el.card, null)
+    tools.remove()
     offs.forEach((f) => f())
   }
 })
