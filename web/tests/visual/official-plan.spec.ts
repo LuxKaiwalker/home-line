@@ -10,6 +10,8 @@
  *   T2  dropping next to P5 (pad_default) says why P5 is refused (the browser spot check) while
  *       snapping elsewhere, as before.
  * L2d (D111): the delta strip ("What this change costs") is in the rover card on the map (#hl-lay-rover).
+ * T2fix: a click spec (playwright.config.ts CLICK_SPECS): every drag step waits for a software-GL map
+ * frame, so under parallel load the drags outlast the test timeout; it runs in the serial project.
  * Not a screenshot test. Run: cd web && npm run build && npx playwright test tests/visual/official-plan.spec.ts
  */
 import { expect, test, type Page } from 'playwright/test'
@@ -169,6 +171,10 @@ test('T2: the drag readout is truthful about the live planner (off vs ready), wi
 
   // and unreachable again: back to the static text
   await page.keyboard.press('Escape')
+  // the rover card (anchored at the released spot, next to the rover handle) is closed and the rover
+  // rests on its pad again before the next press: a press aimed at a stale position (the released
+  // spot) lands on the card or the empty map and never starts a drag
+  await noStrip(page)
   await page.evaluate(() => window.dispatchEvent(new CustomEvent('hl:live-status', { detail: 'offline' })))
   const at3 = await settled(page)
   await hold(page, at3, await awayFrom(page))
