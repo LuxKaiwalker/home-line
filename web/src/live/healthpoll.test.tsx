@@ -264,6 +264,7 @@ function planHarness(s: ReturnType<typeof server>, initial: LiveState) {
     client: s.client,
     loaderFor: s.loaderFor,
     simEnabled: true,
+    simFetch: () => s.fetch,
     mountMap: null,
     render: (v) => void (drawn = v),
     onLiveState: (fn) => {
@@ -300,6 +301,10 @@ describe('permalink views follow the health state', () => {
     await vi.waitFor(() => expect(h.text()).toContain('Play this plan'))
     expect(h.html()).toContain('live-export')
     expect(h.html()).toContain(MOCK_SIM_FILE)
+    // D110: the mount checks the result's mission.json and shows its format version
+    await vi.waitFor(() => expect(h.html()).toContain('data-sim-export="ready"'))
+    expect(h.html()).toContain(`href="http://api.test/api/v1/results/${LIVE_HASH}/${MOCK_SIM_FILE}"`)
+    expect(h.text()).toContain('mission.json format 1.1.0')
 
     h.setLive(OFFLINE)
     expect(h.text()).toContain(`${BANNER}. This plan needs the live server.`)
