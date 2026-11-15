@@ -7,20 +7,36 @@
 //   ui.exaggeration -> setTerrain exaggeration (1 = true shape: the 1.878 factor is in the tiles)
 //   mission clock  -> relief light = sun azimuth at the whole simulated minute (conditions/clock.json)
 //   ui.reducedMotion -> no camera animation
+// L13 (team lead 12:54, D111): on the Plan map (opts.planView) the controller opens in the view
+// state/view.ts resolves (?view=, else the viewer's remembered choice, else plan_view.default: 3D) at
+// plan_view.pitch_deg / bearing_deg with the route framed (opts.frame); the low-frame-rate fallback
+// (performance.fps_3d_min, D38) shows a dismissible note, never under ?view=3d.
 import type { Map as MlMap } from 'maplibre-gl'
 import { DATA_MODE, dataUrl } from '../../env'
 import { data } from '../../data/loader'
 import { parseClockSun, type ClockFile, type SunData } from '../../hud/sun'
 import { effect, mission, ui } from '../../state'
+import { noteFallback, planView, viewOverride, type View } from '../../state/view'
+import { TOKENS } from '../../ui/tokens'
 import { COPY_PENDING, t } from './config'
 import { TerrainControl, TerrainNotice, TERRAIN_TRUST } from './controls'
 import { FpsWatch } from './fps'
-import { exaggeration, reliefAzimuth, reliefMinute } from './state'
+import { exaggeration, reliefAzimuth, reliefMinute, setView } from './state'
 import { parseTerrainTiles, type TerrainTiles } from './tiles'
 import type { TerrainHandle } from './terrain'
 
 export { TerrainControl, TERRAIN_TRUST } from './controls'
-export { clampExaggeration, exaggeration, setExaggeration, setView, toggleView } from './state'
+export { chooseToggle, chooseView, clampExaggeration, exaggeration, setExaggeration, setView, toggleView } from './state'
+
+export interface TerrainControllerOptions {
+  /** L13: this is the Plan map: open in state/view.ts planView() (3D by default) */
+  planView?: boolean
+  /**
+   * L13: put the camera at Plan mode's open pose (plan_view pitch/bearing) with the route in view
+   * (ConsoleMap.frameRoute); called when the opening 3D view is on, and by openPlanView().
+   */
+  frame?: (animate: boolean) => void
+}
 
 export type TerrainState = 'off' | 'loading' | '3d' | 'flat' | 'unavailable'
 
@@ -29,6 +45,15 @@ interface FieldLike {
   readonly id: string
   update(p: never): void
   setData(fd: never): void
+}
+
+/** A story (intro, kiosk, capture) is playing: it owns the camera (StoryStage sets html[data-story]). */
+function storyOn(): boolean {
+  try {
+    return typeof document !== 'undefined' && !!document.documentElement?.dataset?.story
+  } catch {
+    return false
+  }
 }
 
 function webgl2(): boolean {
@@ -53,17 +78,29 @@ export class TerrainController {
   private field: FieldLike | null = null
   private state: TerrainState = 'off'
   private seq = 0
+  /** L13: the next 3D-on is Plan mode opening (no tilt animation; the open pose and framing follow) */
+  private opening: { animate: boolean } | null = null
+  /** L13: ?view= on the page (a forced 3D keeps the fallback off) */
+  private readonly forced: View | null
+  private readonly opts: TerrainControllerOptions
 
   private readonly map: MlMap
   /** layer the relief shading sits under (it goes above the basemap) */
   private readonly beforeId: string
 
-  constructor(map: MlMap, beforeId: string) {
+  constructor(map: MlMap, beforeId: string, opts: TerrainControllerOptions = {}) {
     this.map = map
     this.beforeId = beforeId
+    this.opts = opts
+    this.forced = opts.planView ? viewOverride() : null
     map.addControl(this.control, 'top-left')
     this.notice = new TerrainNotice(map.getContainer())
     this.setState('off')
+    if (opts.planView) {
+      // before the effect below runs: its first apply() is the opening
+      this.opening = { animate: false }
+      setView(planView())
+    }
     this.stops.push(
       effect(() => {
         const v = ui.view.value
@@ -137,14 +174,36 @@ export class TerrainController {
     return this.loading
   }
 
+  /**
+   * L13 end-of-intro hook (L12 calls it through ConsoleMap.applyDefaultView): Plan mode's default view
+   * (planView()), and in 3D the open pose with the route in view. `animate` eases (never under reduced motion).
+   */
+  openPlanView({ animate = false }: { animate?: boolean } = {}): void {
+    const v = planView()
+    const anim = animate && !ui.reducedMotion.peek()
+    if (v === '3d' && ui.view.peek() === '3d' && this.state === '3d') {
+      this.opts.frame?.(anim)
+      return
+    }
+    this.opening = v === '3d' ? { animate: anim } : null
+    setView(v)
+  }
+
+  /** L13: 3D is on and drawing (the Plan map frames the route in 3D only then: maxPitch is lifted). */
+  get is3d(): boolean {
+    return this.state === '3d'
+  }
+
   private async apply(v: '2d' | '3d'): Promise<void> {
     const seq = ++this.seq
-    const animate = !ui.reducedMotion.peek()
+    const opening = v === '3d' ? this.opening : null
+    this.opening = null
+    const animate = !ui.reducedMotion.peek() && (!opening || opening.animate)
     if (v === '2d') {
       if (this.state === '3d') {
         this.handle?.setTerrainOn(false, { animate })
         this.setState('flat')
-      }
+      } else this.flatten(animate)
       if (this.state === 'loading') this.setState(this.handle ? 'flat' : 'off')
       return
     }
@@ -166,13 +225,44 @@ export class TerrainController {
     }
     h.setTerrainOn(true, { animate })
     this.setState('3d')
+    // L13: the opening pose and framing; never while a story moves the camera (it restores its own)
+    if (opening && !storyOn()) this.opts.frame?.(animate)
+  }
+
+  /**
+   * L13 (RR1 on T1): 2D is always north up and untilted. A camera that something else left tilted or
+   * turned while the map was already flat (a move still running at the fallback, a flythrough frame)
+   * goes back to pitch 0, bearing 0, and the tilt stays locked (maxPitch 0).
+   */
+  private flatten(animate: boolean): void {
+    const m = this.map as Partial<MlMap>
+    const pitch = m.getPitch?.() ?? 0
+    const bearing = m.getBearing?.() ?? 0
+    if (pitch === 0 && bearing === 0) return
+    if (storyOn()) return // a story sets its own camera (and StoryStage.restore() puts the app's back)
+    const target = { pitch: 0, bearing: 0 }
+    if (animate) {
+      this.map.easeTo({ ...target, duration: TOKENS.motion.cameraMs[0] })
+      this.map.once('moveend', () => this.state !== '3d' && this.map.setMaxPitch(0))
+    } else {
+      this.map.jumpTo(target)
+      this.map.setMaxPitch(0)
+    }
   }
 
   /** Flat map with relief shading and a one-line notice (DESIGN U1 item 6). */
   private async fallback(why: 'webgl' | 'slow3d'): Promise<void> {
+    // L13 (RR1): stop any camera move still running (focus ease, preset tilt), so nothing tilts or
+    // turns the flat map after the cut to pitch 0 / bearing 0
+    ;(this.map as Partial<MlMap>).stop?.()
     this.handle?.setTerrainOn(false, { animate: false })
+    this.flatten(false)
     this.setState('flat')
-    this.notice.show(t(why === 'webgl' ? 'states.error.webgl' : 'states.error.slow3d'))
+    // L13: the low-frame-rate note is short and dismissible, and names the way back (T)
+    if (why === 'slow3d') {
+      noteFallback()
+      this.notice.show(COPY_PENDING.slow3dNote, { dismissible: true })
+    } else this.notice.show(t('states.error.webgl'))
     this.map.getContainer().setAttribute('data-terrain-fallback', why)
     // the toggle shows 2D; apply('2d') finds the state flat and does nothing more
     if (ui.view.peek() !== '2d') ui.view.value = '2d'
@@ -180,7 +270,7 @@ export class TerrainController {
   }
 
   private readonly onRender = (): void => {
-    if (this.state !== '3d') return
+    if (this.state !== '3d' || this.forced === '3d') return // L13: ?view=3d forces 3D
     if (this.fps.frame(performance.now()) === 'tripped') void this.fallback('slow3d')
   }
 

@@ -23,6 +23,9 @@
 // same VITE_LIVE guard:
 //   if (import.meta.env.VITE_LIVE === '1') void import('../live').then((m) => m.padTool(panelEl, m.consoleMapPort(cmap)))
 import './live.css'
+import { h } from 'preact'
+import { useEffect, useState } from 'preact/hooks'
+import type { StageResult } from './stage'
 import { createApiClient, type ApiClient, type FetchLike } from './client'
 import { dataUrl } from '../env'
 import { isMissionText, officialMissionUrl, setOfficialMissionSource } from '../ui/cards/simslot'
@@ -31,7 +34,10 @@ import { bannerFor, watchHealth, type LiveState } from './health'
 import { consoleMapPort as basePort, type ConsoleMapLike, type MapPort } from './mapPort'
 import type { RouteConsoleMap } from './route/map'
 import { MOCK_OFFICIAL_HASH } from './mock/hashes'
-import { mountPadTool } from './padmount'
+import { mountPadTool, type RouteLink } from './padmount'
+import { crewBlockedText } from './crewview'
+import type { PadToolState } from './padtool'
+import type { RouteHandle } from './route/mount'
 import { mountPlanRoute, resultDataUrl } from './planmount'
 import { mockLiveLoader } from './result'
 import { liveStatus } from '../state/live'
@@ -182,18 +188,97 @@ function planRoute(app: HTMLElement, client: ApiClient): () => void {
  */
 export function padTool(panel: Element, port: MapPort, client: ApiClient = liveClient()): () => void {
   const loader = USE_MOCK ? { loaderFor: mockLiveLoader(lazyMockFetch) } : {}
+  // WP12 (L6 W-1): ONE compute action. The pad tool's card hands the compute to the Edit-route panel
+  // (link below); the panel's job carries the pad tool's valid spot, the crew panel's changes and the route.
+  let handle: RouteHandle | null = null
+  const linkSubs = new Set<() => void>()
+  const linkChanged = () => {
+    for (const fn of [...linkSubs]) fn()
+  }
+  const link: RouteLink = {
+    compute: () => handle?.compute(),
+    status: () => handle?.status() ?? 'unavailable',
+    subscribe(fn) {
+      linkSubs.add(fn)
+      return () => void linkSubs.delete(fn)
+    },
+  }
+  // D116: VITE_ROUTE_EDIT=0 has no Edit-route panel: the card keeps its own "Compute full plan" (still one action)
+  const mounted = mountPadTool(panel, port, { client, onLiveState, ...loader, ...(ROUTE_EDIT_ENABLED ? { route: link } : {}) })
+  const { tool, crew } = mounted
   // R5 (D97): the Edit-route panel in the Plan rail, on the same console map (lazy, live builds only).
   // D116: VITE_ROUTE_EDIT=0 skips it, and with it the map waypoints the panel installs (WP6).
   let offRoute: (() => void) | null = null
+  let offHandle: (() => void) | null = null
   let gone = false
   const cmap = (port as MapPort & { consoleMap?: RouteConsoleMap }).consoleMap ?? null
-  if (ROUTE_EDIT_ENABLED) void import('./route/mount').then((m) => !gone && (offRoute = m.mountRoutePanel({ client, onLiveState, cmap, ...loader })))
-  const off = mountPadTool(panel, port, { client, onLiveState, ...loader }).cleanup
+  if (ROUTE_EDIT_ENABLED) void import('./route/mount').then((m) => {
+    if (gone) return
+    offRoute = m.mountRoutePanel({
+      client,
+      onLiveState,
+      cmap,
+      ...loader,
+      pad: { pad: () => validSpot(tool.state), subscribe: (fn) => onSpot(tool, fn) },
+      crew: crew ? { jobInputs: () => crew.jobInputs(), blocked: () => crewBlockedText(crew.state), subscribe: (fn) => crew.subscribe(() => fn()) } : null,
+      // S1 (D110): "Send to simulator" in the route result box (done and infeasible results only)
+      resultSlot: SIM_EXPORT_ENABLED ? (c) => routeSimSlot(client, c.result.hash, (c.stage?.data as StageResult | undefined)?.manifest ?? null) : null,
+      onReady: (h) => {
+        handle = h
+        offHandle = h.subscribe(linkChanged)
+        linkChanged()
+      },
+    })
+  })
   return () => {
     gone = true
+    offHandle?.()
     offRoute?.()
-    off()
+    handle = null
+    mounted.cleanup()
   }
+}
+
+/** S1's self-contained control for a live route result (hooks data-sim-export, data-origin, data-state). */
+function routeSimSlot(client: ApiClient, hash: string, manifest: StageResult['manifest'] | null) {
+  return h(LazySendToSimulator, {
+    key: hash,
+    base: client.resultBase({ hash, result_url: null }),
+    manifest,
+    origin: 'computed_live',
+    mode: SIM_EXPORT_MODE,
+    // the dev mock answers the API's URLs (as planRoute's simFetch)
+    ...(USE_MOCK ? { fetchFor: (url: string) => (url.startsWith(API_BASE) ? lazyMockFetch : fetch) } : {}),
+  })
+}
+
+type SimProps = import('../ui/cards/simslot-export').SendToSimulatorProps
+let simModule: Promise<typeof import('../ui/cards/simslot-export')> | null = null
+/** SendToSimulator loaded with import() on the first route result (only reached when VITE_SIM_EXPORT is set). */
+function LazySendToSimulator(props: SimProps) {
+  const [C, setC] = useState<((p: SimProps) => unknown) | null>(null)
+  useEffect(() => {
+    let on = true
+    void (simModule ??= import('../ui/cards/simslot-export')).then((m) => on && setC(() => m.SendToSimulator as unknown as (p: SimProps) => unknown))
+    return () => void (on = false)
+  }, [])
+  return C ? h(C as never, props) : null
+}
+
+/** The pad tool's spot while it is a checked, valid pad (else null: the plan in use). */
+export function validSpot(s: PadToolState): { lon: number; lat: number } | null {
+  return s.pad && s.check.kind === 'done' && s.check.result.valid ? { lon: s.pad.lon, lat: s.pad.lat } : null
+}
+
+/** Call `fn` when the valid spot changes (not on every pad-tool state change). */
+function onSpot(tool: { subscribe(fn: (s: PadToolState) => void): () => void; readonly state: PadToolState }, fn: () => void): () => void {
+  let last = JSON.stringify(validSpot(tool.state))
+  return tool.subscribe((s) => {
+    const k = JSON.stringify(validSpot(s))
+    if (k === last) return
+    last = k
+    fn()
+  })
 }
 
 /** consoleMapPort (mapPort.ts); the port also carries the console map for the Edit-route panel (R5). */

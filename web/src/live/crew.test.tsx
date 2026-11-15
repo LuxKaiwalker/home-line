@@ -167,7 +167,7 @@ describe('crew panel: out-of-range values are flagged, not clamped', () => {
     expect(crew.jobInputs()).toBeNull()
     const t = toolText(tool, crew)
     expect(t).toContain('Crew: vo2max is not a number.')
-    expect(toHtml(<PadToolPanel state={tool.state} actions={tool} engineHref={ENGINE_HREF} computeBlocked={crewBlockedText(crew.state)} />)).toMatch(/<button type="button" class="live-btn live-compute" disabled>/)
+    expect(toHtml(<PadToolPanel state={tool.state} actions={tool} engineHref={ENGINE_HREF} computeBlocked={crewBlockedText(crew.state)} />)).toMatch(/<button type="button" class="live-btn live-compute"[^>]* disabled[ >]/)
     tool.computePlan()
     await new Promise((r) => setTimeout(r, 30))
     expect(posts('/jobs')).toEqual([])

@@ -913,6 +913,312 @@
    "units": "min",
    "scenario": "opt_80"
   },
+  "pads/rank2/nom_104/o2_home": {
+   "file": "fields/pads/rank2/nom_104/o2_home.png",
+   "scale": 0.01,
+   "units": "L",
+   "scenario": "nom_104",
+   "pad": "rank2",
+   "lon": 137.393301,
+   "lat": -4.776468
+  },
+  "pads/rank2/nom_104/pointer": {
+   "file": "fields/pads/rank2/nom_104/pointer.png",
+   "scale": 1,
+   "units": "move",
+   "scenario": "nom_104",
+   "pad": "rank2",
+   "lon": 137.393301,
+   "lat": -4.776468,
+   "bounds": [
+    137.319325,
+    -4.868455,
+    137.444675,
+    -4.743545
+   ],
+   "width": 2468,
+   "height": 2468,
+   "res_m": 3.0,
+   "stencil": [
+    [
+     -1,
+     0
+    ],
+    [
+     1,
+     0
+    ],
+    [
+     0,
+     -1
+    ],
+    [
+     0,
+     1
+    ],
+    [
+     -1,
+     -1
+    ],
+    [
+     -1,
+     1
+    ],
+    [
+     1,
+     -1
+    ],
+    [
+     1,
+     1
+    ],
+    [
+     -2,
+     -1
+    ],
+    [
+     -2,
+     1
+    ],
+    [
+     2,
+     -1
+    ],
+    [
+     2,
+     1
+    ],
+    [
+     -1,
+     -2
+    ],
+    [
+     -1,
+     2
+    ],
+    [
+     1,
+     -2
+    ],
+    [
+     1,
+     2
+    ]
+   ]
+  },
+  "pads/rank2/nom_104/t_home": {
+   "file": "fields/pads/rank2/nom_104/t_home.png",
+   "scale": 0.1,
+   "units": "min",
+   "scenario": "nom_104",
+   "pad": "rank2",
+   "lon": 137.393301,
+   "lat": -4.776468
+  },
+  "pads/rank3/nom_104/o2_home": {
+   "file": "fields/pads/rank3/nom_104/o2_home.png",
+   "scale": 0.01,
+   "units": "L",
+   "scenario": "nom_104",
+   "pad": "rank3",
+   "lon": 137.393301,
+   "lat": -4.776114
+  },
+  "pads/rank3/nom_104/pointer": {
+   "file": "fields/pads/rank3/nom_104/pointer.png",
+   "scale": 1,
+   "units": "move",
+   "scenario": "nom_104",
+   "pad": "rank3",
+   "lon": 137.393301,
+   "lat": -4.776114,
+   "bounds": [
+    137.319325,
+    -4.868455,
+    137.444675,
+    -4.743545
+   ],
+   "width": 2468,
+   "height": 2468,
+   "res_m": 3.0,
+   "stencil": [
+    [
+     -1,
+     0
+    ],
+    [
+     1,
+     0
+    ],
+    [
+     0,
+     -1
+    ],
+    [
+     0,
+     1
+    ],
+    [
+     -1,
+     -1
+    ],
+    [
+     -1,
+     1
+    ],
+    [
+     1,
+     -1
+    ],
+    [
+     1,
+     1
+    ],
+    [
+     -2,
+     -1
+    ],
+    [
+     -2,
+     1
+    ],
+    [
+     2,
+     -1
+    ],
+    [
+     2,
+     1
+    ],
+    [
+     -1,
+     -2
+    ],
+    [
+     -1,
+     2
+    ],
+    [
+     1,
+     -2
+    ],
+    [
+     1,
+     2
+    ]
+   ]
+  },
+  "pads/rank3/nom_104/t_home": {
+   "file": "fields/pads/rank3/nom_104/t_home.png",
+   "scale": 0.1,
+   "units": "min",
+   "scenario": "nom_104",
+   "pad": "rank3",
+   "lon": 137.393301,
+   "lat": -4.776114
+  },
+  "pads/rank4/nom_104/o2_home": {
+   "file": "fields/pads/rank4/nom_104/o2_home.png",
+   "scale": 0.01,
+   "units": "L",
+   "scenario": "nom_104",
+   "pad": "rank4",
+   "lon": 137.387206,
+   "lat": -4.781529
+  },
+  "pads/rank4/nom_104/pointer": {
+   "file": "fields/pads/rank4/nom_104/pointer.png",
+   "scale": 1,
+   "units": "move",
+   "scenario": "nom_104",
+   "pad": "rank4",
+   "lon": 137.387206,
+   "lat": -4.781529,
+   "bounds": [
+    137.319325,
+    -4.868455,
+    137.444675,
+    -4.743545
+   ],
+   "width": 2468,
+   "height": 2468,
+   "res_m": 3.0,
+   "stencil": [
+    [
+     -1,
+     0
+    ],
+    [
+     1,
+     0
+    ],
+    [
+     0,
+     -1
+    ],
+    [
+     0,
+     1
+    ],
+    [
+     -1,
+     -1
+    ],
+    [
+     -1,
+     1
+    ],
+    [
+     1,
+     -1
+    ],
+    [
+     1,
+     1
+    ],
+    [
+     -2,
+     -1
+    ],
+    [
+     -2,
+     1
+    ],
+    [
+     2,
+     -1
+    ],
+    [
+     2,
+     1
+    ],
+    [
+     -1,
+     -2
+    ],
+    [
+     -1,
+     2
+    ],
+    [
+     1,
+     -2
+    ],
+    [
+     1,
+     2
+    ]
+   ]
+  },
+  "pads/rank4/nom_104/t_home": {
+   "file": "fields/pads/rank4/nom_104/t_home.png",
+   "scale": 0.1,
+   "units": "min",
+   "scenario": "nom_104",
+   "pad": "rank4",
+   "lon": 137.387206,
+   "lat": -4.781529
+  },
   "slope": {
    "file": "fields/shared/slope.png",
    "scale": 0.01,

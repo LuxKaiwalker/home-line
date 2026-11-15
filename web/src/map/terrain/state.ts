@@ -3,9 +3,10 @@
 // (controls.ts) and the controller (index.ts) call these; the tests call them in node.
 import { sunAt, type SunData } from '../../hud/sun'
 import { batch, ui } from '../../state'
+import { rememberView, type View } from '../../state/view'
 import { TERRAIN, TERRAIN_PENDING } from './config'
 
-export type View = '2d' | '3d'
+export type { View }
 
 /** Exaggeration as the store holds it: clamped to design.yaml [min, max], on the slider step. */
 export function clampExaggeration(x: number): number {
@@ -35,6 +36,19 @@ export function setView(v: View): void {
 export function toggleView(): View {
   const next: View = ui.view.peek() === '3d' ? '2d' : '3d'
   setView(next)
+  return next
+}
+
+/** L13: the viewer picks a view (2D/3D buttons, T): set it and remember it (state/view.ts). */
+export function chooseView(v: View): void {
+  setView(v)
+  rememberView(v)
+}
+
+/** L13: T and the buttons' arrow keys: the other view, chosen (remembered). */
+export function chooseToggle(): View {
+  const next: View = ui.view.peek() === '3d' ? '2d' : '3d'
+  chooseView(next)
   return next
 }
 

@@ -99,7 +99,7 @@ async function openCard(page: Page, q: string, option: string | RegExp): Promise
 }
 
 async function checkAllCards(page: Page): Promise<void> {
-  await page.goto('/?intro=0#/')
+  await page.goto('/?intro=0&view=2d#/')
   await page.locator('.hl-tl__play').waitFor({ timeout: 30_000 })
   const all: Problem[] = []
   let total = 0

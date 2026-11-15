@@ -58,12 +58,13 @@ export function SelectionPanel({ L, cell }: { L: Loader; cell?: CellLookup }) {
   return (
     <div class="hl-selection" data-selected={sel ? sel.kind : 'none'}>
       <div class="hl-selection__nav">
-        <IconButton icon="chevron-left" label={t('buttons.back')} disabled={!canGoBack()} onClick={() => stepHistory(-1)} />
-        <IconButton icon="chevron-right" label={t('buttons.forward')} disabled={!canGoForward()} onClick={() => stepHistory(1)} />
+        <IconButton icon="chevron-left" label={t('buttons.back')} disabled={!canGoBack()} reason={t('hints.disabled.historyBack')} onClick={() => stepHistory(-1)} />
+        <IconButton icon="chevron-right" label={t('buttons.forward')} disabled={!canGoForward()} reason={t('hints.disabled.historyForward')} onClick={() => stepHistory(1)} />
       </div>
       {!sel && (
         <div class="hl-empty">
           <p>{t('states.empty.noSelection')}</p>
+          <p class="hl-empty__hint">{t('hints.map.mouse')}</p>
         </div>
       )}
       {err ? (
