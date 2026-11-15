@@ -137,6 +137,9 @@ test('L13: planning interactions in 3D (?view=3d, open pose): right-drag pan, cu
     await expect(mapEl(page)).not.toHaveAttribute('data-overlays-on', on, { timeout: 10_000 })
   })
 
+  // 3D all along (checked before the pill click: opening a station card may route and remount the map)
+  await expect(mapEl(page)).toHaveAttribute('data-terrain', '3d')
+
   await test.step('a left click on the S7 pill opens its card', async () => {
     const s7 = page.getByRole('button', { name: /^S7: / })
     await expect(s7).toBeVisible({ timeout: 10_000 })
@@ -145,8 +148,6 @@ test('L13: planning interactions in 3D (?view=3d, open pose): right-drag pan, cu
     await expect(card(page)).toContainText('Science target', { timeout: 10_000 })
     await expect(card(page)).toContainText('S7')
   })
-
-  await expect(mapEl(page)).toHaveAttribute('data-terrain', '3d') // 3D all along
 })
 
 test('L13: a left drag on the rover in 3D (?view=3d, open pose) moves it, with the drag readout', async ({ page }) => {
