@@ -1,0 +1,41 @@
+{
+  "title": "Stops",
+  "listLabel": "Route stops in walking order",
+  "empty": "Click the map to add a point, or add a station from its card.",
+  "kind": {
+    "station": "Station",
+    "point": "Point"
+  },
+  "pad": "Pad",
+  "legFrom": "From {from}",
+  "estimate": "Estimate {minutes} min",
+  "computing": "computing…",
+  "unreachable": {
+    "unreachable": "Not reachable: no walkable path",
+    "budget": "Not reachable within the time budget",
+    "slope": "Not reachable: too steep",
+    "other": "Not reachable"
+  },
+  "unreachableTitle": "The leg into this stop has no feasible path; move, reorder or remove a stop.",
+  "home": "Back to the pad",
+  "handle": "Reorder {name}: drag, or press Alt with the up or down arrow",
+  "moveUp": "Move {name} up",
+  "moveDown": "Move {name} down",
+  "remove": "Delete {name}",
+  "clearAll": "Clear all stops",
+  "details": "Add stop time, tags, note",
+  "stopTime": "Planned stop",
+  "stopTimeLabel": "Planned stop time at {name} in minutes, up to {max}",
+  "unit": "min",
+  "tagsLabel": "Tags for {name}",
+  "noteLabel": "Note for {name}",
+  "notePlaceholder": "Note: resource, task, what to carry out here…",
+  "summaryStop": "stop {minutes} min",
+  "announce": {
+    "moved": "{name} moved to position {n} of {total}",
+    "first": "{name} is already first",
+    "last": "{name} is already last",
+    "removed": "{name} removed from the route",
+    "cleared": "All stops removed"
+  }
+}
