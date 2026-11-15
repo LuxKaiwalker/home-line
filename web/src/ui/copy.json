@@ -418,6 +418,14 @@
     "notReady": "The mission timeline is not available yet"
   },
 
+  "planBottom": {
+    "label": "Plan details",
+    "expand": "Show the plan table and the timeline",
+    "collapse": "Hide the plan table and the timeline",
+    "planTable": "Plan table",
+    "timeline": "Timeline"
+  },
+
   "gauges": {
     "oxygen": "O₂",
     "oxygenUsed": "Used",
