@@ -35,8 +35,9 @@ const fsFetcher: TextFetcher = async (path) => {
 }
 const L = createLoader(fsFetcher, 'real')
 
-/** Field lookup stand-in (no PNG decoding in node): fixed nearest-pixel samples, as fieldAt returns them. */
-const SAMPLE: FieldSample = {
+/** Field lookup stand-in (no PNG decoding in node): fixed nearest-pixel samples with the fields the cards read
+ *  (fieldAt has since gained margin/collapse fields from M3/M4 that cards do not use). */
+const SAMPLE = {
   lon: 137.39,
   lat: -4.79,
   inside: true,
@@ -46,7 +47,7 @@ const SAMPLE: FieldSample = {
   o2Home: 31.2,
   noRouteHome: { opt: false, nom: false, con: false },
   drawn: { opt: 21.3, nom: 22.1, con: 24.7 },
-}
+} as FieldSample
 const cell: CellLookup = (lon, lat) => ({ sample: { ...SAMPLE, lon, lat }, suitKg: 104 })
 
 let d: CardData
