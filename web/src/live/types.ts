@@ -97,6 +97,25 @@ export interface EngineVersion {
   world_version?: string
 }
 
+/** One entry of components.schemas.Defaults.ranges: config/backend.yaml ranges with defaults resolved. */
+export interface RangeSpec {
+  min: number
+  max: number
+  default?: number | number[]
+  precomputed?: number[]
+  assumed?: boolean
+}
+
+/** components.schemas.Defaults (GET /defaults): default plan inputs, ranges, stations, pads. */
+export interface Defaults {
+  /** plan_inputs with every default filled (crew, eva, stations, conditions, the official pad). */
+  inputs: PlanInputs
+  /** config/backend.yaml ranges with defaults resolved (crew fields, walkback, dose, reserve_min ...). */
+  ranges: Record<string, unknown>
+  stations: Record<string, unknown>[]
+  pads: Record<string, unknown>[]
+}
+
 /** components.schemas.ImportResult */
 export interface ImportResult {
   hash: string
@@ -123,6 +142,7 @@ export const ENGINE_VERSION_KEYS: KeyMap<EngineVersion> = {
   engine_tree: 'required', commit: 'required', config_hash: 'required', web_contract_version: 'required',
   backend_contract_version: 'required', bundle_contract_version: 'optional', terrain_hash: 'required', world_version: 'optional',
 }
+export const DEFAULTS_KEYS: KeyMap<Defaults> = { inputs: 'required', ranges: 'required', stations: 'required', pads: 'required' }
 export const IMPORT_RESULT_KEYS: KeyMap<ImportResult> = { hash: 'required', inputs: 'required', computed: 'optional', range_flags: 'optional' }
 
 // --- results and provenance (F28, F35) ---
@@ -152,6 +172,9 @@ export interface RunRecord {
   error?: string | null
   dummy: boolean
 }
+
+/** One run-record range flag (F26): an input outside its config range, flagged and never clamped. */
+export type RangeFlag = NonNullable<RunRecord['range_flags']>[number]
 
 export const RUN_RECORD_KEYS: KeyMap<RunRecord> = {
   contract_version: 'required', hash: 'required', origin: 'required', label: 'required', inputs: 'required', engine: 'required',

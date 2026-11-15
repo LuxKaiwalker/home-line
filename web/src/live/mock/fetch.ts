@@ -3,8 +3,8 @@
 import { API_PREFIX, UPLOAD_MAX_BYTES } from '../config'
 import { canonicalJson } from '../planio'
 import { validatePlanInputs } from '../schemacheck'
-import type { ApiErrorBody, Health, ImportResult, Job, LonLat, PadCheck, PadScreen, PlanInputs } from '../types'
-import { HEALTH_WARM, jobScript, PLAN_INPUTS_OFFICIAL, RUN_RECORD_LIVE, RUN_RECORD_OFFICIAL } from './fixtures'
+import type { ApiErrorBody, Defaults, Health, ImportResult, Job, JobRequest, LonLat, PadCheck, PadScreen, PlanInputs } from '../types'
+import { crewJobScript, HEALTH_WARM, jobScript, mockDefaults, PLAN_INPUTS_OFFICIAL, RUN_RECORD_LIVE, RUN_RECORD_OFFICIAL, runRecordCrew } from './fixtures'
 import { MOCK_OFFICIAL_HASH } from './hashes'
 import { mockPadCheck, mockPadScreen } from './pads'
 import { mockResultFile } from './result'
@@ -19,6 +19,16 @@ export interface MockOptions {
   health?: MockHealth
   /** POST /jobs answers job[0]; each GET /jobs/{id} answers the next one (the last repeats). */
   job?: Job[]
+  /** The script per request (ignored when `job` is set). Default jobScript() for every request. */
+  jobFor?: (req: JobRequest) => Job[]
+  /**
+   * Crew jobs (F26; the dev mock turns this on): without `job`/`jobFor`, a request whose inputs carry
+   * a crew block gets crewJobScript under a hash derived from its inputs (a new crew, a new hash)
+   * and a run record with its range flags (runRecordCrew). Any other request gets jobScript().
+   */
+  crewJobs?: boolean
+  /** GET /defaults answer (default mockDefaults(): config ranges, official inputs), or an HTTP error. */
+  defaults?: Defaults | { status: number; body: ApiErrorBody }
   /** Answer POST /jobs with this HTTP error (e.g. 429 rate limited). */
   submitError?: { status: number; body: ApiErrorBody; retryAfter?: number }
   /** POST /pads/validate answer (default mockPadCheck: refused north of a latitude, else valid). */
@@ -74,8 +84,17 @@ function hang(signal: AbortSignal | null | undefined): Promise<Response> {
 
 export function createMockFetch(opts: MockOptions = {}): MockFetch {
   const health = opts.health ?? HEALTH_WARM
-  const script = opts.job ?? jobScript()
-  const provenance = opts.provenance ?? { [(RUN_RECORD_LIVE as { hash: string }).hash]: RUN_RECORD_LIVE, [MOCK_OFFICIAL_HASH]: RUN_RECORD_OFFICIAL }
+  let script = opts.job ?? jobScript()
+  const provenance: Record<string, unknown> = { ...(opts.provenance ?? { [(RUN_RECORD_LIVE as { hash: string }).hash]: RUN_RECORD_LIVE, [MOCK_OFFICIAL_HASH]: RUN_RECORD_OFFICIAL }) }
+  const submitted = new Set<string>() // canonical inputs posted before: E7 attaches the same inputs
+  const scriptFor = (req: JobRequest): Job[] => {
+    if (opts.job) return opts.job
+    if (opts.jobFor) return opts.jobFor(req)
+    if (!opts.crewJobs || !req.inputs || typeof req.inputs.crew !== 'object') return jobScript()
+    const hash = mockHash(canonicalJson({ ...req.inputs, title: undefined }))
+    provenance[hash] ??= runRecordCrew(hash, filled(req.inputs))
+    return crewJobScript(hash)
+  }
   let healthIdx = 0
   let jobIdx = 0
   const calls: MockCall[] = []
@@ -101,13 +120,22 @@ export function createMockFetch(opts: MockOptions = {}): MockFetch {
         return json(status, eb, retryAfter ? { 'Retry-After': String(retryAfter) } : {})
       }
       jobIdx = 0
-      return json(202, script[0])
+      const req = body as JobRequest
+      script = scriptFor(req)
+      const key = canonicalJson({ ...(req?.inputs ?? {}), title: undefined })
+      const again = submitted.has(key)
+      submitted.add(key)
+      return json(202, again ? { ...script[0], attached: true } : script[0])
     }
     const jm = /^\/jobs\/([^/]+)$/.exec(path)
     if (method === 'GET' && jm) {
       if (decodeURIComponent(jm[1]) !== script[0].id) return notFound(path)
       jobIdx = Math.min(jobIdx + 1, script.length - 1)
       return json(200, script[jobIdx])
+    }
+    if (method === 'GET' && path === '/defaults') {
+      const d = opts.defaults ?? mockDefaults()
+      return 'status' in d ? json(d.status, d.body) : json(200, d)
     }
     if (method === 'POST' && (path === '/pads/validate' || path === '/pads/screen')) {
       if (opts.padError) return json(opts.padError.status, opts.padError.body)
@@ -129,7 +157,7 @@ export function createMockFetch(opts: MockOptions = {}): MockFetch {
       const errs = validatePlanInputs(body)
       if (errs.length) return json(422, { error: 'invalid_input', detail: errs } satisfies ApiErrorBody)
       const inputs = body as PlanInputs
-      const answer = opts.importAnswer ?? defaultImport(script[0].hash)
+      const answer = opts.importAnswer ?? defaultImport((inp) => (opts.crewJobs ? scriptFor({ type: 'plan', inputs: inp })[0].hash : script[0].hash))
       return json(200, answer(inputs))
     }
     const pm = /^\/results\/([^/]+)\/provenance$/.exec(path)
@@ -155,8 +183,26 @@ export function createMockFetch(opts: MockOptions = {}): MockFetch {
 }
 
 /** Default import answer: the official inputs (title ignored, as in the hash) are the precomputed official plan; anything else needs a job. */
-function defaultImport(jobHash: string): (inputs: PlanInputs) => ImportResult {
+function defaultImport(jobHash: (inputs: PlanInputs) => string): (inputs: PlanInputs) => ImportResult {
   const untitled = (p: PlanInputs) => canonicalJson({ ...p, title: undefined })
   const official = [untitled(RUN_RECORD_OFFICIAL.inputs), untitled(PLAN_INPUTS_OFFICIAL)]
-  return (inputs) => (official.includes(untitled(inputs)) ? { hash: MOCK_OFFICIAL_HASH, inputs, computed: true } : { hash: jobHash, inputs, computed: false })
+  return (inputs) => (official.includes(untitled(inputs)) ? { hash: MOCK_OFFICIAL_HASH, inputs, computed: true } : { hash: jobHash(inputs), inputs, computed: false })
+}
+
+/** A placeholder 16-hex hash of a text (two FNV-1a 32-bit passes); the server's real hash is sha256 (E2). */
+export function mockHash(text: string): string {
+  let a = 0x811c9dc5
+  let b = 0x01000193 ^ 0x5bd1e995
+  for (let i = 0; i < text.length; i++) {
+    const c = text.charCodeAt(i)
+    a = Math.imul(a ^ c, 0x01000193) >>> 0
+    b = Math.imul(b ^ c, 0x01000193 + 2) >>> 0
+  }
+  return a.toString(16).padStart(8, '0') + b.toString(16).padStart(8, '0')
+}
+
+/** The inputs with the mock defaults filled, as a run record carries them. */
+function filled(inputs: PlanInputs): PlanInputs {
+  const d = mockDefaults().inputs
+  return { ...d, ...inputs, crew: { ...(d.crew as object), ...(inputs.crew as object) } }
 }

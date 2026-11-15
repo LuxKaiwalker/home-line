@@ -2,7 +2,7 @@
 // rule D54: WS18 builds on it): one function per endpoint the live views use, every request with
 // a timeout, errors as ApiError. Jobs are submit + poll (jobs.ts); no request is held open.
 import { API_BASE, API_PREFIX, CLIENT } from './config'
-import type { ApiErrorBody, EngineVersion, Health, ImportResult, Job, JobRequest, LonLat, PadCheck, PadScreen, PlanInputs, RunRecord } from './types'
+import type { ApiErrorBody, Defaults, EngineVersion, Health, ImportResult, Job, JobRequest, LonLat, PadCheck, PadScreen, PlanInputs, RunRecord } from './types'
 
 export type FetchLike = (input: string, init?: RequestInit) => Promise<Response>
 
@@ -47,6 +47,8 @@ export interface ApiClient {
   readonly root: string
   health(opts?: RequestOptions): Promise<Health>
   engineVersion(opts?: RequestOptions): Promise<EngineVersion>
+  /** GET /defaults: default plan inputs and the config ranges (F26 crew panel). */
+  defaults(opts?: RequestOptions): Promise<Defaults>
   validatePad(pad: LonLat, opts?: RequestOptions): Promise<PadCheck>
   screenPad(inputs: PlanInputs, opts?: RequestOptions): Promise<PadScreen>
   submitJob(req: JobRequest, opts?: RequestOptions): Promise<Job>
@@ -145,6 +147,7 @@ export function createApiClient(opts: ApiClientOptions = {}): ApiClient {
     root,
     health: (o) => request<Health>('GET', '/health', undefined, o),
     engineVersion: (o) => request<EngineVersion>('GET', '/engine/version', undefined, o),
+    defaults: (o) => request<Defaults>('GET', '/defaults', undefined, o),
     validatePad: (pad, o) => request<PadCheck>('POST', '/pads/validate', { lon: pad.lon, lat: pad.lat }, o),
     screenPad: (inputs, o) => request<PadScreen>('POST', '/pads/screen', inputs, o),
     submitJob: (req, o) => request<Job>('POST', '/jobs', req, o),
