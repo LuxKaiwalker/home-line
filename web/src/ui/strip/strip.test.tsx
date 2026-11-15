@@ -16,7 +16,8 @@ import { SECTION_NAMES, SectionsCtx, type SectionName, type Sections } from '../
 import { PlanSlot } from '../../views/planPortSlots'
 import { resetLayout } from '../layout'
 import { all, byClass, installDom, type FakeDocument, type FakeNode } from '../testing/dom'
-import { ContextLine, tp } from './ContextBar'
+import { ContextLine } from './ContextBar'
+import { t } from '../copy'
 import { DrawerSummary } from './DrawerSummary'
 import { installStrip } from './index'
 import { shownFor } from './model'
@@ -69,17 +70,17 @@ describe('ContextLine', () => {
     const group = byClass(root, 'hl-ctx')
     expect(group).toHaveLength(1)
     expect(attr(group[0], 'role')).toBe('group')
-    expect(attr(group[0], 'aria-label')).toBe(tp('label'))
+    expect(attr(group[0], 'aria-label')).toBe(t('route.strip.label'))
     const s = text()
-    expect(s).toContain(tp('officialPad'))
-    expect(s).toContain(tp('officialPlan'))
+    expect(s).toContain(t('route.strip.officialPad'))
+    expect(s).toContain(t('route.strip.officialPlan'))
     expect(s).not.toContain('%')
     const nums = byClass(root, 'num')
     expect(nums).toHaveLength(1)
     expect(nums[0].textContent).toContain('41.21')
     const chips = buttons().filter((b) => (attr(b, 'class') ?? '').includes('hl-ctx__chip'))
     expect(chips.map((b) => attr(b, 'aria-controls'))).toEqual(['hl-lay-scenario', 'hl-lay-budget'])
-    expect(chips.map((b) => attr(b, 'aria-label'))).toEqual([`${tp('scenario')}: nominal · 104 kg`, `${tp('budget')}: ${tp('budgetValue', { budget: 30 })}`])
+    expect(chips.map((b) => attr(b, 'aria-label'))).toEqual([`${t('route.strip.scenario')}: nominal · 104 kg`, `${t('route.strip.budget')}: ${t('route.strip.budgetValue', { budget: 30 })}`])
     expect(chips.every((b) => attr(b, 'aria-expanded') === 'false')).toBe(true)
     // no Plan a route without a handler
     expect(byClass(root, 'hl-ctx__plan')).toHaveLength(0)
@@ -89,21 +90,21 @@ describe('ContextLine', () => {
     const shown = shownFor(4, { ...MOCK_ROUTE_RESULTS, firstInfeasibleLeg: null, marginMin: 41.4 }, 'rank2')
     draw(<ContextLine strip={strip} padId="rank2" pads={MOCK_PADS} shown={{ ...shown, kind: 'mine', computing: false, marginMin: 41, fast: true } as never} sections={null} onPlanRoute={() => {}} />)
     const s = text()
-    expect(s).toContain(tp('pad', { pad: 'P2' }))
-    expect(s).toContain(tp('yourRoute'))
-    expect(s).toContain(tp('stops', { n: 4 }))
-    expect(s).toContain(tp('marginValue', { value: 41 }))
-    expect(s).toContain(tp('estimate'))
-    expect(s).toContain(tp('fast'))
+    expect(s).toContain(t('route.strip.pad', { pad: 'P2' }))
+    expect(s).toContain(t('route.strip.yourRoute'))
+    expect(s).toContain(t('route.strip.stops', { n: 4 }))
+    expect(s).toContain(t('route.strip.marginValue', { value: 41 }))
+    expect(s).toContain(t('route.strip.estimate'))
+    expect(s).toContain(t('route.strip.fast'))
     expect(attr(byClass(root, 'hl-ctx__fast')[0], 'title')).toBe('Fast route · may not be the fastest')
     expect(byClass(root, 'hl-ctx__plan')).toHaveLength(0)
   })
 
   it('names the unreachable stop or the way home', () => {
     draw(<ContextLine strip={strip} padId={null} pads={[]} shown={shownFor(3, MOCK_ROUTE_RESULTS, 'official')} sections={null} onPlanRoute={null} />)
-    expect(text()).toContain(tp('unreachable', { n: 3 }))
+    expect(text()).toContain(t('route.strip.unreachable', { n: 3 }))
     draw(<ContextLine strip={strip} padId={null} pads={[]} shown={shownFor(2, MOCK_ROUTE_RESULTS, 'official')} sections={null} onPlanRoute={null} />)
-    expect(text()).toContain(tp('unreachableHome'))
+    expect(text()).toContain(t('route.strip.unreachableHome'))
   })
 
   it('Plan a route calls the handler (named button)', () => {
@@ -111,7 +112,7 @@ describe('ContextLine', () => {
     draw(<ContextLine strip={strip} padId={null} pads={[]} shown={{ kind: 'official' }} sections={null} onPlanRoute={() => n++} />)
     const b = byClass(root, 'hl-ctx__plan')
     expect(b).toHaveLength(1)
-    expect(attr(b[0], 'aria-label')).toBe(tp('planRoute'))
+    expect(attr(b[0], 'aria-label')).toBe(t('route.strip.planRoute'))
     act(() => void b[0].dispatch('click'))
     expect(n).toBe(1)
   })
@@ -124,7 +125,7 @@ describe('DrawerSummary', () => {
     expect(nums).toHaveLength(2)
     expect(nums[0]).toContain('23')
     expect(nums[1]).toContain('31.5')
-    expect(text()).toContain(tp('summary.reach', { budget: 30 }))
+    expect(text()).toContain(t('route.strip.summary.reach', { budget: 30 }))
     expect(text()).toContain('Pad → S4')
     expect(text()).not.toMatch(/Loading[^…]{0,80}…/)
   })

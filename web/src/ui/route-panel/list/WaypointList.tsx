@@ -8,14 +8,12 @@
 // announced in a polite live region. Strings: copy.list.json (I4 merges into route.list).
 import './list.css'
 import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks'
-import { copyFrom } from '../../copy'
+import { t } from '../../copy'
 import { Icon } from '../../components/Icon'
 import { PLAN_TAGS, planning, selectPad, selectRoute, usePlanning, type PlanStop, type PlanningStore, type StopId } from '../../../state/planning'
 import { clampStopMin, displayLabels, legsForStops, STOP_MIN_MAX, STOP_MIN_STEP, stopSummary, toggleTag, type LegView } from './model'
 import { useRouteResults, type RouteResults } from './routeResults'
-import own from './copy.list.json'
 
-export const tl = copyFrom(own)
 
 /** Note typing idle time before it becomes one undo step (blur commits at once). */
 export const NOTE_IDLE_MS = 600
@@ -68,11 +66,11 @@ export function WaypointList({ store = planning, results, stationName, noteIdleM
     const s = stops[from]
     if (!s) return
     const name = labels[from]
-    if (to < 0) return setSaid(tl('announce.first', { name }))
-    if (to >= stops.length) return setSaid(tl('announce.last', { name }))
+    if (to < 0) return setSaid(t('route.list.announce.first', { name }))
+    if (to >= stops.length) return setSaid(t('route.list.announce.last', { name }))
     if (!store.reorderStops(from, to)) return
     if (keep) focusNext.current = 'el' in keep ? keep : { id: s.id, role: keep.role }
-    setSaid(tl('announce.moved', { name, n: to + 1, total: stops.length }))
+    setSaid(t('route.list.announce.moved', { name, n: to + 1, total: stops.length }))
   }
 
   function remove(i: number) {
@@ -81,7 +79,7 @@ export function WaypointList({ store = planning, results, stationName, noteIdleM
     const next = stops[i + 1] ?? stops[i - 1]
     if (next) focusNext.current = { id: next.id, role: 'handle' }
     else focusNext.current = 'end'
-    setSaid(tl('announce.removed', { name: labels[i] }))
+    setSaid(t('route.list.announce.removed', { name: labels[i] }))
   }
 
   function onRowKey(i: number, e: KeyboardEvent) {
@@ -100,17 +98,17 @@ export function WaypointList({ store = planning, results, stationName, noteIdleM
 
   if (!stops.length)
     return (
-      <section class="rpl" aria-label={tl('title')}>
+      <section class="rpl" aria-label={t('route.list.title')}>
         <p class="rpl-empty" tabIndex={-1} ref={(el) => void (listEnd.current = el)}>
-          {tl('empty')}
+          {t('route.list.empty')}
         </p>
         {live_}
       </section>
     )
 
   return (
-    <section class="rpl" aria-label={tl('title')}>
-      <ol class="rpl-list" aria-label={tl('listLabel')}>
+    <section class="rpl" aria-label={t('route.list.title')}>
+      <ol class="rpl-list" aria-label={t('route.list.listLabel')}>
         {stops.map((s, i) => {
           const name = labels[i]
           const leg = legs.into[i]
@@ -142,9 +140,9 @@ export function WaypointList({ store = planning, results, stationName, noteIdleM
                   data-role="handle"
                   draggable
                   ref={reg(s.id, 'handle')}
-                  aria-label={tl('handle', { name })}
+                  aria-label={t('route.list.handle', { name })}
                   aria-keyshortcuts="Alt+ArrowUp Alt+ArrowDown"
-                  title={tl('handle', { name })}
+                  title={t('route.list.handle', { name })}
                   onDragStart={(e) => {
                     dragFrom.current = i
                     if (e.dataTransfer) {
@@ -164,28 +162,28 @@ export function WaypointList({ store = planning, results, stationName, noteIdleM
                 </span>
                 <span class="rpl-name">
                   <span class="rpl-label">{name}</span>
-                  <span class="rpl-kind">{tl(s.kind === 'station' ? 'kind.station' : 'kind.point')}</span>
+                  <span class="rpl-kind">{t(s.kind === 'station' ? 'route.list.kind.station' : 'route.list.kind.point')}</span>
                 </span>
                 <span class="rpl-actions">
-                  <button type="button" class="rpl-btn" data-role="up" ref={reg(s.id, 'up')} aria-label={tl('moveUp', { name })} title={tl('moveUp', { name })} disabled={i === 0} onClick={() => move(i, i - 1, { role: 'up' })}>
+                  <button type="button" class="rpl-btn" data-role="up" ref={reg(s.id, 'up')} aria-label={t('route.list.moveUp', { name })} title={t('route.list.moveUp', { name })} disabled={i === 0} onClick={() => move(i, i - 1, { role: 'up' })}>
                     <Icon name="chevron-up" />
                   </button>
-                  <button type="button" class="rpl-btn" data-role="down" ref={reg(s.id, 'down')} aria-label={tl('moveDown', { name })} title={tl('moveDown', { name })} disabled={i === stops.length - 1} onClick={() => move(i, i + 1, { role: 'down' })}>
+                  <button type="button" class="rpl-btn" data-role="down" ref={reg(s.id, 'down')} aria-label={t('route.list.moveDown', { name })} title={t('route.list.moveDown', { name })} disabled={i === stops.length - 1} onClick={() => move(i, i + 1, { role: 'down' })}>
                     <Icon name="chevron-down" />
                   </button>
-                  <button type="button" class="rpl-btn rpl-btn--remove" data-role="remove" ref={reg(s.id, 'remove')} aria-label={tl('remove', { name })} title={tl('remove', { name })} onClick={() => remove(i)}>
+                  <button type="button" class="rpl-btn rpl-btn--remove" data-role="remove" ref={reg(s.id, 'remove')} aria-label={t('route.list.remove', { name })} title={t('route.list.remove', { name })} onClick={() => remove(i)}>
                     <Icon name="x" />
                   </button>
                 </span>
               </div>
-              <LegLine leg={leg} from={i === 0 ? tl('pad') : labels[i - 1]} />
+              <LegLine leg={leg} from={i === 0 ? t('route.list.pad') : labels[i - 1]} />
               <StopEditor stop={s} name={name} store={store} noteIdleMs={noteIdleMs} />
             </li>
           )
         })}
       </ol>
       <div class={['rpl-home', legs.home.kind === 'infeasible' && 'is-infeasible'].filter(Boolean).join(' ')}>
-        <span class="rpl-home-label">{tl('home')}</span>
+        <span class="rpl-home-label">{t('route.list.home')}</span>
         <LegLine leg={legs.home} from={labels[labels.length - 1]} />
       </div>
       <button
@@ -195,10 +193,10 @@ export function WaypointList({ store = planning, results, stationName, noteIdleM
         onClick={() => {
           if (!store.replaceRoute({ ...route, stops: [] })) return
           focusNext.current = 'end'
-          setSaid(tl('announce.cleared'))
+          setSaid(t('route.list.announce.cleared'))
         }}
       >
-        {tl('clearAll')}
+        {t('route.list.clearAll')}
       </button>
       {live_}
     </section>
@@ -210,35 +208,35 @@ function LegLine({ leg, from }: { leg: LegView; from: string }) {
   if (leg.kind === 'infeasible') {
     const key = (['unreachable', 'budget', 'slope'] as const).find((k) => k === leg.reason) ?? 'other'
     return (
-      <p class="rpl-leg rpl-leg--bad" title={tl('unreachableTitle')} data-reason={leg.reason}>
+      <p class="rpl-leg rpl-leg--bad" title={t('route.list.unreachableTitle')} data-reason={leg.reason}>
         <Icon name="triangle-alert" />
-        <span>{tl(`unreachable.${key}`)}</span>
+        <span>{t(`route.list.unreachable.${key}`)}</span>
       </p>
     )
   }
   return (
     <p class="rpl-leg">
-      <span>{tl('legFrom', { from })}</span>
-      {leg.kind === 'ok' && leg.minutes !== null && <span class="rpl-est">{tl('estimate', { minutes: leg.minutes.toFixed(1) })}</span>}
-      {leg.kind === 'computing' && <span class="rpl-muted">{tl('computing')}</span>}
+      <span>{t('route.list.legFrom', { from })}</span>
+      {leg.kind === 'ok' && leg.minutes !== null && <span class="rpl-est">{t('route.list.estimate', { minutes: leg.minutes.toFixed(1) })}</span>}
+      {leg.kind === 'computing' && <span class="rpl-muted">{t('route.list.computing')}</span>}
     </p>
   )
 }
 
 function StopEditor({ stop, name, store, noteIdleMs }: { stop: PlanStop; name: string; store: PlanningStore; noteIdleMs: number }) {
-  const summary = stopSummary(stop, (minutes) => tl('summaryStop', { minutes }))
+  const summary = stopSummary(stop, (minutes) => t('route.list.summaryStop', { minutes }))
   return (
     <details class="rpl-edit">
-      <summary>{summary || <span class="rpl-muted">{tl('details')}</span>}</summary>
+      <summary>{summary || <span class="rpl-muted">{t('route.list.details')}</span>}</summary>
       <label class="rpl-stop">
-        <span>{tl('stopTime')}</span>
+        <span>{t('route.list.stopTime')}</span>
         <input
           type="number"
           min={0}
           max={STOP_MIN_MAX}
           step={STOP_MIN_STEP}
           inputMode="numeric"
-          aria-label={tl('stopTimeLabel', { name, max: STOP_MIN_MAX })}
+          aria-label={t('route.list.stopTimeLabel', { name, max: STOP_MIN_MAX })}
           value={stop.stopMin}
           onChange={(e) => {
             const el = e.currentTarget
@@ -247,9 +245,9 @@ function StopEditor({ stop, name, store, noteIdleMs }: { stop: PlanStop; name: s
             store.updateStop(stop.id, { stopMin: v })
           }}
         />
-        <span>{tl('unit')}</span>
+        <span>{t('route.list.unit')}</span>
       </label>
-      <div class="rpl-tags" role="group" aria-label={tl('tagsLabel', { name })}>
+      <div class="rpl-tags" role="group" aria-label={t('route.list.tagsLabel', { name })}>
         {PLAN_TAGS.map((tag) => {
           const on = stop.tags.includes(tag)
           return (
@@ -286,8 +284,8 @@ function NoteField({ stop, name, store, idleMs }: { stop: PlanStop; name: string
     <textarea
       class="rpl-note"
       rows={2}
-      placeholder={tl('notePlaceholder')}
-      aria-label={tl('noteLabel', { name })}
+      placeholder={t('route.list.notePlaceholder')}
+      aria-label={t('route.list.noteLabel', { name })}
       value={draft}
       onInput={(e) => {
         const v = e.currentTarget.value

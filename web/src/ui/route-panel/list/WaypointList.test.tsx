@@ -7,7 +7,8 @@ import { all, byClass, byTag, hasClass, installDom, one, type FakeDocument, type
 import { STOP_MIN_MAX } from './model'
 import { MOCK_ROUTE_RESULTS, publishRouteResults, type RouteResults } from './routeResults'
 import { resetRouteResults } from '../../../state/routeResults'
-import { tl, WaypointList } from './WaypointList'
+import { WaypointList } from './WaypointList'
+import { t } from '../../copy'
 import { register } from './index'
 
 let doc: FakeDocument
@@ -49,10 +50,10 @@ describe('list semantics', () => {
   it('an <ol> of stops with labels, kinds, numbers and named buttons; a status live region', () => {
     mount()
     const ol = one(byTag(root, 'ol'))
-    expect(ol.getAttribute('aria-label')).toBe(tl('listLabel'))
+    expect(ol.getAttribute('aria-label')).toBe(t('route.list.listLabel'))
     expect(rows().map((r) => r.localName)).toEqual(['li', 'li', 'li'])
     expect(byClass(root, 'rpl-label').map(text)).toEqual(['W1', 'Nodule census', 'W2'])
-    expect(byClass(root, 'rpl-kind').map(text)).toEqual([tl('kind.point'), tl('kind.station'), tl('kind.point')])
+    expect(byClass(root, 'rpl-kind').map(text)).toEqual([t('route.list.kind.point'), t('route.list.kind.station'), t('route.list.kind.point')])
     for (const b of byTag(root, 'button')) expect(b.getAttribute('aria-label') || text(b), 'every button is named').toBeTruthy()
     const live = one(all(root, (n) => n.getAttribute('role') === 'status'))
     expect(live.getAttribute('aria-live')).toBe('polite')
@@ -61,20 +62,20 @@ describe('list semantics', () => {
     store.replaceRoute({ stops: [], startUtc: null, storm: false })
     mount()
     expect(byTag(root, 'ol')).toHaveLength(0)
-    expect(text(one(byClass(root, 'rpl-empty')))).toBe(tl('empty'))
+    expect(text(one(byClass(root, 'rpl-empty')))).toBe(t('route.list.empty'))
   })
 })
 
 describe('reorder', () => {
   it('Alt+ArrowDown / Alt+ArrowUp on a row move it (one undo step each), announce, keep focus', () => {
     mount()
-    const handle = btn(tl('handle', { name: 'W1' }))
+    const handle = btn(t('route.list.handle', { name: 'W1' }))
     fire(handle, 'keydown', { key: 'ArrowDown', altKey: true })
     expect(order()).toEqual(['s3', 'w1', 'p2'])
-    expect(status()).toBe(tl('announce.moved', { name: 'W1', n: 2, total: 3 }))
-    expect(doc.activeElement).toBe(btn(tl('handle', { name: 'W1' })))
+    expect(status()).toBe(t('route.list.announce.moved', { name: 'W1', n: 2, total: 3 }))
+    expect(doc.activeElement).toBe(btn(t('route.list.handle', { name: 'W1' })))
     expect(store.canUndo.peek()).toBe(true)
-    fire(btn(tl('handle', { name: 'W1' })), 'keydown', { key: 'ArrowUp', altKey: true })
+    fire(btn(t('route.list.handle', { name: 'W1' })), 'keydown', { key: 'ArrowUp', altKey: true })
     expect(order()).toEqual(['w1', 's3', 'p2'])
     store.undo()
     expect(order()).toEqual(['s3', 'w1', 'p2'])
@@ -84,40 +85,40 @@ describe('reorder', () => {
   })
   it('without Alt the arrows do nothing; at the ends the move is refused and announced', () => {
     mount()
-    fire(btn(tl('handle', { name: 'W1' })), 'keydown', { key: 'ArrowDown' })
+    fire(btn(t('route.list.handle', { name: 'W1' })), 'keydown', { key: 'ArrowDown' })
     expect(order()).toEqual(['w1', 's3', 'p2'])
-    fire(btn(tl('handle', { name: 'W1' })), 'keydown', { key: 'ArrowUp', altKey: true })
+    fire(btn(t('route.list.handle', { name: 'W1' })), 'keydown', { key: 'ArrowUp', altKey: true })
     expect(order()).toEqual(['w1', 's3', 'p2'])
-    expect(status()).toBe(tl('announce.first', { name: 'W1' }))
+    expect(status()).toBe(t('route.list.announce.first', { name: 'W1' }))
     expect(store.canUndo.peek()).toBe(false)
   })
   it('up/down buttons: disabled at the ends; focus falls back to the handle when its button disables', () => {
     mount()
-    expect(btn(tl('moveUp', { name: 'W1' })).hasAttribute('disabled')).toBe(true)
-    expect(btn(tl('moveDown', { name: 'W2' })).hasAttribute('disabled')).toBe(true)
-    fire(btn(tl('moveDown', { name: 'Nodule census' })), 'click')
+    expect(btn(t('route.list.moveUp', { name: 'W1' })).hasAttribute('disabled')).toBe(true)
+    expect(btn(t('route.list.moveDown', { name: 'W2' })).hasAttribute('disabled')).toBe(true)
+    fire(btn(t('route.list.moveDown', { name: 'Nodule census' })), 'click')
     expect(order()).toEqual(['w1', 'p2', 's3'])
-    expect(doc.activeElement).toBe(btn(tl('handle', { name: 'Nodule census' })))
-    fire(btn(tl('moveUp', { name: 'W2' })), 'click')
+    expect(doc.activeElement).toBe(btn(t('route.list.handle', { name: 'Nodule census' })))
+    fire(btn(t('route.list.moveUp', { name: 'W2' })), 'click')
     expect(order()).toEqual(['p2', 'w1', 's3'])
     // labels follow the order (W1, W2 among points)
     expect(byClass(root, 'rpl-label').map(text)).toEqual(['W1', 'W2', 'Nodule census'])
   })
   it('drag the handle onto another row: one reorder', () => {
     mount()
-    fire(btn(tl('handle', { name: 'W2' })), 'dragstart', { dataTransfer: { setData() {}, effectAllowed: '' } })
+    fire(btn(t('route.list.handle', { name: 'W2' })), 'dragstart', { dataTransfer: { setData() {}, effectAllowed: '' } })
     const first = rows()[0]
     const over = first.dispatch('dragover')
     expect(over.defaultPrevented).toBe(true)
     fire(first, 'drop')
     expect(order()).toEqual(['p2', 'w1', 's3'])
-    expect(status()).toBe(tl('announce.moved', { name: 'W2', n: 1, total: 3 }))
+    expect(status()).toBe(t('route.list.announce.moved', { name: 'W2', n: 1, total: 3 }))
   })
   it('an edit renders well within 200 ms (8 stops)', () => {
     store.replaceRoute({ stops: Array.from({ length: 8 }, (_, i) => makeStop({ id: `x${i}`, kind: 'point', lon: 137.38 + i / 1000, lat: -4.77 })), startUtc: null, storm: false })
     mount()
     const t0 = performance.now()
-    fire(btn(tl('moveDown', { name: 'W1' })), 'click')
+    fire(btn(t('route.list.moveDown', { name: 'W1' })), 'click')
     expect(performance.now() - t0).toBeLessThan(200)
   })
 })
@@ -125,7 +126,7 @@ describe('reorder', () => {
 describe('tags', () => {
   it('toggle is one undo step, aria-pressed follows, order is PLAN_TAGS', () => {
     mount()
-    const group = one(all(root, (n) => n.getAttribute('aria-label') === tl('tagsLabel', { name: 'W1' })))
+    const group = one(all(root, (n) => n.getAttribute('aria-label') === t('route.list.tagsLabel', { name: 'W1' })))
     const tag = (name: string) => one(all(group, (n) => n.localName === 'button' && text(n) === name), name)
     expect(all(group, (n) => n.localName === 'button').map(text)).toEqual([...PLAN_TAGS])
     fire(tag('Photo'), 'click')
@@ -141,7 +142,7 @@ describe('tags', () => {
 })
 
 describe('stop time', () => {
-  const input = () => one(all(root, (n) => n.localName === 'input' && n.getAttribute('aria-label') === tl('stopTimeLabel', { name: 'W1', max: STOP_MIN_MAX })))
+  const input = () => one(all(root, (n) => n.localName === 'input' && n.getAttribute('aria-label') === t('route.list.stopTimeLabel', { name: 'W1', max: STOP_MIN_MAX })))
   const set = (v: string) => {
     const el = input() as FakeNode & { value: string }
     el.value = v
@@ -168,7 +169,7 @@ describe('note', () => {
   it('typing is debounced: one undo step per idle pause, blur commits at once', () => {
     vi.useFakeTimers()
     mount()
-    const ta = one(all(root, (n) => n.localName === 'textarea' && n.getAttribute('aria-label') === tl('noteLabel', { name: 'W1' }))) as FakeNode & { value: string }
+    const ta = one(all(root, (n) => n.localName === 'textarea' && n.getAttribute('aria-label') === t('route.list.noteLabel', { name: 'W1' }))) as FakeNode & { value: string }
     for (const v of ['S', 'Sa', 'Sam', 'Samp']) {
       ta.value = v
       fire(ta, 'input')
@@ -189,15 +190,15 @@ describe('note', () => {
 describe('delete', () => {
   it('removes the stop (one undo step), announces, focuses the next row; last one → empty hint', () => {
     mount()
-    fire(btn(tl('remove', { name: 'Nodule census' })), 'click')
+    fire(btn(t('route.list.remove', { name: 'Nodule census' })), 'click')
     expect(order()).toEqual(['w1', 'p2'])
-    expect(status()).toBe(tl('announce.removed', { name: 'Nodule census' }))
-    expect(doc.activeElement).toBe(btn(tl('handle', { name: 'W2' })))
+    expect(status()).toBe(t('route.list.announce.removed', { name: 'Nodule census' }))
+    expect(doc.activeElement).toBe(btn(t('route.list.handle', { name: 'W2' })))
     store.undo()
     expect(order()).toEqual(['w1', 's3', 'p2'])
     store.replaceRoute({ stops: [W1()], startUtc: null, storm: false })
     mount()
-    fire(btn(tl('remove', { name: 'W1' })), 'click')
+    fire(btn(t('route.list.remove', { name: 'W1' })), 'click')
     expect(order()).toEqual([])
     expect(doc.activeElement).toBe(one(byClass(root, 'rpl-empty')))
   })
@@ -208,12 +209,12 @@ describe('route results (§9)', () => {
     store.replaceRoute({ stops: [W1(), S3()], startUtc: null, storm: false })
     mount()
     const [a, b] = rows()
-    expect(text(a)).toContain(tl('estimate', { minutes: '18.5' }))
-    expect(text(b)).toContain(tl('estimate', { minutes: '26.0' }))
+    expect(text(a)).toContain(t('route.list.estimate', { minutes: '18.5' }))
+    expect(text(b)).toContain(t('route.list.estimate', { minutes: '26.0' }))
     expect(rows().some((r) => hasClass(r, 'is-infeasible'))).toBe(false)
     const home = one(byClass(root, 'rpl-home'))
     expect(hasClass(home, 'is-infeasible')).toBe(true)
-    expect(text(home)).toContain(tl('unreachable.budget'))
+    expect(text(home)).toContain(t('route.list.unreachable.budget'))
   })
   it('the stop whose incoming leg is infeasible gets the marker', () => {
     store.replaceRoute({ stops: [W1(), S3()], startUtc: null, storm: false })
@@ -222,7 +223,7 @@ describe('route results (§9)', () => {
     const [a, b] = rows()
     expect(hasClass(a, 'is-infeasible')).toBe(false)
     expect(hasClass(b, 'is-infeasible')).toBe(true)
-    expect(text(b)).toContain(tl('unreachable.unreachable'))
+    expect(text(b)).toContain(t('route.list.unreachable.unreachable'))
   })
 })
 
@@ -233,7 +234,7 @@ describe('app route results (no prop)', () => {
     try {
       act(() => render(<WaypointList store={store} stationName={names} />, root as unknown as Element))
       expect(hasClass(one(byClass(root, 'rpl-home')), 'is-infeasible')).toBe(true)
-      expect(text(rows()[0])).toContain(tl('estimate', { minutes: '18.5' }))
+      expect(text(rows()[0])).toContain(t('route.list.estimate', { minutes: '18.5' }))
     } finally {
       resetRouteResults()
     }

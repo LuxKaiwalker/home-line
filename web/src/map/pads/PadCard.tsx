@@ -15,7 +15,6 @@ import { useSignalValue } from '../../state/signal'
 import { Button, TrustChip } from '../../ui/components'
 import { t } from '../../ui/copy'
 import { MarkerCard, type CardMap } from '../../ui/layout'
-import { pt } from './copy'
 import { officialCardNumbers, padCardNumbers, type CardNumbers, type NumRef } from './numbers'
 import { PAD_CARD_ID, padLayer } from './padLayer'
 import { syncPadEnvironment, type PadEnvTarget } from './sync'
@@ -61,14 +60,13 @@ function N({ r, units }: { r: NumRef; units?: string }) {
 export function PadCardBody({ info, load, active, onPlan }: { info: PadInfo; load: CardLoad; active: boolean; onPlan: () => void }) {
   return (
     <div class="hl-padcard" data-pad-card={info.id}>
-      <p class="hl-padcard__kind">{info.official ? pt('card.official') : pt('card.precomputed')}</p>
-      {load.state === 'loading' && (
-        <p class="hl-padcard__muted" role="status">
-          {pt('card.loading')}
-        </p>
-      )}
-      {load.state === 'none' && <p class="hl-padcard__muted">{pt('card.none')}</p>}
-      {load.state === 'error' && <p class="hl-padcard__muted">{pt('card.error')}</p>}
+      <p class="hl-padcard__kind">{info.official ? t('route.padmap.card.official') : t('route.padmap.card.precomputed')}</p>
+      {/* one live region that stays mounted (PORT I4 a11y): loading, then none / error are announced */}
+      <div role="status" data-live="pad-card">
+        {load.state === 'loading' && <p class="hl-padcard__muted">{t('route.padmap.card.loading')}</p>}
+        {load.state === 'none' && <p class="hl-padcard__muted">{t('route.padmap.card.none')}</p>}
+        {load.state === 'error' && <p class="hl-padcard__muted">{t('route.padmap.card.error')}</p>}
+      </div>
       {load.state === 'ok' && (
         <dl class="hl-padcard__nums">
           {load.n.reach.map((r) => (
@@ -89,7 +87,7 @@ export function PadCardBody({ info, load, active, onPlan }: { info: PadInfo; loa
           ))}
           {load.n.feasible && (
             <div class="hl-padcard__row">
-              <dt>{pt('card.feasible')}</dt>
+              <dt>{t('route.padmap.card.feasible')}</dt>
               <dd>
                 <N r={load.n.feasible} />
               </dd>
@@ -97,15 +95,15 @@ export function PadCardBody({ info, load, active, onPlan }: { info: PadInfo; loa
           )}
         </dl>
       )}
-      {load.state === 'ok' && load.n.reach.some((r) => r.range) && <p class="hl-padcard__muted">{pt('card.rangeNote')}</p>}
+      {load.state === 'ok' && load.n.reach.some((r) => r.range) && <p class="hl-padcard__muted">{t('route.padmap.card.rangeNote')}</p>}
       {active ? (
-        <p class="hl-padcard__shown">{pt('card.shown')}</p>
+        <p class="hl-padcard__shown">{t('route.padmap.card.shown')}</p>
       ) : info.hasRoutingFields || info.official ? (
         <Button variant="primary" icon="pad" onClick={onPlan} class="hl-padcard__plan">
           {t('route.pads.planFromHere')}
         </Button>
       ) : (
-        <p class="hl-padcard__muted">{pt('card.noFields')}</p>
+        <p class="hl-padcard__muted">{t('route.padmap.card.noFields')}</p>
       )}
     </div>
   )
@@ -130,12 +128,16 @@ export function PadCard({ map, store = planning }: { map: CardMap; store?: Plann
 export function PadStatus() {
   const shown = useSignalValue(padLayer.shown)
   const pads = useSignalValue(padLayer.pads)
-  if (shown.status === 'ready') return null
   const label = pads.find((p) => p.id === shown.id)?.label ?? shown.id
+  // the live region stays mounted (PORT I4 a11y); only the pill inside comes and goes
   return (
-    <p class={`hl-padstatus hl-padstatus--${shown.status}`} role="status" aria-live="polite">
-      {shown.status === 'loading' ? t('route.pads.loading', { pad: label }) : pt('status.error', { pad: label })}
-    </p>
+    <div role="status" aria-live="polite" data-live="pad-status">
+      {shown.status !== 'ready' && (
+        <p class={`hl-padstatus hl-padstatus--${shown.status}`}>
+          {shown.status === 'loading' ? t('route.pads.loading', { pad: label }) : t('route.padmap.status.error', { pad: label })}
+        </p>
+      )}
+    </div>
   )
 }
 

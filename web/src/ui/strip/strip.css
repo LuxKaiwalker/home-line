@@ -7,7 +7,7 @@
   font-size: var(--font-size-small); line-height: var(--line-height-small); color: var(--color-text);
 }
 .hl-ctx__pad { display: inline-flex; align-items: center; gap: var(--space-1); flex: none; font-weight: var(--font-weight-heading); }
-.hl-ctx__sep { color: var(--color-text-faint); flex: none; }
+.hl-ctx__sep { color: var(--color-text-muted); flex: none; }
 .hl-ctx__shown { display: inline-flex; align-items: center; gap: var(--space-2); min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .hl-ctx__what { font-weight: var(--font-weight-heading); }
 .hl-ctx__margin { display: inline-flex; align-items: center; gap: var(--space-1); }

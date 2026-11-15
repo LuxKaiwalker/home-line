@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { makeStop, PLAN_TAGS, type PlanStop } from '../../../state/planning'
 import { clampStopMin, displayLabels, legsForStops, STOP_MIN_MAX, stopSummary, toggleTag } from './model'
 import { MOCK_ROUTE_RESULTS, type RouteResults } from './routeResults'
-import own from './copy.list.json'
+import copyDeck from '../../copy.json'
 
 const W1 = makeStop({ id: 'w1', kind: 'point', lon: 137.39, lat: -4.776 })
 const S3 = makeStop({ id: 's3', kind: 'station', station: 'S3' })
@@ -74,13 +74,13 @@ describe('summary + copy', () => {
     expect(stopSummary(s, (m) => `stop ${m} min`)).toBe('stop 10 min · Photo · look')
     expect(stopSummary(W1, () => 'x')).toBe('')
   })
-  it('copy.list.json follows the copy.json rules: no digits, no "waypoint", camelCase keys', () => {
+  it('route.list (copy.json) holds no digits, no "waypoint", camelCase keys', () => {
     const leaves: [string, string][] = []
     const walk = (n: unknown, p: string) => {
       if (typeof n === 'string') leaves.push([p, n])
       else for (const [k, v] of Object.entries(n as object)) (expect(k).toMatch(/^[a-z][A-Za-z0-9]*$/), walk(v, p ? `${p}.${k}` : k))
     }
-    walk(own, '')
+    walk(copyDeck.route.list, '')
     for (const [p, s] of leaves) {
       const rest = s.replace(/\{[a-z][a-z0-9_]*\}/g, '')
       expect(/\p{Nd}/u.test(rest), p).toBe(false)

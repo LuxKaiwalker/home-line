@@ -10,7 +10,8 @@ import type { MapExtensionContext } from '../../../map/extensions'
 import { effect } from '../../../state/signal'
 import { TOKENS } from '../../../ui/tokens'
 import type { MapPointer } from '../../../map/extensions'
-import { tr, type PlanEditor } from './planEdit'
+import { type PlanEditor } from './planEdit'
+import { t } from '../../../ui/copy'
 import './planEdit.css'
 
 export const R3_GHOST_SOURCE = 'hl-r3-ghost'
@@ -180,11 +181,11 @@ export function bindPlanEditMap(ed: PlanEditor, ctx: MapExtensionContext, o: Bin
       h.m.setLngLat(dragging ? [d.lon, d.lat] : [p.lon, p.lat])
       if (fresh) h.m.addTo(map as never)
       h.label.textContent = p.name
-      const title = tr('handle.title', { name: p.name })
+      const title = t('route.mapEdit.handle.title', { name: p.name })
       h.el.title = title
       h.el.setAttribute('aria-label', title)
-      h.rm.setAttribute('aria-label', tr('handle.remove', { name: p.name }))
-      h.rm.title = tr('handle.remove', { name: p.name })
+      h.rm.setAttribute('aria-label', t('route.mapEdit.handle.remove', { name: p.name }))
+      h.rm.title = t('route.mapEdit.handle.remove', { name: p.name })
       h.el.classList.toggle('is-dragging', dragging)
       h.el.classList.toggle('is-hover', hover === p.id)
       h.el.dataset.validity = dragging && d.valid === false ? 'invalid' : 'ok'

@@ -10,14 +10,15 @@ import { OFFICIAL_PAD_ID, selectPad, usePlanning, type PlanningStore } from '../
 import { useSignalValue } from '../../state/signal'
 import type { StripProps } from '../../views/planStrip'
 import { TrustChip } from '../components'
-import { stripData, tp } from './ContextBar'
+import { stripData } from './ContextBar'
+import { t } from '../copy'
 import { reachItems, type ReachItem } from './model'
 import './strip.css'
 
 export function ReachLine({ items }: { items: readonly ReachItem[] }) {
   if (items.length === 0) return null
   return (
-    <span class="hl-dsum__reach" role="group" aria-label={tp('summary.label')}>
+    <span class="hl-dsum__reach" role="group" aria-label={t('route.strip.summary.label')}>
       {items.map((r, i) => (
         <span class="hl-dsum__item" key={r.k}>
           {i > 0 && (
@@ -25,7 +26,7 @@ export function ReachLine({ items }: { items: readonly ReachItem[] }) {
               ·
             </span>
           )}
-          <span class="hl-dsum__k">{tp('summary.reach', { budget: r.budget })}</span> <Num v={r.v} units="%" file={r.file} k={r.k} />
+          <span class="hl-dsum__k">{t('route.strip.summary.reach', { budget: r.budget })}</span> <Num v={r.v} units="%" file={r.file} k={r.k} />
           <TrustChip kind="modelled" prov={{ key: r.k, file: r.file, value: r.v }} align="start" />
         </span>
       ))}

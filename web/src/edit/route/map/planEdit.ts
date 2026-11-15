@@ -19,10 +19,8 @@ import { computed, signal, type ReadSignal } from '../../../state/signal'
 import { planning, stopLabels, type PlanStop, type PlanningStore, type StopId } from '../../../state/planning'
 import type { EditHandlers, MapPointer } from '../../../map/extensions'
 import { distanceM, ROUTE_LIMITS, type StationGeo } from '../model'
-import { copyFrom } from '../../../ui/copy'
-import copyR3 from './copy.R3.json'
+import { t } from '../../../ui/copy'
 
-export const tr = copyFrom(copyR3)
 
 /** Validity lookups at a candidate point (null = not known in this browser: never refused). */
 export interface PointProbe {
@@ -142,17 +140,17 @@ export function createPlanEditor(o: PlanEditOptions = {}) {
   function refuseText(r: Refusal, station?: string): string {
     switch (r) {
       case 'tooManyStops':
-        return tr('notice.tooManyStops', { n: ROUTE_LIMITS.maxStops })
+        return t('route.mapEdit.notice.tooManyStops', { n: ROUTE_LIMITS.maxStops })
       case 'tooManyFreePoints':
-        return tr('notice.tooManyFreePoints', { n: ROUTE_LIMITS.maxFreePoints })
+        return t('route.mapEdit.notice.tooManyFreePoints', { n: ROUTE_LIMITS.maxFreePoints })
       case 'spacing':
-        return tr('notice.spacing', { m: ROUTE_LIMITS.minStopSpacingM })
+        return t('route.mapEdit.notice.spacing', { m: ROUTE_LIMITS.minStopSpacingM })
       case 'outside':
-        return tr('notice.outside')
+        return t('route.mapEdit.notice.outside')
       case 'unreachable':
-        return tr('notice.unreachable')
+        return t('route.mapEdit.notice.unreachable')
       case 'unknownStation':
-        return tr('notice.unknownStation', { station: station ?? '' })
+        return t('route.mapEdit.notice.unknownStation', { station: station ?? '' })
     }
   }
 
@@ -187,7 +185,7 @@ export function createPlanEditor(o: PlanEditOptions = {}) {
     const ok = store.addStop({ kind: 'point', ...at })
     if (ok) {
       const s = stops()
-      say('info', tr('notice.pointAdded', { name: stopLabels(s)[s.length - 1] }))
+      say('info', t('route.mapEdit.notice.pointAdded', { name: stopLabels(s)[s.length - 1] }))
     }
     return ok
   }
@@ -195,7 +193,7 @@ export function createPlanEditor(o: PlanEditOptions = {}) {
   /** Add a station (station card "Add to route", ?add=): one undo step, or a notice why not. */
   function addStation(station: string): 'added' | 'already' | Refusal {
     if (stops().some((s) => s.kind === 'station' && s.station === station)) {
-      say('info', tr('notice.stationInRoute', { station: stationName(station) }))
+      say('info', t('route.mapEdit.notice.stationInRoute', { station: stationName(station) }))
       return 'already'
     }
     const known = stations()
@@ -210,7 +208,7 @@ export function createPlanEditor(o: PlanEditOptions = {}) {
       return r
     }
     store.addStop({ kind: 'station', station })
-    say('info', tr('notice.stationAdded', { station: stationName(station) }))
+    say('info', t('route.mapEdit.notice.stationAdded', { station: stationName(station) }))
     return 'added'
   }
 
@@ -218,7 +216,7 @@ export function createPlanEditor(o: PlanEditOptions = {}) {
     const name = nameOf(id)
     if (drag.peek()?.id === id) drag.value = null
     const ok = store.removeStop(id)
-    if (ok) say('info', tr('notice.removed', { name }))
+    if (ok) say('info', t('route.mapEdit.notice.removed', { name }))
     return ok
   }
 
@@ -289,7 +287,7 @@ export function createPlanEditor(o: PlanEditOptions = {}) {
       const at = { lon: round6(fin ? p.lon : d.lon), lat: round6(fin ? p.lat : d.lat) }
       const r = refusal(at, 'point', false, d.id)
       if (r) return say('refused', refuseText(r)) // the handle snaps back (the store is unchanged)
-      if (store.moveStop(d.id, at)) say('info', tr('notice.pointMoved', { name: d.name }))
+      if (store.moveStop(d.id, at)) say('info', t('route.mapEdit.notice.pointMoved', { name: d.name }))
     },
     cursor() {
       if (!editing.peek()) return null

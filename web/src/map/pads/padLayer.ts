@@ -13,7 +13,7 @@ import { effect, signal } from '../../state/signal'
 import { motionMs, TOKENS } from '../../ui/tokens'
 import { containerSpec, openContainer, registerContainer, type CardMap } from '../../ui/layout'
 import { createEnvSwap, type EnvSwap, type SwapMap } from './swap'
-import { pt } from './copy'
+import { t } from '../../ui/copy'
 
 /** Layout-store id of the pad pop-up card (one card; its content follows padLayer.card). */
 export const PAD_CARD_ID = 'pad-card'
@@ -60,7 +60,7 @@ function markerEl(doc: Document, p: PadInfo): HTMLButtonElement {
   el.setAttribute('class', markerClass(p, null))
   el.setAttribute('data-pad-mark', p.id)
   el.appendChild(doc.createTextNode(markerLabel(p)))
-  el.setAttribute('title', pt('marker.title', { pad: markerLabel(p) }))
+  el.setAttribute('title', t('route.padmap.marker.title', { pad: markerLabel(p) }))
   el.setAttribute('aria-haspopup', 'dialog')
   el.addEventListener('click', (ev) => {
     ev.stopPropagation() // not a map click (selection, waypoint editing)

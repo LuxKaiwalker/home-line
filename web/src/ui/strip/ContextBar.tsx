@@ -17,14 +17,12 @@ import { signal, useSignalValue } from '../../state/signal'
 import type { StripProps } from '../../views/planStrip'
 import { registerPlanMount, SectionHost, SectionsCtx, type Sections } from '../../views/planSlots'
 import { Icon, TrustChip } from '../components'
-import { copyFrom } from '../copy'
+import { t } from '../copy'
 import { layout, Popover, toggleContainer } from '../layout'
 import { activePadId, officialMargin, padName, shownFor, stripPropsOf, type Shown } from './model'
 import { useRouteResults, type RouteResults } from './routeResults'
-import own from './copy.P3.json'
 import './strip.css'
 
-export const tp = copyFrom(own)
 
 /** The top-bar host while the Plan layout is mounted (shell frame only; ?legacy=1 has none). */
 const barHost = signal<HTMLElement | null>(null)
@@ -63,10 +61,10 @@ export interface ContextLineProps {
 
 /** The bar's content (no portal; tests render it directly). */
 export function ContextLine({ strip, padId, pads, shown, sections, onPlanRoute }: ContextLineProps) {
-  const pad = padId === null ? tp('officialPad') : tp('pad', { pad: padName(padId, pads) })
+  const pad = padId === null ? t('route.strip.officialPad') : t('route.strip.pad', { pad: padName(padId, pads) })
   return (
-    <div class="hl-ctx" role="group" aria-label={tp('label')}>
-      <span class="hl-ctx__pad" title={tp('padTitle')}>
+    <div class="hl-ctx" role="group" aria-label={t('route.strip.label')}>
+      <span class="hl-ctx__pad" title={t('route.strip.padTitle')}>
         <Icon name="pad" />
         <span class="hl-ctx__padname">{pad}</span>
       </span>
@@ -74,14 +72,14 @@ export function ContextLine({ strip, padId, pads, shown, sections, onPlanRoute }
       <span class="hl-ctx__shown">{shown.kind === 'official' ? <Official strip={strip} /> : <Mine s={shown} />}</span>
       {sections && strip && (
         <span class="hl-ctx__chips">
-          <Chip id="scenario" icon="gauge" text={strip.scenarioText} label={tp('scenario')} sections={sections} />
-          <Chip id="budget" icon="timer" text={tp('budgetValue', { budget: strip.budget })} label={tp('budget')} sections={sections} />
+          <Chip id="scenario" icon="gauge" text={strip.scenarioText} label={t('route.strip.scenario')} sections={sections} />
+          <Chip id="budget" icon="timer" text={t('route.strip.budgetValue', { budget: strip.budget })} label={t('route.strip.budget')} sections={sections} />
         </span>
       )}
       {onPlanRoute && shown.kind === 'official' && (
-        <button type="button" class="hl-ctx__plan" onClick={onPlanRoute} aria-label={tp('planRoute')} title={tp('planRoute')}>
+        <button type="button" class="hl-ctx__plan" onClick={onPlanRoute} aria-label={t('route.strip.planRoute')} title={t('route.strip.planRoute')}>
           <Icon name="plus" />
-          <span class="hl-ctx__plantext">{tp('planRoute')}</span>
+          <span class="hl-ctx__plantext">{t('route.strip.planRoute')}</span>
         </button>
       )}
     </div>
@@ -92,12 +90,12 @@ function Official({ strip }: { strip: StripProps | null }) {
   const m = officialMargin(strip)
   return (
     <>
-      <span class="hl-ctx__what">{tp('officialPlan')}</span>
+      <span class="hl-ctx__what">{t('route.strip.officialPlan')}</span>
       {m && (
         <>
           {SEP}
-          <span class="hl-ctx__margin" title={`${tp('marginTitle')}: ${m.why}`}>
-            <span class="hl-ctx__k">{tp('margin')}</span> <Num v={m.v} units="min" file={m.file} k={m.k} />
+          <span class="hl-ctx__margin" title={`${t('route.strip.marginTitle')}: ${m.why}`}>
+            <span class="hl-ctx__k">{t('route.strip.margin')}</span> <Num v={m.v} units="min" file={m.file} k={m.k} />
             <TrustChip kind="simulated" prov={{ key: m.k, file: m.file, value: m.v }} align="start" />
           </span>
         </>
@@ -109,25 +107,25 @@ function Official({ strip }: { strip: StripProps | null }) {
 function Mine({ s }: { s: Extract<Shown, { kind: 'mine' }> }) {
   return (
     <>
-      <span class="hl-ctx__what">{tp('yourRoute')}</span>
+      <span class="hl-ctx__what">{t('route.strip.yourRoute')}</span>
       {SEP}
-      <span>{tp(s.stops === 1 ? 'stop' : 'stops', { n: s.stops })}</span>
+      <span>{t(s.stops === 1 ? 'route.strip.stop' : 'route.strip.stops', { n: s.stops })}</span>
       {SEP}
       {s.unreachable !== null ? (
-        <span class="hl-ctx__bad">{s.unreachable === 'home' ? tp('unreachableHome') : tp('unreachable', { n: s.unreachable })}</span>
+        <span class="hl-ctx__bad">{s.unreachable === 'home' ? t('route.strip.unreachableHome') : t('route.strip.unreachable', { n: s.unreachable })}</span>
       ) : s.marginMin !== null ? (
         <span class="hl-ctx__margin">
-          {tp('marginValue', { value: s.marginMin })}
-          <span class="hl-ctx__est">{tp('estimate')}</span>
+          {t('route.strip.marginValue', { value: s.marginMin })}
+          <span class="hl-ctx__est">{t('route.strip.estimate')}</span>
         </span>
       ) : (
-        <span class="hl-ctx__muted">{tp('marginPending')}</span>
+        <span class="hl-ctx__muted">{t('route.strip.marginPending')}</span>
       )}
       {s.fast && (
         <>
           {SEP}
-          <span class="hl-ctx__fast" title={tp('fastTitle')}>
-            {tp('fast')}
+          <span class="hl-ctx__fast" title={t('route.strip.fastTitle')}>
+            {t('route.strip.fast')}
           </span>
         </>
       )}

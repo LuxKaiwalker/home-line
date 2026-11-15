@@ -58,12 +58,13 @@ function termRegex(term: string): RegExp {
 
 /**
  * §3.8 forbids "Waypoint (except user points)"; the parenthetical is dropped by forbiddenTerms(). The
- * Mission Planer's waypoints (#/mission, copy under mission.*) are the user's own points, so the word
- * is allowed there and nowhere else (J1c, D135).
+ * user's own points live in Plan's Route panel list and map editing (route.list.*, route.mapEdit.*; the
+ * Mission Planer's mission.* before the Plan port), so the word is allowed there and nowhere else (J1c,
+ * D135, PORT I4).
  */
-const USER_POINT_PREFIX = 'mission.'
+const USER_POINT_PREFIXES = ['route.list.', 'route.mapEdit.']
 function userPointException(term: string, path: string): boolean {
-  return term.toLowerCase() === 'waypoint' && path.startsWith(USER_POINT_PREFIX)
+  return term.toLowerCase() === 'waypoint' && USER_POINT_PREFIXES.some((p) => path.startsWith(p))
 }
 
 const PLACEHOLDER = /\{[a-z][a-z0-9_]*\}/g
@@ -147,12 +148,14 @@ describe('copy.json: wording (DESIGN §3.8)', () => {
     expect(hits).toEqual([])
   })
 
-  it('allows "waypoint" only for user points, i.e. the Mission Planer (§3.8 "Waypoint (except user points)", D135)', () => {
+  it('allows "waypoint" only for user points, i.e. the Route panel list and map editing (§3.8 "Waypoint (except user points)", D135)', () => {
     expect(terms.map((s) => s.toLowerCase())).toContain('waypoint')
-    expect(userPointException('Waypoint', 'mission.waypoints.title')).toBe(true)
+    expect(userPointException('Waypoint', 'route.list.title')).toBe(true)
+    expect(userPointException('Waypoint', 'route.mapEdit.notice.pointAdded')).toBe(true)
     expect(userPointException('Waypoint', 'cards.station.title')).toBe(false)
-    expect(userPointException('Waypoint', 'missionary.x')).toBe(false)
-    expect(userPointException('Buffer', 'mission.estimates.timeMargin')).toBe(false)
+    expect(userPointException('Waypoint', 'route.listing.x')).toBe(false)
+    expect(userPointException('Waypoint', 'mission.waypoints.title')).toBe(false)
+    expect(userPointException('Buffer', 'route.list.title')).toBe(false)
   })
 
   it('the matcher catches the forbidden terms (self-check)', () => {
@@ -233,12 +236,8 @@ describe('copy.ts accessor', () => {
 
 describe('copy.json: the Plan port strings (route.*, PORT I4)', () => {
   // Every route.* key is read somewhere in the app: as a literal 'route.…' key, or under the static prefix of
-  // a template key (`route.panel.sections.${name}`). PENDING = seed keys whose package has not merged yet.
-  const PENDING: string[] = [
-    'route.pads.planFromHere', // P2
-    'route.strip.official', 'route.strip.pad', 'route.panel.open', // P3
-    'route.list.empty', // U2
-  ]
+  // a template key (`route.panel.sections.${name}`). PENDING = keys whose reader has not merged yet (none since wave 1).
+  const PENDING: string[] = []
   const SRC = join(UI, '..')
   const files = (dir: string): string[] =>
     readdirSync(dir, { withFileTypes: true }).flatMap((e) =>

@@ -9,7 +9,8 @@
 import { Icon } from '../../../ui/components/Icon'
 import { usePlanning, type PlanningLink } from '../../../state/planning'
 import { planEditor } from './plan'
-import { tr, type PlanEditor } from './planEdit'
+import { type PlanEditor } from './planEdit'
+import { t } from '../../../ui/copy'
 
 /** A station id as stations.json writes them (S1 …); anything else in a link is ignored. */
 const STATION_ID = /^[A-Za-z0-9_-]{1,32}$/
@@ -41,20 +42,20 @@ export function AddToRouteButton({ station, editor, onAdded }: { station: string
   if (has)
     return (
       <span class="hl-btn hl-btn--secondary plan-card__add is-in-route" aria-disabled="true" data-add-to-route={station} data-in-route="">
-        <Icon name="check" /> {tr('card.inRoute')}
+        <Icon name="check" /> {t('route.mapEdit.card.inRoute')}
       </span>
     )
   return (
     <button
       type="button"
       class="hl-btn hl-btn--secondary plan-card__add"
-      title={tr('card.addTip')}
+      title={t('route.mapEdit.card.addTip')}
       data-add-to-route={station}
       onClick={() => {
         if (addStationToRoute(station, ed) === 'added') onAdded?.(station)
       }}
     >
-      <Icon name="plus" /> {tr('card.add')}
+      <Icon name="plus" /> {t('route.mapEdit.card.add')}
     </button>
   )
 }
