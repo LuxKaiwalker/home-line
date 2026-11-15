@@ -1,5 +1,5 @@
 // PORT R3: the map binding (handles, ghost while dragging, notice, no pan while dragging).
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { installMapExtensions, registerEditHandlers, resetMapExtensions, type MapExtensionContext, type MapPointer } from '../../../map/extensions'
 import { MapSelection, type SelectMap } from '../../../map/select'
 import { resetSelection, selection } from '../../../state/selection'
@@ -152,6 +152,7 @@ const FLAT = (x: number, y: number) => ({ lng: 137.4 + x * 1e-4, lat: PAD.lat + 
 
 describe('F11: map click and drop pick the ground under the pointer (2D and 3D)', () => {
   afterEach(() => {
+    vi.unstubAllGlobals()
     resetMapExtensions()
     resetSelection()
   })
@@ -193,7 +194,7 @@ describe('F11: map click and drop pick the ground under the pointer (2D and 3D)'
     off()
   })
 
-  it('R3 consumes the click: MapSelection opens no card (live/mapPort.f11.test.ts: no live pad either)', () => {
+  it('acceptance: adding, dragging and dropping a point opens no card (live/mapPort.f11.test.ts: no live pad either)', () => {
     const store = createPlanningStore()
     const ed = createPlanEditor({ store, pad: () => PAD, noticeMs: 0 })
     ed.setEditing(true)
@@ -226,6 +227,22 @@ describe('F11: map click and drop pick the ground under the pointer (2D and 3D)'
     click(ground)
     expect(store.doc.peek().route.stops).toHaveLength(1) // R3 added the point
     expect(selection.selected.peek()).toBeNull() // no "Terrain spot" card
+    // drag and drop that point: no card either (the browser's click after the drop is swallowed)
+    const id = store.doc.peek().route.stops[0].id
+    const onHandle = { closest: (q: string) => (q.includes('data-r3-stop') ? { getAttribute: () => id } : null) }
+    const fire = (t: string, x: number, target: unknown) => {
+      const originalEvent = { button: 0, target, defaultPrevented: false, preventDefault() { originalEvent.defaultPrevented = true } }
+      for (const fn of handlers.get(t) ?? []) fn({ point: { x, y: 5 }, lngLat: { lng: 137.41 + x * 1e-5, lat: PAD.lat }, originalEvent })
+    }
+    vi.stubGlobal('requestAnimationFrame', () => 0) // MapSelection's hover is per frame; not under test here
+    fire('mousedown', 5, onHandle)
+    fire('mousemove', 60, onHandle)
+    fire('mouseup', 60, onHandle)
+    click(onHandle)
+    expect(store.doc.peek().route.stops).toHaveLength(1)
+    expect(selection.selected.peek()).toBeNull() // no card after the drop
+    click(onHandle) // a plain click on the handle: still no card
+    expect(selection.selected.peek()).toBeNull()
     // editing off: the same click is MapSelection's again (terrain cell card)
     ed.setEditing(false)
     click(ground)
