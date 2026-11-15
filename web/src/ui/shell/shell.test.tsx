@@ -59,7 +59,7 @@ describe('legacy frame = the layout from before the shell', () => {
     expect(header.getAttribute('class')).toBe('topbar')
     expect(text(one(byClass(header, 'brand')))).toBe('HOMELINE')
     const links = byTag(one(byClass(header, 'topnav')), 'a')
-    expect(links.map((a) => a.getAttribute('href'))).toEqual(['#/', '#/trade', '#/conditions', '#/cuff', '#/hud', '#/hud3d', '#/nav', '#/scorecard', '#/about'])
+    expect(links.map((a) => a.getAttribute('href'))).toEqual(['#/', '#/trade', '#/conditions', '#/cuff', '#/hud', '#/scorecard', '#/about'])
     expect(links.map(text)).toEqual(NAV_ITEMS.map((n) => n.label))
     expect(byClass(root, 'dummy-banner')).toHaveLength(1)
     expect(one(byTag(root, 'main')).getAttribute('class')).toBe('outlet')
@@ -119,9 +119,9 @@ describe('shell frame and islands', () => {
     expect(root().getAttribute('data-mode')).toBe('evidence')
     expect(root().getAttribute('data-dock')).toBe('none') // REPORT/EVIDENCE are documents: no dock
     const views = byClass(root(), 'hl-rail__view')
-    expect(views.map(text)).toEqual([t('nav.views.scorecard'), t('nav.views.navigation'), t('nav.views.about')])
+    expect(views.map(text)).toEqual([t('nav.views.scorecard'), t('nav.views.about')])
     expect(views[0].getAttribute('aria-current')).toBe('page')
-    expect(views.map((a) => a.getAttribute('href'))).toEqual(['#/evidence/scorecard', '#/evidence/nav', '#/evidence/about'])
+    expect(views.map((a) => a.getAttribute('href'))).toEqual(['#/evidence/scorecard', '#/evidence/about'])
   })
 
   it('every route maps into its mode (§4.2)', () => {
@@ -131,10 +131,8 @@ describe('shell frame and islands', () => {
       [{ name: 'trade' }, 'plan'],
       [{ name: 'conditions' }, 'fly'],
       [{ name: 'hud' }, 'fly'],
-      [{ name: 'hud3d' }, 'fly'],
       [{ name: 'cuff' }, 'report'],
       [{ name: 'scorecard' }, 'evidence'],
-      [{ name: 'nav' }, 'evidence'],
       [{ name: 'about' }, 'evidence'],
     ] as const
     for (const [r, m] of cases) {

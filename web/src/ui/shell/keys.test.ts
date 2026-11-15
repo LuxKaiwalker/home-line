@@ -108,14 +108,14 @@ describe('runShortcut', () => {
     expect(run({ action: 'escape' })).toBe(false) // nothing to close: the browser default stays
   })
 
-  it('T switches 2D/3D in the UI store and, in FLY, between the HUD and first-person 3D', () => {
+  it('T switches 2D/3D in the UI store and never navigates (D99: no first-person 3D view)', () => {
     run({ action: 'toggle3d' })
     expect(ui.view.value).toBe('3d')
     expect(nav).not.toHaveBeenCalled()
-    applyRoute({ name: 'hud3d' }, '#/fly/3d')
+    applyRoute({ name: 'hud' }, '#/fly/hud')
     run({ action: 'toggle3d' })
     expect(ui.view.value).toBe('2d')
-    expect(nav).toHaveBeenLastCalledWith('#/fly/hud')
+    expect(nav).not.toHaveBeenCalled()
   })
 
   it('Space and arrows drive the mission clock in FLY only; the HUD keeps its own Space', async () => {

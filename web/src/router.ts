@@ -1,13 +1,15 @@
 // Hash router (SPEC F17). Hash routes survive GitHub Pages (no SPA fallback) and work logged out.
 // Pages: / (planning console), /station/:id, /trade, /conditions, /scorecard, /cuff, /about.
-// Mount slots for other workstreams: /hud (WS7), /hud3d (WS8), /nav (WS9).
+// Mount slot for another workstream: /hud (WS7).
+// Removed views (D98, D99): /nav (navigation add-on) redirects to EVIDENCE, /hud3d (first-person 3D)
+// redirects to the 2D HUD; their mode paths #/evidence/nav and #/fly/3d redirect the same way.
 //
 // Mode routes (DESIGN §4.2, WS15 task 4 / A4). PLAN keeps the root and its old URLs (`#/`,
 // `#/station/:id`, `#/trade`): `#/plan/{hash}` is the plan-permalink namespace (§4.2 "any mode with
 // that plan loaded", F28, owned by src/live/), so PLAN cannot live under `#/plan`. The other modes:
-//   FLY       #/fly/hud  #/fly/3d  #/fly/conditions          (#/fly = #/fly/hud)
+//   FLY       #/fly/hud  #/fly/conditions                   (#/fly = #/fly/hud)
 //   REPORT    #/report/cuff                                  (#/report = #/report/cuff until U10)
-//   EVIDENCE  #/evidence/scorecard[?key=K]  #/evidence/nav  #/evidence/about  (#/evidence = scorecard)
+//   EVIDENCE  #/evidence/scorecard[?key=K]  #/evidence/about  (#/evidence = scorecard)
 // parseRoute accepts the old and the new paths; the shell replaces an old hash by canonicalHref
 // (redirectFor), so every old link and deep link keeps working. href() still writes the old paths,
 // which every layout understands (the legacy layout never redirects).
@@ -21,26 +23,32 @@ export type Route =
   | { name: 'cuff' }
   | { name: 'about' }
   | { name: 'hud' }
-  | { name: 'hud3d' }
-  | { name: 'nav' }
   | { name: 'notfound'; path: string }
 
-const SIMPLE = ['trade', 'conditions', 'cuff', 'about', 'hud', 'hud3d', 'nav'] as const
+const SIMPLE = ['trade', 'conditions', 'cuff', 'about', 'hud'] as const
 
-type ModeView = 'hud' | 'hud3d' | 'conditions' | 'cuff' | 'scorecard' | 'nav' | 'about'
+type ModeView = 'hud' | 'conditions' | 'cuff' | 'scorecard' | 'about'
 /** New canonical path of every view outside PLAN (DESIGN §4.2). */
 export const MODE_PATHS: Readonly<Record<ModeView, string>> = {
   hud: '/fly/hud',
-  hud3d: '/fly/3d',
   conditions: '/fly/conditions',
   cuff: '/report/cuff',
   scorecard: '/evidence/scorecard',
-  nav: '/evidence/nav',
   about: '/evidence/about',
 }
 /** The view a bare mode path shows (#/fly, #/report, #/evidence). */
 const MODE_ROOT: Readonly<Record<string, ModeView>> = { fly: 'hud', report: 'cuff', evidence: 'scorecard' }
 const MODE_PATH_VIEW: Readonly<Record<string, ModeView>> = Object.fromEntries(Object.entries(MODE_PATHS).map(([v, p]) => [p, v as ModeView]))
+/**
+ * Paths of removed views and the view they now open (the shell then redirects to its canonical hash):
+ * D98 the navigation add-on (/nav) -> EVIDENCE; D99 the first-person 3D view (/hud3d) -> FLY 2D HUD.
+ */
+export const REMOVED_PATHS: Readonly<Record<string, ModeView>> = {
+  '/nav': 'scorecard',
+  '/evidence/nav': 'scorecard',
+  '/hud3d': 'hud',
+  '/fly/3d': 'hud',
+}
 
 export function parseRoute(hash: string): Route {
   const raw = hash.replace(/^#/, '')
@@ -50,6 +58,7 @@ export function parseRoute(hash: string): Route {
   const params = new URLSearchParams(query)
 
   if (segs.length === 0) return { name: 'console' }
+  if (Object.hasOwn(REMOVED_PATHS, path)) return { name: REMOVED_PATHS[path] }
   const [head, ...rest] = segs
   if (Object.hasOwn(MODE_ROOT, head) && rest.length <= 1) {
     const sub = `/${head}/${rest[0] ?? ''}`
@@ -139,15 +148,13 @@ export function isLegacy(param: string | null, route: Route): boolean {
   return v.split(',').some((n) => n.trim() === route.name.toLowerCase())
 }
 
-/** Top navigation, in display order. Slots (hud/hud3d/nav) are listed but owned by WS7/8/9. */
+/** Top navigation, in display order. The hud slot is listed but owned by WS7. */
 export const NAV_ITEMS: { route: Route; label: string }[] = [
   { route: { name: 'console' }, label: 'Plan' },
   { route: { name: 'trade' }, label: 'Trade' },
   { route: { name: 'conditions' }, label: 'Conditions' },
   { route: { name: 'cuff' }, label: 'Cuff card' },
   { route: { name: 'hud' }, label: 'HUD' },
-  { route: { name: 'hud3d' }, label: '3D' },
-  { route: { name: 'nav' }, label: 'Navigation (optional)' }, // D19: optional add-on
   { route: { name: 'scorecard' }, label: 'Scorecard' },
   { route: { name: 'about' }, label: 'About' },
 ]

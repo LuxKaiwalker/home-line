@@ -39,13 +39,11 @@ export const MODE_VIEWS: Readonly<Record<Mode, readonly ModeView[]>> = {
   ],
   fly: [
     { route: { name: 'hud' }, label: 'nav.views.hud', icon: 'gauge' },
-    { route: { name: 'hud3d' }, label: 'nav.views.hud3d', icon: 'rotate-3d' },
     { route: { name: 'conditions' }, label: 'nav.views.conditions', icon: 'sun' },
   ],
   report: [{ route: { name: 'cuff' }, label: 'nav.views.cuff', icon: 'printer' }],
   evidence: [
     { route: { name: 'scorecard' }, label: 'nav.views.scorecard', icon: 'shield-check' },
-    { route: { name: 'nav' }, label: 'nav.views.navigation', icon: 'compass' },
     { route: { name: 'about' }, label: 'nav.views.about', icon: 'info' },
   ],
 }

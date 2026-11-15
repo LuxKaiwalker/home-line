@@ -3,8 +3,8 @@
  *
  * Screens: every 2D route of web/src/router.ts plus /styleguide (skipped while the route is not
  * registered, i.e. the app renders its "Not found" page). Viewports: 1440×900 and 1024×768
- * (projects in playwright.config.ts). Never judged here (R7, software WebGL in CI): #/hud3d (Three.js)
- * and #/spike (field shader). The MapLibre map and every other <canvas> are masked, so only the DOM
+ * (projects in playwright.config.ts). Never judged here (R7, software WebGL in CI): #/spike (field
+ * shader). #/nav and #/hud3d are removed (D98, D99). The MapLibre map and every other <canvas> are masked, so only the DOM
  * around them (panels, legends, chips, text) is compared; the RR lane judges what is drawn on canvases.
  *
  * Baselines: tests/visual/__screenshots__/<screen>-<viewport>.png, taken on CI only (ubuntu-latest,
@@ -47,7 +47,6 @@ const SCREENS: Screen[] = [
   { name: 'conditions', hash: '#/conditions' },
   { name: 'cuff', hash: '#/cuff' },
   { name: 'hud', hash: '#/hud', mask: ['.hl-hud-fps'] }, // measured frame rate: never stable
-  { name: 'nav', hash: '#/nav' },
   { name: 'scorecard', hash: '#/scorecard' },
   { name: 'about', hash: '#/about' },
   { name: 'styleguide', hash: '#/styleguide', optional: true },

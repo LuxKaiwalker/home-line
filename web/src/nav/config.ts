@@ -1,5 +1,6 @@
 // Navigation constants, read from config/nav.yaml (and crew.yaml / hud.yaml via src/config.ts) at
-// build time. AGENTS rule 2: no copies. Presentation-only values (colours) live in ./theme.ts.
+// build time. AGENTS rule 2: no copies. Since D98 the /nav view is removed; what remains in src/nav/
+// (config, loader, types, ellipse geometry, series, position line) serves the 2D HUD only.
 import navRaw from '../../../config/nav.yaml'
 import hudRaw from '../../../config/hud.yaml'
 import { cfg, CONFIG } from '../config'
@@ -39,10 +40,7 @@ export const NAV = {
   criterion: cfg<string>(navRaw, 'fix_interval.criterion'),
   runs: cfg<number>(navRaw, 'monte_carlo.runs'),
   skylineStandaloneOffsetM: cfg<number>(navRaw, 'skyline_fix.standalone_prior_offset_m'),
-  /** HUD playback (hud.yaml): the /nav scrubber uses the same speeds. */
+  /** HUD playback (hud.yaml). */
   playbackSpeeds: cfg<number[]>(hudRaw, 'playback_speeds'),
   defaultSpeed: cfg<number>(hudRaw, 'default_speed'),
 } as const
-
-/** Config citation for on-screen config values (shown with <CfgNum>). */
-export const navSource = (key: string) => `config/nav.yaml: ${key}`
