@@ -58,6 +58,7 @@ export function LayerPanel() {
   const any = OVERLAYS.some((o) => on[o.id])
   return (
     <div class="hl-ovl">
+      <p class="hl-ovl__hint">{t('hints.layers.cap', { max: OVERLAY_CFG.maxThematicOn })}</p>
       <p class="hl-ovl__notice" role="status">
         {notice ? t('tooltips.layerCap', { max: OVERLAY_CFG.maxThematicOn, layer: t(overlayById(notice.turnedOff).name) }) : any ? '' : t('states.empty.noLayers')}
       </p>
