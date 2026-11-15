@@ -37,7 +37,7 @@
 /* L3's Edit-route button joins the bottom of the tool column (mount writes --plan-tools-bottom) */
 .console--layout .hl-editroute__edge {
   top: calc(var(--plan-tools-bottom, var(--space-7)) + var(--space-1)); bottom: auto;
-  right: calc(var(--plan-inset-right, 0px) + var(--space-2));
+  right: calc(var(--plan-tools-right, var(--plan-inset-right, 0px)) + var(--space-2)); /* F6: with the column */
 }
 
 /* the rover card (views/planStation.tsx): its title already says "Rover pad" */

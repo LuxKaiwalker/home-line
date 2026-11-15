@@ -74,7 +74,10 @@ export function mountPlanChrome(ctx: PlanMountCtx): () => void {
   const tools = (): HTMLElement | null => ctx.el.edge.querySelector<HTMLElement>('.plan-tools')
   const write = () => {
     const c = tools()
-    if (c) ctx.mapEl.style.setProperty('--plan-tools-bottom', `${c.offsetTop + c.offsetHeight}px`)
+    if (!c) return
+    ctx.mapEl.style.setProperty('--plan-tools-bottom', `${c.offsetTop + c.offsetHeight}px`)
+    // PORT F6: the column's width (2D/3D is its widest control); the Route panel keeps clear of it
+    ctx.mapEl.style.setProperty('--plan-tools-w', `${c.offsetWidth}px`)
   }
   let ro: ResizeObserver | null = null
   let mo: MutationObserver | null = null
@@ -98,6 +101,7 @@ export function mountPlanChrome(ctx: PlanMountCtx): () => void {
     mo?.disconnect()
     ro?.disconnect()
     ctx.mapEl.style?.removeProperty?.('--plan-tools-bottom')
+    ctx.mapEl.style?.removeProperty?.('--plan-tools-w')
     render(null, slot)
     slot.remove()
   }
