@@ -21,6 +21,9 @@ export interface PointRowProps {
   name: string
   label: string | undefined
   disabled: boolean
+  /** WP12 (L6 W-4): why the row is disabled (tooltip) and the id of the note that says it */
+  why?: string | null
+  whyId?: string
 }
 
 /**
@@ -41,7 +44,8 @@ function holdRow(e: Event): void {
   window.addEventListener('pointercancel', back, true)
 }
 
-export function PointRowBody({ ctl, index, name, label, disabled }: PointRowProps) {
+export function PointRowBody({ ctl, index, name, label, disabled, why = null, whyId }: PointRowProps) {
+  const reason = disabled && why ? { title: why, 'aria-describedby': whyId } : {}
   const ed = editorOf(ctl)
   const commit = (el: HTMLInputElement) => {
     if (!ed.rename(index, el.value)) el.value = label ?? ''
@@ -60,6 +64,7 @@ export function PointRowBody({ ctl, index, name, label, disabled }: PointRowProp
         placeholder={fill(W.labelPlaceholder, { name })}
         aria-label={fill(W.labelField, { name })}
         disabled={disabled}
+        {...reason}
         onChange={(e) => commit(e.currentTarget as HTMLInputElement)}
         onKeyDown={(e) => {
           // the field owns its keys: Ctrl+Z edits the text, Alt+arrows move the caret
@@ -77,7 +82,7 @@ export function PointRowBody({ ctl, index, name, label, disabled }: PointRowProp
           e.stopPropagation()
         }}
       />
-      <IconButton icon="x" label={fill(W.delete, { name })} class="hl-route__delete" data-route-action="delete-point" disabled={disabled} onClick={() => ed.remove(index)} />
+      <IconButton icon="x" label={fill(W.delete, { name })} class="hl-route__delete" data-route-action="delete-point" disabled={disabled} {...reason} onClick={() => ed.remove(index)} />
     </span>
   )
 }
@@ -104,12 +109,13 @@ export function AddPointButton({ ctl }: { ctl: RouteController }) {
         aria-pressed={adding ? 'true' : 'false'}
         disabled={!!blocked && !adding}
         title={why ?? undefined}
+        aria-describedby={why && !adding ? 'hl-route-why-add' : undefined}
         onClick={() => ed.toggleAdd()}
       >
         <Icon name={adding ? 'x' : 'crosshair'} />
         {adding ? W.addCancel : W.add}
       </button>
-      <span class="hl-route__note" role="status">
+      <span class="hl-route__note" role="status" id="hl-route-why-add">
         {adding ? W.addArmed : (why ?? fill(W.addHint, { n: ROUTE_LIMITS.maxFreePoints }))}
       </span>
     </div>

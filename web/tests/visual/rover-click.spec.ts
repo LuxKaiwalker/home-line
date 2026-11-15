@@ -5,7 +5,7 @@
  *   - A click without movement, and a click with 3 px of hand jitter (MapLibre starts its marker drag
  *     at 3 px), open the official pad card (U14) and open no "What this change costs" strip (no draft).
  *   - A press that moves well beyond the click slop (4 px) still drags the rover: on release the
- *     delta strip opens; Escape discards it.
+ *     delta strip opens (L2d, D111: in the rover card on the map, #hl-lay-rover); Escape discards it.
  * Run: cd web && npm run build && npx playwright test tests/visual/rover-click.spec.ts
  */
 import { expect, test, type Page } from 'playwright/test'
@@ -49,7 +49,10 @@ test('rover pad marker: a press moving beyond the slop still drags (delta strip 
   await page.mouse.move(at.x - 60, at.y + 10, { steps: 12 })
   await expect(page.locator('.hl-edit-rover')).toHaveClass(/is-dragging/)
   await page.mouse.up()
-  await expect(card(page)).toContainText('What this change costs', { timeout: 10_000 })
+  const strip = page.locator('#hl-lay-rover') // L2d: the delta strip's card
+  await expect(strip).toContainText('What this change costs', { timeout: 10_000 })
+  await expect(card(page)).not.toContainText('What this change costs')
   await page.keyboard.press('Escape')
-  await expect(card(page)).not.toContainText('What this change costs', { timeout: 5_000 })
+  await expect(strip).toHaveCount(0, { timeout: 5_000 })
+  await expect(page.locator('.hl-edit-delta')).toHaveCount(0)
 })

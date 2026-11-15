@@ -3,9 +3,15 @@
 // answer. No DOM and nothing from src/live: the live side passes a RouteJobs port (live/route/jobs.ts)
 // and optionally a RouteMap port (live/route/map.ts). D85: nothing is computed while the user drags a
 // stop; only "Compute plan" starts a job. Waypoint rule 2: the order is never changed here.
+//
+// WP12 (L6 W-1, W-4): this is the ONE compute action of the Plan view: the inputs are the route store's
+// step (pad from the pad tool or the plan in use, crew from the crew panel, the route), one job at a
+// time; a second press while a job runs starts nothing and asks the panel to focus the progress. Ticking
+// a station while the engine chooses switches to "My order" and adds it in one undo step.
 import { computed, signal, type ReadSignal } from '../../state/signal'
-import { checkRoute, legCoords, moveStop, routeLegs, setMode, toggleStation, type PlanRoute, type RouteCheck, type RouteMode, type StationGeo, type StopProbe } from './model'
-import type { RouteStep, RouteStore } from './store'
+import { checkRoute, legCoords, moveStop, routeLegs, rowIds, setMode, toggleStation, type PlanRoute, type RouteCheck, type RouteMode, type StationGeo, type StopProbe } from './model'
+import type { RouteDraftTarget, RouteStep, RouteStore } from './store'
+import { fill, LIMIT_SHORT, MAP_TEXT } from './text'
 
 /** The limit an infeasible route breaks first (draft §4.2: O₂ at the effort-cap rule D45, daylight, EVA length D28, dose). */
 export type RouteLimit = 'O2' | 'daylight' | 'EVA duration' | 'dose'
@@ -64,9 +70,18 @@ export interface RouteMap {
   /** Draw a staged snapshot through the console map's own setters (one rendering path). */
   showStage(data: unknown): void | Promise<void>
   /** Highlight the failing leg `leg` (null clears it). */
-  highlightLeg(coords: [number, number][] | null, label?: string, leg?: number): void
+  highlightLeg(coords: [number, number][] | null, label?: string, leg?: number, end?: RouteEnd): void
   /** Give the map back to the static plan. */
   restore(): void
+}
+
+/** D117: where an infeasible route stops (the last reached stop: the failing leg's start); no way home is drawn. */
+export interface RouteEnd {
+  /** run-record name of the stop ('pad' when the first leg fails) */
+  name: string
+  label: string
+  /** the failing leg (contract numbering): route legs from it on are not drawn */
+  leg: number
 }
 
 export type ComputeState =
@@ -86,6 +101,8 @@ export interface RouteControllerOptions {
   map?: RouteMap | null
   /** health says heavy jobs are possible now (index.ts onLiveState + bannerFor) */
   canCompute?: ReadSignal<boolean>
+  /** WP12: why the job cannot start although the route is fine (crew panel: a field is not a number); null = nothing */
+  blocked?: ReadSignal<string | null>
 }
 
 export function createRouteController(o: RouteControllerOptions) {
@@ -96,6 +113,18 @@ export function createRouteController(o: RouteControllerOptions) {
   let handle: { cancel(): void } | null = null
   let seq = 0
   let drawn = false
+  /** bumped when the user asks for a job while one runs: the panel focuses the progress (W-1) */
+  const focusRequest = signal(0)
+  /**
+   * W-7: the order of the rows in the stop list. A tick, a mode change or a waypoint edit keeps every
+   * row where it is (nothing moves under the pointer); an explicit reorder (drag, Alt+Up/Down), undo
+   * or redo lays the rows out in route order again (null = route order).
+   */
+  const layout = signal<readonly string[] | null>(null)
+  const resort = () => {
+    if (layout.peek() !== null) layout.value = null
+  }
+  const requestFocus = () => void (focusRequest.value = focusRequest.peek() + 1)
 
   const check = computed<RouteCheck>(() => {
     void store.step.value // pad changes rebuild the check
@@ -112,16 +141,24 @@ export function createRouteController(o: RouteControllerOptions) {
     drawn = false
   }
   /** Every route edit: one undo step; a shown result belongs to the old route, so it is cleared. */
-  function edit(next: PlanRoute): boolean {
+  function edit(next: PlanRoute, rows: 'keep' | 'resort' = 'keep'): boolean {
+    const pre = layout.peek() ?? rowIds(store.route.peek(), o.stations)
     if (!store.apply(next)) return false
+    if (rows === 'resort') resort()
+    else if (layout.peek() === null) layout.value = pre
     clearResult()
     return true
   }
 
   function runCompute(): boolean {
     const c = compute.peek()
-    if (c.kind === 'running' || dragging.peek() !== null) return false
-    if (!check.peek().ok || (o.canCompute && !o.canCompute.peek())) return false
+    if (c.kind === 'running') {
+      // one job at a time (W-1): a second press only brings the progress into view
+      requestFocus()
+      return false
+    }
+    if (dragging.peek() !== null) return false
+    if (!check.peek().ok || (o.canCompute && !o.canCompute.peek()) || o.blocked?.peek()) return false
     clearResult()
     const my = ++seq
     const step = store.step.peek()
@@ -155,7 +192,8 @@ export function createRouteController(o: RouteControllerOptions) {
         if (out.status === 'done') {
           compute.value = { kind: 'done', job, stage, result: out.result, key: step.key }
           const f = out.result.feasibility
-          if (f && !f.feasible) o.map?.highlightLeg(legCoords(route, f.leg, { stations: o.stations, pad: o.pad() }), `${f.from} → ${f.to}`, f.leg)
+          if (f && !f.feasible)
+            o.map?.highlightLeg(legCoords(route, f.leg, { stations: o.stations, pad: o.pad() }), fill(MAP_TEXT.fails, { limit: LIMIT_SHORT[f.limit as RouteLimit] ?? f.limit }), f.leg, { name: f.from, label: MAP_TEXT.end, leg: f.leg })
         } else if (out.status === 'failed') compute.value = { kind: 'failed', job, stage, failure: out.failure, key: step.key }
         else compute.value = { kind: 'cancelled', key: step.key }
       }),
@@ -170,11 +208,27 @@ export function createRouteController(o: RouteControllerOptions) {
     dragging: dragging as ReadSignal<number | null>,
     legs: computed(() => routeLegs(store.route.value)),
     stations: o.stations,
+    blocked: o.blocked ?? null,
+    focusRequest: focusRequest as ReadSignal<number>,
+    requestFocus,
     setMode: (m: RouteMode) => edit(setMode(store.route.peek(), m)),
-    toggle: (id: string, on: boolean) => edit(toggleStation(store.route.peek(), id, on)),
-    move: (from: number, to: number) => edit(moveStop(store.route.peek(), from, to)),
-    /** Any other route edit (WP6 free points: add, move, rename, delete): one undo step, result cleared. */
-    edit,
+    /** W-4: in "Engine chooses" a tick (or untick) switches to "My order" too: one undo step for both. */
+    toggle: (id: string, on: boolean) => {
+      const r = store.route.peek()
+      const next = toggleStation(r, id, on)
+      return next === r ? false : edit(setMode(next, 'ordered'))
+    },
+    move: (from: number, to: number) => edit(moveStop(store.route.peek(), from, to), 'resort'),
+    /** Any other route edit (WP6 free points: add, move, rename, delete): one undo step, result cleared; rows stay. */
+    edit: (next: PlanRoute) => edit(next),
+    /** setRouteDraft's view of this panel (store.ts): the same checks, one undo step, rows in route order. */
+    draftTarget: (): RouteDraftTarget => ({
+      route: () => store.route.peek(),
+      check: (r) => checkRoute(r, { stations: o.stations, pad: o.pad(), probe: o.probe }),
+      apply: (r) => edit(r, 'resort'),
+    }),
+    /** W-7: the row layout of the stop list (null = route order). */
+    layout: layout as ReadSignal<readonly string[] | null>,
     /** Drag gesture: start (no store change), drop (one undo step), cancel. */
     dragStart(i: number): void {
       dragging.value = i
@@ -182,18 +236,20 @@ export function createRouteController(o: RouteControllerOptions) {
     dragDrop(to: number): boolean {
       const from = dragging.peek()
       dragging.value = null
-      return from === null ? false : edit(moveStop(store.route.peek(), from, to))
+      return from === null ? false : edit(moveStop(store.route.peek(), from, to), 'resort')
     },
     dragCancel(): void {
       dragging.value = null
     },
     undo(): boolean {
       if (!store.undo()) return false
+      resort()
       clearResult()
       return true
     },
     redo(): boolean {
       if (!store.redo()) return false
+      resort()
       clearResult()
       return true
     },

@@ -8,11 +8,17 @@
 // Every route change is one undo step (config/design.yaml edit.undo_max, as H1). The H1 store file is
 // not changed: it ships in the static build, which must stay byte-identical (waypoint rule 4). When
 // that constraint is lifted the route can move into store.ts as a field of EditPlan.
+//
+// WP12 (L6 W-1, W-5):
+//   extra  inputs added on top of the H1 plan at every step (the crew panel's changed fields), so the
+//          job, the canonical text and the hash cover pad + crew + route as ONE plan_inputs
+//   tag    every undo/redo entry remembers the plan it was made on (undo.ts: one timeline with the
+//          H1 plan edits behind the one global Ctrl/Cmd-Z)
 import { batch, computed, signal, type ReadSignal } from '../../state/signal'
 import { canonicalJson, defaultInputs, hashCanonical, inputsKey, type CanonicalContext, type EngineIdentity, type PlanInputs } from '../canonical'
 import type { EditCatalog, EditPlan } from '../options'
 import { createPlanEditStore, UNDO_MAX } from '../store'
-import { AUTO_ROUTE, routeForHash, routePayload, sameRoute, type PlanRoute } from './model'
+import { AUTO_ROUTE, isStationStop, routeForHash, routePayload, sameRoute, type PlanRoute, type RouteCheck, type RouteStop, type StopProblem } from './model'
 
 export type RouteInputs = PlanInputs & { route?: ReturnType<typeof routePayload> }
 
@@ -34,6 +40,10 @@ export interface RouteStoreOptions {
   initial?: PlanRoute
   identity?: EngineIdentity | null
   undoMax?: number
+  /** WP12: inputs on top of the plan (crew panel: {crew: changed fields}); null or {} = none */
+  extra?: () => Partial<PlanInputs> | null
+  /** WP12: the plan an edit is made on (undo.ts planKey); stored with each undo/redo entry */
+  tag?: () => string
 }
 
 export function createRouteStore(opts: RouteStoreOptions) {
@@ -46,12 +56,24 @@ export function createRouteStore(opts: RouteStoreOptions) {
   const route = signal<PlanRoute>(opts.initial ?? AUTO_ROUTE)
   const past = signal<readonly PlanRoute[]>([])
   const future = signal<readonly PlanRoute[]>([])
+  /** the plan tag of each past / future entry (same length and order as past / future) */
+  let pastTags: string[] = []
+  let futureTags: string[] = []
+  const tagNow = () => opts.tag?.() ?? ''
   const identity = signal<EngineIdentity | null>(opts.identity ?? null)
   /** bumped when the console's plan may have changed (pad drag, scenario): steps are rebuilt */
   const planTick = signal(0)
 
+  /** H1 inputs + the extra fields (crew merged field by field: the scenario's suit stays unless changed) */
+  function withExtra(inputs: PlanInputs): PlanInputs {
+    const x = opts.extra?.()
+    if (!x || !Object.keys(x).length) return inputs
+    const out: PlanInputs = { ...inputs, ...x, pad: inputs.pad, contract_version: inputs.contract_version }
+    if (x.crew) out.crew = { ...inputs.crew, ...x.crew }
+    return out
+  }
   function stepOf(plan: EditPlan, r: PlanRoute): RouteStep {
-    const base = h1.stepOf(plan).inputs
+    const base = withExtra(h1.stepOf(plan).inputs)
     const send = routePayload(r)
     const hashed = routeForHash(r)
     const inputs: RouteInputs = send ? { ...base, route: send } : { ...base }
@@ -86,8 +108,11 @@ export function createRouteStore(opts: RouteStoreOptions) {
     apply(next: PlanRoute): boolean {
       const cur = route.peek()
       if (sameRoute(cur, next)) return false
+      const tag = tagNow()
       batch(() => {
         const p = [...past.peek(), cur]
+        pastTags = [...pastTags, tag].slice(-undoMax)
+        futureTags = []
         past.value = p.length > undoMax ? p.slice(p.length - undoMax) : p
         future.value = []
         route.value = next
@@ -98,6 +123,8 @@ export function createRouteStore(opts: RouteStoreOptions) {
       const p = past.peek()
       if (!p.length) return false
       batch(() => {
+        futureTags = [pastTags[pastTags.length - 1] ?? tagNow(), ...futureTags]
+        pastTags = pastTags.slice(0, -1)
         future.value = [route.peek(), ...future.peek()]
         route.value = p[p.length - 1]
         past.value = p.slice(0, -1)
@@ -108,11 +135,20 @@ export function createRouteStore(opts: RouteStoreOptions) {
       const f = future.peek()
       if (!f.length) return false
       batch(() => {
+        pastTags = [...pastTags, futureTags[0] ?? tagNow()].slice(-undoMax)
+        futureTags = futureTags.slice(1)
         past.value = [...past.peek(), route.peek()].slice(-undoMax)
         route.value = f[0]
         future.value = f.slice(1)
       })
       return true
+    },
+    /** WP12: the plan tag of the entry undo / redo would restore (undefined: nothing to undo / redo). */
+    undoTag(): string | undefined {
+      return past.peek().length ? pastTags[pastTags.length - 1] : undefined
+    },
+    redoTag(): string | undefined {
+      return future.peek().length ? futureTags[0] : undefined
     },
     setIdentity(id: EngineIdentity | null): void {
       identity.value = id
@@ -126,3 +162,53 @@ export function createRouteStore(opts: RouteStoreOptions) {
 }
 
 export type RouteStore = ReturnType<typeof createRouteStore>
+
+// ---- setRouteDraft (WP12, for the search route builder S3a) --------------------------------------
+
+/** The route being edited, as setRouteDraft sees it (controller.draftTarget(); registered by the live mount). */
+export interface RouteDraftTarget {
+  route(): PlanRoute
+  /** the panel's own validity rules (stations, limits, spacing, field) for a route */
+  check(r: PlanRoute): RouteCheck
+  /** one undoable step on the Plan view's one undo (W-5); rows laid out in route order */
+  apply(r: PlanRoute): boolean
+}
+let draftTarget: RouteDraftTarget | null = null
+/** Make `t` the route setRouteDraft writes to (the mounted Edit-route panel); returns unregister. */
+export function registerRouteDraftTarget(t: RouteDraftTarget): () => void {
+  draftTarget = t
+  return () => {
+    if (draftTarget === t) draftTarget = null
+  }
+}
+
+const DROP: readonly StopProblem[] = ['unknownStation', 'duplicate']
+const ROUTE_TO_STOP = { tooManyStops: 'tooMany', tooManyFreePoints: 'tooMany', noStops: null } as const
+
+/**
+ * Apply a whole route draft (e.g. built by search) as ONE undoable step, validated like a manual edit:
+ *   - an unknown station or a repeated stop is dropped and reported (the rest still applies)
+ *   - too many stops or free points, a stop too close to another or to the pad, or a stop the field
+ *     refuses (outside the grid, unassessed, not walkable, unreachable): nothing is applied
+ * Free points are named W1, W2, … by their order among the free stops, as usual. `ok` = the draft (minus
+ * the dropped stops) is now the route; `problems` = every problem found, dropped stops included, in
+ * stop order. No Edit-route panel mounted (static build, live planning offline): ok false, no problems.
+ */
+export function setRouteDraft(stops: RouteStop[], mode: 'ordered' | 'auto' = 'ordered'): { ok: boolean; problems: StopProblem[] } {
+  const t = draftTarget
+  if (!t) return { ok: false, problems: [] }
+  const norm: RouteStop[] = stops.map((s) => (isStationStop(s) ? { station: s.station } : { lon: s.lon, lat: s.lat, ...(s.label ? { label: s.label } : {}) }))
+  const first = t.check({ mode: 'ordered', stops: norm })
+  const dropped: StopProblem[] = []
+  const kept = norm.filter((_, i) => {
+    const bad = (first.stops[i]?.problems ?? []).filter((p) => DROP.includes(p))
+    dropped.push(...bad)
+    return !bad.length
+  })
+  const next: PlanRoute = { mode, stops: kept }
+  const c = t.check({ mode: 'ordered', stops: kept })
+  const refused: StopProblem[] = [...c.stops.flatMap((s) => (s.valid === false ? s.problems : [])), ...c.route.map((p) => ROUTE_TO_STOP[p]).filter((p): p is 'tooMany' => p !== null)]
+  if (refused.length) return { ok: false, problems: [...dropped, ...[...new Set(refused)]] }
+  t.apply(next)
+  return { ok: true, problems: dropped }
+}
