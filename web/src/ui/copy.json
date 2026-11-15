@@ -1088,5 +1088,16 @@
       "credit": "Raw images, NASA/JPL-Caltech/MSSS ·",
       "archive": "raw-image archive"
     }
+  },
+  "route": {
+    "pads": { "official": "Official pad", "loading": "Loading pad {pad}…", "planFromHere": "Plan from here" },
+    "strip": { "official": "Official", "pad": "Pad {pad}" },
+    "panel": { "title": "Route", "open": "Plan a route", "fast": "Fast route · may not be the fastest" },
+    "list": { "empty": "Click the map to add a point, or add a station from its card." },
+    "settings": { "storm": "Include storm in the margin" },
+    "export": { "marvis": "Send to MARVIS", "download": "Download mission.json" },
+    "map": { "official": "Official route for this pad", "mine": "Your route" },
+    "layers": { "slope": { "title": "Slope" }, "curiosity": { "title": "Curiosity route and photos" } },
+    "basemaps": { "title": "Maps" }
   }
 }

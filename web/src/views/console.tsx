@@ -34,6 +34,7 @@ import type { View } from './types'
 import { makeSections, mountPlanSlots, PlanSummary, S, SectionsCtx } from './planSlots'
 import './planBottom' // L2b: the plan-bottom drawer (plan table + timeline tabs)
 import './planLayers' // L2c (D111): layers popover, legend chip, map-edge tools (registers its Plan mount)
+import { PlanSlot } from './planPortSlots' // PORT W0a: Route panel, pad layer, strip mount points
 import { HeadlineStrip } from './planStrip' // L2a: the headline strip (registers its Plan mount)
 import './planStation' // L2d: station + rover marker cards
 import './planChrome' // L2f: data notes, cursor chip, Rover + Full screen tools (no console or live aside in Plan)
@@ -435,17 +436,30 @@ function ConsolePanel({ cmap }: { cmap: ConsoleMap }) {
         {error != null && <DataProblem error={error} what="Scenario layers" />}
       </S>
 
-      <HeadlineStrip
-        h30={padSel && padF ? null : { v: h.reachable_pct, k: `reachable_pct.${scenario.id}.${hb}`, file: 'scenarios/index.json', budget: hb }}
-        h60={padSel && padF ? null : headline60(scenario)}
-        sid={scenario.id}
-        pad={padSel && padF ? { id: padSel, summary: padSummary?.id === padSel ? padSummary : null, file: padF.summary } : null}
-        route={rd ? { timeline: rd.timeline, file: routeProps.timelineFile, key: routeProps.timelineKey } : null}
-        scenarioText={`${scenario.variant} · ${scenario.suit_kg} kg`}
-        budget={budget}
+      {/* PORT W0a seams (views/planPortSlots.tsx): null / today's headline strip and summary until I1 wires the packages */}
+      <PlanSlot name="pad-layer" cmap={cmap} />
+      <PlanSlot name="route-panel" cmap={cmap} />
+      <PlanSlot
+        name="context-bar"
+        cmap={cmap}
+        fallback={
+          <HeadlineStrip
+            h30={padSel && padF ? null : { v: h.reachable_pct, k: `reachable_pct.${scenario.id}.${hb}`, file: 'scenarios/index.json', budget: hb }}
+            h60={padSel && padF ? null : headline60(scenario)}
+            sid={scenario.id}
+            pad={padSel && padF ? { id: padSel, summary: padSummary?.id === padSel ? padSummary : null, file: padF.summary } : null}
+            route={rd ? { timeline: rd.timeline, file: routeProps.timelineFile, key: routeProps.timelineKey } : null}
+            scenarioText={`${scenario.variant} · ${scenario.suit_kg} kg`}
+            budget={budget}
+          />
+        }
       />
       <S name="summary">
-        <PlanSummary route={rd?.route ?? null} label={routeProps.label} file={routeProps.timelineFile} routeKey={routeProps.routeKey} loading={!rd} stations={stations?.length ?? null} />
+        <PlanSlot
+          name="drawer-summary"
+          cmap={cmap}
+          fallback={<PlanSummary route={rd?.route ?? null} label={routeProps.label} file={routeProps.timelineFile} routeKey={routeProps.routeKey} loading={!rd} stations={stations?.length ?? null} />}
+        />
       </S>
 
       <S name="headline">

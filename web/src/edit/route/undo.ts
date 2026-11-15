@@ -28,8 +28,19 @@ export interface UndoWindow {
   dispatchEvent(e: Event): boolean
 }
 
+/**
+ * PORT W0a: what the timeline needs of a route side. RouteController fits it; so does the planning
+ * store (state/planning.ts planningUndoSource), so the planning edits share the one Ctrl/Cmd-Z.
+ */
+export interface UndoSource {
+  store: { undoTag(): string | undefined; redoTag(): string | undefined; canUndo: ReadSignal<boolean>; canRedo: ReadSignal<boolean> }
+  compute: ReadSignal<{ kind: string }>
+  undo(): boolean
+  redo(): boolean
+}
+
 export interface SharedUndoOptions {
-  ctl: RouteController
+  ctl: UndoSource | RouteController
   /** the plan in use as H1 records it (mission.plan: scenario | budget | pad) */
   planKey: () => string
   win?: UndoWindow | null

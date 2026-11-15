@@ -36,6 +36,8 @@ import { CameraController, type ControllerMap } from './camera'
 import { installOverlays } from './overlays'
 import { MapSelection, SELECT_ROUTE_HIT, type SelectMap, type SelectSources } from './select'
 import { installMapInput, type InputMap, type MapInput } from './input'
+import { installMapExtensions, type MapHost, type MapLayerSlot, type RouteLayerHandle, type RouteLayerKind } from './extensions'
+import type { PadEnv } from '../pads/types'
 import { activeField, BINDING_LABEL, driveMargin, FIELD_TRUST, fieldModeQuery, fieldRequested, loadFieldData, loadFieldLayer, setActiveField, VARIANT_OF, webgl2Available, zeroEdgeLabels, type FieldData, type MarginState } from './field'
 
 /** The GPU field layer handle (field/layer.ts, loaded lazily). */
@@ -159,6 +161,9 @@ export class ConsoleMap {
   })
   // WS16 task 11 (M11): U7 overlays + layer manager (all off by default)
   private stopOverlays: (() => void) | null = null
+  // PORT W0a: extension points (map/extensions.ts); packages register, ConsoleMap hosts them
+  private ext: MapHost | null = null
+  private pendingPadEnv: PadEnv | null | undefined = undefined
   private destroyed = false
   private readonly input: MapInput
 
@@ -268,9 +273,43 @@ export class ConsoleMap {
     this.groupLayers.route.push(SELECT_ROUTE_HIT)
     this.camera = new CameraController(m as unknown as ControllerMap, this.selectSources)
     this.stopOverlays = installOverlays(m as never, { marker: (el) => new Marker({ element: el }) }, !!m.getContainer().closest('.hl-shell'))
+    this.ext = installMapExtensions({ map: m, beforeId: (slot) => this.slotBefore(slot), marker: (el) => new Marker({ element: el }), inShell: !!m.getContainer().closest('.hl-shell') })
+    if (this.pendingPadEnv !== undefined) this.ext.setPadEnvironment(this.pendingPadEnv)
     const legacy = !!this.map.getContainer().closest('.hl-frame-legacy')
     const story = storyRequest(storyParams(location.search, location.hash), { reduced: ui.reducedMotion.peek(), introSeen: ui.introSeen.peek(), legacy })
     if (story) void import('../story/attach').then((m) => !this.destroyed && (this.stopStory = m.attachStory(this, story)))
+  }
+
+  /** PORT W0a: beforeId of an extension layer slot (map/extensions.ts MapLayerSlot), bottom to top. */
+  private slotBefore(slot: MapLayerSlot): string | undefined {
+    const m = this.map
+    const has = (id: string) => (m.getLayer(id) ? id : undefined)
+    if (slot === 'basemap') {
+      const ids = (m.getStyle().layers ?? []).map((l) => l.id)
+      const i = ids.indexOf('basemap')
+      return i >= 0 ? ids[i + 1] : ids[0]
+    }
+    if (slot === 'overlay') return has('iso-lines')
+    if (slot === 'plan') return has('walkin-line')
+    if (slot === 'route') return ROUTE_LAYERS.find((id) => m.getLayer(id))
+    return undefined
+  }
+
+  /** PORT W0a: the active pad's environment (pads/ loadPadEnv) to the registered pad handlers (P2,
+   *  map/pads/). null = the official pad as ConsoleMap loads it today. No handler registered: no-op. */
+  setPadEnvironment(env: PadEnv | null): void {
+    if (this.ext) this.ext.setPadEnvironment(env)
+    else this.pendingPadEnv = env
+  }
+
+  /** PORT W0a: the installed route layer of `kind` (R4, map/routes/); undefined until registered. */
+  routeLayers(kind: RouteLayerKind): RouteLayerHandle | undefined {
+    return this.ext?.routeLayer(kind)
+  }
+
+  /** PORT W0a: the extension host (overlays, base maps by id); null before the style is loaded. */
+  extensions(): MapHost | null {
+    return this.ext
   }
 
   /** M10c: a live story camera move pauses the per-move label placement (4 Hz) and the furniture loops. */
@@ -752,6 +791,7 @@ export class ConsoleMap {
     this.stopStorm?.()
     this.camera?.destroy()
     this.stopOverlays?.()
+    this.ext?.destroy()
     this.selectMap?.destroy()
     this.terrain?.destroy()
     this.labels?.destroy()
