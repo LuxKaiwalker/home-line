@@ -10,6 +10,7 @@ import { effect, mission } from '../../state'
 import { confirmInputChange } from '../../state/activity'
 import { fmtEva } from '../../ui/timeline/model'
 import { t } from '../../ui/copy'
+import { iconSvg } from '../../ui/icons/icons'
 import type { StormHandle } from './mode'
 import type { StormModel } from './model'
 import './storm.css'
@@ -50,6 +51,9 @@ export class StormControl implements IControl {
     const setting = t('activity.stormSetting')
     btn.title = `${t('storm.title')} · ${setting}`
     btn.dataset.activitySetting = 'storm'
+    // L2c (D111): icon + label; the Plan map-edge tools show the icon only (label = name, title = tooltip)
+    btn.innerHTML = `${iconSvg('radiation', { className: 'hl-ctrl-icon' })}<span class="hl-ctrl-text"></span>`
+    const text = btn.querySelector<HTMLSpanElement>('.hl-ctrl-text')!
     btn.addEventListener('click', () => {
       if (!confirmInputChange()) return
       mission.conditions.storm.value = !mission.conditions.storm.peek()
@@ -59,7 +63,7 @@ export class StormControl implements IControl {
     this.stops.push(
       effect(() => {
         const on = mission.conditions.storm.value
-        btn.textContent = t(on ? 'buttons.stormReplayOn' : 'buttons.stormReplayOff')
+        text.textContent = t(on ? 'buttons.stormReplayOn' : 'buttons.stormReplayOff')
         btn.setAttribute('aria-pressed', String(on))
         const seq = ++this.seq
         if (!on) {
