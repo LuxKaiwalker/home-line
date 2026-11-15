@@ -87,11 +87,15 @@ describe('runShortcut', () => {
     ui.view.value = '2d'
   })
 
-  it('P/Y/R/E go to the mode, back to the last place visited in it', () => {
+  it('P/S/Y/R/E go to the mode, back to the last place visited in it', () => {
+    applyRoute({ name: 'trade' }, '#/trade')
     applyRoute({ name: 'station', id: 'S4' }, '#/station/S4')
+    expect(ui.mode.value).toBe('science') // station detail pages live under Science stations
     applyRoute({ name: 'about' }, '#/evidence/about')
     expect(ui.mode.value).toBe('evidence')
     expect(run({ action: 'mode', mode: 'plan' })).toBe(true)
+    expect(nav).toHaveBeenLastCalledWith('#/trade')
+    run({ action: 'mode', mode: 'science' })
     expect(nav).toHaveBeenLastCalledWith('#/station/S4')
     run({ action: 'mode', mode: 'evidence' })
     expect(nav).toHaveBeenLastCalledWith('#/evidence/about')

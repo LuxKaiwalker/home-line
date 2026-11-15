@@ -22,7 +22,7 @@ export type FieldMode = 'bands' | 'margin'
 export const ROUTE_MODE: Readonly<Record<string, Mode>> = {
   console: 'plan',
   mission: 'plan',
-  station: 'plan',
+  station: 'science',
   stations: 'science',
   trade: 'plan',
   conditions: 'fly',

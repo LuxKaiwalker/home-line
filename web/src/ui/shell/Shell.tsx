@@ -11,6 +11,7 @@ import { t } from '../copy'
 import { SearchButton } from '../search/button'
 import type { Frame } from './frame'
 import { HELP_ROWS, installShortcuts } from './keys'
+import { StationLinks } from './StationLinks'
 import {
   breakpointFor,
   closeSidebar,
@@ -30,7 +31,7 @@ import {
   sidebarContent,
 } from './store'
 
-const sameView = (a: Route, b: Route): boolean => a.name === b.name || (a.name === 'station' && b.name === 'console')
+const sameView = (a: Route, b: Route): boolean => a.name === b.name
 
 function useMode(): Mode {
   return useSignalValue(ui.mode) ?? 'plan'
@@ -158,6 +159,8 @@ export function Rail() {
                   <Icon name={v.icon} />
                   {!iconOnly && <span>{label}</span>}
                 </a>
+                {/* the station detail pages, as sub-entries of Science stations */}
+                {v.route.name === 'stations' && !iconOnly && <StationLinks route={route} />}
               </li>
             )
           })}
