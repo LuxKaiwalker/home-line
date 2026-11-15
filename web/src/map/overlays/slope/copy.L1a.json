@@ -1,0 +1,25 @@
+{
+  "title": "Slope",
+  "what": "Ground slope in the engine's own classes; class edges come from config/site.yaml",
+  "opacity": "Slope layer opacity",
+  "loading": "Loading slope…",
+  "error": "Slope layer unavailable: {error}",
+  "noField": "fields/index.json has no slope field",
+  "encodeError": "Could not draw the slope image",
+  "note": "Cell slope from {file}; class edges from {site}. Ground without data is left clear.",
+  "edgeSource": "Edge from {source}",
+  "classes": {
+    "padFlat": "Pad-flat",
+    "walkable": "Walkable",
+    "beyondTested": "Beyond the tested range",
+    "nogoNominal": "No-go in the nominal case",
+    "nogoAlways": "No-go always",
+    "unknown": "No data"
+  },
+  "range": {
+    "below": "under {max}",
+    "between": "{min} to {max}",
+    "above": "{min} and steeper",
+    "clear": "left clear"
+  }
+}

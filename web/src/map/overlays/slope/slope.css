@@ -1,0 +1,13 @@
+/* PORT L1a: slope layer. Class colours as tokens built only from existing token variables
+   (DESIGN §3.1: green fine, orange caution, red limit); the recipe in classes.ts SLOPE_COLORS
+   paints the raster with the same mix (slope.test.ts checks both agree). */
+:root {
+  --hl-slope-pad-flat: var(--color-safe);
+  --hl-slope-walkable: color-mix(in srgb, var(--color-safe) 50%, var(--color-caution));
+  --hl-slope-beyond-tested: var(--color-caution);
+  --hl-slope-nogo-nominal: var(--color-limit);
+  --hl-slope-nogo-always: color-mix(in srgb, var(--color-limit) 55%, var(--color-bg));
+}
+.hl-slope__range { color: var(--color-text-muted); white-space: nowrap; }
+.hl-slope__error { color: var(--color-limit); }
+.hl-slope__note code { font-family: var(--font-mono); }
