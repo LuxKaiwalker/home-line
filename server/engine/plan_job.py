@@ -6,8 +6,9 @@ A plan for one pad with the default crew is ONE call of ``pipeline.engine.plan.b
 harness (server/tests/parity_harness.py ``server_build``) calls the same function, so parity
 tests exactly what the server runs.
 
-Scenario set (D81, F26): the official pad with the default crew keeps the full official set
-(variants.yaml scenarios.ids); any other pad or crew computes only the three variants at the
+Scenario set (D81, D97, F26): the official plan (the official pad, the default crew, an auto or
+missing route) keeps the full official set (variants.yaml scenarios.ids); any other pad or crew,
+and any ordered route (also on the official pad), computes only the three variants at the
 default scenario's suit mass (104 kg) ("the three variants always run").
 
 Supported inputs: the pad (task 8) and the crew (task 11, server.engine.crew): body_mass_kg,
@@ -153,13 +154,16 @@ def unsupported(inputs: dict) -> list[str]:
 
 
 def scenario_set(inputs: dict) -> list[str]:
-    """D81: the official pad with the default crew keeps the official set; any other pad or crew
-    gets the default suit's three variants (F26: the three variants always run)."""
+    """D81, D97: only the official plan (the official pad, the default crew and an auto or
+    missing route; precomputed, its hash never runs a job) keeps the official set; any other pad
+    or crew, and any ordered route (also on the official pad: a custom plan, W1 finding), gets the
+    default suit's three variants (F26: the three variants always run)."""
     from pipeline.engine import physio
     from pipeline.engine.config import load
 
     sc = load("variants")["scenarios"]
-    if is_official_pad(inputs) and crew_mod.is_default(inputs):
+    auto = route_mod.mode(canonical_inputs(inputs)) == route_mod.AUTO
+    if auto and is_official_pad(inputs) and crew_mod.is_default(inputs):
         return list(sc["ids"])
     suit = physio.parse_scenario(sc["default"])[1]
     return [s for s in sc["ids"] if physio.parse_scenario(s)[1] == suit]
