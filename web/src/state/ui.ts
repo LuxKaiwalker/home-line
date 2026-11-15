@@ -16,6 +16,7 @@ export type FieldMode = 'bands' | 'margin'
  */
 export const ROUTE_MODE: Readonly<Record<string, Mode>> = {
   console: 'plan',
+  mission: 'plan',
   station: 'plan',
   trade: 'report', // L2 (D111, L0 Q2): document content
   conditions: 'fly',

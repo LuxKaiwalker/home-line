@@ -21,7 +21,7 @@ import { data } from '../data/loader'
 import { DATA_MODE, dataUrl } from '../env'
 import { CHASE, ELEVATION_FACTOR, FIRST_FRAME_MAX_MS, WARMUP_MAX_MS } from './config'
 import { after, descentTiles, mapIdle, prefetch, storyPoses, until, type TileSet } from './warm'
-import { introSkipRequested, loadingDone, onIntroSkip, setLoadProgress, STAGE } from './loading'
+import { introOver, introSkipRequested, loadingDone, onIntroSkip, setLoadProgress, STAGE } from './loading'
 
 const INPUTS = ['keydown', 'pointerdown', 'wheel', 'touchstart'] as const
 
@@ -283,6 +283,7 @@ export function attachStory(cmap: ConsoleMap, req: StoryRequest = storyRequest(s
   // L12: the viewer skipped from the loading screen before the story got here
   if (!req || (req.kind === 'intro' && introSkipRequested())) {
     loadingDone()
+    if (req) introOver() // D132: a bare address lands on the Mission Planer once the intro is over
     return () => undefined
   }
   if (req.kind === 'intro') ui.introSeen.value = true // in memory: once per page session (no browser storage)
@@ -338,6 +339,7 @@ export function attachStory(cmap: ConsoleMap, req: StoryRequest = storyRequest(s
     .finally(() => {
       unSkip()
       if (req.kind !== 'capture') loadingDone() // L12: never leave the loading screen up
+      if (req.kind === 'intro') introOver() // D132: ended, skipped or failed
     })
   return () => {
     signal.stopped = true

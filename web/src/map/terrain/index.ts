@@ -11,7 +11,7 @@
 // state/view.ts resolves (?view=, else the viewer's remembered choice, else plan_view.default: 3D) at
 // plan_view.pitch_deg / bearing_deg with the route framed (opts.frame); the low-frame-rate fallback
 // (performance.fps_3d_min, D38) shows a dismissible note, never under ?view=3d.
-import type { Map as MlMap } from 'maplibre-gl'
+import type { ControlPosition, Map as MlMap } from 'maplibre-gl'
 import { DATA_MODE, dataUrl } from '../../env'
 import { data } from '../../data/loader'
 import { parseClockSun, type ClockFile, type SunData } from '../../hud/sun'
@@ -36,6 +36,8 @@ export interface TerrainControllerOptions {
    * (ConsoleMap.frameRoute); called when the opening 3D view is on, and by openPlanView().
    */
   frame?: (animate: boolean) => void
+  /** where the 2D/3D control sits (the Plan map: top-left, the default; the Mission Planer: bottom-right) */
+  position?: ControlPosition
 }
 
 export type TerrainState = 'off' | 'loading' | '3d' | 'flat' | 'unavailable'
@@ -93,7 +95,7 @@ export class TerrainController {
     this.beforeId = beforeId
     this.opts = opts
     this.forced = opts.planView ? viewOverride() : null
-    map.addControl(this.control, 'top-left')
+    map.addControl(this.control, opts.position ?? 'top-left')
     this.notice = new TerrainNotice(map.getContainer())
     this.setState('off')
     if (opts.planView) {
