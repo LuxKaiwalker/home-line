@@ -3,7 +3,7 @@
 // classes, no functions): grids travel as typed arrays, legs as plain objects.
 //
 // Flow per edit:  main posts 'route' {seq} -> worker answers 'legs' partial (each finished leg, cheap
-// first) … then 'legs' final, then 'timing'. When idle, the worker refines legs with exact A* (w = 1)
+// first) … then 'timing', then 'legs' final. When idle, the worker refines legs with exact A* (w = 1)
 // and posts 'refined' for every leg that got faster. Main drops every message whose seq is older
 // than its latest request ('cancel' lets the worker stop early). Legs are keyed by cell pair
 // "from-to" (edit/route/browser/data.ts legCache key), so a refined leg replaces the cached one.
