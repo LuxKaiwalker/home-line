@@ -99,9 +99,10 @@ This block adds them back on top of what exists: drag the rover and the plan-edi
   - Cost **[repo]**: about 6.7 s per free point on the real grid, not the ~40 s assumed.
 - Infeasible: a result with `feasible: false`, the failing leg, limit and shortfall; files are
   written for the legs planned before it so the map can show them.
-- Free points in the route (WP2b): `W1…Wn`, fields from `point_fields`, spacing checked in
-  `build_plan(…, route_min_spacing_m=…)`. A stop without an access cell raises only in the default
-  scenario; other scenarios are recorded as skipped (S7 in the conservative scenario).
+- **[in progress: WP2b, PR #124]** Free points in the route: `W1…Wn`, fields from `point_fields`,
+  spacing checked in `build_plan`. A stop without an access cell is to raise only in the default
+  scenario; other scenarios are recorded as skipped (S7 in the conservative scenario). Until #124
+  merges, an ordered route through S7 fails the whole job.
 
 ### 4.3 Server (WS11: WP3, WP4)
 
@@ -113,8 +114,9 @@ This block adds them back on top of what exists: drag the rover and the plan-edi
 - An ordered route goes to `build_plan(route=…)` for the nominal preview and the full call; staged
   publication stays (nominal band and route first). A `RouteStopError` inside the job ends it with
   `error` naming the code and the stop. `/pads/screen` refuses an ordered route.
-- Free points: WP3 refuses them with 422 `unsupported_inputs` naming the stop; WP4 accepts them
-  (grid checks, great-circle spacing as in the engine) and re-measures the job time.
+- Free points: on main, WP3 refuses them with 422 `unsupported_inputs` naming the stop.
+  **[in progress: WP4]** WP4 accepts them (grid checks, great-circle spacing as in the engine) and
+  re-measures the job time.
 - **[repo] Job time:** measured on the demo pad (rank 2): ordered S4, S1, S6, S7 done in 358 s;
   an infeasible order in 372 s (leg 3 S7 → S6, O₂, 25.34 min short); auto 356 s.
   `compute.job_timeout_s` 600 (assumed) leaves ~1.6× headroom. Rate limits and the kill switch are
