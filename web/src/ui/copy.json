@@ -360,6 +360,7 @@
     },
     "chip": "Where does this number come from?",
     "exaggeration": "Vertical exaggeration {factor}× (true shape at one times)",
+    "view3d": "3D view (T)",
     "budgetSlider": "Walkback budget",
     "dwellSlider": "Dwell at this station",
     "fieldLegendDaylight": "Daylight end is taken at the rover pad; horizon shading per cell is not modelled",

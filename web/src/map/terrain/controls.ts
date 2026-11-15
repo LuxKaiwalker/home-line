@@ -1,10 +1,12 @@
 // WS16 task 8 (M8): the map controls of U1 — 2D/3D toggle and the exaggeration slider that always
 // shows its factor (DESIGN U1 "What the user sees"). Plain DOM (A2's Segmented/Slider are Preact and
 // not on this stack; swap after the rebase). Both write the A3 ui store through state.ts.
+// T1: the shell's T shortcut (`hl:shortcut` toggle3d, ui/shell/keys.ts) runs the same action as the
+// 2D/3D buttons while this control is on the map, and is ignored like a click while 3D is unavailable.
 import type { IControl } from 'maplibre-gl'
 import { effect, ui } from '../../state'
 import { COPY_PENDING, factorText, t, TERRAIN, TERRAIN_PENDING } from './config'
-import { exaggeration, setExaggeration, setView, type View } from './state'
+import { exaggeration, setExaggeration, setView, toggleView, type View } from './state'
 import './terrain.css'
 
 /** Trust-chip hook (DESIGN §3.6): the terrain layer group is Real (measured DEM), factor noted. */
@@ -15,6 +17,15 @@ export class TerrainControl implements IControl {
   private stop: (() => void) | null = null
   private disabledWhy: string | null = null
   private buttons: Partial<Record<View, HTMLButtonElement>> = {}
+  private win: Window | null = null
+
+  /** The T shortcut: the 2D/3D button action; nothing while the 3D button is disabled (like a click on it). */
+  private readonly onShortcut = (e: Event): void => {
+    if ((e as CustomEvent<{ action?: string } | null>).detail?.action !== 'toggle3d') return
+    e.preventDefault() // handled here: the shell does not flip ui.view on its own
+    if (ui.view.peek() !== '3d' && this.disabledWhy) return
+    toggleView()
+  }
 
   onAdd(): HTMLElement {
     const box = document.createElement('div')
@@ -35,6 +46,7 @@ export class TerrainControl implements IControl {
       b.type = 'button'
       b.setAttribute('role', 'radio')
       b.textContent = t(v === '2d' ? 'buttons.view2d' : 'buttons.view3d')
+      b.setAttribute('aria-keyshortcuts', 'T')
       b.addEventListener('click', () => setView(v))
       b.addEventListener('keydown', (e) => {
         if (!['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(e.key)) return
@@ -59,9 +71,12 @@ export class TerrainControl implements IControl {
     input.step = String(TERRAIN_PENDING.exaggerationStep)
     input.addEventListener('input', () => setExaggeration(Number(input.value)))
     const out = document.createElement('output')
-    label.append(name, input, out)
+    label.appendChild(name)
+    label.appendChild(input)
+    label.appendChild(out)
 
-    box.append(seg, label)
+    box.appendChild(seg)
+    box.appendChild(label)
     this.el = box
     this.stop = effect(() => {
       const view = ui.view.value
@@ -73,7 +88,7 @@ export class TerrainControl implements IControl {
         b.tabIndex = on ? 0 : -1
       }
       this.buttons['3d']!.disabled = this.disabledWhy !== null
-      this.buttons['3d']!.title = this.disabledWhy ?? ''
+      this.buttons['3d']!.title = this.disabledWhy ?? t('tooltips.view3d')
       label.hidden = view !== '3d'
       input.value = String(x)
       out.value = factorText(x)
@@ -82,6 +97,8 @@ export class TerrainControl implements IControl {
       input.setAttribute('aria-valuetext', tip)
       out.title = tip
     })
+    this.win = typeof window === 'undefined' ? null : window
+    this.win?.addEventListener('hl:shortcut', this.onShortcut)
     return box
   }
 
@@ -91,11 +108,13 @@ export class TerrainControl implements IControl {
     const b = this.buttons['3d']
     if (b) {
       b.disabled = why !== null
-      b.title = why ?? ''
+      b.title = why ?? t('tooltips.view3d')
     }
   }
 
   onRemove(): void {
+    this.win?.removeEventListener('hl:shortcut', this.onShortcut)
+    this.win = null
     this.stop?.()
     this.el?.remove()
     this.el = null
