@@ -13,16 +13,27 @@ default scenario's suit mass (104 kg) ("the three variants always run").
 Supported inputs: the pad (task 8) and the crew (task 11, server.engine.crew): body_mass_kg,
 tools_kg, vo2max_ml_kg_min and effort_cap_frac go to build_plan's ``crew`` (physio.params
 overrides, D48 crew-as-parameter); the default crew passes ``crew=None``, so its call and tree are
-exactly the ones before task 11. crew.suit_kg (no build_plan path, server.engine.crew) and every
-other plan_inputs field must equal its default (route inputs, task 10, are cut by D69);
-otherwise the job fails with ``UnsupportedInputs`` naming the fields, never silently ignoring
-them. Inputs outside the config ranges (config/backend.yaml ``ranges``) are reported as
-run-record ``range_flags`` (anchored_flag_note); nothing is clamped and the plan runs.
+exactly the ones before task 11. An ordered route of stations (D97, server.engine.route; checked
+at submit) goes to build_plan's ``route`` as the station ids in visiting order, in the preview and
+the full call alike; a missing or auto route makes exactly the call before D97 (no ``route``
+argument). crew.suit_kg (no build_plan path, server.engine.crew) and every other plan_inputs
+field must equal its default (free points in a route: R4); otherwise the job fails with
+``UnsupportedInputs`` naming the fields, never silently ignoring them. Inputs outside the config
+ranges (config/backend.yaml ``ranges``) are reported as run-record ``range_flags``
+(anchored_flag_note); nothing is clamped and the plan runs.
 
 Station fields (F26, D84): a custom-crew job computes no crew station fields. build_plan takes no
 precomputed station fields (its route runs its own station searches with the crew), so the E10
 crew cache ($HL_SERVER_DATA/cache/station_fields/) cost ~42 s and ~280 MB per new crew for
 nothing; it was removed. It returns when WS2 adds a station-field input to build_plan.
+
+Route answer (D97): build_plan's summary ``route.feasibility[route.scenario]`` (the default
+scenario's block; ``route.feasibility`` is keyed by scenario id) becomes the run record's
+``feasibility``, mirrored to the v1.1 ``infeasible`` when false (binding = limit,
+margin_min = -shortfall_min); ``route_mode`` is on every record. An infeasible order is a result:
+the job ends ``done`` with the legs planned before the failing one. A stop the engine cannot route
+at all (traverse.RouteStopError, e.g. route_point_unreachable) ends the job ``error`` with its
+code and the stop named (``RouteStopFailed``).
 
 Stages (D81: the map fills in early; job.schema.json ``stages_done``):
 1. ``nominal``: a preview build_plan call with the default scenario only (partner line on, so the
@@ -71,6 +82,7 @@ from pathlib import Path
 
 from server.engine import crew as crew_mod
 from server.engine import exporters, version
+from server.engine import route as route_mod
 from server.engine.defaults import ranges as config_ranges
 from server.engine.hashing import canonical_inputs, official_inputs
 from server.engine.jobs import JobContext, JobType, register_job_type
@@ -105,6 +117,15 @@ class UnsupportedInputs(ValueError):
     """plan_inputs fields this server cannot plan yet (not silently ignored)."""
 
 
+class RouteStopFailed(ValueError):
+    """D97: a stop of the ordered route the engine cannot route at all (its traverse
+    .RouteStopError: ``code``, ``stop`` index); the job ends ``error`` with this message."""
+
+    def __init__(self, code: str, stop: int, detail: str):
+        super().__init__(f"{code}: {detail}")
+        self.code, self.stop = code, stop
+
+
 # ------------------------------------------------------------------------ inputs ----
 def _official() -> dict:
     return canonical_inputs(official_inputs())
@@ -115,12 +136,19 @@ def is_official_pad(inputs: dict) -> bool:
     return (pad["lon"], pad["lat"]) == (off["lon"], off["lat"])
 
 
+def _route_planned(c: dict) -> bool:
+    """An ordered route of stations (D97): planned, so not a difference from the defaults."""
+    return route_mod.mode(c) == route_mod.ORDERED and not any(
+        route_mod.is_free(s) for s in c["route"]["stops"])
+
+
 def unsupported(inputs: dict) -> list[str]:
-    """Top-level plan_inputs blocks (other than the pad and the crew) that differ from the
-    defaults, and the dotted crew fields build_plan has no parameter for (crew.suit_kg)."""
+    """Top-level plan_inputs blocks (other than the pad, the crew and an ordered route of
+    stations) that differ from the defaults, and the dotted crew fields build_plan has no
+    parameter for (crew.suit_kg)."""
     c, d = canonical_inputs(inputs), _official()
-    blocks = sorted(k for k in set(c) | set(d) if k not in ("pad", "crew", "contract_version")
-                    and c.get(k) != d.get(k))
+    planned = {"pad", "crew", "contract_version"} | ({"route"} if _route_planned(c) else set())
+    blocks = sorted(k for k in set(c) | set(d) if k not in planned and c.get(k) != d.get(k))
     return sorted(blocks + crew_mod.unsupported(inputs))
 
 
@@ -166,7 +194,9 @@ def build(inputs: dict, *, terrain_dir: Path, out_dir: Path, public_dir: Path | 
           on_stage=None) -> dict:
     """Canonical plan_inputs -> one build_plan call (the server path; parity calls this).
 
-    ``preview``: only the default scenario (the job's nominal stage). Returns the run summary."""
+    ``preview``: only the default scenario (the job's nominal stage). An ordered route passes
+    ``route=[station ids in visiting order]``; auto passes no ``route`` (the pre-D97 call).
+    Returns the run summary."""
     from pipeline.engine import scenarios
     from pipeline.engine.config import load
     from pipeline.engine.graph import load_ws1_grid
@@ -177,8 +207,11 @@ def build(inputs: dict, *, terrain_dir: Path, out_dir: Path, public_dir: Path | 
     if bad:
         raise UnsupportedInputs(f"plan_inputs {bad} differ from the defaults; this server plans "
                                 "a custom pad and crew (body mass, tools, VO2max, effort cap) "
-                                "with the default suit mass and route only")
-    pad = canonical_inputs(inputs)["pad"]
+                                "with the default suit mass, and a route of stations (D97)")
+    c = canonical_inputs(inputs)
+    pad = c["pad"]
+    ids_route = route_mod.station_ids(c)
+    route_kw = {} if ids_route is None else {"route": ids_route}
     grid = load_ws1_grid(terrain_dir) if grid is None else grid
     ids = [load("variants")["scenarios"]["default"]] if preview else scenario_set(inputs)
     sids, skipped = scenarios.runnable(ids, None)
@@ -193,7 +226,45 @@ def build(inputs: dict, *, terrain_dir: Path, out_dir: Path, public_dir: Path | 
                       terrain_dir=terrain_dir, cond=cond, dose_fn=dose_fn, partner=True,
                       siting=False, d21=None, crew=crew_mod.overrides(inputs),
                       skipped=skipped, rmse=None,
-                      manifest_dir=manifest_dir, on_stage=on_stage, verbose=False)
+                      manifest_dir=manifest_dir, on_stage=on_stage, verbose=False, **route_kw)
+
+
+def route_answer(inputs: dict, summary: dict | None) -> dict:
+    """Run record ``route_mode``, ``feasibility`` and the v1.1 ``infeasible`` mirror (D97) from
+    the full call's summary: ``route.feasibility[route.scenario]``. Auto: route_mode only (the
+    engine's own choice keeps every margin; infeasible stays null as before)."""
+    m = route_mod.mode(canonical_inputs(inputs))
+    if m != route_mod.ORDERED:
+        return {"route_mode": m}
+    block = (summary or {}).get("route") or {}
+    feas = (block.get("feasibility") or {}).get(block.get("scenario"))
+    if not isinstance(feas, dict) or "feasible" not in feas:
+        raise RuntimeError(f"build_plan summary has no route feasibility for an ordered route: "
+                           f"{(summary or {}).get('route')!r}")
+    out = {"route_mode": m, "feasibility": feas}
+    if feas["feasible"] is False:
+        out["infeasible"] = {"leg": feas["leg"], "from": feas["from"], "to": feas["to"],
+                             "margin_min": -float(feas["shortfall_min"]),
+                             "binding": feas["limit"]}
+    return out
+
+
+def _route_stop_error():
+    """pipeline.engine.traverse.RouteStopError (R1), or no exception class before it exists."""
+    from pipeline.engine import traverse
+
+    return getattr(traverse, "RouteStopError", ())
+
+
+def _build_job(inputs: dict, **kw) -> dict:
+    """``build`` with a stop the engine cannot route turned into RouteStopFailed naming it."""
+    try:
+        return build(inputs, **kw)
+    except _route_stop_error() as e:
+        stops = canonical_inputs(inputs)["route"]["stops"]
+        i = int(e.index)
+        name = route_mod.stop_name(stops, i) if 0 <= i < len(stops) else "?"
+        raise RouteStopFailed(e.code, i, f"stop {i} ({name}): {e.message}") from e
 
 
 def nominal_files(public: Path) -> list[str]:
@@ -335,7 +406,8 @@ def run_plan_job(inputs: dict, ctx: JobContext) -> dict:
     # 1. nominal: the default scenario alone (preview call), published at once with a partial
     # index and manifest (H5-1: the client finds the map files through them)
     pre, pre_pub, pre_man = work / "preview", work / "preview" / "public", work / "preview_manifest"
-    build(inputs, out_dir=pre, public_dir=pre_pub, manifest_dir=pre_man, preview=True, **common)
+    _build_job(inputs, out_dir=pre, public_dir=pre_pub, manifest_dir=pre_man, preview=True,
+               **common)
     _copy(ctx, pre_pub, nominal_files(pre_pub))
     _publish_partial(ctx, pre_pub, [(pre_man, pre_pub)])
     ctx.stage("nominal")
@@ -354,8 +426,8 @@ def run_plan_job(inputs: dict, ctx: JobContext) -> dict:
         if name in AT_BUILD_STAGE and AT_BUILD_STAGE[name] not in ctx.done:
             flush(AT_BUILD_STAGE[name])
 
-    build(inputs, out_dir=full, public_dir=pub, manifest_dir=work / "manifest",
-          on_stage=on_stage, **common)
+    summary = _build_job(inputs, out_dir=full, public_dir=pub, manifest_dir=work / "manifest",
+                         on_stage=on_stage, **common)
     if len(ctx.done) < STAGES.index("summary"):  # a build_plan stage was skipped (no stations)
         flush(STAGES[STAGES.index("summary") - 1])
 
@@ -374,7 +446,7 @@ def run_plan_job(inputs: dict, ctx: JobContext) -> dict:
     ctx.write_json(MANIFEST, merged)
     ctx.stage("summary")
     shutil.rmtree(work, ignore_errors=True)
-    return {"range_flags": flags}
+    return {"range_flags": flags, **route_answer(inputs, summary)}
 
 
 PLAN_JOB = JobType(run=run_plan_job, stages=STAGES)

@@ -120,7 +120,9 @@ class JobType:
     ``inputs`` are the canonical plan inputs (what was hashed) plus the title if any. ``run`` writes
     its files with ``ctx.write_bytes``/``ctx.write_json`` (or into ``ctx.out_dir``) and calls
     ``ctx.stage(name)`` after each of ``stages``, in order. It may return ``{"range_flags": [...],
-    "infeasible": {...}}`` for the run record. Raising reports the job as ``error``."""
+    "route_mode": ..., "feasibility": {...}, "infeasible": {...}}`` for the run record (D97: without
+    ``route_mode`` the record takes the inputs' route mode, auto when absent; ``feasibility`` is
+    written only when returned). Raising reports the job as ``error``."""
 
     run: Callable[[dict, JobContext], dict | None]
     stages: tuple[str, ...]
@@ -235,7 +237,12 @@ class JobContext:
                 self._published[rel] = key
 
 
-RUN_EXTRA_KEYS = {"range_flags", "infeasible"}
+RUN_EXTRA_KEYS = {"range_flags", "route_mode", "feasibility", "infeasible"}
+
+
+def _route_mode(inputs: dict) -> str:
+    """D97 run_record.route_mode: inputs.route.mode, auto when the route is absent."""
+    return (inputs.get("route") or {}).get("mode", "auto")
 
 
 def _run_job(conn, job_id: str, run, inputs: dict, out_dir: str, public_dir: str, record: dict,
@@ -249,8 +256,10 @@ def _run_job(conn, job_id: str, run, inputs: dict, out_dir: str, public_dir: str
         raise RuntimeError(f"unknown run record keys {sorted(set(extra) - RUN_EXTRA_KEYS)}")
     doc = {**record, "status": DONE, "started_utc": started, "finished_utc": utc_now(),
            "stages": ctx.records, "files": results.tree_files(ctx.out_dir),
-           "range_flags": extra.get("range_flags", []), "infeasible": extra.get("infeasible"),
-           "error": None, "dummy": False}
+           "range_flags": extra.get("range_flags", []),
+           "route_mode": extra.get("route_mode") or _route_mode(inputs),
+           **({"feasibility": extra["feasibility"]} if extra.get("feasibility") else {}),
+           "infeasible": extra.get("infeasible"), "error": None, "dummy": False}
     results.validate_run_record(doc)
     ctx.publish()  # files written after the last stage
     ctx.write_json(results.RUN_RECORD, doc)
