@@ -12,9 +12,9 @@ name: design
 
 on:
   pull_request:
-    branches: [main, design]
+    branches: [main]
   push:
-    branches: [design]
+    branches: [main]
 
 permissions:
   contents: read
