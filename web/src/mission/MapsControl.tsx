@@ -1,11 +1,12 @@
 // "Maps" switcher (bottom left of the Mission Planer map, PDF "Maps" button): Satellite (HiRISE
-// basemap), Topography (hillshade + contours) and Material composition (rock units inferred from
-// elevation). Rasters are rendered once per type on first use, on the routing grid.
+// basemap), Topography (hillshade + contours) and Material composition (regional rock class from
+// the Unity scene's rocks, like the Unity EVA map's mineral layer). Rasters are rendered once per
+// type on first use, on the routing grid.
 import { useEffect, useRef, useState } from 'preact/hooks'
 import type { FieldGrid } from '../hud/fields'
 import type { MapType, MissionMap } from './missionMap'
 import type { LonLat } from './plan'
-import { renderRelief, unitBands, UNITS_FILE, type Relief, type Unit } from './relief'
+import { buildUnitField, renderRelief, ROCKS_FILE, type Relief, type Unit } from './relief'
 
 const TYPES: { id: MapType; label: string; swatch: string }[] = [
   { id: 'satellite', label: 'Satellite', swatch: 'linear-gradient(135deg, #8a5a3c, #c79a6b 55%, #5c3a28)' },
@@ -50,12 +51,12 @@ export function MapsControl({ mmap, src }: { mmap: MissionMap; src: ReliefSource
         await new Promise((res) => setTimeout(res, 20)) // let "Rendering…" paint
         try {
           const { grid, elev, resM } = src
-          let lo = Infinity
-          let hi = -Infinity
-          for (const v of elev) if (Number.isFinite(v)) (lo = Math.min(lo, v)), (hi = Math.max(hi, v))
-          const u = type === 'material' ? unitBands(lo, hi) : null
+          const u =
+            type === 'material'
+              ? buildUnitField(ROCKS_FILE.rocks, ROCKS_FILE.classes, grid, grid.width * resM, grid.height * resM)
+              : null
           r = renderRelief(elev, grid.width, grid.height, resM, type, u)
-          if (u) setUnits(u)
+          if (u) setUnits(u.units)
           setRelief((x) => ({ ...x, [type]: r }))
         } catch (e) {
           setError(e instanceof Error ? e.message : String(e))
@@ -124,29 +125,25 @@ export function MapsControl({ mmap, src }: { mmap: MissionMap; src: ReliefSource
 }
 
 function MaterialLegend({ r, units }: { r: Relief; units: Unit[] }) {
-  const shown = units.filter((u) => (r.unitCells.get(u.id) ?? 0) > 0).sort((a, b) => a.lo - b.lo)
+  const shown = units.filter((u) => (r.unitCells.get(u.id) ?? 0) > 0)
   return (
     <div class="mp-maps-legend">
-      <b>Rock unit, inferred from elevation</b>
+      <b>Mineral units</b>
       <ul>
         {shown.length ? (
           shown.map((u) => (
-            <li key={u.id} title={`${u.name}: Curiosity samples from ${Math.round(u.lo)} to ${Math.round(u.hi)} m`}>
+            <li key={u.id} title={u.name}>
               <span class="mp-swatch" style={{ background: `rgb(${u.rgb.join(',')})` }} />
               {u.label}
             </li>
           ))
         ) : (
-          <li>No unit band reaches this terrain.</li>
+          <li>No rocks on this terrain.</li>
         )}
-        <li title="Heights above or below every Curiosity sample in the database (it ends at sol 3712, before the boxwork region)">
-          <span class="mp-swatch" style={{ background: 'rgb(70,70,70)' }} />
-          Grey: no sample at that height
-        </li>
       </ul>
-      <span class="mp-maps-note" title={UNITS_FILE.rule}>
-        Mount Sharp's layers are nearly flat, so each unit is drawn at the heights where Curiosity sampled it (± {UNITS_FILE.band_margin_m} m, fading beyond).
-        Not a mineral survey. Data: Curiosity APXS (PDS), via the team's Unity rock database.
+      <span class="mp-maps-note" title={ROCKS_FILE.source}>
+        Same layer as the Unity EVA map: the dominant class of the {ROCKS_FILE.rocks.length.toLocaleString('en')} field rocks
+        nearby (Gaussian, 70 m). Not a mineral survey.
       </span>
     </div>
   )

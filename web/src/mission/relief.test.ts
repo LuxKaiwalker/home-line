@@ -1,5 +1,20 @@
 import { describe, expect, it } from 'vitest'
-import { BASE_GREY, contourInterval, coverage, pickUnit, RAMP, renderRelief, unitBands, UNITS_FILE } from './relief'
+import {
+  BASE_GREY,
+  buildUnitField,
+  contourInterval,
+  coverage,
+  RAMP,
+  renderRelief,
+  ROCKS_FILE,
+  UNIT_ALPHA_MAX,
+  UNIT_ALPHA_MIN,
+  UNIT_CELL_M,
+  UNIT_SHARE_FLOOR,
+  UNIT_SIGMA_M,
+  unitAt,
+  UNITS_FILE,
+} from './relief'
 
 const flat = (w: number, h: number, z = -4100) => new Float32Array(w * h).fill(z)
 /** Plane rising east at grade theta (deg), cell size mpp. */
@@ -30,42 +45,71 @@ describe('contour line coverage', () => {
   })
 })
 
-describe('geologic units by elevation band (Curiosity samples, Unity rule)', () => {
-  const units = unitBands(-4600, -3700)
-  const id = (e: number) => {
-    const p = pickUnit(units, e)
-    return p.index < 0 ? null : units[p.index].id
-  }
+describe('mineral units from the rock population (Unity MarsElevationMap)', () => {
+  // A 10 x 10 grid of 32 m cells; frame in degrees 0..10 so lon d sits at d * 32 m east.
+  const frame = { w: 0, s: 0, e: 10, n: 10 }
+  const size = 10 * UNIT_CELL_M
+  /** lon/lat of grid node (i, j): node centres sit half a cell in from the corner */
+  const node = (i: number, j: number): [number, number] => [i + 0.5, j + 0.5]
+  const at = (i: number, j: number) => [(i + 0.5) * UNIT_CELL_M, (j + 0.5) * UNIT_CELL_M] as const
 
-  it('bands come from the sample elevations; caprock and meteorites are left out', () => {
-    const ids = units.map((u) => u.id)
-    expect(ids).toEqual(['murray-mudstone', 'vera-rubin-ridge', 'glen-torridon-clay', 'mirador-sulfate', 'amapari-iron'])
-    const murray = units[0]
-    expect(murray.lo).toBeCloseTo(-4459.6, 6)
-    expect(murray.hi).toBeCloseTo(-4192.46, 6)
-    expect(UNITS_FILE.band_margin_m).toBe(15)
+  it('Unity constants: 32 m cells, sigma 70 m, alpha 0.35..0.60, share floor 0.3', () => {
+    expect([UNIT_CELL_M, UNIT_SIGMA_M, UNIT_ALPHA_MIN, UNIT_ALPHA_MAX, UNIT_SHARE_FLOOR]).toEqual([32, 70, 0.35, 0.6, 0.3])
   })
 
-  it('inside a band: that unit at full weight', () => {
-    expect(id(-4300)).toBe('murray-mudstone')
-    expect(pickUnit(units, -4300).fade).toBe(1)
-    expect(id(-4100)).toBe('glen-torridon-clay')
-    expect(id(-3950)).toBe('mirador-sulfate')
+  it('one rock: its node weighs exactly 1, the neighbour exp(-32^2 / (2 * 70^2)); full dominance gives alpha 0.60', () => {
+    const f = buildUnitField([[...node(4, 4), 0]], ['mirador-sulfate'], frame, size, size)
+    expect(f.grid[4 * 10 + 4]).toBeCloseTo(1, 6)
+    expect(f.grid[4 * 10 + 5]).toBeCloseTo(Math.exp(-(32 * 32) / (2 * 70 * 70)), 6)
+    const p = unitAt(f, ...at(4, 4))
+    expect(f.units[p.index].id).toBe('mirador-sulfate')
+    expect(p.alpha).toBeCloseTo(UNIT_ALPHA_MAX, 6)
   })
 
-  it('overlap: the more abundant unit wins (Murray 0.3 over Vera Rubin 0.12 at -4180 m)', () => {
-    expect(id(-4180)).toBe('murray-mudstone')
+  it('beyond 3 sigma (210 m) nothing is splatted: clear', () => {
+    const f = buildUnitField([[...node(0, 0), 0]], ['mirador-sulfate'], frame, size, size)
+    expect(f.grid[9 * 10 + 9]).toBe(0)
+    expect(unitAt(f, ...at(9, 9)).alpha).toBe(0)
   })
 
-  it('below every band: fades by e per 20 m beyond the 15 m margin, then nothing', () => {
-    const p = pickUnit(units, -4500) // 25.4 m below -4474.6
-    expect(units[p.index].id).toBe('murray-mudstone')
-    expect(p.fade).toBeCloseTo(Math.exp(-25.4 / 20), 6)
-    expect(pickUnit(units, -4520).fade).toBeLessThan(UNITS_FILE.min_fade)
+  it('mixed: 2 clay + 1 sulfate on one node: clay wins, alpha from share 2/3', () => {
+    const f = buildUnitField(
+      [
+        [...node(5, 5), 0],
+        [...node(5, 5), 0],
+        [...node(5, 5), 1],
+      ],
+      ['glen-torridon-clay', 'mirador-sulfate'],
+      frame,
+      size,
+      size,
+    )
+    const p = unitAt(f, ...at(5, 5))
+    expect(f.units[p.index].id).toBe('glen-torridon-clay')
+    const share = (2 / 3 - 0.3) / 0.7
+    expect(p.alpha).toBeCloseTo(0.35 + 0.25 * share, 6)
   })
 
-  it('a band that cannot reach the terrain range is dropped', () => {
-    expect(unitBands(-4100, -4050).map((u) => u.id)).not.toContain('murray-mudstone')
+  it('units follow the rock database order, not the order rocks are met', () => {
+    const f = buildUnitField(
+      [
+        [...node(1, 1), 0],
+        [...node(2, 2), 1],
+        [...node(3, 3), 2],
+      ],
+      ['iron-meteorite', 'stimson-sandstone', 'glen-torridon-clay'],
+      frame,
+      size,
+      size,
+    )
+    expect(f.units.map((u) => u.id)).toEqual(['glen-torridon-clay', 'stimson-sandstone', 'iron-meteorite'])
+    expect(f.units[2].rgb).toEqual([0xb5, 0xd6, 0x5a]) // Unity lime meteorite
+  })
+
+  it('the exported Unity rocks: 2544, every class in the rock database', () => {
+    expect(ROCKS_FILE.rocks.length).toBe(2544)
+    const known = UNITS_FILE.classes.map((c) => c.id)
+    for (const id of ROCKS_FILE.classes) expect(known).toContain(id)
   })
 })
 
@@ -82,14 +126,18 @@ describe('relief rendering', () => {
     expect(img.contourM).toBe(5)
   })
 
-  it('material base on flat ground is the neutral grey; a unit tints it at half alpha', () => {
+  it('material base on flat ground is the neutral grey; a lone rock tints its cell at alpha 0.60', () => {
     const w = 6
     const e = flat(w, w, -4300)
-    const img = renderRelief(e, w, w, 5, 'material', unitBands(-4310, -4290))
-    const i = (3 * w + 3) * 4
-    const murray = unitBands(-4310, -4290)[0].rgb
-    for (let k = 0; k < 3; k++) expect(img.rgba[i + k]).toBe(Math.round(BASE_GREY + (murray[k] - BASE_GREY) * 0.5))
-    expect(img.unitCells.get('murray-mudstone')).toBeGreaterThan(0)
+    // 32 m cells = unit grid cells; cell (row 2, col 3) centre is node (3, 6 - 2 - 1)
+    const f = buildUnitField([[3.5, 3.5, 0]], ['mirador-sulfate'], { w: 0, s: 0, e: 6, n: 6 }, 6 * 32, 6 * 32)
+    const img = renderRelief(e, w, w, 32, 'material', f)
+    const i = (2 * w + 3) * 4
+    const rgb = f.units[0].rgb
+    for (let k = 0; k < 3; k++) expect(img.rgba[i + k]).toBe(Math.round(BASE_GREY + (rgb[k] - BASE_GREY) * 0.6))
+    expect(img.unitCells.get('mirador-sulfate')).toBeGreaterThan(0)
+    const plain = renderRelief(e, w, w, 32, 'material', null)
+    expect(plain.rgba[i]).toBe(BASE_GREY)
   })
 
   it('edge cells have no slope estimate and stay transparent (as Unity)', () => {

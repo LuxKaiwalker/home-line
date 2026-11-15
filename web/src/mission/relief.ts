@@ -1,23 +1,23 @@
 // Topography and material-composition rasters for the Mission Planer "Maps" switcher, ported from
 // the team's Unity map (Nasa-Space-App, Assets/Mars/Scripts/HUD/MarsElevationMap.cs and MapView.cs
-// MapPalette, commit e5a40ad) so both apps draw the same map:
+// MapPalette, origin/main ba3c1a5; unit layer as of d19e9bf) so both apps draw the same map:
 //   topo:     muted ochre hypsometric tint (min..max of the grid) x soft multi-directional hillshade,
 //             contour lines (interval from the median slope, index contour every 5th);
-//   material: the same hillshade on neutral grey, tinted by the geologic unit of Mount Sharp's
-//             flat-lying layers inferred from elevation (mountSharpUnits.json: Curiosity sample
-//             elevations; band rule in that file). Not a mineral survey.
+//   material: the same hillshade on neutral grey, tinted by the regional dominant rock class of
+//             the Unity scene's rock population (unityRocks.json: every RockSample, Gaussian splat,
+//             see buildUnitField / unitAt). Not a mineral survey.
 // Pure functions on a row-major elevation grid (row 0 north, square cells of mpp metres).
 import unitsFile from './mountSharpUnits.json'
 
+import rocksFile from './unityRocks.json'
+
 export const UNITS_FILE = unitsFile as {
   source: string
-  rule: string
-  band_margin_m: number
-  band_falloff_m: number
-  min_fade: number
   classes: { id: string; name: string; unitSymbol: string | null; abundance: number; setting: string | null; summary?: string }[]
-  samples: { classId: string; target: string; instrument: string | null; sol: number | null; elevationM: number | null; useAsAnalog: boolean; citation: string | null }[]
 }
+
+/** The Unity scene's rocks: [lon, lat, index into classes] (web/scripts/unity_rocks.py). */
+export const ROCKS_FILE = rocksFile as unknown as { source: string; classes: string[]; rocks: [number, number, number][] }
 
 // ---------------------------------------------------------------- Unity constants (MarsElevationMap)
 const INTERVALS = [5, 10, 20, 50, 100, 200, 500]
@@ -38,8 +38,15 @@ const CONTOUR_RGB: [number, number, number] = [226, 214, 196]
 const LIGHT_AZ_DEG = [315, 270, 0]
 const LIGHT_W = [0.5, 0.25, 0.25]
 const LIGHT_ALT_DEG = 45
-/** Unity MapPalette.UnitOverlayAlpha (perceptual; blended in sRGB here) */
-export const UNIT_OVERLAY_ALPHA = 0.5
+// Unity MarsElevationMap unit-map constants and MapPalette.UnitAlphaMin/Max (perceptual; blended in sRGB here).
+export const UNIT_CELL_M = 32
+export const UNIT_SIGMA_M = 70
+const UNIT_CUTOFF_SIGMAS = 3
+export const UNIT_WEIGHT_FLOOR = 0.05
+export const UNIT_SHARE_FLOOR = 0.3
+export const UNIT_ALPHA_MIN = 0.35
+export const UNIT_ALPHA_MAX = 0.6
+const UNIT_MAX = 16
 
 /** Unity MapPalette.ClassColor and ClassLabel. */
 const CLASS_STYLE: Record<string, { hex: number; label: string }> = {
@@ -50,7 +57,7 @@ const CLASS_STYLE: Record<string, { hex: number; label: string }> = {
   'amapari-iron': { hex: 0xe07fb8, label: 'Ma Fe bed' },
   'stimson-sandstone': { hex: 0xd9b77e, label: 'Ss sandstone' },
   'silica-alteration': { hex: 0xa6e0c8, label: 'Si silica' },
-  'iron-meteorite': { hex: 0x9da3aa, label: 'Fe meteorite' },
+  'iron-meteorite': { hex: 0xb5d65a, label: 'Fe meteorite' },
 }
 const FALLBACK_HEX = [0x8fbf6a, 0xd9906a, 0xa0a0e0, 0xc0c070]
 
@@ -70,51 +77,116 @@ export interface Unit {
   id: string
   name: string
   label: string
-  lo: number
-  hi: number
-  abundance: number
   rgb: [number, number, number]
 }
 
-/** Layered units that can reach elevations [minE, maxE] (Unity BuildUnits). */
-export function unitBands(minE: number, maxE: number): Unit[] {
-  const { band_margin_m: margin, band_falloff_m: falloff, min_fade: minFade } = UNITS_FILE
-  const reach = margin + falloff * Math.log(1 / minFade)
-  const out: Unit[] = []
-  for (const c of UNITS_FILE.classes) {
-    if (!c.id || !(c.abundance > 0) || c.setting === 'caprock') continue
-    let lo = Infinity
-    let hi = -Infinity
-    for (const s of UNITS_FILE.samples) {
-      if (s.classId !== c.id || !s.useAsAnalog || s.elevationM === null) continue
-      lo = Math.min(lo, s.elevationM)
-      hi = Math.max(hi, s.elevationM)
-    }
-    if (lo > hi || hi + reach < minE || lo - reach > maxE) continue
-    const st = classStyle(c.id, c.unitSymbol)
-    out.push({ id: c.id, name: c.name, label: st.label, lo, hi, abundance: c.abundance, rgb: st.rgb })
-  }
-  return out
+/** Lon/lat to metres east of the west edge and north of the south edge of the raster. */
+export interface UnitFrame {
+  w: number
+  s: number
+  e: number
+  n: number
 }
 
-/** Unit of highest abundance x band fade at elevation e (Unity PickUnit); index -1 without units. */
-export function pickUnit(units: Unit[], e: number): { index: number; fade: number } {
-  const { band_margin_m: margin, band_falloff_m: falloff } = UNITS_FILE
-  let best = -1
-  let bestScore = 0
-  let bestOutside = 0
-  units.forEach((u, i) => {
-    const lo = u.lo - margin
-    const hi = u.hi + margin
-    const outside = e < lo ? lo - e : e > hi ? e - hi : 0
-    const score = outside > 0 ? u.abundance * Math.exp(-outside / falloff) : u.abundance
-    if (best < 0 || score > bestScore) {
-      best = i
-      bestScore = score
-      bestOutside = outside
-    }
+export interface UnitField {
+  /** classes present, in Unity RockDatabase order (unknown ids after, as met) */
+  units: Unit[]
+  gridW: number
+  gridH: number
+  /** class-weight planes, unit-major: grid[u * gridW * gridH + j * gridW + i], j = 0 at the south edge */
+  grid: Float32Array
+}
+
+/**
+ * Unity GatherRocks + SplatRocks: every rock adds a Gaussian (sigma UNIT_SIGMA_M, cut at 3 sigma per
+ * axis) to its own class plane of a UNIT_CELL_M grid anchored at the raster's south-west corner, so
+ * each plane is the kernel-smoothed local rock count of that class.
+ */
+export function buildUnitField(
+  rocks: readonly (readonly [number, number, number])[],
+  classIds: readonly string[],
+  frame: UnitFrame,
+  widthM: number,
+  heightM: number,
+): UnitField {
+  const order = UNITS_FILE.classes.map((c) => c.id)
+  const used = [...new Set(rocks.map((r) => classIds[r[2]]).filter((id): id is string => !!id))]
+  const key = (id: string) => (order.includes(id) ? order.indexOf(id) : order.length + used.indexOf(id))
+  const ids = used.sort((a, b) => key(a) - key(b)).slice(0, UNIT_MAX)
+  const units: Unit[] = ids.map((id) => {
+    const c = UNITS_FILE.classes.find((x) => x.id === id)
+    const st = classStyle(id, c?.unitSymbol ?? null)
+    return { id, name: c?.name ?? id, label: st.label, rgb: st.rgb }
   })
-  return { index: best, fade: best < 0 ? 0 : bestOutside > 0 ? Math.exp(-bestOutside / falloff) : 1 }
+  const gridW = Math.max(1, Math.ceil(widthM / UNIT_CELL_M))
+  const gridH = Math.max(1, Math.ceil(heightM / UNIT_CELL_M))
+  const cells = gridW * gridH
+  const grid = new Float32Array(units.length * cells)
+  const inv2s2 = 1 / (2 * UNIT_SIGMA_M * UNIT_SIGMA_M)
+  const reach = (UNIT_CUTOFF_SIGMAS * UNIT_SIGMA_M) / UNIT_CELL_M
+  const kx = new Float32Array(2 * Math.ceil(reach) + 2)
+  for (const [lon, lat, ci] of rocks) {
+    const u = ids.indexOf(classIds[ci])
+    if (u < 0) continue
+    const fx = (((lon - frame.w) / (frame.e - frame.w)) * widthM) / UNIT_CELL_M - 0.5
+    const fz = (((lat - frame.s) / (frame.n - frame.s)) * heightM) / UNIT_CELL_M - 0.5
+    const ia = Math.max(0, Math.ceil(fx - reach))
+    const ib = Math.min(gridW - 1, Math.floor(fx + reach))
+    const ja = Math.max(0, Math.ceil(fz - reach))
+    const jb = Math.min(gridH - 1, Math.floor(fz + reach))
+    if (ia > ib || ja > jb) continue // off the map
+    for (let i = ia; i <= ib; i++) {
+      const dx = (i - fx) * UNIT_CELL_M
+      kx[i - ia] = Math.exp(-dx * dx * inv2s2)
+    }
+    for (let j = ja; j <= jb; j++) {
+      const dz = (j - fz) * UNIT_CELL_M
+      const wz = Math.exp(-dz * dz * inv2s2)
+      const row = u * cells + j * gridW
+      for (let i = ia; i <= ib; i++) grid[row + i] += kx[i - ia] * wz
+    }
+  }
+  return { units, gridW, gridH, grid }
+}
+
+/**
+ * Unity UnitTexel at metres (x east of the west edge, z north of the south edge): dominant class of
+ * the bilinearly interpolated weights; alpha UNIT_ALPHA_MIN..MAX with the dominance share, faded out
+ * where the summed weight is negligible (no rock near). index -1 / alpha 0: draw nothing.
+ */
+export function unitAt(f: UnitField, xM: number, zM: number): { index: number; alpha: number } {
+  const fx = xM / UNIT_CELL_M - 0.5
+  const fz = zM / UNIT_CELL_M - 0.5
+  const i0 = Math.floor(fx)
+  const j0 = Math.floor(fz)
+  const tx = fx - i0
+  const tz = fz - j0
+  const cl = (v: number, n: number) => (v < 0 ? 0 : v > n - 1 ? n - 1 : v)
+  const ia = cl(i0, f.gridW)
+  const ib = cl(i0 + 1, f.gridW)
+  const ja = cl(j0, f.gridH) * f.gridW
+  const jb = cl(j0 + 1, f.gridH) * f.gridW
+  const w00 = (1 - tx) * (1 - tz)
+  const w10 = tx * (1 - tz)
+  const w01 = (1 - tx) * tz
+  const w11 = tx * tz
+  const cells = f.gridW * f.gridH
+  let total = 0
+  let best = 0
+  let bu = -1
+  for (let u = 0, o = 0; u < f.units.length; u++, o += cells) {
+    const w = f.grid[o + ja + ia] * w00 + f.grid[o + ja + ib] * w10 + f.grid[o + jb + ia] * w01 + f.grid[o + jb + ib] * w11
+    total += w
+    if (w > best) {
+      best = w
+      bu = u
+    }
+  }
+  if (bu < 0) return { index: -1, alpha: 0 }
+  const presence = (total - UNIT_WEIGHT_FLOOR) / UNIT_WEIGHT_FLOOR
+  if (presence <= 0) return { index: bu, alpha: 0 }
+  const share = Math.min(1, Math.max(0, (best / total - UNIT_SHARE_FLOOR) / (1 - UNIT_SHARE_FLOOR)))
+  return { index: bu, alpha: (UNIT_ALPHA_MIN + (UNIT_ALPHA_MAX - UNIT_ALPHA_MIN) * share) * Math.min(1, presence) }
 }
 
 // ---------------------------------------------------------------- relief
@@ -164,13 +236,13 @@ export interface Relief {
   minE: number
   maxE: number
   contourM: number
-  /** cells drawn per unit at half weight or more (Unity unitTexels), by unit id */
+  /** cells drawn per unit with alpha > 0 (Unity unitTexels), by unit id */
   unitCells: Map<string, number>
 }
 
 const clamp255 = (v: number) => (v <= 0 ? 0 : v >= 255 ? 255 : Math.round(v))
 
-export function renderRelief(elev: Float32Array, w: number, h: number, mpp: number, mode: ReliefMode, units: Unit[] | null): Relief {
+export function renderRelief(elev: Float32Array, w: number, h: number, mpp: number, mode: ReliefMode, units: UnitField | null): Relief {
   let minE = Infinity
   let maxE = -Infinity
   for (const v of elev)
@@ -196,7 +268,6 @@ export function renderRelief(elev: Float32Array, w: number, h: number, mpp: numb
 
   const rgba = new Uint8ClampedArray(w * h * 4)
   const unitCells = new Map<string, number>()
-  const minFade = UNITS_FILE.min_fade
   const inv2 = 0.5 / mpp
   for (let r = 1; r < h - 1; r++) {
     for (let c = 1; c < w - 1; c++) {
@@ -239,15 +310,14 @@ export function renderRelief(elev: Float32Array, w: number, h: number, mpp: numb
         }
       } else {
         cr = cg = cb = BASE_GREY * f
-        if (units && units.length) {
-          const p = pickUnit(units, e)
-          if (p.index >= 0 && p.fade >= minFade) {
-            const u = units[p.index]
-            const a = UNIT_OVERLAY_ALPHA * p.fade
-            cr += (u.rgb[0] - cr) * a
-            cg += (u.rgb[1] - cg) * a
-            cb += (u.rgb[2] - cb) * a
-            if (p.fade >= 0.5) unitCells.set(u.id, (unitCells.get(u.id) ?? 0) + 1)
+        if (units && units.units.length) {
+          const p = unitAt(units, (c + 0.5) * mpp, (h - r - 0.5) * mpp)
+          if (p.index >= 0 && p.alpha > 0) {
+            const u = units.units[p.index]
+            cr += (u.rgb[0] - cr) * p.alpha
+            cg += (u.rgb[1] - cg) * p.alpha
+            cb += (u.rgb[2] - cb) * p.alpha
+            unitCells.set(u.id, (unitCells.get(u.id) ?? 0) + 1)
           }
         }
       }
