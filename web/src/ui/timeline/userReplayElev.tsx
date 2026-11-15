@@ -6,7 +6,7 @@
 // Heights: fp3d/far.f32.gz, loaded lazily on the first user replay (elevationData.ts). Derived, so
 // every number is labelled "Estimate". The official replay is unchanged.
 import { useEffect, useMemo, useState } from 'preact/hooks'
-import { stopLabels, type PlanningStop } from '../../state/planning'
+import { stopLabels, type PlanStop } from '../../state/planning'
 import { signal, useSignalValue } from '../../state/signal'
 import type { UserReplay } from '../../state/userReplay'
 import { areaPath, linear, linePath, pct, stepTicks, type Pt } from '../charts'
@@ -93,13 +93,13 @@ function legendLabel(i: number): string {
 }
 
 /** The Elevation view: main's ElevStrip on the replay's axis, plus the replay-clock marker. */
-export function ReplayElevation({ u, e, tNow, stops, resM }: { u: UserReplay; e: ElevProfile | null | 'loading'; tNow: number; stops: readonly PlanningStop[]; resM?: number }) {
+export function ReplayElevation({ u, e, tNow, stops, resM }: { u: UserReplay; e: ElevProfile | null | 'loading'; tNow: number; stops: readonly PlanStop[]; resM?: number }) {
   if (e === 'loading') return <p class="hl-tl__status">{tr('heightLoading')}</p>
   if (!e) return <p class="hl-tl__status" data-no-height>{tr('noHeight')}</p>
   return <ElevStrip u={u} e={e} tNow={tNow} stops={stops} resM={resM} />
 }
 
-function ElevStrip({ u, e, tNow, stops, resM }: { u: UserReplay; e: ElevProfile; tNow: number; stops: readonly PlanningStop[]; resM?: number }) {
+function ElevStrip({ u, e, tNow, stops, resM }: { u: UserReplay; e: ElevProfile; tNow: number; stops: readonly PlanStop[]; resM?: number }) {
   const tMax = Math.max(u.totalMin, e.tEnd, 1e-6)
   const pad = Math.max(1, (e.zMax - e.zMin) * 0.08)
   const z0 = e.zMin - pad
@@ -110,7 +110,7 @@ function ElevStrip({ u, e, tNow, stops, resM }: { u: UserReplay; e: ElevProfile;
   const all: Pt[] = useMemo(() => e.points.map((p) => [p.t, p.z]), [e])
   const runs = useMemo(() => slopeRuns(e.points), [e])
   const used = new Set(runs.filter((r) => r.cls >= 0).map((r) => r.cls))
-  const labels = stopLabels(stops as PlanningStop[])
+  const labels = stopLabels(stops)
   const name = (id: string | null) => {
     const i = id === null ? -1 : stops.findIndex((s) => s.id === id)
     return i >= 0 ? labels[i] : ''
