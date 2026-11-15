@@ -4,7 +4,10 @@ Gate B1′: "custom pad end to end: validate, preview, full plan on the map; per
 This is the real demo setup: `make serve` on 127.0.0.1:8012 and `VITE_LIVE=1 npm run dev` on
 http://localhost:5173. That origin is in `api.cors_origins`, so the browser runs with web security on.
 
-## Result: PARTIAL. Steps 1–3, 5 and 6 pass. Step 4 fails one criterion: the map shows nothing live until the job is complete.
+## Result: PARTIAL. Steps 1–3, 5, 6 and 7 (crew) pass. Step 4 fails one criterion: the map shows nothing live until the job is complete.
+
+Steps 1–6 were first run on e75cb3d (run3 and run4). After U4 was merged, they were all run again on main cd2ae9a,
+together with step 7 (run5-crew and run6-crew35). Both heads give the same verdicts.
 
 | Step | What | Result | Key numbers |
 |---|---|---|---|
@@ -14,7 +17,7 @@ http://localhost:5173. That origin is in `api.cors_origins`, so the browser runs
 | 4 | Compute full plan: stages in order, nominal band + route on the map first, done, label + provenance, no uncaught errors | **FAIL** (one criterion) | done in 374.5 s (timeout 600 s); stages in order; label + provenance link present; 0 uncaught errors; **no band, route or headline before the job is complete (finding H5-1)** |
 | 5 | Permalink in a fresh page; provenance; export + re-import | **PASS** | renders in 469 ms with 8 manifest-backed numbers and 0 withheld; origin `computed_live` with stage timings; re-import → same hash, opened in 99 ms (`computed: true`) |
 | 6 | Official permalink | **PASS** | "Precomputed · official plan"; 23 % / 15.2 % / 28.7 % / 60-min 31.5 % (16.2–43.8 %), the same numbers as the static console |
-| 7 | Crew job (+20 kg tools) | **crew: pending U4** | U4 (the crew panel) was not on origin/main at 02:10 (head 9874f4c) |
+| 7 | Crew job (+20 kg tools) on main with U4 (cd2ae9a) | **PASS**, but H5-1 again | tools 35 kg is flagged in the panel; tools 30 kg (+20) is sent with the job, which is done in 490.4 s under load; reach at 30 min **20.7 %** vs 21.2 % for the default crew; "No range flags"; steps 1–3, 5 and 6 pass again on the new head |
 
 Peak memory of the API process tree (RSS summed, sampled every 1 s):
 - During the step-4 job: **2.43 GiB** (2,550,112 KiB). The job worker peaked at **1.90 GiB** and the API server process at 0.44 GiB.
@@ -165,9 +168,51 @@ Evidence (screenshots, `e2e-result.json` with the network log and every job poll
   H2's cosmetic finding 3 still applies: the label briefly reads "Computed live" while the page loads.
 - Screenshot: `run4/step6-official.png`.
 
-### 7. Crew job — crew: pending U4
-U4 was not merged: origin/main was at 9874f4c (H2) at 02:10, and only E10's server side (#61) is on main. No crew job was run.
-E10 measured a crew job (+20 kg tools, official pad) via the API: 386.6 s.
+### 7. Crew job on main with U4 — PASS (H5-1 reproduced)
+U4 was merged as cd2ae9a during the check (orchestrator message, about 02:20).
+
+**Setup for the re-run:**
+- I merged origin/main into the branch (HEAD 643b53a = cd2ae9a + this doc), ran `npm ci` again and restarted both servers.
+  `make serve` now includes E8b's warm-up: `/health` reported `engine_warm: true` before the first request.
+- `/engine/version`: commit 643b53a, engine_tree `6135328580…`. The engine tree changed only through `pipeline/export/*` tile code
+  (P2), so the hashes changed but the planning code did not. The official hash is now `7d491d3e2dd6a60d`.
+- The machine was loaded by other agents (load average 26–30 on 16 cores), so these timings are slower than run3's.
+
+**Results:**
+- **run5-crew** (`OFFICIAL_HASH=7d491d3e2dd6a60d CREW_PROBE=tools_kg=35 CREW_SET=tools_kg=30`; evidence in `/tmp/hl-orch/h5/run5-crew/`):
+  - Steps 1–3 pass again: ready after 758 ms; `disc_off_grid` with the nearest block 360.9 m away; preview after 107 ms with 14/14 numbers flagged as estimates.
+  - The crew panel ("Crew · Computed live …") shows the 4 inputs with "Validated range min to max, default d". Suit (104 kg) and O2 reserve (30 min) are marked "fixed tonight".
+  - **Out of range:** "Carried tools" set to 35 gives `data-check=outside` and the flag "outside the validated range: result is an
+    extrapolation" (range 0 to 30 kg). The compute button stays enabled (not clamped).
+    Screenshot: `step7a-crew-out-of-range.png`.
+  - **+20 kg:** tools set to 30 gives `data-check=changed` and no flag (`step7b-crew-set.png`).
+    The job then runs on rank 3 with crew tools_kg 30: plan `de37fb2fe179f1e0`.
+  - Run record stages: nominal 114.76, bands 265.74, partner 23.53, route 27.60, summary 58.74 s (the summary includes
+    E10's station-field cache for the new crew), **490.4 s** in total. That is under the 600 s timeout, but with only 1.22× headroom on this loaded machine.
+  - Headline: "Reachable within a 30-min walk home (nom_104): **20.7%** (range 16% to 29%)". The default crew on the same pad
+    gave 21.2 % (16.2 to 30.1) → **smaller, as expected**. The 60-min figure is 21.7 % (11.5 to 36.7) vs 22.6 % (11.9 to 38.7).
+  - Run-record flags: "No range flags: every input is inside its validated range." That is correct, because 30 is the range max.
+  - **H5-1 again:** after nominal, bands, partner and route, only `scenarios/index.json` and `manifest.json` were fetched, and both returned 404 (115.5 s, 380.8 s, 405.8 s and 435.8 s).
+    The map files came at 491 s, when the job was done.
+  - Steps 5 and 6 pass again:
+    - The permalink renders in 1770 ms, `computed_live`, with 8 manifest-backed numbers and 0 withheld; the shown value equals index.json.
+    - Provenance shows the stage table.
+    - The export contains `crew.tools_kg: 30`. Re-import gives the same hash and opens in 210 ms.
+    - The official permalink `7d491d3e2dd6a60d` shows "Precomputed · official plan" with 23 / 15.2 / 28.7 %.
+    - 0 uncaught errors; 9 `console.error` 404s (8 from H5-1, 1 favicon).
+- **run6-crew35** (`CREW_SET=tools_kg=35`: an out-of-range crew sent with a job, to see the run-record flags):
+  - The panel showed the out-of-range flag, and the job ran anyway (not clamped): plan `1366d2cbc482198b`.
+  - Run record stages: nominal 118.20, bands 209.61, partner 18.83, route 25.92, summary 44.44 s, **417.0 s** in total.
+  - When done, the live result shows **"Range flags (run record) · Inputs outside the validated range: result is an
+    extrapolation. · crew.tools_kg = 35: outside the anchored range (ICES-2026-127, IST-2)"**.
+    The API's run record has `range_flags [{"key": "crew.tools_kg", "value": 35.0, …}]`. **Range flags show. PASS.**
+  - Headline: 20.5 % (15.9 to 28.7), which is below both the 30 kg result and the default crew's.
+  - The driver, with its corrected criterion (map files before the first `done` poll), reports step 4 **FAIL** for H5-1:
+    the map files were first fetched at 420.7 s, the same poll that said done. Steps 1–3, 5 and 6 pass. 0 uncaught errors.
+- Memory on the new head (E8b preloads the job workers):
+  - Idle tree: 0.83 GiB (server 0.37 GiB, plus 2 warm workers of about 0.21 GiB each).
+  - Peak during the 30 kg crew job: 2.34 GiB, with the job worker at 1.78 GiB.
+  - Peak during the 35 kg job: 2.06 GiB.
 
 ## Findings
 
@@ -204,7 +249,16 @@ presenter cannot click exactly on rank 2 or 3. Clicking next to a marker and usi
 `/favicon.ico` returns 404 there). It is harmless.
 
 **H5-5 (info, for the VM sizing).** One custom-pad job took the API process tree from 0.42 to 2.43 GiB. The job worker alone
-peaked at 1.90 GiB. Two concurrent jobs would need about 4.4 GiB.
+peaked at 1.90 GiB. Two concurrent jobs would need about 4.4 GiB. With E8b on main, the idle tree is 0.83 GiB because the
+workers are preloaded, and a crew job peaked at 2.34 GiB.
+
+**H5-7 (timeout headroom, for the T1/D81 owner).** Measured job totals:
+- custom pad, default crew: 374.5 s and 370.1 s;
+- custom pad, crew 30 kg: 490.4 s (machine load 26–30);
+- custom pad, crew 35 kg: 417.0 s.
+
+A new-crew job pays about 45–60 s more in its summary stage for E10's station-field cache. Under load it took 82 % of
+`compute.job_timeout_s` 600 s. During a live demo, keep other heavy work off the machine.
 
 **H5-6 (info, static console; for the WS5/static-data owner, unverified).** During the first driver attempt
 (run1, 02:03:14), the driver's map clicks went through to the static "Rover parking options" list and selected

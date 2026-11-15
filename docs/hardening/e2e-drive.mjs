@@ -15,6 +15,8 @@
 //                 rank 2; its nearest valid block is rank 3 137.393301,-4.776114, which the driver then takes)
 //   BAD           invalid spot "lon,lat" (default E8's pad 137.401783,-4.771407: disc_off_grid, north edge)
 //   JOB_WAIT_S    how long to wait for the full plan (default 660 = job_timeout_s 600 + 60)
+//   CREW_PROBE    "field=value" typed into the crew panel (U4) to check its out-of-range flag, e.g. tools_kg=35
+//   CREW_SET      "field=value" left in the crew panel for the step-4 job, e.g. tools_kg=30 (+20 kg tools)
 import { execSync } from 'node:child_process'
 import { mkdirSync, writeFileSync } from 'node:fs'
 
@@ -188,6 +190,29 @@ try {
     await shot(page, 'step3-preview')
   }
 
+  // ---------- 7 (optional). crew panel (U4): out-of-range flag, then the crew used by the step-4 job ----------
+  // CREW_PROBE=field=value (expected outside its range), CREW_SET=field=value (sent with the job).
+  if (process.env.CREW_SET || process.env.CREW_PROBE) {
+    const t = performance.now()
+    const crew = { set: process.env.CREW_SET ?? null, probe: process.env.CREW_PROBE ?? null }
+    await until(async () => (await visible(page, '.live-crew-fields')) || null, 15000)
+    const setField = async (kv) => {
+      const [f, v] = kv.split('=')
+      await page.fill(`#live-crew-${f}`, v)
+      await sleep(300)
+      return page.evaluate((f) => {
+        const tr = document.querySelector(`.live-crew tr[data-field="${f}"]`)
+        return { field: f, check: tr?.dataset.check ?? null, row: tr?.innerText.replace(/\s+/g, ' ').trim() ?? null, flag: tr?.querySelector('.live-extrapolation')?.innerText ?? null, blocked: document.querySelector('.live-compute')?.disabled ?? null }
+      }, f)
+    }
+    if (crew.probe) { crew.probeResult = await setField(crew.probe); await shot(page, 'step7a-crew-out-of-range') }
+    if (crew.set) { crew.setResult = await setField(crew.set); await shot(page, 'step7b-crew-set') }
+    crew.panel = await txt(page, '.live-crew')
+    crew.ms = Math.round(performance.now() - t)
+    R.crew = crew
+    log('crew', JSON.stringify(crew))
+  }
+
   // ---------- 4. full plan: staged, nominal band + route first, done, label + provenance ----------
   let hash = null
   {
@@ -200,7 +225,7 @@ try {
         const p = document.querySelector('.live-pad .live-plan')
         if (!p) return null
         const prov = p.querySelector('.live-prov')
-        return { kind: p.dataset.plan, progress: p.querySelector('.live-progress')?.innerText ?? null, stages: p.querySelector('.live-stages')?.innerText ?? null, label: p.querySelector('.live-label')?.innerText ?? null, prov: prov?.getAttribute('href') ?? null, headline: p.querySelector('.live-headline')?.innerText ?? null, failed: p.querySelector('.live-failed')?.innerText ?? null, errs: p.querySelector('.live-errors')?.innerText ?? null }
+        return { kind: p.dataset.plan, progress: p.querySelector('.live-progress')?.innerText ?? null, stages: p.querySelector('.live-stages')?.innerText ?? null, label: p.querySelector('.live-label')?.innerText ?? null, prov: prov?.getAttribute('href') ?? null, headline: p.querySelector('.live-headline')?.innerText ?? null, failed: p.querySelector('.live-failed')?.innerText ?? null, flags: p.querySelector('.live-range-flags-box')?.innerText ?? p.querySelector('.live-no-flags')?.innerText ?? null, attached: p.querySelector('.live-attached')?.innerText ?? null, errs: p.querySelector('.live-errors')?.innerText ?? null }
       }).catch(() => null)
       if (s) {
         const done = (s.stages ?? '').replace('Stages on the map: ', '').split(', ').filter(Boolean)
@@ -214,6 +239,11 @@ try {
       await sleep(500)
     }
     const totalS = +((performance.now() - t) / 1000).toFixed(1)
+    if (final?.kind === 'done' && !final.flags) {
+      // the run record (range flags) is read after the job is done (U4)
+      const f = await until(() => page.evaluate(() => { const p = document.querySelector('.live-pad .live-plan'); return p?.querySelector('.live-range-flags-box')?.innerText ?? p?.querySelector('.live-no-flags')?.innerText ?? null }), 5000)
+      final.flags = f.v
+    }
     // what the page fetched from the result tree, in seconds since "Compute full plan" (same clock as stageAt)
     const t0s = (t - T0) / 1000
     const resNet = netlog.filter((n) => hash && n.url && n.url.startsWith(`/results/${hash}/`) && n.method === 'GET').map((n) => ({ ...n, s: +(n.t - t0s).toFixed(1) }))
@@ -224,15 +254,19 @@ try {
       firstMapFiles: { band: firstMap('bands_'), route: firstMap('route_'), isochrones: firstMap('isochrones'), index: firstMap('scenarios/index.json'), manifest: firstMap('manifest.json') },
       resultFetches: resNet.map((n) => `${n.s}s ${n.status} ${n.url.replace(`/results/${hash}/`, '')}`),
       label: final?.label ?? null, labelOk: !!final?.label?.includes(LIVE_LABEL), provHref: final?.prov ?? null,
-      headline: final?.headline ?? null, failed: final?.failed ?? null, contractErrors: final?.errs ?? null,
+      headline: final?.headline ?? null, rangeFlags: final?.flags ?? null, attached: final?.attached ?? null, failed: final?.failed ?? null, contractErrors: final?.errs ?? null,
       uncaughtSoFar: errors.filter((e) => e.kind === 'uncaught').length,
     }
     R.steps[4].nominalFirst = order[0] === 'nominal'
-    // "the nominal band and route appear on the map first": both fetched (200) before the last stage is done
-    const lastStage = order.at(-1)
+    // "the nominal band and route appear on the map first": both fetched (200) before the first job poll that
+    // says done. A job that was already done at its first poll (cached / attached) cannot show this: 'cached'.
     const fm = R.steps[4].firstMapFiles
-    R.steps[4].mapBeforeLastStage = fm.band !== null && fm.route !== null && order.length > 1 && fm.band < stageAt[lastStage] && fm.route < stageAt[lastStage]
-    R.steps[4].pass = final?.kind === 'done' && R.steps[4].nominalFirst && R.steps[4].mapBeforeLastStage && R.steps[4].labelOk && !!hash && R.steps[4].provHref === `#/plan/${hash}` && !final?.errs && R.steps[4].uncaughtSoFar === 0
+    const polls = jobPolls.filter((p) => p.t >= t0s)
+    const doneAt = polls.find((p) => p.status === 'done')?.t
+    const cached = polls.length > 0 && polls[0].status === 'done'
+    R.steps[4].jobDoneAtS = doneAt === undefined ? null : +(doneAt - t0s).toFixed(1)
+    R.steps[4].mapBeforeDone = cached ? 'cached' : fm.band !== null && fm.route !== null && doneAt !== undefined && fm.band < doneAt - t0s - 0.5 && fm.route < doneAt - t0s - 0.5
+    R.steps[4].pass = final?.kind === 'done' && R.steps[4].nominalFirst && R.steps[4].mapBeforeDone !== false && R.steps[4].labelOk && !!hash && R.steps[4].provHref === `#/plan/${hash}` && !final?.errs && R.steps[4].uncaughtSoFar === 0
     log('step 4', JSON.stringify(R.steps[4]), 'first stage at', firstStageT)
     await shot(page, 'step4-done')
     // zoom the map out (wheel over the visible map) so the live band and route are in frame
