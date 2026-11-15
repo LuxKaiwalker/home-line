@@ -393,8 +393,8 @@ describe('static first (VITE_LIVE off): the static build does not contain the ro
       }
     }
     visit(SRC)
-    // I1a/I1b (D128): the browser compute core (edit/route/browser, reached only through the panel's
-    // instant estimate) reuses the grid and the router
-    expect(importers.filter((p) => !p.startsWith(`edit${sep}route${sep}browser${sep}`)).sort()).toEqual(['edit/route/panel.tsx', 'live/route/mount.tsx'].map((p) => p.split('/').join(sep)))
+    // I1a: edit/route/browser/ (the in-browser route computation) builds on map/ and is itself live-only
+    // (the static-entry test above covers all of edit/route/)
+    expect(importers.filter((f) => !f.startsWith(`edit${sep}route${sep}browser${sep}`)).sort()).toEqual(['edit/route/panel.tsx', 'live/route/mount.tsx'])
   })
 })
