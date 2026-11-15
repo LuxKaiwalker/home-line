@@ -8,6 +8,7 @@ import type { ConsoleMap, LayerGroup } from '../map/consoleMap'
 import { resetCollapse, setCollapse } from '../map/field/collapse'
 import { jumpToPose } from '../map/flythrough/camera'
 import { setSelectedLabel, selectedLabel } from '../map/labels/layer'
+import { setFpsWatchSuspended } from '../map/terrain/fps'
 import { exaggeration, setView } from '../map/terrain/state'
 import { mission, missionClock, ui } from '../state'
 import { t, type CopyKey } from '../ui/copy'
@@ -87,6 +88,8 @@ export class StoryStage {
     // live runs only: a capture places the labels on every frame (frame-exact)
     this.paused = chrome === 'story'
     if (this.paused) cmap.setStoryPaused(true)
+    // M10d: every story (live and capture) suspends the 3D fps fallback until restore()
+    setFpsWatchSuspended(true)
   }
 
   private setChrome(v: 'hide' | 'reveal' | undefined): void {
@@ -179,6 +182,7 @@ export class StoryStage {
     this.caption.remove()
     this.setCanvasHidden(false)
     if (this.paused) this.cmap.setStoryPaused(false)
+    setFpsWatchSuspended(false) // M10d: the watch resumes with a fresh window
     if (this.last.layers.terrain !== undefined) setView(sv.view)
     if (this.relief) removeReliefLow(this.map)
     for (const [g, on] of Object.entries(sv.groups) as [LayerGroup, boolean][]) if (this.cmap.layerVisible(g) !== on) this.cmap.setVisible(g, on)
