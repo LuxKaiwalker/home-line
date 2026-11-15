@@ -85,7 +85,7 @@ function fakeCtx() {
 }
 
 describe('Plan mount (L2c)', () => {
-  it.skip('claims layers + legend, sets reveal openers, hosts the U7 rail section; cleanup undoes it (hidden, D145)', () => {
+  it('claims layers + legend, sets reveal openers, hosts the U7 rail section; cleanup undoes it', () => {
     const f = fakeCtx()
     let stop!: () => void
     act(() => void (stop = mountPlanEdge(f.ctx)))
@@ -93,11 +93,12 @@ describe('Plan mount (L2c)', () => {
     expect(JSON.parse(f.sec.layers.getAttribute('data-hl-reveal')!)).toEqual(['[aria-controls="hl-lay-layers"][aria-expanded="false"]'])
     expect(JSON.parse(f.sec.legend.getAttribute('data-hl-reveal')!)).toEqual(['[aria-controls="hl-lay-legend"][aria-expanded="false"]'])
     expect(shell.hosted.value).toContain('layers')
-    // map-edge tools: the compass and the flythrough left the MapLibre corner for the tools column
+    // map-edge tools: the compass left the MapLibre corner for the tools column; the flythrough is not
+    // borrowed while FLY is hidden (D145)
     const tools = one(byClass(f.edge, 'plan-tools'))
     expect(tools.contains(f.compass)).toBe(true)
-    expect(tools.contains(f.fly)).toBe(true)
-    expect(f.corner.childNodes).toEqual([])
+    expect(tools.contains(f.fly)).toBe(false)
+    expect(f.corner.childNodes).toEqual([f.fly])
     act(() => stop())
     expect(shell.hosted.value).not.toContain('layers')
     expect(f.corner.childNodes).toEqual([f.compass, f.fly]) // back, in order

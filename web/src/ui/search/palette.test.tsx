@@ -247,15 +247,15 @@ describe.skipIf(!HAVE)('search palette (real data)', () => {
     expect(selection.selected.value).toEqual({ kind: 'station', id: 'S7' })
   })
 
-  it.skip('commands run their registry command (2D/3D toggles the view; a mode command navigates) (hidden, D145)', () => {
+  it('commands run their registry command (2D/3D toggles the view; a mode command navigates)', () => {
     ui.view.value = '2d'
     runItem(cmd('view.toggle3d'), { navigate: () => {} })
     expect(ui.view.value).toBe('3d')
     const nav = vi.fn()
     setCommandEnv({ navigate: nav })
-    runItem(cmd('mode.fly'), { navigate: () => {} })
+    runItem(cmd('mode.science'), { navigate: () => {} }) // D145: FLY is hidden, no mode.fly
     expect(nav).toHaveBeenCalledTimes(1)
-    expect(labelOf(cmd('mode.fly'))).toBe(t('modes.fly.label'))
+    expect(labelOf(cmd('mode.science'))).toBe(t('modes.science.label'))
   })
 
   it('commands group: every registered command can be found, with its keys beside it', () => {

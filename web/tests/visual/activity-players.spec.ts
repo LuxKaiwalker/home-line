@@ -60,7 +60,6 @@ async function advancing(page: Page): Promise<void> {
 async function openPlan(page: Page, drawer: Drawer): Promise<void> {
   await page.goto('/?intro=0#/')
   await play(page).waitFor({ timeout: 60_000 })
-  await fly(page).waitFor({ timeout: 60_000 })
   await storm(page).waitFor({ timeout: 60_000 })
   await expect(page.locator(GRIP)).toHaveAttribute('aria-expanded', 'false') // collapsed by default
   if (drawer === 'collapsed') {
@@ -106,7 +105,7 @@ async function expectRunning(page: Page, p: P, moving = true): Promise<void> {
     await expect(play(page)).toHaveAttribute('aria-pressed', 'false')
   } else {
     await expect(play(page)).toHaveAttribute('aria-pressed', 'true')
-    await expect(fly(page)).toHaveAttribute('aria-pressed', 'false')
+    await expect(fly(page)).toHaveCount(0) // D145: no Flythrough button while FLY is hidden
     await expect(storm(page)).toHaveAttribute('aria-pressed', String(p === 'storm'))
   }
   if (moving) await advancing(page)
@@ -131,8 +130,9 @@ test.describe('pairs: start A, then B', () => {
     for (const a of players)
       for (const b of players) {
         if (a === b) continue
-        // hidden, D145: openPlan waits for the Flythrough button, hidden with FLY
-        test.skip(`${a} -> ${b} (${drawer}) (hidden, D145)`, async ({ page }) => {
+        // hidden, D145: the Flythrough button is hidden with FLY
+        const flies = a === 'flythrough' || b === 'flythrough'
+        ;(flies ? test.skip : test)(`${a} -> ${b} (${drawer})${flies ? ' (hidden, D145)' : ''}`, async ({ page }) => {
           await openPlan(page, drawer)
           await startPlayer(page, a)
           await expectRunning(page, a)
@@ -163,7 +163,7 @@ test.describe('pairs: start A, then B', () => {
 })
 
 for (const drawer of DRAWERS)
-  test.skip(`editing stops the replay (rover drag, ${drawer}) (hidden, D145)`, async ({ page }) => {
+  test(`editing stops the replay (rover drag, ${drawer})`, async ({ page }) => {
     await openPlan(page, drawer)
     const rover = page.locator('.hl-edit-rover')
     await rover.waitFor({ timeout: 60_000 })
@@ -200,12 +200,14 @@ for (const drawer of DRAWERS)
 
 for (const drawer of DRAWERS)
   for (const p of ['replay', 'flythrough'] as const)
-    test.skip(`a mode switch stops the ${p} (${drawer}) (hidden, D145)`, async ({ page }) => {
+    // hidden, D145: the flythrough variant needs the Flythrough button
+    ;(p === 'flythrough' ? test.skip : test)(`a mode switch stops the ${p} (${drawer})${p === 'flythrough' ? ' (hidden, D145)' : ''}`, async ({ page }) => {
       await openPlan(page, drawer)
       await startPlayer(page, p)
       await expectRunning(page, p)
-      await press(page, page.locator('.hl-modes__tab', { hasText: 'Report' }).first())
-      await expect(page).toHaveURL(/#\/report/)
+      // REPORT is hidden (no tab): Science is the other shown mode
+      await press(page, page.locator('.hl-modes__tab', { hasText: 'Science' }).first())
+      await expect(page).toHaveURL(/#\/stations/)
       await expect(html(page)).toHaveAttribute('data-activity', 'none')
       // back in Plan: nothing plays, the clock stands still
       await press(page, page.locator('.hl-modes__tab', { hasText: 'Plan' }).first())
