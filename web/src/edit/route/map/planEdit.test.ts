@@ -76,13 +76,13 @@ describe('R3 planEdit: click adds a free point', () => {
 })
 
 describe('R3 planEdit: limits refuse with a notice', () => {
-  it(`at most ${ROUTE_LIMITS.maxFreePoints} free points`, () => {
+  it(`free points are capped only by the ${ROUTE_LIMITS.maxStops}-stop total (no separate ${ROUTE_LIMITS.maxFreePoints}-point cap, F4)`, () => {
     const { store, ed } = setup()
-    for (let k = 0; k < ROUTE_LIMITS.maxFreePoints; k++) expect(ed.addPointAt(at(k).lon, at(k).lat)).toBe(true)
+    for (let k = 0; k < ROUTE_LIMITS.maxStops; k++) expect(ed.addPointAt(at(k).lon, at(k).lat)).toBe(true)
     expect(ed.handlers.click!(ptr(at(9)))).toBe(true) // consumed: the notice answers, no selection card
-    expect(store.doc.peek().route.stops).toHaveLength(ROUTE_LIMITS.maxFreePoints)
+    expect(store.doc.peek().route.stops).toHaveLength(ROUTE_LIMITS.maxStops)
     expect(ed.notice.peek()).toMatchObject({ kind: 'refused' })
-    expect(ed.notice.peek()?.text).toContain(String(ROUTE_LIMITS.maxFreePoints))
+    expect(ed.notice.peek()?.text).toContain(String(ROUTE_LIMITS.maxStops))
   })
 
   it(`at most ${ROUTE_LIMITS.maxStops} stops`, () => {
@@ -183,9 +183,9 @@ describe('R3 planEdit: drag, ghost, delete', () => {
   it('every edit gives visible feedback within 200 ms (synchronous store change or notice)', () => {
     const { store, ed } = setup()
     const t0 = performance.now()
-    for (let k = 0; k < ROUTE_LIMITS.maxFreePoints + 2; k++) ed.handlers.click!(ptr(at(k)))
+    for (let k = 0; k < ROUTE_LIMITS.maxStops + 2; k++) ed.handlers.click!(ptr(at(k)))
     expect(performance.now() - t0).toBeLessThan(200)
-    expect(store.doc.peek().route.stops).toHaveLength(ROUTE_LIMITS.maxFreePoints)
+    expect(store.doc.peek().route.stops).toHaveLength(ROUTE_LIMITS.maxStops)
   })
 })
 

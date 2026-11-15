@@ -25,7 +25,6 @@ export function freePointCount(r: PlanRoute): number {
 /** Why no point can be added now (null = it can). */
 export function addBlocked(r: PlanRoute): 'auto' | 'tooManyFreePoints' | 'tooManyStops' | null {
   if (r.mode !== 'ordered') return 'auto'
-  if (freePointCount(r) >= ROUTE_LIMITS.maxFreePoints) return 'tooManyFreePoints'
   if (r.stops.length >= ROUTE_LIMITS.maxStops) return 'tooManyStops'
   return null
 }

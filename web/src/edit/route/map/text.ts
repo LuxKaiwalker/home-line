@@ -5,7 +5,7 @@ export const WAYPOINT_TEXT = {
   add: 'Add waypoint',
   addArmed: 'Click the map to place it',
   addCancel: 'Cancel adding (Escape)',
-  addHint: 'Then click the map. Up to {n} points of your own.',
+  addHint: 'Then click the map. Up to {n} stops, stations included.',
   blockedAuto: 'Waypoints need “My order”.',
   blockedTooManyFreePoints: 'At most {n} points of your own.',
   blockedTooManyStops: 'At most {n} stops.',

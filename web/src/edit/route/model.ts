@@ -153,7 +153,8 @@ export function checkRoute(r: PlanRoute, ctx: RouteCheckContext): RouteCheck {
   const route: RouteProblem[] = []
   if (!r.stops.length) route.push('noStops')
   if (r.stops.length > ROUTE_LIMITS.maxStops) route.push('tooManyStops')
-  if (r.stops.filter((s) => !isStationStop(s)).length > ROUTE_LIMITS.maxFreePoints) route.push('tooManyFreePoints')
+  // F4: the browser route caps the total at maxStops only; maxFreePoints (D97) is a SERVER compute-cost
+  // limit (each free point ~40 s per scenario there) and stays in ROUTE_LIMITS for the live server path.
   const seen = new Set<string>()
   const stops = r.stops.map((s, i): StopCheck => {
     const key = stopKey(s)

@@ -57,12 +57,12 @@ describe('free points: list operations (pure)', () => {
     expect(freePoints(r).map((p) => [p.index, p.name])).toEqual([[1, 'W1'], [3, 'W2']])
   })
 
-  it('at most route.max_free_points (4) and route.max_stops (8); auto mode adds nothing', () => {
-    expect(ROUTE_LIMITS.maxFreePoints).toBe(4)
+  it('at most route.max_stops (8) in all, no separate free-point cap (F4); auto mode adds nothing', () => {
+    expect(ROUTE_LIMITS.maxFreePoints).toBe(4) // the server's compute-cost limit stays (live path)
     let r: PlanRoute = { mode: 'ordered', stops: [] }
-    for (let i = 0; i < 6; i++) r = addPoint(r, at(100 * (i + 1), 0))
-    expect(r.stops).toHaveLength(4)
-    expect(addBlocked(r)).toBe('tooManyFreePoints')
+    for (let i = 0; i < 10; i++) r = addPoint(r, at(100 * (i + 1), 0))
+    expect(r.stops).toHaveLength(ROUTE_LIMITS.maxStops)
+    expect(addBlocked(r)).toBe('tooManyStops')
     const full: PlanRoute = { mode: 'ordered', stops: [...stations.map((s) => ({ station: s.id })), { lon: 1, lat: 1 }, { lon: 2, lat: 2 }] }
     expect(addBlocked(full)).toBe('tooManyStops')
     expect(addPoint(full, at(0, 500))).toBe(full)
@@ -364,13 +364,14 @@ describe('editor: add on the armed click, drop = one undo step, nothing routed w
     expect(ed.ghost.value.kind).toBe('ready')
   })
 
-  it('max 4: "Add waypoint" is blocked with the reason; without a map it is blocked too', () => {
-    const { ed } = editor()
-    for (let i = 0; i < 4; i++) {
+  it('max 8 stops in all (no 4-point cap, F4): "Add waypoint" is blocked with the reason; without a map it is blocked too', () => {
+    const { ed, store } = editor()
+    for (let i = 0; i < ROUTE_LIMITS.maxStops; i++) {
       ed.startAdd()
       ed.add(at(100 * (i + 1), 0).lon, at(100 * (i + 1), 0).lat)
     }
-    expect(ed.blocked.value).toBe('tooManyFreePoints')
+    expect(store.route.value.stops).toHaveLength(ROUTE_LIMITS.maxStops)
+    expect(ed.blocked.value).toBe('tooManyStops')
     expect(ed.startAdd()).toBe(false)
     const { ed: e2 } = editor()
     e2.setMapAttached(false)

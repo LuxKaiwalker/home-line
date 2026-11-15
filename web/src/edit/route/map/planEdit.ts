@@ -169,7 +169,7 @@ export function createPlanEditor(o: PlanEditOptions = {}) {
   function refusal(at: { lon: number; lat: number }, kind: 'point' | 'station', adding: boolean, except?: StopId): Refusal | null {
     const s = stops()
     if (adding && s.length >= ROUTE_LIMITS.maxStops) return 'tooManyStops'
-    if (adding && kind === 'point' && s.filter((x) => x.kind === 'point').length >= ROUTE_LIMITS.maxFreePoints) return 'tooManyFreePoints'
+    // F4: no separate free-point cap in the browser (maxFreePoints is the server's compute-cost limit)
     if (kind === 'point') {
       const p = probe(at.lon, at.lat)
       if (p.inGrid === false) return 'outside'
