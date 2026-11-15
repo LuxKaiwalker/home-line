@@ -63,10 +63,10 @@ const SAMPLE: FieldSample = {
   inside: true,
   state: null,
   unknown: false,
-  tHome: { nominal: 12.34 } as FieldSample['tHome'],
+  tHome: { nom: 12.34, con: null, opt: null },
   o2Home: null,
   noRouteHome: {} as FieldSample['noRouteHome'],
-  variant: 'nominal',
+  variant: 'nom',
 } as unknown as FieldSample
 vi.mock('../field', async (orig) => ({ ...(await orig<typeof import('../field')>()), fieldAt: (lon: number, lat: number) => ({ ...SAMPLE, lon, lat }) }))
 
