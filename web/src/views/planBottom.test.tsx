@@ -6,15 +6,14 @@
 //    the shared mission clock; a trust chip on the EVA time); the L5 ids #hl-lay-plan-bottom and
 //    #hl-lay-plan-bottom-tab-{plan-table,timeline};
 //  - F7 (user 22:59): the drawer holds ONLY the replay: one tab (timeline), no plan-table tab, no
-//    "Compare plans" link; user 23:28: the Plan table is the left-rail section 'plan-table' (rendered
-//    there; the rail toggle is its reveal opener); while the rail is closed the sections wait in the
-//    hidden stash (numbers in the page);
+//    "Compare plans" link; user 23:28: the Plan table is a left-edge map panel 'plan-table' (inside the
+//    map, so main.outlet; its button is the reveal opener); closed, the sections wait in the hidden
+//    stash (numbers in the page);
 //    a stale remembered 'plan-table' tab falls back to the timeline;
 //  - expanded: the timeline tab shows the dock body (dockContent), one timeline at a time;
 //  - L7c: the slim Play is the replay player of the activity store (as the full timeline's Play): it
 //    stops a running flythrough / intro, is pressed only while the replay runs, disabled during a job;
 //  - the shell root gets the drawer height (--hl-plan-bottom) so an overlay side panel ends above it.
-import { render } from 'preact'
 import { act } from 'preact/test-utils'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { activity, beginJob, endJob, resetActivity, start } from '../state/activity'
@@ -22,8 +21,8 @@ import { missionClock } from '../state/mission'
 import { ui } from '../state/ui'
 import { all, byClass, installDom, one, type FakeDocument, type FakeNode } from '../ui/testing/dom'
 import { bindLayoutStorage, closeContainer, openContainer, reportInset, resetLayout, setActiveTab } from '../ui/layout'
-import { dockContent, railSections, setDockContent, shell } from '../ui/shell/store'
-import { mountPlanBottom, PLAN_BOTTOM, RAIL_TABLE, TAB_TABLE, TAB_TIMELINE, TABLE_SECTIONS } from './planBottom'
+import { dockContent, setDockContent, shell } from '../ui/shell/store'
+import { LEFT_TABLE, mountPlanBottom, PLAN_BOTTOM, TAB_TABLE, TAB_TIMELINE, TABLE_SECTIONS } from './planBottom'
 import type { PlanMountCtx, SectionName, Sections } from './planSlots'
 
 let doc: FakeDocument
@@ -94,24 +93,17 @@ afterEach(() => {
 })
 
 describe('plan-bottom drawer (L2b)', () => {
-  it('claims the plan-table sections and the summary; the left rail shows them, the rail toggle reveals them (F7)', () => {
+  it('claims the plan-table sections and the summary; the left-edge "Plan table" panel shows them, its button reveals them (F7)', () => {
     expect([...claimed].sort()).toEqual([...TABLE_SECTIONS, 'summary'].sort())
-    for (const n of TABLE_SECTIONS) expect(reveals.get(n)).toEqual(['.hl-rail__toggle[aria-controls="hl-rail-body"][aria-expanded="false"]'])
-    const rail = railSections.value.find((x) => x.id === RAIL_TABLE)
-    expect(rail?.modes).toEqual(['plan'])
-    expect(rail?.title).toBe('planBottom.planTable')
+    for (const n of TABLE_SECTIONS) expect(reveals.get(n)).toEqual([`[aria-controls="hl-lay-${LEFT_TABLE}"][aria-expanded="false"]`])
     act(() => openContainer(PLAN_BOTTOM, null))
     for (const n of TABLE_SECTIONS) expect(one(byClass(bottom, 'hl-lay-bottom')).contains(section(n))).toBe(false)
-    // rendered in the rail: the section nodes themselves move there (same numbers)
-    const host = doc.createElement('div')
-    doc.body.appendChild(host)
-    act(() => render(<>{rail!.render()}</>, host as unknown as Element))
-    const table = one(byClass(host, 'plan-table'))
+    const pop = one(byClass(bottom, 'plan-pop--table'))
+    expect((pop.getAttribute('class') ?? '').includes('hl-lay-pop--left-top')).toBe(true)
+    expect(byClass(pop, 'plan-table')).toHaveLength(0) // closed: the sections wait in the stash
+    act(() => openContainer(LEFT_TABLE, null))
+    const table = one(byClass(pop, 'plan-table'))
     for (const n of TABLE_SECTIONS) expect(table.contains(section(n))).toBe(true)
-    act(() => render(null, host as unknown as Element))
-    act(() => stop())
-    stop = () => {}
-    expect(railSections.value.some((x) => x.id === RAIL_TABLE)).toBe(false)
   })
 
   it('hosts the timeline while mounted (the shell dock leaves Plan) and gives it back on cleanup', () => {

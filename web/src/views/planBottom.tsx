@@ -3,10 +3,12 @@
 // the drawer holds ONLY the replay, one tab:
 //   timeline     the timeline dock body (ui/timeline/install.tsx installTimelineDock → dockContent)
 // User 23:28 (F7): the Plan table (PlanTableTab: the console's planned route and stations table and the
-// sections that explain them, parking options included) lives in the LEFT rail (sheet over the map in
-// Plan) as rail section 'plan-table'; its opener is the rail toggle (ctx.reveal, values snapshot). While
-// the rail is closed the sections wait in the hidden stash (numbers stay in the page). The D142 "Compare
-// plans" link stays removed (ComparePlansLink kept, not mounted; #/trade stays reachable by URL).
+// sections that explain them, parking options included) lives at the LEFT edge of the map: a left-top
+// map-edge panel 'plan-table' (layout Popover) with its own "Plan table" button, the reveal opener for
+// the values snapshot. It stays inside the map (main.outlet): the shell's left rail is outside the outlet,
+// so numbers shown there leave the value snapshot. Closed, the sections wait in the hidden stash (numbers
+// stay in the page). The D142 "Compare plans" link stays removed (ComparePlansLink kept, not mounted;
+// #/trade stays reachable by URL).
 // Collapsed it is one line: the plan summary (the route at a glance, from the same files) and the slim
 // timeline scrubber (play, scrub, EVA time). Expanded at most 40 % of the map (L1, layout.css).
 // While mounted the Plan map view hosts the timeline ('timeline' in shell.hosted), so the shell dock
@@ -20,8 +22,8 @@ import { toggleReplay } from '../state/activityClock'
 import { missionClock } from '../state/mission'
 import { IconButton, TrustChip } from '../ui/components'
 import { t } from '../ui/copy'
-import { BottomDrawer, layoutInsets, onLayoutChange, type LayoutInsets } from '../ui/layout'
-import { dockContent, hostIn, registerRailSection } from '../ui/shell/store'
+import { BottomDrawer, Popover, layoutInsets, onLayoutChange, type LayoutInsets } from '../ui/layout'
+import { dockContent, hostIn } from '../ui/shell/store'
 import { fmtEva } from '../ui/timeline/model'
 import { ReplaySourceBar, UserReplayReadout } from '../ui/timeline/userReplay'
 import { userReplay } from '../state/userReplay'
@@ -101,12 +103,12 @@ function TimelineTab() {
   return <div class="plan-timeline">{content ? content() : <p class="muted">{t('states.error.notAvailable', { what: t('timeline.marginCurve') })}</p>}</div>
 }
 
-/** Rail section id of the Plan table (user 23:28: left rail; it was the drawer's plan-table tab). */
-export const RAIL_TABLE = 'plan-table'
-/** What tools/values_snapshot.ts presses to show a plan-table control: open the left rail (sheet). */
-export const TABLE_REVEAL = ['.hl-rail__toggle[aria-controls="hl-rail-body"][aria-expanded="false"]']
+/** Layout id of the Plan table's left-edge panel (user 23:28; it was the drawer's plan-table tab). */
+export const LEFT_TABLE = 'plan-table'
+/** What tools/values_snapshot.ts presses to show a plan-table control: the left panel's closed opener. */
+export const TABLE_REVEAL = [`[aria-controls="hl-lay-${LEFT_TABLE}"][aria-expanded="false"]`]
 
-/** The Plan table (left rail section since user 23:28): the claimed console sections in the old order. */
+/** The Plan table (left-edge panel since user 23:28): the claimed console sections in the old order. */
 export function PlanTableTab({ ctx }: { ctx: PlanMountCtx }) {
   return (
     <div class="plan-table">
@@ -114,6 +116,16 @@ export function PlanTableTab({ ctx }: { ctx: PlanMountCtx }) {
         <SectionHost key={n} name={n} sections={ctx.sections} />
       ))}
     </div>
+  )
+}
+
+/** User 23:28: the Plan table at the left edge of the map, opened by its own "Plan table" button. */
+function PlanTablePanel({ ctx }: { ctx: PlanMountCtx }) {
+  const label = t('planBottom.planTable')
+  return (
+    <Popover id={LEFT_TABLE} icon="file-text" label={label} title={label} edge="left-top" class="plan-pop plan-pop--table">
+      <PlanTableTab ctx={ctx} />
+    </Popover>
   )
 }
 
@@ -153,9 +165,8 @@ function PlanBottom({ ctx }: { ctx: PlanMountCtx }) {
 /** Mount the bottom drawer into the L2-shell slot; returns cleanup. */
 export function mountPlanBottom(ctx: PlanMountCtx): () => void {
   ctx.claim([...TABLE_SECTIONS, 'summary'])
-  // user 23:28: the Plan table is a left-rail section; the rail toggle reveals its controls
+  // user 23:28: the Plan table is a left-edge panel over the map; its button reveals its controls
   for (const n of TABLE_SECTIONS) ctx.reveal(n, TABLE_REVEAL)
-  const unrail = registerRailSection({ id: RAIL_TABLE, modes: ['plan'], title: 'planBottom.planTable', icon: 'file-text', render: () => <PlanTableTab ctx={ctx} /> })
   const unhost = hostIn('timeline')
   const host = ctx.el.bottom
   // RR1 issue 1: a side panel that overlays the map (tablet / phone sidebar) ends above the drawer
@@ -163,9 +174,14 @@ export function mountPlanBottom(ctx: PlanMountCtx): () => void {
   const inset = (i: LayoutInsets) => shellEl?.style.setProperty(INSET_VAR, `${i.bottom}px`)
   inset(layoutInsets.peek())
   const off = onLayoutChange(inset)
-  render(<PlanBottom ctx={ctx} />, host)
+  render(
+    <>
+      <PlanBottom ctx={ctx} />
+      <PlanTablePanel ctx={ctx} />
+    </>,
+    host,
+  )
   return () => {
-    unrail()
     off()
     render(null, host)
     shellEl?.style.setProperty(INSET_VAR, '') // '' removes it
