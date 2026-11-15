@@ -24,6 +24,9 @@ SCHEMAS = sorted(B.glob("*.schema.json"))
 EXAMPLES = sorted(EX.glob("*.json"))
 FAMILY = {"plan_inputs", "run_record", "job", "telemetry"}
 CROCKFORD = "0123456789ABCDEFGHJKMNPQRSTVWXYZ"  # D55 (kit K4)
+# per-schema version: v1.2.0 (D97) changed plan_inputs (route) and run_record (feasibility) only
+SCHEMA_VERSION = {"plan_inputs": "1.2.0", "run_record": "1.2.0", "job": "1.0.0",
+                  "telemetry": "1.0.0"}
 
 
 def _load(p: Path):
@@ -66,7 +69,7 @@ def test_schema_valid_and_versioned(path):
     Draft202012Validator.check_schema(s)
     assert s["$schema"] == "https://json-schema.org/draft/2020-12/schema"
     assert s["$id"] == f"homeline/contracts/backend/{path.name}"
-    assert s["x-contract-version"] == "1.0.0"
+    assert s["x-contract-version"] == SCHEMA_VERSION[_stem(path)]
     for key in ("title", "description", "x-source"):
         assert s.get(key)
 
@@ -161,6 +164,74 @@ def test_plan_inputs_storm_and_tripwire():
     assert not v.is_valid(_inputs(conditions={"storm": "2024-05-21"}))
     assert not v.is_valid(_inputs(conditions={"tripwire_at": -1}))
     assert not v.is_valid(_inputs(conditions={"tripwire_at": "station_max"}))
+
+
+def test_plan_inputs_route_v1_2_known_answers():
+    """v1.2.0 (D97): route auto | ordered; stops are {station} or {lon, lat, label?}; additive."""
+    v = validator("plan_inputs.schema.json")
+    st, pt = {"station": "S4"}, {"lon": 137.3962, "lat": -4.7781}
+    assert v.is_valid(_inputs())  # missing route = auto: every v1.1 document stays valid
+    for ok in ({"mode": "auto"}, {"mode": "auto", "stops": []},
+               {"mode": "ordered", "stops": [st]},
+               {"mode": "ordered",
+                "stops": [st, pt, {**pt, "label": "Dark sand"}, {"station": "S1"}]}):
+        assert v.is_valid(_inputs(route=ok)), ok
+    for bad in ({}, {"mode": "best"}, {"mode": "ordered"}, {"mode": "ordered", "stops": []},
+                {"mode": "auto", "stops": [st]}, {"mode": "ordered", "stops": [{"station": "U1"}]},
+                {"mode": "ordered", "stops": [{"station": "S4", "lon": 137.4, "lat": -4.78}]},
+                {"mode": "ordered", "stops": [{"lon": 137.4}]},
+                {"mode": "ordered", "stops": [{**pt, "name": "x"}]},
+                {"mode": "ordered", "stops": [{**pt, "lat": -91}]},
+                {"mode": "ordered", "stops": [st], "order": "fixed"}):
+        assert not v.is_valid(_inputs(route=bad)), bad
+
+
+def test_route_examples_are_the_ui_mocks():
+    """The examples the design orchestrator mocks from (R5-R7): ordered stations, mixed free points,
+    an infeasible answer naming the leg and the limit, and a feasible free-point run."""
+    ordered = _load(EX / "plan_inputs.route_ordered.json")["route"]
+    assert ordered["mode"] == "ordered" and all("station" in s for s in ordered["stops"])
+    free = _load(EX / "plan_inputs.route_free.json")["route"]["stops"]
+    assert any("station" in s for s in free) and any("lon" in s for s in free)
+    inf = _load(EX / "run_record.route_infeasible.json")
+    assert inf["route_mode"] == "ordered" and inf["status"] == "done"  # infeasible is a result
+    f = inf["feasibility"]
+    assert f["feasible"] is False and f["limit"] in ("O2", "daylight", "dose", "EVA duration")
+    stops = ["pad", *(s["station"] for s in inf["inputs"]["route"]["stops"]), "pad"]
+    assert (f["from"], f["to"]) == (stops[f["leg"]], stops[f["leg"] + 1])
+    assert _load(EX / "run_record.route_free.json")["feasibility"] == {"feasible": True}
+
+
+def test_run_record_feasibility_known_answers():
+    v = validator("run_record.schema.json")
+    rec = _load(EX / "run_record.live.json")
+    assert "feasibility" not in rec and v.is_valid(rec)  # v1.1 records stay valid
+    for ok in ({"feasible": True},
+               {"feasible": False, "leg": 0, "from": "pad", "to": "W1", "limit": "daylight",
+                "shortfall_min": 4.0},
+               {"feasible": False, "leg": 3, "from": "S8", "to": "pad", "limit": "EVA duration",
+                "shortfall_min": 0.5, "legs_planned": 3}):
+        assert v.is_valid({**rec, "route_mode": "ordered", "feasibility": ok}), ok
+    for bad in ({"feasible": True, "leg": 1}, {"feasible": False},
+                {"feasible": False, "leg": 0, "from": "pad", "to": "S1", "limit": "speed",
+                 "shortfall_min": 1},
+                {"feasible": False, "leg": 0, "from": "pad", "to": "U1", "limit": "O2",
+                 "shortfall_min": 1},
+                {"feasible": False, "leg": 0, "from": "pad", "to": "S1", "limit": "O2",
+                 "shortfall_min": -1}):
+        assert not v.is_valid({**rec, "feasibility": bad}), bad
+    assert not v.is_valid({**rec, "route_mode": "best"})
+
+
+def test_route_422_names_the_stop():
+    """v1.2.0: Error.stop indexes inputs.route.stops; the route error codes are documented."""
+    err = _api()["components"]["schemas"]["Error"]
+    stop = err["properties"]["stop"]
+    assert stop["type"] == ["integer", "null"] and stop["minimum"] == 0
+    for code in ("route_too_many_stops", "route_too_many_free_points", "route_stop_spacing",
+                 "route_station_unknown", "route_point_outside_grid", "route_point_unreachable"):
+        assert code in stop["description"], code
+    assert "required" not in err or err["required"] == ["error"]  # additive: stop is optional
 
 
 # --- run record, job, telemetry ------------------------------------------------------------------

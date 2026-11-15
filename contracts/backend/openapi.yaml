@@ -1,13 +1,13 @@
 openapi: 3.1.0
 info:
   title: HOMELINE live API
-  version: 1.1.0
+  version: 1.2.0
   description: |
     Optional live layer of HOMELINE (F23-F36, D40, D48). The static app works without it.
     Every live result carries the label "Computed live · not part of the validated scorecard".
     Auth: G = guest (no security), U = Supabase login (Bearer JWT), K = session key (X-HL-Key
     header), T = team token (X-HL-Team header). Limits, ranges and timeouts come from
-    config/backend.yaml. Backend contract family v1.1.0 (contracts/backend/, frozen at P0, D50).
+    config/backend.yaml. Backend contract family v1.2.0 (contracts/backend/, frozen at P0, D50; v1.2.0 adds the route, D97).
     Source: backend spec §5 (docs/backend.md).
   license: {name: Apache-2.0, identifier: Apache-2.0}
 servers:
@@ -76,6 +76,19 @@ components:
         detail: {description: human-readable text or a validation error list}
         retry_after_s: {type: [integer, "null"]}
         allowed: {type: [object, "null"], description: "the allowed range for an out-of-range input (F26), e.g. {min, max}"}
+        stop:
+          type: [integer, "null"]
+          minimum: 0
+          description: >-
+            v1.2.0 (D97): for a 422 on a route, the index into inputs.route.stops of the stop the error
+            names (null when it concerns the whole route). Codes: route_too_many_stops (route.max_stops),
+            route_too_many_free_points (route.max_free_points), route_stop_spacing (two stops, or a stop
+            and the pad, closer than route.min_stop_spacing_m), route_station_unknown,
+            route_station_duplicate, route_point_outside_grid, route_point_unassessed,
+            route_point_not_walkable, route_point_unreachable (no path from the pad), route_label_too_long,
+            route_mode_conflict (route ordered together with stations.mode set/order or stations.custom).
+            An ordered route that breaks a limit is not a 422: the job answers with
+            run_record.feasibility.
     Health:
       type: object
       required: [ok, engine_warm, queue_length, heavy_jobs]
@@ -358,6 +371,8 @@ paths:
               schema: {$ref: "#/components/schemas/RunRecord"}
               examples:
                 live: {externalValue: examples/run_record.live.json}
+                route_infeasible: {externalValue: examples/run_record.route_infeasible.json}
+                route_free: {externalValue: examples/run_record.route_free.json}
         "404": {$ref: "#/components/responses/Error"}
   /results/{hash}/{path}:
     get:
@@ -379,7 +394,12 @@ paths:
       description: "503 (v1.1.0): no engine identity, error server_data_missing or engine_identity_unavailable, as POST /jobs."
       requestBody:
         required: true
-        content: {application/json: {schema: {$ref: "#/components/schemas/PlanInputs"}}}
+        content:
+          application/json:
+            schema: {$ref: "#/components/schemas/PlanInputs"}
+            examples:
+              route_ordered: {externalValue: examples/plan_inputs.route_ordered.json}
+              route_free: {externalValue: examples/plan_inputs.route_free.json}
       responses:
         "200": {description: ok, content: {application/json: {schema: {$ref: "#/components/schemas/ImportResult"}}}}
         "413": {$ref: "#/components/responses/Error"}

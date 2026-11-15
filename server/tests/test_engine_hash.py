@@ -210,6 +210,57 @@ def test_title_and_pad_id_are_not_hashed():
         assert "title" not in canon and "id" not in canon["pad"]
 
 
+# ------------------------------------------------------------- route (v1.2.0, D97) ----
+ROUTE = {"mode": "ordered", "stops": [{"station": "S4"}, {"station": "S1"}, {"station": "S2"}]}
+FREE = {"lon": 137.3962, "lat": -4.7781}
+
+
+def test_missing_route_and_auto_hash_as_today():
+    """D97: missing route = auto; the route is removed, so v1.1 hashes stay (official pinned)."""
+    for route in ({"mode": "auto"}, {"mode": "auto", "stops": []}):
+        assert h({**MINIMAL, "route": route}) == h(MINIMAL) == OFFICIAL_HASH
+        assert "route" not in canonical_inputs({**MINIMAL, "route": route})
+        pinned = {**MINIMAL, "contract_version": PINNED_CV, "route": route}
+        assert h(pinned) == OFFICIAL_HASH_PINNED
+
+
+def test_ordered_route_changes_the_hash_and_order_matters():
+    a = h({**MINIMAL, "route": ROUTE})
+    rev = {"mode": "ordered", "stops": ROUTE["stops"][::-1]}
+    one = {"mode": "ordered", "stops": ROUTE["stops"][:1]}
+    free = {"mode": "ordered", "stops": [*ROUTE["stops"], dict(FREE)]}
+    moved = {"mode": "ordered", "stops": [*ROUTE["stops"], {**FREE, "lon": 137.3963}]}
+    hashes = [a, h({**MINIMAL, "route": rev}), h({**MINIMAL, "route": one}),
+              h({**MINIMAL, "route": free}), h({**MINIMAL, "route": moved})]
+    assert OFFICIAL_HASH not in hashes and len(set(hashes)) == len(hashes)
+    assert canonical_inputs({**MINIMAL, "route": ROUTE})["route"] == ROUTE  # order kept
+
+
+def test_route_labels_are_not_hashed():
+    """D57: a free point's label is dropped like the title."""
+    plain = {"mode": "ordered", "stops": [{"station": "S2"}, dict(FREE)]}
+    named = {"mode": "ordered", "stops": [{"station": "S2"}, {**FREE, "label": "Dark sand"}]}
+    other = {"mode": "ordered", "stops": [{"station": "S2"}, {**FREE, "label": "Other"}]}
+    assert h({**MINIMAL, "route": plain}) == h({**MINIMAL, "route": named}) \
+        == h({**MINIMAL, "route": other})
+    doc = {**MINIMAL, "route": named}
+    before = copy.deepcopy(doc)
+    assert "label" not in canonical_inputs(doc)["route"]["stops"][1]
+    assert doc == before  # the caller's labels stay
+
+
+@pytest.mark.parametrize("route", [
+    {"mode": "ordered"}, {"mode": "ordered", "stops": []},
+    {"mode": "auto", "stops": [{"station": "S1"}]},
+    {"mode": "ordered", "stops": [{"station": "X1"}]},
+    {"mode": "ordered", "stops": [{"lon": 137.4}]},
+    {"mode": "ordered", "stops": [{"station": "S1", "lon": 137.4, "lat": -4.78}]},
+    {"mode": "best"}])
+def test_invalid_routes_raise(route):
+    with pytest.raises(InvalidPlanInputs):
+        canonical_inputs({**MINIMAL, "route": route})
+
+
 def test_different_pad_lon_lat_changes_the_hash():
     base = {**MINIMAL, "pad": {"id": "rank1", "lon": 137.401783, "lat": -4.77748}}
     moved_lon = {**MINIMAL, "pad": {"id": "rank1", "lon": 137.393301, "lat": -4.77748}}
