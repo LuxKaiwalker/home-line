@@ -20,6 +20,9 @@ from __future__ import annotations
 
 import json
 import math
+import os
+import subprocess
+import sys
 import threading
 import time
 from contextlib import contextmanager
@@ -415,12 +418,22 @@ def test_the_pool_starts_after_the_warm_up_and_stops_with_the_app(server_data):
 
 
 def test_stale_temp_dirs_are_cleaned_at_start(server_data):
+    # Stale = no running job can own it (E7b, H1-1): its owner process is gone (a crash), or it is
+    # older than 2 x job_timeout_s. Live owners: server/tests/test_jobs_owner.py.
     rd = results_dir(server_data)
     (rd / ".job-j_old").mkdir(parents=True)
     (rd / ".job-j_old" / "x.json").write_text("{}")
+    gone = int(subprocess.run([sys.executable, "-c", "import os; print(os.getpid())"],
+                              capture_output=True, text=True, check=True).stdout)
+    owner = {**jobs.owner_record(TIMEOUT_S), "pid": gone}  # the crashed server
+    (rd / ".job-j_old" / jobs.OWNER_FILE).write_text(json.dumps(owner))
+    (rd / ".job-j_older").mkdir()  # no owner file, older than 2 x the timeout
+    t = time.time() - 2 * TIMEOUT_S - 1
+    os.utime(rd / ".job-j_older", (t, t))
     with live():
         pass
     assert not (rd / ".job-j_old").exists()
+    assert not (rd / ".job-j_older").exists()
 
 
 def test_a_partial_tree_is_replaced_when_its_hash_runs_again(server_data):
