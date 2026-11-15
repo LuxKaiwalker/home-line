@@ -15,7 +15,9 @@
     "lint:tokens": "node scripts/lint-tokens.mjs",
     "values:snapshot": "node ../tools/values_snapshot.ts",
     "test:visual": "playwright test",
-    "bundle:budget": "node ../tools/bundle_budget.ts"
+    "bundle:budget": "node ../tools/bundle_budget.ts",
+    "test:a11y:static": "vitest run -c tests/a11y/vitest.config.ts",
+    "test:a11y-perf": "playwright test -c tests/a11y/playwright.config.ts"
   },
   "devDependencies": {
     "@types/geojson": "^7946.0.16",
