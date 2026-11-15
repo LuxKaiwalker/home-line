@@ -55,7 +55,8 @@ export function SlimScrubber() {
         }}
       />
       <input
-        class="plan-scrub__range"
+        class="hl-slider__input plan-scrub__range"
+        style={{ '--fill': `${tMax > 0 ? (100 * Math.min(Math.max(tNow, 0), tMax)) / tMax : 0}%` }}
         type="range"
         min={0}
         max={tMax}
