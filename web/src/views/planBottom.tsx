@@ -1,9 +1,11 @@
 // Plan bottom drawer (package L2b, D111; L0 mapping rows 4 and 5). Mount points only: one BottomDrawer
-// 'plan-bottom' along the bottom map edge, in the L2-shell slot `.plan-layout__bottom`, with two tabs
-// (F7: timeline first and the default when no tab is remembered; "Compare plans" stays after the tabs):
+// 'plan-bottom' along the bottom map edge, in the L2-shell slot `.plan-layout__bottom`. User 22:59 (F7):
+// the drawer holds ONLY the replay, one tab:
 //   timeline     the timeline dock body (ui/timeline/install.tsx installTimelineDock → dockContent)
-//   plan-table   the console's planned route and stations table (and the sections that explain them:
-//                headline, parking options, rover pad, siting), moved out of the old side panel
+// Kept but not mounted (code below, not in the drawer): the plan-table tab (PlanTableTab: the console's
+// planned route and stations table and the sections that explain them) and the D142 "Compare plans"
+// link (ComparePlansLink; #/trade stays reachable by URL). The table sections are still claimed, so they
+// wait in the hidden stash (numbers stay in the page) instead of returning to the side panel.
 // Collapsed it is one line: the plan summary (the route at a glance, from the same files) and the slim
 // timeline scrubber (play, scrub, EVA time). Expanded at most 40 % of the map (L1, layout.css).
 // While mounted the Plan map view hosts the timeline ('timeline' in shell.hosted), so the shell dock
@@ -37,9 +39,6 @@ const INSET_VAR = '--hl-plan-bottom'
 /** Console sections shown in the plan table, in the old side-panel order. */
 // L2f: 'roverpad' went to the rover card (views/planStation.tsx)
 export const TABLE_SECTIONS: readonly SectionName[] = ['headline', 'padpicker', 'route', 'siting', 'stations']
-
-/** What tools/values_snapshot.ts presses to show a plan-table control: expand, then pick the tab. */
-const TABLE_REVEAL = [`[aria-controls="hl-lay-${PLAN_BOTTOM}"][aria-expanded="false"]`, `#hl-lay-${PLAN_BOTTOM}-tab-${TAB_TABLE}[aria-selected="false"]`]
 
 /**
  * Collapsed timeline line: play / pause, scrub, EVA time (the full chart is the expanded tab).
@@ -101,6 +100,27 @@ function TimelineTab() {
   return <div class="plan-timeline">{content ? content() : <p class="muted">{t('states.error.notAvailable', { what: t('timeline.marginCurve') })}</p>}</div>
 }
 
+/** Plan-table tab, not mounted since user 22:59 (F7): the claimed console sections in the old order. */
+export function PlanTableTab({ ctx }: { ctx: PlanMountCtx }) {
+  return (
+    <div class="plan-table">
+      {TABLE_SECTIONS.map((n) => (
+        <SectionHost key={n} name={n} sections={ctx.sections} />
+      ))}
+    </div>
+  )
+}
+
+/** D142 "Compare plans" (#/trade; Back returns with the same pad and route, views/planPort.tsx). Not
+ *  mounted since user 22:59 (F7): the drawer holds only the replay; #/trade stays reachable by URL. */
+export function ComparePlansLink() {
+  return (
+    <a class="plan-bottom__compare" href="#/trade" data-testid="plan-compare-plans" title={t('planBottom.comparePlansTip')}>
+      {t('planBottom.comparePlans')}
+    </a>
+  )
+}
+
 function PlanBottom({ ctx }: { ctx: PlanMountCtx }) {
   return (
     <BottomDrawer
@@ -110,28 +130,8 @@ function PlanBottom({ ctx }: { ctx: PlanMountCtx }) {
       expandLabel={t('planBottom.expand')}
       collapseLabel={t('planBottom.collapse')}
       defaultTab={TAB_TIMELINE}
-      // D142: "Compare plans" opens the trade table (#/trade); Back returns to Plan with the same pad and
-      // route (the planning state is in the address, #/?route=…, views/planPort.tsx)
-      actions={
-        <a class="plan-bottom__compare" href="#/trade" data-testid="plan-compare-plans" title={t('planBottom.comparePlansTip')}>
-          {t('planBottom.comparePlans')}
-        </a>
-      }
-      // F7 (user 22:51): the replay (timeline) is the leftmost tab and the default; arrow keys follow this order
-      tabs={[
-        { id: TAB_TIMELINE, label: t('planBottom.timeline'), render: () => <TimelineTab /> },
-        {
-          id: TAB_TABLE,
-          label: t('planBottom.planTable'),
-          render: () => (
-            <div class="plan-table">
-              {TABLE_SECTIONS.map((n) => (
-                <SectionHost key={n} name={n} sections={ctx.sections} />
-              ))}
-            </div>
-          ),
-        },
-      ]}
+      // user 22:59 (F7): only the replay; no plan-table tab, no "Compare plans" link
+      tabs={[{ id: TAB_TIMELINE, label: t('planBottom.timeline'), render: () => <TimelineTab /> }]}
       collapsed={() => (
         <span class="plan-bottom__line">
           <span class="plan-bottom__summary">
@@ -146,8 +146,8 @@ function PlanBottom({ ctx }: { ctx: PlanMountCtx }) {
 
 /** Mount the bottom drawer into the L2-shell slot; returns cleanup. */
 export function mountPlanBottom(ctx: PlanMountCtx): () => void {
+  // the table sections stay claimed (hidden stash, numbers in the page); no opener shows them any more
   ctx.claim([...TABLE_SECTIONS, 'summary'])
-  for (const n of TABLE_SECTIONS) ctx.reveal(n, TABLE_REVEAL)
   const unhost = hostIn('timeline')
   const host = ctx.el.bottom
   // RR1 issue 1: a side panel that overlays the map (tablet / phone sidebar) ends above the drawer

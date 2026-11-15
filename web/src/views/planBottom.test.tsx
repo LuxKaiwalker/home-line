@@ -5,10 +5,10 @@
 //  - collapsed: one line with the route summary section and the slim scrubber (Play = .hl-tl__play,
 //    the shared mission clock; a trust chip on the EVA time); the L5 ids #hl-lay-plan-bottom and
 //    #hl-lay-plan-bottom-tab-{plan-table,timeline};
-//  - F7: tab order timeline, plan-table ("Compare plans" after them); timeline is the default tab when
-//    none is remembered, a remembered tab wins; arrow keys follow the visual order;
-//  - expanded: the plan-table tab shows the claimed section elements themselves (numbers unchanged: the
-//    same nodes move), the timeline tab shows the dock body (dockContent), one timeline at a time;
+//  - F7 (user 22:59): the drawer holds ONLY the replay: one tab (timeline), no plan-table tab, no
+//    "Compare plans" link; the table sections stay claimed in the hidden stash (numbers in the page);
+//    a stale remembered 'plan-table' tab falls back to the timeline;
+//  - expanded: the timeline tab shows the dock body (dockContent), one timeline at a time;
 //  - L7c: the slim Play is the replay player of the activity store (as the full timeline's Play): it
 //    stops a running flythrough / intro, is pressed only while the replay runs, disabled during a job;
 //  - the shell root gets the drawer height (--hl-plan-bottom) so an overlay side panel ends above it.
@@ -91,11 +91,11 @@ afterEach(() => {
 })
 
 describe('plan-bottom drawer (L2b)', () => {
-  it('claims the plan-table sections and the summary; each table section names its openers', () => {
-    expect(TABLE_SECTIONS).toEqual(['headline', 'padpicker', 'route', 'siting', 'stations'])
-    expect(claimed).toEqual([...TABLE_SECTIONS, 'summary'])
-    for (const n of TABLE_SECTIONS)
-      expect(reveals.get(n)).toEqual([`[aria-controls="hl-lay-${PLAN_BOTTOM}"][aria-expanded="false"]`, `#hl-lay-${PLAN_BOTTOM}-tab-${TAB_TABLE}[aria-selected="false"]`])
+  it('claims the plan-table sections and the summary; they wait in the hidden stash with no opener (F7)', () => {
+    expect([...claimed].sort()).toEqual([...TABLE_SECTIONS, 'summary'].sort())
+    for (const n of TABLE_SECTIONS) expect(reveals.has(n)).toBe(false)
+    act(() => openContainer(PLAN_BOTTOM, null))
+    for (const n of TABLE_SECTIONS) expect(one(byClass(bottom, 'hl-lay-bottom')).contains(section(n))).toBe(false)
   })
 
   it('hosts the timeline while mounted (the shell dock leaves Plan) and gives it back on cleanup', () => {
@@ -155,55 +155,31 @@ describe('plan-bottom drawer (L2b)', () => {
     expect(play().getAttribute('data-activity-reason')).toBe(null)
   })
 
-  it('expanded: the plan table shows the claimed section nodes; the timeline tab shows the dock body', () => {
+  it('expanded: the timeline tab shows the dock body', () => {
     setDockContent(() => <div class="probe-dock">dock</div>)
     act(() => openContainer(PLAN_BOTTOM, null))
     const drawer = one(byClass(bottom, 'hl-lay-bottom'))
     expect(drawer.getAttribute('data-open')).toBe('true')
-    expect(byId(`hl-lay-${PLAN_BOTTOM}-tab-${TAB_TIMELINE}`).getAttribute('aria-selected')).toBe('true') // F7: default tab
-    expect(byId(`hl-lay-${PLAN_BOTTOM}-tab-${TAB_TABLE}`).getAttribute('aria-selected')).toBe('false')
+    expect(byId(`hl-lay-${PLAN_BOTTOM}-tab-${TAB_TIMELINE}`).getAttribute('aria-selected')).toBe('true') // the only tab
     expect(byClass(drawer, 'plan-table')).toHaveLength(0)
     expect(one(byClass(drawer, 'plan-timeline')).contains(one(byClass(drawer, 'probe-dock')))).toBe(true)
     expect(byClass(drawer, 'hl-tl__play')).toHaveLength(0) // the collapsed line is gone while expanded
-    act(() => setActiveTab(PLAN_BOTTOM, TAB_TABLE))
-    const table = one(byClass(drawer, 'plan-table'))
-    for (const n of TABLE_SECTIONS) expect(table.contains(section(n))).toBe(true)
-    expect(byClass(drawer, 'plan-timeline')).toHaveLength(0)
     expect(dockContent.value).toBeDefined()
     act(() => closeContainer(PLAN_BOTTOM))
     expect(drawer.getAttribute('data-open')).toBe('false')
     expect(byClass(drawer, 'hl-tl__play')).toHaveLength(1)
   })
 
-  it('F7: replay (timeline) is the leftmost tab, then the plan table, then "Compare plans"; keys follow', () => {
+  it('F7 (user 22:59): only the replay: one timeline tab, no plan-table tab, no "Compare plans" link', () => {
     act(() => openContainer(PLAN_BOTTOM, null))
     const drawer = one(byClass(bottom, 'hl-lay-bottom'))
     const tabs = all(drawer, (n) => n.getAttribute('role') === 'tab')
-    expect(tabs.map((n) => n.getAttribute('id'))).toEqual([`hl-lay-${PLAN_BOTTOM}-tab-${TAB_TIMELINE}`, `hl-lay-${PLAN_BOTTOM}-tab-${TAB_TABLE}`])
-    expect(tabs.map((n) => n.getAttribute('tabIndex') ?? n.getAttribute('tabindex'))).toEqual(['0', '-1'])
-    // "Compare plans" stays at the end, after the tab list
-    const bar = one(byClass(drawer, 'hl-lay-bottom__bar'))
-    const kids = bar.childNodes as unknown as FakeNode[]
-    const iTabs = kids.findIndex((n) => n.getAttribute?.('role') === 'tablist')
-    const iActs = kids.findIndex((n) => (n.getAttribute?.('class') ?? '').includes('hl-lay-bottom__actions'))
-    expect(iTabs).toBeGreaterThanOrEqual(0)
-    expect(iActs).toBeGreaterThan(iTabs)
-    expect(one(byClass(kids[iActs], 'plan-bottom__compare')).getAttribute('href')).toBe('#/trade')
-    // ArrowRight from the timeline goes to the plan table; Home returns to the timeline
-    act(() => void tabs[0].dispatch('keydown', { key: 'ArrowRight' }))
-    expect(byId(`hl-lay-${PLAN_BOTTOM}-tab-${TAB_TABLE}`).getAttribute('aria-selected')).toBe('true')
-    act(() => void byId(`hl-lay-${PLAN_BOTTOM}-tab-${TAB_TABLE}`).dispatch('keydown', { key: 'Home' }))
+    expect(tabs.map((n) => n.getAttribute('id'))).toEqual([`hl-lay-${PLAN_BOTTOM}-tab-${TAB_TIMELINE}`])
+    expect(all(drawer, (n) => n.getAttribute('data-testid') === 'plan-compare-plans')).toHaveLength(0)
+    expect(byClass(drawer, 'hl-lay-bottom__actions')).toHaveLength(0)
+    act(() => setActiveTab(PLAN_BOTTOM, TAB_TABLE)) // a stale remembered 'plan-table' falls back to the timeline
     expect(byId(`hl-lay-${PLAN_BOTTOM}-tab-${TAB_TIMELINE}`).getAttribute('aria-selected')).toBe('true')
-  })
-
-  it('F7: a remembered tab wins over the timeline default', () => {
-    act(() => stop())
-    const store = new Map<string, string>([['hl.layout.v1', JSON.stringify({ open: { [PLAN_BOTTOM]: true }, tabs: { [PLAN_BOTTOM]: TAB_TABLE } })]])
-    bindLayoutStorage(() => ({ getItem: (k: string) => store.get(k) ?? null, setItem: (k: string, v: string) => void store.set(k, v), removeItem: (k: string) => void store.delete(k) }) as Storage)
-    resetLayout()
-    act(() => void (stop = mountPlanBottom(makeCtx())))
-    expect(byId(`hl-lay-${PLAN_BOTTOM}-tab-${TAB_TABLE}`).getAttribute('aria-selected')).toBe('true')
-    expect(byId(`hl-lay-${PLAN_BOTTOM}-tab-${TAB_TIMELINE}`).getAttribute('aria-selected')).toBe('false')
+    expect(byClass(drawer, 'plan-table')).toHaveLength(0)
   })
 
   it('writes the drawer height to the shell root for overlay side panels (RR1 issue 1)', () => {

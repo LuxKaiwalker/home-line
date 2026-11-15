@@ -322,7 +322,8 @@ test.describe('compare plans (D142)', () => {
   })
 
   // TODO(I1): bottom drawer link "Compare plans" (data-testid="plan-compare-plans", href "#/trade").
-  test('bottom drawer "Compare plans" opens #/trade; Back keeps the pad and the route', async ({ page }) => {
+  // F7: removed by user 22:59 (the bottom drawer holds only the replay; #/trade stays reachable by URL).
+  test.skip('bottom drawer "Compare plans" opens #/trade; Back keeps the pad and the route', async ({ page }) => {
     const link = routeHash(PICKER_PAD, [station('S1'), station('S7')])
     await openPlan(page, link)
     await openBottomDrawer(page) // the drawer's actions (Compare plans) show while it is open
