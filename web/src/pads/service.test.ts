@@ -259,6 +259,25 @@ describe('dedupe and abort', () => {
   })
 })
 
+describe('abort then reload', () => {
+  it('a new load right after an abort keeps its loading state when the old fetch settles', async () => {
+    const h = harness()
+    await h.svc.loadPadIndex()
+    h.hold((p) => p.endsWith('.png'))
+    const ctl = new AbortController()
+    const a = h.svc.loadPadEnv('rank2', { signal: ctl.signal })
+    await settle()
+    ctl.abort()
+    await a.catch(() => {})
+    const b = h.svc.loadPadEnv('rank2')
+    await settle()
+    expect(h.svc.loadState.peek().rank2?.state).toBe('loading')
+    h.release()
+    const env = await b
+    expect(h.svc.loadState.peek().rank2).toEqual({ state: 'ready', env })
+  })
+})
+
 describe('LRU cache', () => {
   it(`keeps ${PAD_CACHE_SIZE} pads; loading touches; the least recent is evicted (state back to idle)`, async () => {
     expect(PAD_CACHE_SIZE).toBe(3)

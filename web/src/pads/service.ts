@@ -124,7 +124,9 @@ export function createPadService(deps: PadServiceDeps = {}): RealPadService {
       (error) => {
         f.done = true
         if (flights.get(id) === f) flights.delete(id)
-        if (ctrl.signal.aborted || isAbortError(error)) return setState(id, null)
+        // aborted: release() already cleared the state (a newer load of this pad may own it now)
+        if (ctrl.signal.aborted) return
+        if (isAbortError(error)) return setState(id, null)
         if (f.prefetchOnly) return
         setState(id, { state: 'error', error })
       },
