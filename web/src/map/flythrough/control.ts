@@ -2,7 +2,7 @@
 // Small and GL-free; the flight itself (fly.ts) loads with import() on the first press.
 import type { IControl, Map as MlMap } from 'maplibre-gl'
 import { effect, mission, missionClock } from '../../state'
-import { controlState, end as endPlayer, start as startPlayer } from '../../state/activity'
+import { activity, controlState, end as endPlayer, start as startPlayer } from '../../state/activity'
 import { installActivityClock } from '../../state/activityClock'
 import { t } from '../../ui/copy'
 import './flythrough.css'
@@ -53,8 +53,14 @@ export class FlythroughControl implements IControl {
           this.flight = null
           setFlying(false)
         })
-        // stopped (store or button) while the path loaded: land at once
-        if (flight && !this.flying) return flight.stop()
+        // stopped (store or button) while the path loaded: land at once; its stop pauses the mission
+        // clock, so a replay started meanwhile plays on (the clock observer registers it again)
+        if (flight && !this.flying) {
+          const replaying = activity.current.peek() === 'replay'
+          flight.stop()
+          if (replaying) missionClock.play()
+          return
+        }
         this.flight = flight
         if (!this.flight) setFlying(false)
       })

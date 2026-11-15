@@ -11,12 +11,12 @@
  * only (the 3D flythrough in software GL is slow; the rules do not depend on the viewport).
  * Run: cd web && npm run build && npx playwright test tests/visual/activity-players.spec.ts
  */
-import { expect, test, type Page } from 'playwright/test'
+import { expect, test, type Locator, type Page } from 'playwright/test'
 
 type P = 'replay' | 'flythrough' | 'storm'
 
 test.skip(({ viewport }) => (viewport?.width ?? 0) !== 1440, 'rules are viewport-independent: one click project')
-test.setTimeout(240_000)
+test.setTimeout(180_000)
 
 const html = (page: Page) => page.locator('html')
 const play = (page: Page) => page.locator('.hl-tl__play')
@@ -24,6 +24,16 @@ const fly = (page: Page) => page.locator('.hl-fly-btn:not(.hl-fly-speed)')
 const storm = (page: Page) => page.locator('.hl-storm-btn')
 const clock = (page: Page) => page.locator('.hl-tl__clockvalue').first()
 const CLICK = { timeout: 30_000 }
+
+/**
+ * Click `loc`. While the 3D flythrough flies, software GL starves the page's main thread and the real
+ * click's after-action wait outlasts its timeout (#131, notes/L7a.md): then the button gets a DOM click
+ * (the same handler; what is under test is the store, not the pointer path).
+ */
+async function press(page: Page, loc: Locator): Promise<void> {
+  if ((await html(page).getAttribute('data-activity')) === 'flythrough') await loc.evaluate((b: HTMLElement) => b.click())
+  else await loc.click(CLICK)
+}
 
 const clockValue = (s: string): number => s.split(/[^0-9]+/).filter(Boolean).reduce((a, p) => a * 60 + Number(p), 0)
 
@@ -40,22 +50,28 @@ async function openPlan(page: Page): Promise<void> {
 }
 
 async function setStorm(page: Page, on: boolean): Promise<void> {
-  if ((await storm(page).getAttribute('aria-pressed')) !== String(on)) await storm(page).click(CLICK)
+  if ((await storm(page).getAttribute('aria-pressed')) !== String(on)) await press(page, storm(page))
   await expect(storm(page)).toHaveAttribute('aria-pressed', String(on))
 }
 
 /** Start player `p` from its control. */
 async function startPlayer(page: Page, p: P): Promise<void> {
   if (p === 'flythrough') {
-    await fly(page).click(CLICK)
+    await press(page, fly(page))
     return
   }
   await setStorm(page, p === 'storm')
-  if ((await play(page).getAttribute('aria-pressed')) !== 'true') await play(page).click(CLICK)
+  if ((await play(page).getAttribute('aria-pressed')) !== 'true') await press(page, play(page))
 }
 
-/** `p` runs: the store says so, its control is pressed, the clock moves. */
-async function expectRunning(page: Page, p: P): Promise<void> {
+/**
+ * `p` runs: the store says so, its control is pressed, the mission clock plays (and moves, `moving`).
+ * After a flythrough the map stays in 3D; in software GL under load a frame can then take over 1 s and
+ * the dock ticker drops such steps as stalls (ticker.ts MAX_STEP_MS), so there the clock's playing
+ * state (.hl-tl[data-state]) is the check, not its movement.
+ */
+async function expectRunning(page: Page, p: P, moving = true): Promise<void> {
+  await expect(page.locator('.hl-tl')).toHaveAttribute('data-state', 'playing', { timeout: 30_000 })
   await expect(html(page)).toHaveAttribute('data-activity', p === 'flythrough' ? 'flythrough' : 'replay', { timeout: 30_000 })
   if (p === 'flythrough') {
     await expect(fly(page)).toHaveAttribute('aria-pressed', 'true')
@@ -65,7 +81,7 @@ async function expectRunning(page: Page, p: P): Promise<void> {
     await expect(fly(page)).toHaveAttribute('aria-pressed', 'false')
     await expect(storm(page)).toHaveAttribute('aria-pressed', String(p === 'storm'))
   }
-  await advancing(page)
+  if (moving) await advancing(page)
 }
 
 /** `p` stopped cleanly (its own control released). */
@@ -80,26 +96,25 @@ async function expectStopped(page: Page, p: P | 'intro'): Promise<void> {
 }
 
 test.describe('pairs: start A, then B', () => {
-  // the Eulerian walk replay -> flythrough -> storm -> replay -> storm -> flythrough -> replay covers
-  // every ordered pair of the three viewer-started players once
-  test('replay, flythrough, storm replay: every ordered pair', async ({ page }) => {
-    await openPlan(page)
-    const walk: P[] = ['replay', 'flythrough', 'storm', 'replay', 'storm', 'flythrough', 'replay']
-    await startPlayer(page, walk[0])
-    await expectRunning(page, walk[0])
-    for (let i = 1; i < walk.length; i++) {
-      const [a, b] = [walk[i - 1], walk[i]]
-      await test.step(`${a} -> ${b}`, async () => {
+  // every ordered pair of the three viewer-started players, each on a fresh page (a 3D flight in
+  // software GL is too slow to chain them in one test)
+  const players: P[] = ['replay', 'flythrough', 'storm']
+  for (const a of players)
+    for (const b of players) {
+      if (a === b) continue
+      test(`${a} -> ${b}`, async ({ page }) => {
+        await openPlan(page)
+        await startPlayer(page, a)
+        await expectRunning(page, a)
         await startPlayer(page, b)
-        await expectRunning(page, b)
+        await expectRunning(page, b, a !== 'flythrough' || b === 'flythrough')
         // replay <-> storm replay: one player, the setting changed (it keeps running)
-        if (!(a !== 'flythrough' && b !== 'flythrough')) await expectStopped(page, a)
+        if (a === 'flythrough' || b === 'flythrough') await expectStopped(page, a)
+        // its own control stops B
+        await press(page, b === 'flythrough' ? fly(page) : play(page))
+        await expect(html(page)).toHaveAttribute('data-activity', 'none', { timeout: 30_000 })
       })
     }
-    // its own control stops the last one
-    await play(page).click(CLICK)
-    await expect(html(page)).toHaveAttribute('data-activity', 'none')
-  })
 
   test.describe('the intro, then B', () => {
     test.use({ reducedMotion: 'no-preference' }) // the intro never plays under reduced motion
@@ -139,7 +154,7 @@ for (const p of ['replay', 'flythrough'] as const)
     await openPlan(page)
     await startPlayer(page, p)
     await expectRunning(page, p)
-    await page.locator('.hl-modes__tab', { hasText: 'Report' }).first().click(CLICK)
+    await press(page, page.locator('.hl-modes__tab', { hasText: 'Report' }).first())
     await expect(page).toHaveURL(/#\/report/)
     await expect(html(page)).toHaveAttribute('data-activity', 'none')
     // back in Plan: nothing plays, the clock stands still
