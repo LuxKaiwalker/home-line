@@ -59,7 +59,7 @@ describe('legacy frame = the layout from before the shell', () => {
     expect(header.getAttribute('class')).toBe('topbar')
     expect(text(one(byClass(header, 'brand')))).toBe('M.A.R.V.I.S')
     const links = byTag(one(byClass(header, 'topnav')), 'a')
-    expect(links.map((a) => a.getAttribute('href'))).toEqual(['#/', '#/mission', '#/trade', '#/cuff', '#/scorecard', '#/about'])
+    expect(links.map((a) => a.getAttribute('href'))).toEqual(['#/', '#/mission', '#/stations', '#/trade', '#/cuff', '#/scorecard', '#/about'])
     expect(links.map(text)).toEqual(NAV_ITEMS.map((n) => n.label))
     expect(byClass(root, 'dummy-banner')).toHaveLength(1)
     expect(one(byTag(root, 'main')).getAttribute('class')).toBe('outlet')
@@ -98,11 +98,11 @@ describe('shell frame and islands', () => {
     expect(one(byClass(root(), 'hl-dock')).getAttribute('aria-label')).toBe(t('timeline.evaTime'))
   })
 
-  it('focus order: skip link, wordmark, the shown modes in order (only PLAN; FLY, REPORT and EVIDENCE hidden), then the top bar tools, then the rail', () => {
+  it('focus order: skip link, wordmark, the shown modes in order (PLAN, SCIENCE; FLY, REPORT and EVIDENCE hidden), then the top bar tools, then the rail', () => {
     const order = all(root(), focusable)
     expect(text(order[0])).toBe(t('nav.skipToMap'))
     expect(text(order[1])).toBe(t('nav.wordmark'))
-    expect(order.slice(2, 3).map((n) => text(n).replace(/[A-Z]$/, '').trim())).toEqual(['plan'].map((m) => t(`modes.${m}.label` as 'modes.plan.label')))
+    expect(order.slice(2, 4).map((n) => text(n).replace(/[A-Z]$/, '').trim())).toEqual(['plan', 'science'].map((m) => t(`modes.${m}.label` as 'modes.plan.label')))
     const rail = one(byClass(root(), 'hl-rail'))
     const firstRail = order.findIndex((n) => rail.contains(n))
     const lastTop = order.findLastIndex((n) => (f.topbar as unknown as FakeNode).contains(n))
@@ -111,17 +111,25 @@ describe('shell frame and islands', () => {
 
   it('the mode tabs follow the UI store: aria-current on the active mode, links to the mode routes', () => {
     const tabs = () => byClass(root(), 'hl-modes__tab')
-    expect(tabs().map((a) => a.getAttribute('aria-current'))).toEqual(['page'])
-    expect(tabs().map((a) => a.getAttribute('href'))).toEqual(['#/'])
+    expect(tabs().map((a) => a.getAttribute('aria-current'))).toEqual(['page', null])
+    expect(tabs().map((a) => a.getAttribute('href'))).toEqual(['#/', '#/stations'])
     act(() => void applyRoute({ name: 'scorecard', key: 'k' }, '#/evidence/scorecard?key=k'))
     expect(ui.mode.value).toBe('evidence')
-    expect(tabs().map((a) => a.getAttribute('aria-current'))).toEqual([null]) // EVIDENCE is hidden: still reachable by URL, no tab
+    expect(tabs().map((a) => a.getAttribute('aria-current'))).toEqual([null, null]) // EVIDENCE is hidden: still reachable by URL, no tab
     expect(root().getAttribute('data-mode')).toBe('evidence')
     expect(root().getAttribute('data-dock')).toBe('none') // REPORT/EVIDENCE are documents: no dock
     const views = byClass(root(), 'hl-rail__view')
     expect(views.map(text)).toEqual([t('nav.views.scorecard'), t('nav.views.about')])
     expect(views[0].getAttribute('aria-current')).toBe('page')
     expect(views.map((a) => a.getAttribute('href'))).toEqual(['#/evidence/scorecard', '#/evidence/about'])
+  })
+
+  it('Science stations is its own tab next to PLAN: a document page, no map dock, no sidebar', () => {
+    act(() => void applyRoute({ name: 'stations' }, '#/stations'))
+    expect(ui.mode.value).toBe('science')
+    expect(byClass(root(), 'hl-modes__tab').map((a) => a.getAttribute('aria-current'))).toEqual([null, 'page'])
+    expect(root().getAttribute('data-dock')).toBe('none')
+    expect(byClass(root(), 'hl-rail__view').map((a) => a.getAttribute('href'))).toEqual(['#/stations'])
   })
 
   it('the Mission Planer (PLAN) has no EVA-time dock; the Plan view keeps it', () => {

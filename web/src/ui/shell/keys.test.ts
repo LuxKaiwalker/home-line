@@ -25,6 +25,7 @@ describe('shortcutFor (§4.4 table)', () => {
     [{ key: '[' }, { action: 'history', step: -1 }],
     [{ key: ']' }, { action: 'history', step: 1 }],
     [{ key: 'p' }, { action: 'mode', mode: 'plan' }],
+    [{ key: 's' }, { action: 'mode', mode: 'science' }],
     [{ key: 't' }, { action: 'toggle3d' }],
     [{ key: '?', shiftKey: true }, { action: 'help' }],
   ])('%o -> %o', (e, want) => expect(shortcutFor(e)).toEqual(want))

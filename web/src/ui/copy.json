@@ -5,6 +5,7 @@
 
   "modes": {
     "plan": { "label": "Plan", "question": "Where can we go and still get home?" },
+    "science": { "label": "Science stations", "question": "Why these spots, and what is there to find?" },
     "fly": { "label": "Fly", "question": "What will it be like, minute by minute?" },
     "report": { "label": "Report", "question": "Is this plan safe, and what does it cost?" },
     "evidence": { "label": "Evidence", "question": "Why believe it?" }
@@ -43,6 +44,7 @@
     },
     "views": {
       "mission": "Mission Planer",
+      "stations": "Science stations",
       "trade": "Trade table",
       "conditions": "Conditions",
       "cuff": "Cuff card",

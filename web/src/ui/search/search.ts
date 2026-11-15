@@ -93,8 +93,8 @@ export function buildObjectIndex(labels: readonly LabelLike[], stations: readonl
 
 /** Short command list (U17 commands; first on the DESIGN §8 cut order). Each runs the §4.4 shortcut. */
 export function commandItems(): SearchItem[] {
-  const modeKey: Record<string, string> = { plan: 'P', fly: 'Y', report: 'R', evidence: 'E' }
-  const modeIcon: Record<string, IconName> = { plan: 'map', fly: 'compass', report: 'file-text', evidence: 'shield-check' }
+  const modeKey: Record<string, string> = { plan: 'P', science: 'S', fly: 'Y', report: 'R', evidence: 'E' }
+  const modeIcon: Record<string, IconName> = { plan: 'map', science: 'flask-conical', fly: 'compass', report: 'file-text', evidence: 'shield-check' }
   return [
     ...SHOWN_MODES.map(
       (m): SearchItem => ({ id: `cmd:mode:${m}`, group: 'commands', code: '', name: m, label: `modes.${m}.label`, icon: modeIcon[m], priority: 20, command: { action: 'mode', mode: m }, keys: [modeKey[m]] }),

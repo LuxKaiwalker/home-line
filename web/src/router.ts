@@ -18,6 +18,8 @@ export type Route =
   | { name: 'console' }
   | { name: 'station'; id: string }
   | { name: 'trade' }
+  /** Science stations: why these spots (F7 score, placement rules), one row per station */
+  | { name: 'stations' }
   | { name: 'conditions' }
   | { name: 'scorecard'; key?: string }
   | { name: 'cuff' }
@@ -27,7 +29,7 @@ export type Route =
   | { name: 'mission'; plan?: string; add?: string }
   | { name: 'notfound'; path: string }
 
-const SIMPLE = ['trade', 'conditions', 'cuff', 'about', 'hud'] as const
+const SIMPLE = ['stations', 'trade', 'conditions', 'cuff', 'about', 'hud'] as const
 
 type ModeView = 'hud' | 'conditions' | 'cuff' | 'scorecard' | 'about'
 /** New canonical path of every view outside PLAN (DESIGN §4.2). */
@@ -175,6 +177,7 @@ export function isLegacy(param: string | null, route: Route): boolean {
 export const NAV_ITEMS: { route: Route; label: string }[] = [
   { route: { name: 'console' }, label: 'Plan' },
   { route: { name: 'mission' }, label: 'Mission Planer' },
+  { route: { name: 'stations' }, label: 'Science stations' },
   { route: { name: 'trade' }, label: 'Trade' },
   { route: { name: 'cuff' }, label: 'Cuff card' },
   { route: { name: 'scorecard' }, label: 'Scorecard' },
