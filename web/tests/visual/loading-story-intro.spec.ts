@@ -122,12 +122,11 @@ test.describe('intro loading screen (L12)', () => {
     await page.waitForTimeout(300)
     await expect(page.locator('html')).toHaveAttribute('data-story', 'on')
     await expect(page.locator('.hl-shell')).not.toHaveAttribute('data-focus', 'on') // not the focus-mode shortcut
-    const fs = page.locator(`${LOADING} [data-hl-act=fullscreen]`)
-    if (await fs.isVisible()) {
-      await fs.click({ timeout: 5_000 })
-      await page.waitForTimeout(300)
-      await expect(page.locator('html')).toHaveAttribute('data-story', 'on')
-    }
+    // the Full screen button: its pointer input never reaches the intro's skip listeners (an event, not a
+    // real click: entering full screen resizes the headless window, which is slow in software GL)
+    await page.locator(`${LOADING} [data-hl-act=fullscreen]`).dispatchEvent('pointerdown')
+    await page.waitForTimeout(300)
+    await expect(page.locator('html')).toHaveAttribute('data-story', 'on')
     // any other input still skips at once (M10, D9)
     await page.keyboard.press('x')
     await expect(page.locator('html')).not.toHaveAttribute('data-story', 'on')
