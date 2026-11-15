@@ -63,3 +63,4 @@
 .mp-tags button:hover { border-color: var(--accent); }
 .mp-tags button.on { background: var(--accent); border-color: var(--accent); color: #1a120e; }
 .mp-wp-noted { box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.6), 0 0 0 4px var(--accent, #e8925a); }
+.mp-share { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; margin-top: 0.4rem; font-size: 0.78rem; }

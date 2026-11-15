@@ -17,6 +17,8 @@ export interface Waypoint {
   tags: string[]
   /** planned time at the waypoint (min): station work at the station task rate (budget.ts) */
   stopMin: number
+  /** science station id when added from a station */
+  station?: string
 }
 
 /** Quick tags offered on every waypoint (UI labels, no numbers attached). */
