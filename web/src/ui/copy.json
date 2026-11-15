@@ -906,6 +906,8 @@
       "noStation": "No science station \"{id}\" in stations.json: nothing added.",
       "stationInPlan": "{id} is already in the plan.",
       "stationNoAccess": "{id} has no walkable access cell in {scenario}: not added.",
+      "stationUnreachable": "{id} is not reachable from this pad: no walkable route from the pad comes within {radius} m of its access point. Not added.",
+      "unreachable": "That spot is not reachable from this pad: no walkable route from the pad comes within {radius} m of it. No waypoint there.",
       "stationAdded": "Added {id} as waypoint #{n}, with a {stop_min}-min stop.",
       "planDamaged": "The plan in this link is damaged or from another version: starting empty.",
       "lostOne": "{n} waypoint of the saved plan has no walk home in {scenario} and was left out.",

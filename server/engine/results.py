@@ -49,6 +49,7 @@ from server.engine.hashing import (
     official_inputs,
 )
 from server.settings import settings
+from tools.make_mission import PICKER_PAD_FIELDS
 from tools.validate_contracts import match_schema
 
 REPO = Path(__file__).resolve().parents[2]
@@ -222,9 +223,12 @@ def tree_files(root: Path) -> list[dict]:
 
 
 def _tree_times(root: Path) -> tuple[str, str]:
-    """Earliest and latest ``utc`` of the tree's provenance manifest (when it was built)."""
+    """Earliest and latest ``utc`` of the tree's provenance manifest (when it was built), over the
+    official plan's rows: the I2 picker-pad field rows (``fields/pads/``, added later by
+    tools/make_pad_fields.py) are not part of the run, as in tools/make_mission.py build_time."""
     manifest = json.loads((root / "manifest.json").read_text(encoding="utf-8"))
-    times = sorted(v["utc"] for v in manifest.values() if isinstance(v, dict) and v.get("utc"))
+    times = sorted(v["utc"] for v in manifest.values() if isinstance(v, dict) and v.get("utc")
+                   and not str(v.get("file", "")).startswith(PICKER_PAD_FIELDS))
     if not times:
         raise ValueError(f"{root / 'manifest.json'} carries no utc times")
     return times[0], times[-1]
