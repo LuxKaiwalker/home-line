@@ -124,6 +124,14 @@ describe('shell frame and islands', () => {
     expect(views.map((a) => a.getAttribute('href'))).toEqual(['#/evidence/scorecard', '#/evidence/about'])
   })
 
+  it('the Mission Planer (PLAN) has no EVA-time dock; the Plan view keeps it', () => {
+    act(() => void applyRoute({ name: 'mission' }, '#/mission'))
+    expect(ui.mode.value).toBe('plan')
+    expect(root().getAttribute('data-dock')).toBe('none')
+    act(() => void applyRoute({ name: 'console' }, '#/'))
+    expect(root().getAttribute('data-dock')).not.toBe('none')
+  })
+
   it('every route maps into its mode (§4.2)', () => {
     const cases = [
       [{ name: 'console' }, 'plan'],

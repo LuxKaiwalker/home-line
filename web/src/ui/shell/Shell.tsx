@@ -16,6 +16,7 @@ import {
   closeSidebar,
   dockCollapsed,
   dockContent,
+  hasDock,
   isMapMode,
   MODE_KEY,
   MODE_VIEWS,
@@ -298,7 +299,7 @@ export function mountShell(frame: Frame, navigate: (hash: string) => void, win: 
     set('data-focus', shell.focusMode.value ? 'on' : 'off')
     set('data-sidebar', shell.sidebarOpen.value && isMapMode(mode) ? 'open' : 'closed')
     set('data-rail', (bp === 'tablet' ? !shell.railSheet.value : railCollapsed()) ? 'collapsed' : 'open')
-    set('data-dock', isMapMode(mode) ? (dockCollapsed() ? 'collapsed' : 'open') : 'none')
+    set('data-dock', hasDock(mode, shell.route.value) ? (dockCollapsed() ? 'collapsed' : 'open') : 'none')
     root.style.setProperty('--hl-rail-w', `${ui.panels.leftRail.value}px`)
     root.style.setProperty('--hl-side-w', `${ui.panels.sidebar.value}px`)
     root.style.setProperty('--hl-dock-h', `${ui.panels.timeline.value}px`)
