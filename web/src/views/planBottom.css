@@ -1,0 +1,38 @@
+/* Plan bottom drawer (L2b, D111): plan table + timeline tabs over the bottom map edge. Tokens only
+   (kit rule 2). Height cap and bar come from the L1 container (ui/layout/layout.css). */
+
+/* collapsed line: the route summary (truncates first) and the slim scrubber (keeps its width) */
+.plan-bottom__line { display: flex; align-items: center; gap: var(--space-4); min-width: 0; }
+.plan-bottom__summary { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.plan-bottom__summary > .plan-sectionhost, .plan-bottom__summary .plan-section { display: inline; }
+.plan-scrub {
+  display: flex; align-items: center; gap: var(--space-2); white-space: nowrap;
+  flex: 1 0 auto; min-width: calc(var(--layout-sidebar) * 2 / 3); margin-left: auto;
+}
+.plan-scrub__range { flex: 1; min-width: var(--space-7); }
+/* keyboard focus on the summary's manifest number links (U12 a11y: ring ≥ line.focusRingPx, as in the dock) */
+.plan-bottom a:focus-visible { outline: var(--line-focus-ring) solid var(--color-select); outline-offset: var(--line-focus-ring); }
+.plan-scrub__time { color: var(--color-text); }
+
+/* plan table: the sections side by side when the map is wide, stacked when narrow */
+.plan-table {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(calc(var(--layout-sidebar) * 5 / 6), 1fr));
+  gap: var(--space-3) var(--space-5); align-items: start;
+}
+.plan-table > .plan-sectionhost:has(> .plan-section:empty) { display: none; }
+.plan-table .pad-picker > h3:first-child { margin-top: 0; }
+
+/* timeline tab: the dock body at the old dock height; RR1 issue 1: the track never gets crushed by a
+   narrow map (labels and ticks overlap below this): the panel scrolls sideways instead */
+.plan-timeline { height: var(--layout-timeline); display: flex; align-items: stretch; }
+.plan-timeline > * { flex: 1; min-width: 0; }
+.plan-bottom .hl-tl { min-width: calc(var(--layout-sidebar) * 2); }
+.plan-bottom .hl-tl__track { min-width: var(--layout-sidebar); }
+
+
+/* RR1 issue 1: a side panel never covers the drawer. On desktop the sidebar is a column beside the map
+   (the drawer spans the map); where it overlays the map (tablet, phone) it ends above the drawer. */
+.hl-shell[data-bp=tablet][data-dock=none] .hl-sidebar { margin-bottom: var(--hl-plan-bottom, 0px); }
+.hl-shell[data-bp=phone][data-dock=none] .hl-sidebar { bottom: var(--hl-plan-bottom, 0px); }
+/* marker cards (station, rover; L2d) are placed inside their slot's box: end it at the drawer too */
+.plan-layout > .plan-layout__card { bottom: var(--plan-inset-bottom, 0); }

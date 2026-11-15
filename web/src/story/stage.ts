@@ -238,8 +238,14 @@ export class StoryStage {
     }
   }
 
-  /** Put the app back as it was; `animate` eases the camera home (never under reduced motion). */
+  /** L7c: called once after restore() (the activity store learns the story ended). */
+  onRestored: (() => void) | null = null
+  private restored = false
+
+  /** Put the app back as it was; `animate` eases the camera home (never under reduced motion). Once only. */
   restore(animate: boolean): void {
+    if (this.restored) return
+    this.restored = true
     const sv = this.saved
     this.caption.remove()
     this.setCanvasHidden(false)
@@ -260,5 +266,6 @@ export class StoryStage {
     const cam = { center: sv.center, zoom: sv.zoom, bearing: sv.bearing, pitch: sv.pitch }
     if (animate && !ui.reducedMotion.peek()) this.map.easeTo({ ...cam, duration: CAMERA_RETURN_MS })
     else this.map.jumpTo(cam)
+    this.onRestored?.()
   }
 }
