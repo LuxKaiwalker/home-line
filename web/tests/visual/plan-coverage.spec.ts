@@ -62,8 +62,8 @@ test('default Plan state: panels cover at most 25 % (1440) / 35 % (1024) of the 
 test('one map-edge tool column; the Rover button opens the rover card; cursor chip bottom left', async ({ page }) => {
   await open(page)
   const tools = page.locator('.plan-layout .plan-tools')
-  // every map control sits in the column: zoom, compass, Layers, 2D/3D, Flythrough, Storm, Rover, Full screen
-  for (const sel of ['.maplibregl-ctrl-zoom-in', '.hl-compass', '[aria-controls="hl-lay-layers"]', '.hl-terrain-ctrl', '.hl-fly-btn', '.hl-storm-btn', '[aria-controls="hl-lay-rover"]'])
+  // every map control sits in the column: zoom, compass, Layers, 2D/3D, Flythrough, Storm, Rover, Full screen, Plan summary (L2e)
+  for (const sel of ['.maplibregl-ctrl-zoom-in', '.hl-compass', '[aria-controls="hl-lay-layers"]', '.hl-terrain-ctrl', '.hl-fly-btn', '.hl-storm-btn', '[aria-controls="hl-lay-rover"]', '[data-testid="plan-summary"]'])
     await expect(tools.locator(sel).first(), sel).toBeAttached()
   // no other floating control clusters at MapLibre's corners (the scale bar stays)
   for (const corner of ['top-left', 'top-right', 'bottom-right'])

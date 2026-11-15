@@ -107,8 +107,8 @@ export const view: View = async (el) => {
     const offEdit = liveSlot ? er.mountEditRoute(liveSlot, { store: ps.createPlansStore(), View: pv.MyPlans }, { enabled: m.PLAN_ROUTE_EDIT, simMode: m.SIM_EXPORT_MODE }) : () => {}
     const padEl = padHost()
     const port = m.consoleMapPort(cmap)
-    // L2f: a pad-tool map click (live planner ready: the panel shows something) opens the rover card that
-    // shows its result, unless the click opened another card (a station) or a card is open already
+    // L2f: a pad-tool map click (live planner ready: the panel shows something) opens the rover card and its
+    // "Custom pad" section, which show its result, unless the click opened a selection card (L2e)
     const padPort = shellFrame
       ? {
           ...port,
@@ -117,7 +117,9 @@ export const view: View = async (el) => {
               cb(p)
               setTimeout(() => {
                 const o = layout.open.peek()
-                if (alive && padEl.childElementCount && !o.station && !o.rover) openContainer('rover', null)
+                if (!alive || !padEl.childElementCount || o.station || o.selection) return
+                if (!o.rover) openContainer('rover', null)
+                openContainer('custom-pad', null) // its result shows in the card's "Custom pad" section
               }, 0)
             }),
         }

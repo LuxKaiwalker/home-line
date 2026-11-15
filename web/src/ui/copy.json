@@ -446,6 +446,7 @@
   "planChrome": {
     "roverCard": "Rover pad",
     "rover": "Rover pad and pad tool",
+    "customPad": "Custom pad",
     "fullscreen": "Full screen",
     "exitFullscreen": "Exit full screen",
     "cursor": "Cursor readout",
