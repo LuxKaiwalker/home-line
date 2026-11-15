@@ -125,7 +125,7 @@ describe.skipIf(!existsSync(PUB))('computeBrowserRoute on the official pad (real
     expect(f.shortfall_min).toBeGreaterThan(0)
     // first: every leg before it passes on its own prefix (the prefix route is feasible)
     if (f.leg > 0) expect(computeBrowserRoute(d, d.fieldsPad, order.slice(0, f.leg)).feasibility).toEqual({ feasible: true })
-    console.info(`[I1a] infeasible S2,S8,S7,S6,S1,S4 on rank1: leg ${f.leg} ${f.from}->${f.to} ${f.limit} ${f.shortfall_min} min`)
+    process.stdout.write(`\n[I1a] infeasible S2,S8,S7,S6,S1,S4 on rank1: leg ${f.leg} ${f.from}->${f.to} ${f.limit} ${f.shortfall_min} min\n`)
   })
 
   it('free points W1..Wn are named in order among the free stops; mixed route computes', () => {
@@ -186,7 +186,7 @@ describe.skipIf(!existsSync(PUB))('computeBrowserRoute on the official pad (real
     }
     const warm = Math.min(...runs)
     const median = [...runs].sort((a, b) => a - b)[2]
-    console.info(`[I1a] 4 stations + 4 free points: cold ${cold.toFixed(1)} ms, warm min ${warm.toFixed(1)} ms, warm median ${median.toFixed(1)} ms`)
+    process.stdout.write(`\n[I1a] 4 stations + 4 free points: cold ${cold.toFixed(1)} ms, warm min ${warm.toFixed(1)} ms, warm median ${median.toFixed(1)} ms\n`)
     expect(median).toBeLessThan(150)
   })
 })
