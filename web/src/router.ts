@@ -173,9 +173,11 @@ export function isLegacy(param: string | null, route: Route): boolean {
   return v.split(',').some((n) => n.trim() === route.name.toLowerCase())
 }
 
-/** Top navigation (legacy layout), in display order. FLY views (hud, conditions) are left out: FLY is hidden (state/ui HIDDEN_MODES). */
+/**
+ * Top navigation (legacy layout), in display order. FLY views (hud, conditions) are left out: FLY is hidden
+ * (state/ui HIDDEN_MODES); the old Plan map (#/) is left out too (user, 2026-11-15), reachable by URL only.
+ */
 export const NAV_ITEMS: { route: Route; label: string }[] = [
-  { route: { name: 'console' }, label: 'Plan' },
   { route: { name: 'mission' }, label: 'Mission Planer' },
   { route: { name: 'stations' }, label: 'Science stations' },
   { route: { name: 'trade' }, label: 'Trade' },

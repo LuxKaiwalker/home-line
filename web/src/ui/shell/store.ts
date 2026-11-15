@@ -34,9 +34,9 @@ export interface ModeView {
 }
 export const MODE_VIEWS: Readonly<Record<Mode, readonly ModeView[]>> = {
   plan: [
-    // Mission Planer first: the landing page and where the PLAN tab leads by default (user, 2026-11-15)
+    // Mission Planer first: the landing page and where the PLAN tab leads by default (user, 2026-11-15).
+    // The old Plan map (#/) is off the rail (user, 2026-11-15); its route still works by URL.
     { route: { name: 'mission' }, label: 'nav.views.mission', icon: 'mountain' },
-    { route: { name: 'console' }, label: 'modes.plan.label', icon: 'map' },
     { route: { name: 'trade' }, label: 'nav.views.trade', icon: 'file-text' },
   ],
   // Science stations: its own top-bar tab next to PLAN, a page without a map (user, 2026-11-15)

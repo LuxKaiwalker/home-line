@@ -324,7 +324,7 @@ function CardBody({ d }: { d: StationData }) {
 
         <nav class="card-nav">
           <a href={href({ name: 'station', id: prev.id })}>← {prev.id}</a>
-          <a href={href({ name: 'console' })}>Map</a>
+          <a href={href({ name: 'mission' })}>Mission Planer</a>
           <a href={href({ name: 'cuff' })}>Cuff card</a>
           <a href={href({ name: 'station', id: next.id })}>{next.id} →</a>
         </nav>
