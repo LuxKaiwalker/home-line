@@ -6,6 +6,9 @@
 //   - the same inputs give the same outputs (margin profile, budget, mission.json except origin_label);
 //   - the EVA start constants are I3's (#177, edit/route/browser/start.ts).
 // Read-only: this test imports edit/route/ (tests are not in the build); it never edits it.
+// Scope (waypoint orchestrator, 17:0x): the byte copies only: margin, budget, router, physio, export (and
+// marstime, which has no copy: edit/route/browser/start.ts imports mission/marstime.ts). NOT compute.ts:
+// the tab has no copy of it, and I1c (#182) changes it and its leg rows on its own.
 /// <reference types="node" />
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
