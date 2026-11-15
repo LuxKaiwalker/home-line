@@ -81,6 +81,9 @@ export class StoryStage {
     this.caption.className = 'hl-story-caption'
     this.caption.setAttribute('role', 'status')
     this.caption.setAttribute('aria-live', 'polite')
+    // hidden until a step sets a caption: a storyboard without captions (flythrough.json) otherwise
+    // showed an empty caption card low in the middle of every frame (notes/Kcap.md)
+    this.caption.hidden = true
     this.map.getContainer().append(this.caption)
     document.documentElement.dataset.story = 'on'
     this.setChrome(chrome === 'shown' ? 'reveal' : chrome === 'hidden' ? 'hide' : undefined)
