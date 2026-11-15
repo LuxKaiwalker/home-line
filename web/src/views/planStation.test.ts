@@ -78,5 +78,7 @@ describe('rover card (delta strip)', () => {
     expect(isOpen(ROVER_CARD)).toBe(true)
     expect(roverStrip.peek()).toBe(a)
     expect(a.dismiss).not.toHaveBeenCalled()
+    closeContainer(ROVER_CARD) // the card that came back: closing it by hand still discards
+    expect(a.dismiss).toHaveBeenCalledTimes(1)
   })
 })

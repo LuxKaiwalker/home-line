@@ -17,7 +17,7 @@ import type { ConsoleMap } from '../map/consoleMap'
 import { href } from '../router'
 import { hostRoverCard, roverStrip } from '../state/roverCard'
 import { clearSelection, selection } from '../state/selection'
-import { effect, useSignalValue } from '../state/signal'
+import { batch, effect, useSignalValue } from '../state/signal'
 import { CardSkeleton } from '../ui/components'
 import { t } from '../ui/copy'
 import { closeContainer, layout, MarkerCard, openContainer, registerContainer } from '../ui/layout'
@@ -55,13 +55,17 @@ function StationCardBody({ id }: { id: string }) {
  * gets the station whose card to draw; `bindClick` receives the map-click handler. Returns off.
  */
 export function wirePlanCards(setCard: (id: string) => void, bindClick: (fn: (id: string) => void) => void): () => void {
+  // one change: the card it replaces closes in the same batch, so the watcher below never sees "both
+  // closed" in between (that would read as a close by hand: a Discard)
+  const open = (id: string) => batch(() => openContainer(id))
   const show = (id: string) => {
     setCard(id)
-    openContainer(STATION_CARD)
+    open(STATION_CARD)
   }
   // a map click on a station (also the one already selected: it reopens its card)
   bindClick(show)
   // closing a card by hand (×, Esc), not by the other card opening
+  const read = (o: Readonly<Record<string, boolean>>) => ({ s: !!o[STATION_CARD], r: !!o[ROVER_CARD] })
   let was = { s: false, r: false }
   const offs = [
     // a station selection (map, list, search, history) opens its card; any other selection closes it
@@ -73,20 +77,19 @@ export function wirePlanCards(setCard: (id: string) => void, bindClick: (fn: (id
     // the strip appears on release and goes on Keep / Discard / a new drag
     effect(() => {
       const on = !!roverStrip.value
-      if (on && !layout.open.peek()[STATION_CARD]) openContainer(ROVER_CARD)
+      if (on && !layout.open.peek()[STATION_CARD]) open(ROVER_CARD)
       else if (!on) closeContainer(ROVER_CARD, { restoreFocus: false })
     }),
     effect(() => {
-      const o = layout.open.value
-      const now = { s: !!o[STATION_CARD], r: !!o[ROVER_CARD] }
+      const now = read(layout.open.value)
       if (was.s && !now.s && !now.r) {
         // the station selection goes with its card (Esc cleared it in the sidebar); a draft still open
         // gets its rover card back
         if (selection.selected.peek()?.kind === 'station') clearSelection()
-        if (roverStrip.peek()) openContainer(ROVER_CARD)
+        if (roverStrip.peek()) open(ROVER_CARD)
       }
       if (was.r && !now.r && !now.s) roverStrip.peek()?.dismiss()
-      was = now
+      was = read(layout.open.peek()) // what this run opened itself (it does not re-run for its own writes)
     }),
   ]
   return () => offs.forEach((f) => f())
