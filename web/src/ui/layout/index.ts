@@ -8,6 +8,7 @@ export { Popover, type PopoverEdge, type PopoverProps } from './Popover'
 export { Collapsible, type CollapsibleProps } from './Collapsible'
 export type { HeadingLevel } from './Heading'
 export {
+  bindBrowserStorage,
   bindLayoutStorage,
   closeContainer,
   closeTopmost,
