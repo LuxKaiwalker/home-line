@@ -180,13 +180,20 @@ def test_only_index_manifest_and_bands_are_rewritten(staged):
 
 def test_final_index_and_manifest_are_the_summary_ones(staged):
     """Byte-identical to the pre-staging summary: the full call's index file, and
-    json.dumps(manifest.merge(full fragments), indent=1) + newline (ctx.write_json)."""
+    json.dumps(manifest.merge(full fragments) + the exporter entries, indent=1) + newline
+    (ctx.write_json)."""
     ctx, conn, out, pub = staged
     assert conn.events[-1][0] == "summary" and ctx.done == list(plan_job.STAGES)
     work = out / plan_job.WORK
     full_index = (work / "full" / "public" / "scenarios/index.json").read_bytes()
     assert (pub / "scenarios/index.json").read_bytes() == full_index
     merged = manifest_mod.merge(work / "manifest", out_path=work / "check_manifest.json")
+    # plus the exporters' entries, after the engine's (D110: only mission.json, kind sim_plan)
+    final_doc = json.loads((pub / "manifest.json").read_bytes())
+    extra = {k: e for k, e in final_doc.items() if k.startswith("export.")}
+    assert list(extra) == ["export.mission.mission.json"]
+    assert extra["export.mission.mission.json"]["kind"] == "sim_plan"
+    merged = {**merged, **extra}
     expect = (json.dumps(merged, indent=1, ensure_ascii=False) + "\n").encode("utf-8")
     assert (pub / "manifest.json").read_bytes() == expect
     final = conn.events[-1][1]
