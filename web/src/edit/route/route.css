@@ -128,3 +128,6 @@
 }
 .hl-route__start-reset:focus-visible { outline: var(--line-focus-ring) solid var(--color-select); }
 @media (max-width: 420px) { .hl-route__start-grid { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } .hl-route__start-grid label:first-child { grid-column: 1 / -1; } }
+/* J1d: the Mission Planer link in place of the hidden route editor */
+.hl-route__mission { margin: 0; }
+.hl-route__mission a { display: inline-flex; align-items: center; gap: var(--space-1); text-decoration: none; }

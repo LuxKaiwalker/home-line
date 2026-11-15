@@ -11,7 +11,8 @@ import type { LonLat, Waypoint } from './plan'
 import type { Leg } from './router'
 
 export const MISSION_SCHEMA_VERSION = '1.1.0'
-export const ORIGIN_LABEL = 'Mission Planer: browser estimate on the 5 m grid, not part of the validated scorecard'
+/** J1d (team lead 2026-11-15 16:57): the app's estimate label (edit/route/browser/export.ts ORIGIN_LABEL, parity.test.ts pins it). */
+export const ORIGIN_LABEL = 'Estimate · browser, 5 m grid · not part of the validated scorecard'
 /** I3 (#177, edit/route/browser/start.ts CUSTOM_START_LABEL, same text; parity.test.ts pins it): a moved EVA start. */
 export const CUSTOM_START_LABEL = 'custom start · outside the validated scenario'
 /** J1 (D132): the tab's origin_label: ORIGIN_LABEL, plus the custom-start label when the start was moved (as I3). */
@@ -25,7 +26,7 @@ export interface HomeValues {
 export interface MissionExportInput {
   title?: string
   proj: string
-  pad: { kind: 'official' | 'custom' | 'config_default'; id: string | null; lon: number; lat: number; elevM: number | null; source: string }
+  pad: { kind: 'official' | 'picker' | 'custom' | 'config_default'; id: string | null; lon: number; lat: number; elevM: number | null; source: string }
   scenario: { id: string; variant: string; suit_kg: number }
   planner: { gridResM: number; elevationResM: number; files: Record<string, string | null>; appCommit?: string | null; configHash?: string | null }
   constants: { o2CapacityL: number; effortRateLMin: number; stationRateLMin: number; reserveL: number; evaLimitMin: number; marginAmberMin: number }

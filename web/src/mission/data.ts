@@ -6,6 +6,8 @@
 //     bilinearly at every cell centre. This is coarser than WS2's 3 m graph, so leg times and O2 are
 //     browser estimates, labelled as such; T_home and O2 home stay WS2's own numbers.
 //   - way home: WS2's pointer field (same path as the HUD's drag-anywhere).
+//   - J1d: the pad: the official pad (pad.json, the scenario's own fields) or a picker pad P2–P4 with its
+//     own fields (I2, mission/pads.ts); loaded once per (pad, scenario), as I2b's edit/route/browser/data.ts.
 import { CONFIG } from '../config'
 import { data } from '../data/loader'
 import type { BandsFC, EdgesFC, IsochroneFC, Rad, ScenarioEntry, TileJson } from '../data/types'
@@ -18,6 +20,7 @@ import type { FieldsIndex as HudFieldsIndex } from '../hud/types'
 import { loadPointer, type PointerField } from '../hud/wayhome'
 import { citesD21, padMarker, type PadMarkerInfo } from '../map/pad'
 import { gradeModel, scenarioParams, type GradeModel } from './physio'
+import { fieldKeys, padChoices, PADS_INDEX, pickerLayerFiles, pickerPad, type MissionPad, type PadChoice, type PadIndexRow } from './pads'
 import type { RouteGrid } from './router'
 
 export interface MissionData {
@@ -34,7 +37,7 @@ export interface MissionData {
   isochrones: IsochroneFC | null
   edges: EdgesFC | null
   /** file each layer came from, for the captions */
-  files: { tHome: string; o2Home: string | null; pointer: string | null; elevation: string; bands: string; isochrones: string; edges: string }
+  files: { tHome: string; o2Home: string | null; pointer: string | null; elevation: string; bands: string | null; isochrones: string | null; edges: string | null }
   elevationResM: number
   /** WS4 conditions for the margin (mission/margin.ts): the RAD storm series (D39) and the
    *  minutes from EVA start to darkness; null when the file is missing */
@@ -42,8 +45,12 @@ export interface MissionData {
   tDarkMin: number | null
   /** pad.json pad id and areoid elevation (null without pad.json / when unknown): the mission export's frame */
   padId: string | null
-  /** official = pad.json cites D21; config_default = no pad.json (site.yaml pad_default); custom = any other pad.json pad */
-  padKind: 'official' | 'custom' | 'config_default'
+  /** official = pad.json cites D21; config_default = no pad.json (site.yaml pad_default); custom = any other pad.json pad;
+   *  picker = a pads index pad P2–P4 (J1d) */
+  padKind: 'official' | 'picker' | 'custom' | 'config_default'
+  /** J1d: the pad these fields are for (null = official) and the four choices of the tab */
+  fieldsPad: MissionPad
+  padChoices: PadChoice[]
   padElevM: number | null
   /** clock.json eva.start_lmst (D31), or null */
   evaStartLmst: string | null
@@ -95,7 +102,21 @@ export function sampleElevation(g: FieldGrid, heights: HeightGrid, toXY: (lon: n
   return out
 }
 
-export async function loadMissionData(scenarioId?: string, onStep?: (what: string) => void): Promise<MissionData> {
+const loaded = new Map<string, Promise<MissionData>>()
+
+/** J1d: loadMissionData once per (pad, scenario); a failed load is not kept. */
+export function missionData(scenarioId?: string, onStep?: (what: string) => void, pad: MissionPad = null): Promise<MissionData> {
+  const key = JSON.stringify([pad, scenarioId ?? null])
+  let p = loaded.get(key)
+  if (!p) {
+    p = loadMissionData(scenarioId, onStep, pad)
+    loaded.set(key, p)
+    p.catch(() => loaded.get(key) === p && loaded.delete(key))
+  }
+  return p
+}
+
+export async function loadMissionData(scenarioId?: string, onStep?: (what: string) => void, fieldsPad: MissionPad = null): Promise<MissionData> {
   const L = data()
   const step = (s: string) => onStep?.(s)
   step('scenarios and pad')
@@ -103,13 +124,24 @@ export async function loadMissionData(scenarioId?: string, onStep?: (what: strin
   const sid = scenarioId ?? idx.default
   const scenario = idx.scenarios.find((s) => s.id === sid)
   if (!scenario) throw new Error(`scenario ${sid} not in scenarios/index.json`)
-  const pad = padMarker(padFile, CONFIG.padDefault)
+  let pad = padMarker(padFile, CONFIG.padDefault)
   // The HUD's view of the same file (adds the pointer entry's own grid and stencil, contracts v1.1.1).
   const fi = fiRaw as unknown as HudFieldsIndex
 
-  const tKey = `${sid}/t_home`
-  const oKey = `${sid}/o2_home`
-  const pKey = `${sid}/pointer`
+  const keys = fieldKeys(fieldsPad, sid)
+  const tKey = keys.tHome
+  const oKey = keys.o2Home
+  const pKey = keys.pointer
+  // J1d: a picker pad (P2–P4): its pads index row is the pad, its own layers the boundary
+  let picker: ReturnType<typeof pickerPad> | null = null
+  if (fieldsPad !== null) {
+    const idxPads = await L.json<{ pads: PadIndexRow[] }>(PADS_INDEX)
+    const row = idxPads.pads.find((r) => r.id === fieldsPad)
+    if (!row) throw new Error(`${PADS_INDEX} has no pad ${fieldsPad}`)
+    picker = pickerPad(row)
+    pad = picker.marker
+  }
+  const layers = picker ? pickerLayerFiles(fieldsPad!, scenario.suit_kg) : null
   if (!fi.fields[tKey]) throw new Error(`fields/index.json has no ${tKey}`)
   step('walk-home fields')
   const [tHome, o2Home, pointer] = await Promise.all([
@@ -130,9 +162,9 @@ export async function loadMissionData(scenarioId?: string, onStep?: (what: strin
 
   step('reachable-area layers and conditions')
   const [bands, isochrones, edges, rad, clock] = await Promise.all([
-    L.optional(() => L.bands(scenario)),
-    L.optional(() => L.isochrones(scenario)),
-    L.optional(() => L.edges(scenario)),
+    layers ? L.optional(() => L.json<BandsFC>(layers.bands)) : L.optional(() => L.bands(scenario)),
+    layers ? Promise.resolve(null) : L.optional(() => L.isochrones(scenario)),
+    layers ? L.optional(() => L.json<EdgesFC>(layers.edges)) : L.optional(() => L.edges(scenario)),
     L.optional(() => L.rad()),
     L.optional(() => L.clock()),
   ])
@@ -155,16 +187,18 @@ export async function loadMissionData(scenarioId?: string, onStep?: (what: strin
       o2Home: fi.fields[oKey]?.file ?? null,
       pointer: pointer ? fi.fields[pKey].file : null,
       elevation: fp.far.file,
-      bands: scenario.files.bands,
-      isochrones: scenario.files.isochrones,
-      edges: scenario.files.edges,
+      bands: layers ? layers.bands : scenario.files.bands,
+      isochrones: layers ? null : scenario.files.isochrones,
+      edges: layers ? layers.edges : scenario.files.edges,
     },
     elevationResM: fp.far.res_m,
     rad,
     tDarkMin: tDarkOf(clock),
-    padId: padFile ? (padFile.pad.id ?? null) : null,
-    padKind: !padFile ? 'config_default' : citesD21(padFile.pad.source) ? 'official' : 'custom',
-    padElevM: padFile && typeof padFile.pad.elev_m === 'number' ? padFile.pad.elev_m : null,
+    padId: picker ? picker.id : padFile ? (padFile.pad.id ?? null) : null,
+    padKind: picker ? picker.kind : !padFile ? 'config_default' : citesD21(padFile.pad.source) ? 'official' : 'custom',
+    padElevM: picker ? picker.elevM : padFile && typeof padFile.pad.elev_m === 'number' ? padFile.pad.elev_m : null,
+    fieldsPad,
+    padChoices: padChoices(fi.fields, sid),
     evaStartLmst: evaStartLmstOf(clock),
     evaStartUtc: evaStartUtcOf(clock),
     mslSol: mslSolOf(clock),
