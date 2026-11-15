@@ -7,6 +7,8 @@ import { describe, expect, it } from 'vitest'
 import { NAV_ITEMS } from '../router'
 import { ADDON_LABEL, SLOTS } from './slot'
 import { VIEWS } from '.'
+import { ui } from '../state'
+import { setView, toggleView } from '../map/terrain/state'
 
 const src = (p: string) => readFileSync(resolve(__dirname, '..', p), 'utf8')
 
@@ -17,6 +19,23 @@ describe('D98 / D99 removed views', () => {
     expect(Object.keys(VIEWS)).not.toContain('hud3d')
     expect(NAV_ITEMS.map((i) => i.route.name)).not.toContain('nav')
     expect(NAV_ITEMS.map((i) => i.route.name)).not.toContain('hud3d')
+  })
+})
+
+// Team lead clarification (D99): only the first-person 3D EVA preview is removed. The 3D MAP (MapLibre
+// terrain, 2D/3D toggle, exaggeration, flythrough, camera presets, drape) stays fully working.
+describe('D99 keeps the 3D map', () => {
+  it('the 2D/3D map toggle still switches ui.view both ways', () => {
+    setView('2d')
+    expect(toggleView()).toBe('3d')
+    expect(ui.view.value).toBe('3d')
+    expect(toggleView()).toBe('2d')
+    expect(ui.view.value).toBe('2d')
+  })
+  it('the terrain, flythrough and camera modules exist and never imported the removed fp3d scene', () => {
+    for (const f of ['map/terrain/index.ts', 'map/terrain/state.ts', 'map/terrain/controls.ts', 'map/flythrough/fly.ts', 'map/camera/presets.ts']) {
+      expect(src(f), f).not.toMatch(/fp3d/)
+    }
   })
 })
 
