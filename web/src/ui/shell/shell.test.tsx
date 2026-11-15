@@ -168,7 +168,8 @@ describe('shell frame and islands', () => {
   it('every route maps into its mode (§4.2)', () => {
     const cases = [
       [{ name: 'console' }, 'plan'],
-      [{ name: 'station', id: 'S1' }, 'plan'],
+      [{ name: 'station', id: 'S1' }, 'science'],
+      [{ name: 'stations' }, 'science'],
       [{ name: 'trade' }, 'report'], // L2 (D111, L0 Q2): the trade table is a Report document
       [{ name: 'conditions' }, 'fly'],
       [{ name: 'hud' }, 'fly'],
