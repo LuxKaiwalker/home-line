@@ -19,6 +19,8 @@ import { t } from '../ui/copy'
 import { BottomDrawer, layoutInsets, onLayoutChange, type LayoutInsets } from '../ui/layout'
 import { dockContent, hostIn } from '../ui/shell/store'
 import { fmtEva } from '../ui/timeline/model'
+import { ReplaySourceBar, UserReplayReadout } from '../ui/timeline/userReplay'
+import { userReplay } from '../state/userReplay'
 import { registerPlanMount, SectionHost, type PlanMountCtx, type SectionName } from './planSlots'
 import './planBottom.css'
 
@@ -53,6 +55,8 @@ export function SlimScrubber() {
   // the dock ticker (ui/timeline/install.tsx) starts on its own whenever the mission clock plays
   return (
     <span class="plan-scrub" data-state={playing ? 'playing' : 'paused'}>
+      {/* PORT F5: "Replaying: your route (estimate)" + the way back, only while the user's route replays */}
+      <ReplaySourceBar />
       <IconButton
         class="hl-tl__play"
         icon={replay.running ? 'pause' : 'play'}
@@ -91,6 +95,8 @@ export function SlimScrubber() {
 /** Expanded timeline tab: the timeline dock body (the same element the shell dock shows elsewhere). */
 function TimelineTab() {
   const content = useSignalValue(dockContent)
+  // PORT F5: during the user's replay the official chart (official plan values) is hidden
+  if (useSignalValue(userReplay)) return <div class="plan-timeline"><UserReplayReadout /></div>
   return <div class="plan-timeline">{content ? content() : <p class="muted">{t('states.error.notAvailable', { what: t('timeline.marginCurve') })}</p>}</div>
 }
 

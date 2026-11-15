@@ -8,6 +8,7 @@ import type { RouteFC, Station } from '../../data/types'
 import { dataUrl } from '../../env'
 import { fieldGrid, loadField, type FieldGrid } from '../../hud/fields'
 import { Plan } from '../../hud/plan'
+import { userReplay, userReplayPosition } from '../../state/userReplay'
 import { parseClockSun, type ClockFile } from '../../hud/sun'
 import type { LonLat, TimelineEvent } from '../../hud/types'
 import { loadPointer } from '../../hud/wayhome'
@@ -246,7 +247,10 @@ export class MapFurniture {
   private renderCrew(t: number): void {
     const src = this.map.getSource('crew') as GeoJSONSource | undefined
     if (!src) return
-    const st = this.plan && (mission.clock.playing.peek() || t > 0) ? this.plan.stateAt(t) : null
+    const on = mission.clock.playing.peek() || t > 0
+    // PORT F5: while the user's route replays, the crew walks the user's route (state/userReplay.ts)
+    const mine = userReplay.peek() ? userReplayPosition(t) : null
+    const st = mine ? (on ? { lon: mine[0], lat: mine[1], phase: 'walk' } : null) : this.plan && on ? this.plan.stateAt(t) : null
     const key = st ? `${st.lon},${st.lat}` : ''
     if (key === this.crewKey) return
     this.crewKey = key
@@ -349,7 +353,8 @@ export class MapFurniture {
   private update(): void {
     const t = mission.clock.t.peek()
     const playing = mission.clock.playing.peek()
-    const crew = this.plan && (playing || t > 0) ? this.plan.stateAt(t) : null
+    const mine = userReplay.peek() ? userReplayPosition(t) : null // PORT F5: the user's replay
+    const crew = mine ? (playing || t > 0 ? { lon: mine[0], lat: mine[1] } : null) : this.plan && (playing || t > 0) ? this.plan.stateAt(t) : null
     // L7a (D111): hover never changes state: the replay keeps the crew's thread; the pointer gets one
     // only in the explicit mode (way-home key held, clock not playing)
     const start = threadFrom({ cursor: this.cursor, wayHome: this.wayHome, playing, crew: crew ? [crew.lon, crew.lat] : null })

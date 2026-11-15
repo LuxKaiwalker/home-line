@@ -19,6 +19,7 @@ import { t } from '../copy'
 import { Drawer, domId } from '../layout'
 import type { Loader } from '../../data/loader'
 import { RouteEstimates } from './Estimates'
+import { LoadIntoReplay } from '../timeline/userReplay'
 import { PadPicker } from './PadPicker'
 import { ROUTE_PANEL_ID, routeCoreUnavailable, routePanelCollapsed, routePanelOpen, setRoutePanelCollapsed } from './panelState'
 import { PadReach } from './Reach'
@@ -77,7 +78,13 @@ export function RoutePanel({ store = planning, loader }: RoutePanelProps) {
           <h3 id={estId} class="hl-rp__h">
             {t('route.panel.estimates.title')}
           </h3>
-          {hasRoute ? <RouteEstimates store={store} /> : <p class="hl-rp__empty" data-empty>{t('route.panel.empty')}</p>}
+          {hasRoute ? (
+            <>
+              <RouteEstimates store={store} />
+              {/* PORT F5: replay the computed route on the drawer's timeline player */}
+              <LoadIntoReplay store={store} />
+            </>
+          ) : <p class="hl-rp__empty" data-empty>{t('route.panel.empty')}</p>}
           {/* backed numbers only while open: the closed drawer stays mounted (hidden), and the value
               snapshot must not see the strip's reach keys a second time while the panel is closed */}
           {open && <PadReach store={store} loader={loader} />}

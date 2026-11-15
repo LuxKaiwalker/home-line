@@ -51,3 +51,5 @@
 /* collapsed: the header only (the drawer's inline bottom is the bottom drawer's inset) */
 .hl-lay-drawer.hl-rp--collapsed { bottom: auto !important; }
 .hl-rp--collapsed .hl-lay-drawer__body { display: none; }
+/* PORT F5: Load into replay, under the estimates */
+.hl-rp__replay { margin-top: var(--space-2); }

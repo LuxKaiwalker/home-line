@@ -1,0 +1,20 @@
+{
+  "load": "Load into replay",
+  "loadTip": "Replay your computed route on the timeline (estimate from the route planner)",
+  "loadNeedsRoute": "Compute a complete route first: every leg needs a time",
+  "replaying": "Replaying: your route (estimate)",
+  "replayingOfficial": "Replaying: the official plan",
+  "backToOfficial": "Replay the official plan",
+  "estimate": "Estimate",
+  "length": "Route length {v} min",
+  "o2Used": "O₂ of finished legs {v} L",
+  "o2Unknown": "O₂ of finished legs —",
+  "margin": "Margin {v} min",
+  "marginUnknown": "Margin —",
+  "atStop": "At {name}",
+  "walking": "Walking to {name}",
+  "walkingHome": "Walking back to the pad",
+  "done": "Back at the pad",
+  "pad": "the pad",
+  "officialHidden": "Official plan values are hidden while your route replays."
+}

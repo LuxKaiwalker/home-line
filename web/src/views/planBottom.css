@@ -36,3 +36,11 @@
 .hl-shell[data-bp=phone][data-dock=none] .hl-sidebar { bottom: var(--hl-plan-bottom, 0px); }
 /* marker cards (station, rover; L2d) are placed inside their slot's box: end it at the drawer too */
 .plan-layout > .plan-layout__card { bottom: var(--plan-inset-bottom, 0); }
+
+/* PORT F5: "Replaying: your route (estimate)" + the way back; the core's numbers, each "Estimate" */
+.plan-replay { display: inline-flex; align-items: center; gap: var(--space-2); min-width: 0; }
+.plan-replay__label { font-weight: 600; color: var(--color-text); white-space: nowrap; }
+.plan-replay__readout { display: flex; flex-direction: column; gap: var(--space-2); padding: var(--space-2); }
+.plan-replay__readout p { margin: 0; }
+.plan-replay__nums { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: var(--space-4); }
+.plan-replay__tag { font-size: var(--font-size-small); color: var(--color-text-muted); text-transform: uppercase; }
