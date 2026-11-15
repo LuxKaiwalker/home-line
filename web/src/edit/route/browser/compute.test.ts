@@ -18,7 +18,7 @@ import type { RouteStop } from '../model'
 import { accessCell, cellOf, lonLatOfCell, routeGridOf, sampleElevation } from '../map/grid'
 import { codecOf, decodeHeights, farOrigin, gunzipIfNeeded, HeightGrid, lonLatToXY, parseEqc, parseIndex } from '../map/heights'
 import { gradeModel, scenarioParams } from '../map/physio'
-import { buildBrowserMission, buildBrowserMissionDraft, computeBrowserRoute } from './compute'
+import { buildBrowserMission, buildBrowserMissionDraft, computeBrowserRoute, type BrowserRouteResult } from './compute'
 import { makeBrowserRouteData, type BrowserRouteData } from './data'
 import { ORIGIN_LABEL } from './export'
 import { clockAt, DEFAULT_START_MS, withEvaStart } from './start'
@@ -28,17 +28,18 @@ const SCHEMA = resolve(REPO, 'contracts/bundle/mission.schema.json')
 const PY = resolve(REPO, '.venv/bin/python')
 const J = <T>(rel: string): T => JSON.parse(readFileSync(resolve(PUB, rel), 'utf8')) as T
 
-async function loadFromFiles(sid: string): Promise<BrowserRouteData> {
+async function loadFromFiles(sid: string, fieldsPrefix = '', padFile: PadFile = J<PadFile>('pad.json')): Promise<BrowserRouteData> {
   const fi = J<FieldsIndex>('fields/index.json')
   const field = (k: string) => {
     const meta = fi.fields[k]
     const { rgba, width, height } = readPngRGBA(resolve(PUB, meta.file))
     return new FieldGrid(fieldGrid(fi, k), decodeRGBA(rgba, width, height, meta.scale), meta.units)
   }
-  const tHome = field(`${sid}/t_home`)
-  const o2Home = field(`${sid}/o2_home`)
-  const pMeta = fi.fields[`${sid}/pointer`]
-  const pointer = new PointerField(field(`${sid}/pointer`), pMeta.stencil!)
+  const key = `${fieldsPrefix}${sid}`
+  const tHome = field(`${key}/t_home`)
+  const o2Home = field(`${key}/o2_home`)
+  const pMeta = fi.fields[`${key}/pointer`]
+  const pointer = new PointerField(field(`${key}/pointer`), pMeta.stencil!)
   const fp = parseIndex(J('fp3d/index.json'))
   const raw = readFileSync(resolve(PUB, fp.far.file))
   const buf = await gunzipIfNeeded(raw.buffer.slice(raw.byteOffset, raw.byteOffset + raw.byteLength) as ArrayBuffer)
@@ -54,10 +55,10 @@ async function loadFromFiles(sid: string): Promise<BrowserRouteData> {
     grid,
     model: gradeModel(scenarioParams(sid)),
     stations: J<Station[]>('stations.json'),
-    padFile: J<PadFile>('pad.json'),
+    padFile,
     rad: J<Rad>('conditions/rad.json'),
     clock: J('conditions/clock.json'),
-    files: { tHome: fi.fields[`${sid}/t_home`].file, o2Home: fi.fields[`${sid}/o2_home`].file, pointer: pMeta.file, elevation: fp.far.file },
+    files: { tHome: fi.fields[`${key}/t_home`].file, o2Home: fi.fields[`${key}/o2_home`].file, pointer: pMeta.file, elevation: fp.far.file },
     elevationResM: fp.far.res_m,
   })
 }
@@ -220,5 +221,97 @@ describe.skipIf(!existsSync(PUB))('computeBrowserRoute on the official pad (real
     const median = [...runs].sort((a, b) => a - b)[2]
     process.stdout.write(`\n[I1a] 4 stations + 4 free points: cold ${cold.toFixed(1)} ms, warm min ${warm.toFixed(1)} ms, warm median ${median.toFixed(1)} ms\n`)
     expect(median).toBeLessThan(150)
+  })
+})
+
+// I1c: the headline ("Leg k fails first: <limit>, short by <m> min") is read off the leg rows: the failing row
+// carries the same check (the engine's ordered-route rule, traverse._route_order: O2 used before each leg
+// bounded at the effort cap x elapsed time), every earlier row passes it. marginMin stays the WALKED margin
+// (the ported Mission Planer track, mission.json summary); the two differ by design and the panel says so.
+type Infeasible = Extract<NonNullable<BrowserRouteResult['feasibility']>, { feasible: false }>
+function expectHeadlineFromRows(r: BrowserRouteResult): Infeasible {
+  expect(r.feasibility!.feasible).toBe(false)
+  const f = r.feasibility as Infeasible
+  const row = r.legs[f.leg]
+  expect([row.from, row.to]).toEqual([f.from, f.to])
+  expect(row.checkOk).toBe(false)
+  expect(row.checkBinding).toBe(f.limit)
+  expect(f.shortfall_min).toBeCloseTo(Math.max(0, -row.checkMin!), 2)
+  for (const l of r.legs.slice(0, f.leg)) expect(l.checkOk, `leg ${l.leg} before the failing leg`).toBe(true)
+  return f
+}
+
+describe.skipIf(!existsSync(PUB))('I1c: first failing leg consistent with the rows (official pad, real data)', () => {
+  let d: BrowserRouteData
+  const st = (...ids: string[]): RouteStop[] => ids.map((station) => ({ station }))
+  beforeAll(async () => {
+    d = await loadFromFiles(CONFIG.defaultScenario)
+  }, 60_000)
+
+  it('smoke c S2,S8,S7,S6,S1,S4: headline = the failing row\'s check; the walked margins and the summary are the track', async () => {
+    const r = computeBrowserRoute(d, d.fieldsPad, st('S2', 'S8', 'S7', 'S6', 'S1', 'S4'))
+    const f = expectHeadlineFromRows(r)
+    // before (f18f5a9) and after: leg 4 S6 -> S1, O2, 36.27 min short under the effort-cap rule; the walked
+    // margin of that row is +1.3 min (O2 used at departure 291 L walked vs 367 L at 1.35 L/min x 271.7 min)
+    expect([f.leg, f.from, f.to, f.limit]).toEqual([4, 'S6', 'S1', 'O2'])
+    expect(f.shortfall_min).toBeCloseTo(36.27, 1)
+    expect(r.legs[4].marginMin!).toBeGreaterThan(0)
+    const doc = buildBrowserMissionDraft(r, { data: d }) as Record<string, any> // eslint-disable-line @typescript-eslint/no-explicit-any
+    expect(doc.summary.feasible).toBe(false)
+    // the summary's O2 margin is the walked track at the pad: the last row's walked margin
+    expect(doc.summary.o2_margin_min).toBeCloseTo(r.legs[5].marginMin!, 0)
+    if (existsSync(PY)) expect(validateWithPython(await buildBrowserMission(r, { data: d })).out.trim()).toBe('OK')
+  })
+
+  it('smoke b S4,S1,S6,S7 + W1, W2: headline = the failing row\'s check (W1 -> W2, O2), every earlier row passes', async () => {
+    const stops: RouteStop[] = [...st('S4', 'S1', 'S6', 'S7'), { lon: 137.3962, lat: -4.7781 }, { lon: 137.3905, lat: -4.786 }]
+    const r = computeBrowserRoute(d, d.fieldsPad, stops)
+    expect(r.issues).toEqual([])
+    const f = expectHeadlineFromRows(r)
+    expect([f.leg, f.from, f.to, f.limit]).toEqual([5, 'W1', 'W2', 'O2'])
+    expect(f.shortfall_min).toBeCloseTo(35.78, 1)
+    const doc = buildBrowserMissionDraft(r, { data: d }) as Record<string, any> // eslint-disable-line @typescript-eslint/no-explicit-any
+    expect(doc.summary.feasible).toBe(false)
+    expect(doc.summary.time_margin_min).toBeCloseTo(r.legs[6].marginMin!, 0)
+    if (existsSync(PY)) expect(validateWithPython(await buildBrowserMission(r, { data: d })).out.trim()).toBe('OK')
+  })
+
+  it('S4,S1,S6,S7 stays feasible; every row passes its check', () => {
+    const r = computeBrowserRoute(d, d.fieldsPad, st('S4', 'S1', 'S6', 'S7'))
+    expect(r.feasibility).toEqual({ feasible: true })
+    expect(r.legs.every((l) => l.checkOk === true && l.checkMin! >= 0)).toBe(true)
+  })
+})
+
+// The picker pad rank2 (D21 rank 2, I2 fields: fields/index.json pads/rank2/nom_104/*), where the engine has
+// real run records (server results, WP1/WP3): S2,S8,S7,S6,S1,S4 infeasible leg 3 S7 -> S6, O2, 25.34 min;
+// S4,S1,S6,S7 feasible.
+describe.skipIf(!existsSync(PUB))('I1c: picker pad rank2 against the engine (real data)', () => {
+  const RANK2 = { lon: 137.393301, lat: -4.776468 }
+  let d: BrowserRouteData
+  const st = (...ids: string[]): RouteStop[] => ids.map((station) => ({ station }))
+  beforeAll(async () => {
+    const pf = J<PadFile>('pad.json')
+    d = await loadFromFiles(CONFIG.defaultScenario, 'pads/rank2/', { ...pf, pad: { ...pf.pad, ...RANK2, id: 'rank2' } } as PadFile)
+  }, 60_000)
+
+  it('S2,S8,S7,S6,S1,S4: infeasible on O2 like the engine; the browser names leg 4 (engine: leg 3), documented', () => {
+    const r = computeBrowserRoute(d, RANK2, st('S2', 'S8', 'S7', 'S6', 'S1', 'S4'))
+    expect(r.issues).toEqual([])
+    expect(r.warnings).toEqual([])
+    const f = expectHeadlineFromRows(r)
+    expect(f.limit).toBe('O2')
+    // Tolerance / known divergence: the rule is the engine's, the walk is not. On the 5 m grid (8 m heights)
+    // legs 0-2 take 26.2 + 32.0 + 61.8 min; the engine's 3 m graph walks 56.5 + 34.8 + 88.5 min (pad -> S2
+    // 2863 m around terrain the coarse grid crosses), so leg 3 departs at 210 min here vs 270 min in the
+    // engine and passes; the bound first fails one leg later (S6 -> S1, 21 min short vs the engine's 25.34
+    // on S7 -> S6). Same limit, shortfall within 5 min, failing leg one later.
+    expect([f.leg, f.from, f.to]).toEqual([4, 'S6', 'S1'])
+    expect(Math.abs(f.shortfall_min - 25.34)).toBeLessThan(5)
+  })
+
+  it('S4,S1,S6,S7 stays feasible (engine: feasible)', () => {
+    const r = computeBrowserRoute(d, RANK2, st('S4', 'S1', 'S6', 'S7'))
+    expect(r.feasibility).toEqual({ feasible: true })
   })
 })

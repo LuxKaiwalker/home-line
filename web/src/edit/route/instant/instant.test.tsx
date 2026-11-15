@@ -33,7 +33,11 @@ function stubCore(failAt: { leg: number; term: string; short: number } | null = 
     compute(_d, pad, stops) {
       calls.push({ stops: stops.map(nameOf), pad })
       const names = ['pad', ...stops.map(nameOf), 'pad']
-      const legs = names.slice(1).map((to, i) => ({ leg: i, from: names[i], to, walkMin: 10 + i, o2UsedL: 50, marginMin: 60 - i, binding: 'O2' }))
+      // I1c: rows carry the check the headline quotes (failing row: checkOk false, -short)
+      const legs = names.slice(1).map((to, i) => ({
+        leg: i, from: names[i], to, walkMin: 10 + i, o2UsedL: 50, marginMin: 60 - i, binding: 'O2',
+        checkMin: failAt && i === failAt.leg ? -failAt.short : 5, checkBinding: failAt && i === failAt.leg ? failAt.term : 'O2', checkOk: !(failAt && i >= failAt.leg),
+      })) // prettier-ignore
       const r: EstimateResult = {
         legs,
         totals: { walkMin: 100, evaMin: 180, o2UsedL: 400.25, o2LeftL: 1100.5 },
@@ -175,6 +179,11 @@ describe('instant browser estimate (I1b)', () => {
       expect(box.getAttribute('data-limit')).toBe('O2')
       expect(text(box)).toContain('Leg 4 (S2 → Pad) fails first: O2, short by 25 min')
       expect(byClass(root, 'hl-route__est-leg').map((l) => l.getAttribute('data-state'))).toEqual(['planned', 'planned', 'planned', 'failing'])
+      // I1c: the failing row shows the headline's own number next to its walked margin, and the rule is named
+      const rows = byClass(root, 'hl-route__est-leg')
+      expect(text(rows[3])).toContain('margin 57 min (O2) · fails the planning check by 25 min (O2)')
+      expect(rows.slice(0, 3).every((r) => !text(r).includes('planning check'))).toBe(true)
+      expect(text(box)).toContain('O₂ used before each leg counted at the effort cap')
     })
 
     it('Send to simulator: a Blob download whose JSON has schema 1.1.0, the estimate label and the stops in order; infeasible routes export too', async () => {

@@ -68,6 +68,9 @@ export const shell = {
   breakpoint: signal<Breakpoint>('desktop'),
   /** §4.3 "opens on selection": closed until A5 selects something or the user opens it. */
   sidebarOpen: signal<boolean>(false),
+  /** L2e (D111): selections open as pop-up cards (ui/cards/selectionCard.tsx), not in the sidebar;
+   *  while true (set by the shell's selection install) openSidebar() leaves the sidebar shut. */
+  selectionCards: signal<boolean>(false),
   focusMode: signal<boolean>(false),
   helpOpen: signal<boolean>(false),
   /** Tablet (768–1279) only: the rail is a 56 px icon column; its toggle opens the full rail as an
@@ -114,6 +117,7 @@ export function setDockCollapsed(c: boolean): void {
   ui.panels.timeline.value = c ? TOKENS.layout.timelineCollapsed : TOKENS.layout.timeline
 }
 export function openSidebar(): void {
+  if (shell.selectionCards.peek()) return // L2e: the selection card shows it
   shell.sidebarOpen.value = true
 }
 export function closeSidebar(): void {

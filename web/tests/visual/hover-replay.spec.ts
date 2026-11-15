@@ -84,6 +84,7 @@ test('Plan: a hover is a passive tooltip only (estimate); the route to the point
   expect(await clock.innerText()).toBe(t0)
   expect(page.url()).toBe(url0)
   expect(await page.locator('.hl-sidebar__body').innerText()).toBe(card0)
+  await expect(page.locator('.sel-card')).toHaveCount(0) // L2e: a hover opens no selection card
   // the explicit mode: Alt held over the map draws the thread from the pointer
   await page.keyboard.down('Alt')
   await hoverAcross(page, box, 2)

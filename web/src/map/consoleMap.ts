@@ -25,7 +25,7 @@ import { LabelLayer, loadLabels, setLabelPlacementPaused, setSelectedLabel } fro
 import type { MapLabel } from './labels/model'
 import { TerrainController } from './terrain'
 import { framePitched } from './terrain/frame'
-import { PLAN_VIEW } from '../state/view'
+import { openPose } from '../state/view'
 import { TOKENS } from '../ui/tokens'
 import type { RoverHandle } from '../edit/roverMap'
 import { FlythroughControl } from './flythrough/control'
@@ -642,7 +642,7 @@ export class ConsoleMap {
   /** L13: Plan mode's 3D open pose (plan_view pitch/bearing) with the last fitted box in view. */
   private frameRoute(animate: boolean): void {
     if (this.destroyed) return
-    const pose = { pitch: PLAN_VIEW.pitch, bearing: PLAN_VIEW.bearing }
+    const pose = openPose('3d')
     const ms = TOKENS.motion.cameraMs[0]
     if (this.lastFit && framePitched(this.map as never, this.lastFit, pose, FIT_PADDING_PX, animate, ms)) return
     if (animate) this.map.easeTo({ ...pose, duration: ms })
