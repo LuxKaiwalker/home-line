@@ -60,6 +60,14 @@ INFEASIBLE = {"feasible": False, "leg": 2, "from": "S1", "to": "S2", "limit": "O
               "shortfall_min": 12.4, "legs_planned": 2}
 
 
+def summary(default_block: dict) -> dict:
+    """build_plan's summary route block (WP1): feasibility keyed by scenario, the record carries
+    route.feasibility[route.scenario]; another scenario's block must not be the answer."""
+    return {"route": {"mode": "ordered", "stops": ["S4", "S1", "S2"], "scenario": "nom_104",
+                      "feasibility": {"opt_104": {"feasible": True}, "nom_104": default_block,
+                                      "con_104": INFEASIBLE}}}
+
+
 def doc(stops, pad=PAD, **extra) -> dict:
     out = {"contract_version": settings().contract_version, "pad": dict(pad), **extra}
     if stops is not None:
@@ -355,19 +363,28 @@ def test_a_stop_the_engine_cannot_route_is_named(monkeypatch, world, tmp_path):
     assert str(e.value) == ("route_point_unreachable: stop 1 (S1): no access cell in nom_104")
 
 
+def test_the_mapped_exception_is_the_engines():
+    from pipeline.engine import traverse
+
+    want = getattr(traverse, "RouteStopError", ())  # () before WP1: nothing is caught
+    assert plan_job._route_stop_error() is want
+
+
 # ------------------------------------------------------------------------- the run record ----
 def test_route_answer_from_the_summary():
     ordered = canonical_inputs(doc(st("S4", "S1", "S2")))
     auto = canonical_inputs(doc(None))
     assert plan_job.route_answer(auto, {}) == {"route_mode": "auto"}
-    assert plan_job.route_answer(ordered, {"route": {"feasibility": FEASIBLE}}) == {
+    assert plan_job.route_answer(ordered, summary(FEASIBLE)) == {
         "route_mode": "ordered", "feasibility": FEASIBLE}
-    assert plan_job.route_answer(ordered, {"route": {"feasibility": INFEASIBLE}}) == {
+    assert plan_job.route_answer(ordered, summary(INFEASIBLE)) == {
         "route_mode": "ordered", "feasibility": INFEASIBLE,
         "infeasible": {"leg": 2, "from": "S1", "to": "S2", "margin_min": -12.4,
                        "binding": "O2"}}
     with pytest.raises(RuntimeError, match="feasibility"):
         plan_job.route_answer(ordered, {})
+    with pytest.raises(RuntimeError, match="feasibility"):  # the pre-WP1 shape (no scenario key)
+        plan_job.route_answer(ordered, {"route": {"feasibility": FEASIBLE}})
 
 
 class Pipe:
@@ -404,7 +421,7 @@ def _record(tmp_path, inputs, extra) -> dict:
 def test_run_record_carries_route_mode_and_feasibility(tmp_path, feas):
     raw = doc(st("S4", "S1", "S2"), title="Ridge loop, my order")
     inputs = route_mod.record_inputs(raw, canonical_inputs(raw))
-    extra = plan_job.route_answer(inputs, {"route": {"feasibility": feas}})
+    extra = plan_job.route_answer(inputs, summary(feas))
     rec = _record(tmp_path, inputs, {"range_flags": [], **extra})
     assert rec["status"] == "done" and rec["route_mode"] == "ordered"
     assert rec["feasibility"] == feas
@@ -426,7 +443,7 @@ def run_infeasible(inputs: dict, ctx) -> dict:
     for name in plan_job.STAGES:
         ctx.write_json(f"{name}.json", {"stage": name})
         ctx.stage(name)
-    return plan_job.route_answer(inputs, {"route": {"feasibility": INFEASIBLE}})
+    return plan_job.route_answer(inputs, summary(INFEASIBLE))
 
 
 def test_an_infeasible_route_is_a_done_job(server_data):

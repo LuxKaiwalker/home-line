@@ -27,8 +27,9 @@ precomputed station fields (its route runs its own station searches with the cre
 crew cache ($HL_SERVER_DATA/cache/station_fields/) cost ~42 s and ~280 MB per new crew for
 nothing; it was removed. It returns when WS2 adds a station-field input to build_plan.
 
-Route answer (D97): build_plan's summary ``route.feasibility`` (the default scenario's) becomes the
-run record's ``feasibility``, mirrored to the v1.1 ``infeasible`` when false (binding = limit,
+Route answer (D97): build_plan's summary ``route.feasibility[route.scenario]`` (the default
+scenario's block; ``route.feasibility`` is keyed by scenario id) becomes the run record's
+``feasibility``, mirrored to the v1.1 ``infeasible`` when false (binding = limit,
 margin_min = -shortfall_min); ``route_mode`` is on every record. An infeasible order is a result:
 the job ends ``done`` with the legs planned before the failing one. A stop the engine cannot route
 at all (traverse.RouteStopError, e.g. route_point_unreachable) ends the job ``error`` with its
@@ -230,12 +231,13 @@ def build(inputs: dict, *, terrain_dir: Path, out_dir: Path, public_dir: Path | 
 
 def route_answer(inputs: dict, summary: dict | None) -> dict:
     """Run record ``route_mode``, ``feasibility`` and the v1.1 ``infeasible`` mirror (D97) from
-    the full call's summary. Auto: route_mode only (the engine's own choice keeps every margin;
-    infeasible stays null as before)."""
+    the full call's summary: ``route.feasibility[route.scenario]``. Auto: route_mode only (the
+    engine's own choice keeps every margin; infeasible stays null as before)."""
     m = route_mod.mode(canonical_inputs(inputs))
     if m != route_mod.ORDERED:
         return {"route_mode": m}
-    feas = ((summary or {}).get("route") or {}).get("feasibility")
+    block = (summary or {}).get("route") or {}
+    feas = (block.get("feasibility") or {}).get(block.get("scenario"))
     if not isinstance(feas, dict) or "feasible" not in feas:
         raise RuntimeError(f"build_plan summary has no route feasibility for an ordered route: "
                            f"{(summary or {}).get('route')!r}")
