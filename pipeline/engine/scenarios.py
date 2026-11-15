@@ -855,17 +855,22 @@ def storm_timing(cond: dict, rad_path: Path = INTERIM_DIR / "conditions" / "rad.
 
 
 def plan_route(grid: Grid, pad, sid: str, field: dijkstra.Field, st: list[dict], cond: dict,
-               dose_fn, partner_t=None, rmse=None, crew: dict | None = None,
+               dose_fn, partner_t=None, rmse=None, crew: dict | None = None, route=None,
                ) -> tuple[traverse.Result, dict]:  # fmt: skip
     """F9 route for one scenario and pad: access cells from ``field``, D28 EVA term, D39 timed
-    dose term (dose_fn) or the static one. Returns (Result, no_access {id: reason})."""
+    dose term (dose_fn) or the static one. Returns (Result, no_access {id: reason}).
+    route (D97): ordered station stops (traverse.plan); a stop without an access cell in sid
+    raises traverse.RouteStopError (route_point_unreachable)."""
     p = physio.scenario_params(sid, v1_rmse_deg=rmse, crew=crew)
     tau = None if dose_fn is not None else cond.get("tau_dose_min")
     mi = margin.inputs(p, cond.get("t_dark_min"), tau, eva=True)
     rst, no_access = access.routing_stations(st, sid)
+    if route is not None:
+        traverse.resolve_route(route, rst, no_access)  # the stop's error code before any work
     res = traverse.plan(grid.with_nogo(p.nogo_deg), physio.grade_table(p), field, pad, rst,
                         route_budget_min(), float(load("variants")["route"]["o2_checkpoint_min"]),
-                        mi, partner_t, load("haul")["contour_min"], dose_fn=dose_fn)  # fmt: skip
+                        mi, partner_t, load("haul")["contour_min"], dose_fn=dose_fn,
+                        route=route)  # fmt: skip
     res.unreachable = res.unreachable + list(no_access)
     return res, no_access
 
