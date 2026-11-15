@@ -23,9 +23,13 @@
 // same VITE_LIVE guard:
 //   if (import.meta.env.VITE_LIVE === '1') void import('../live').then((m) => m.padTool(panelEl, m.consoleMapPort(cmap)))
 import './live.css'
+import { h } from 'preact'
+import { SendToSimulator } from '../ui/cards/simslot-export'
+import type { StageResult } from './stage'
 import { createApiClient, type ApiClient, type FetchLike } from './client'
 import { dataUrl } from '../env'
-import { SIM_EXPORT_ENABLED } from './config'
+import { isMissionText, officialMissionUrl, setOfficialMissionSource } from '../ui/cards/simslot'
+import { API_BASE, ROUTE_EDIT_ENABLED, SIM_EXPORT_ENABLED, SIM_EXPORT_MODE } from './config'
 import { bannerFor, watchHealth, type LiveState } from './health'
 import { consoleMapPort as basePort, type ConsoleMapLike, type MapPort } from './mapPort'
 import type { RouteConsoleMap } from './route/map'
@@ -38,7 +42,7 @@ import { mountPlanRoute, resultDataUrl } from './planmount'
 import { mockLiveLoader } from './result'
 
 export { ApiError, createApiClient, type ApiClient, type ApiClientOptions } from './client'
-export { API_BASE, LIVE_ENABLED, LIVE_LABEL, OFFLINE_LABEL, WARMING_LABEL } from './config'
+export { API_BASE, LIVE_ENABLED, LIVE_LABEL, OFFLINE_LABEL, ROUTE_EDIT_ENABLED, SIM_EXPORT_MODE, WARMING_LABEL, type SimExportMode } from './config'
 export { bannerFor, checkHealth, watchHealth, type Banner, type HealthWatch, type LiveState } from './health'
 export { startJob, type JobCallbacks, type JobHandle, type JobOptions, type JobOutcome } from './jobs'
 export { liveLoader } from './result'
@@ -52,7 +56,8 @@ export { loadStage, type StageResult } from './stage'
 export { importPlanFile, loadPlan, parsePlanRoute, planUrl, type ImportState, type PlanLoad, type PlanRoute } from './plan'
 export { canonicalJson, checkPlanInputsText, exportPlanInputs } from './planio'
 export { mountPlanRoute, playPlan, type PlanRouteOptions } from './planmount'
-export { simPlanFiles, SimSlot } from './simslot'
+export { missionTarget, simPlanFiles, SimSlot, type MissionProbe, type MissionTarget } from './simslot'
+export { SendToSimulator, type SendToSimulatorProps } from '../ui/cards/simslot-export'
 export { mountPrivacy, PRIVACY_TEXT, PRIVACY_TITLE } from './privacy'
 export type * from './types'
 
@@ -64,8 +69,15 @@ const staticTree = async (path: string): Promise<string | null> => {
   const res = await fetch(dataUrl(path))
   return res.ok ? res.text() : null
 }
+/** Dev mock: the server serves WP9c's static official mission.json for the official hash (D110). */
+const officialTree = async (path: string): Promise<string | null> => {
+  if (path !== 'mission.json') return staticTree(path)
+  const res = await fetch(officialMissionUrl())
+  const text = res.ok ? await res.text() : null
+  return text !== null && isMissionText(text) ? text : null
+}
 const lazyMockFetch: FetchLike = async (input, init) => {
-  const f = await (mockFetch ??= Promise.all([import('./mock/fetch'), import('./mock/route')]).then(([m, r]) => r.withRouteMock(m.createMockFetch({ crewJobs: true, trees: { [MOCK_OFFICIAL_HASH]: staticTree } }))))
+  const f = await (mockFetch ??= Promise.all([import('./mock/fetch'), import('./mock/route')]).then(([m, r]) => r.withRouteMock(m.createMockFetch({ crewJobs: true, trees: { [MOCK_OFFICIAL_HASH]: officialTree } }))))
   return f(input, init)
 }
 
@@ -98,8 +110,11 @@ export function mountLive(anchor: Element, client: ApiClient = liveClient()): ()
   // #/plan routes (F28, F35): only when the app shell's .outlet is next to the anchor.
   const app = (anchor as Partial<Element>).parentElement
   const stopPlan = app && typeof window !== 'undefined' ? planRoute(app, client) : () => {}
+  // D116: mode 'official' reads the static file only, so no API lookup
+  const official = SIM_EXPORT_MODE === 'all' ? officialMissionSource(client) : null
   const watch = watchHealth(client, (s) => {
     current = s
+    official?.(s)
     const b = bannerFor(s)
     line.hidden = b.text === null
     line.textContent = b.text ?? ''
@@ -113,7 +128,38 @@ export function mountLive(anchor: Element, client: ApiClient = liveClient()): ()
     offFailure()
     watch()
     stopPlan()
+    if (official) setOfficialMissionSource(null)
     line.remove()
+  }
+}
+
+/** URL of the official plan's mission.json on the API: /defaults inputs -> /plans/import hash (computed). */
+export async function officialMissionApiUrl(client: ApiClient): Promise<string | null> {
+  try {
+    const d = await client.defaults()
+    const r = await client.importPlan(d.inputs)
+    return r.computed ? `${client.resultBase({ hash: r.hash, result_url: null })}/mission.json` : null
+  } catch {
+    return null
+  }
+}
+
+/**
+ * D110: while live is ready the console's "Send to simulator" slot (ui/cards/simslot.tsx, the official
+ * plan) tries the API's copy of the official mission.json first; offline it uses the static file.
+ */
+function officialMissionSource(client: ApiClient): (s: LiveState) => void {
+  let url: Promise<string | null> | undefined
+  let ready = false
+  return (s) => {
+    const now = s.kind === 'ready'
+    if (now === ready) return
+    ready = now
+    if (!now) return setOfficialMissionSource(null)
+    void (url ??= officialMissionApiUrl(client)).then((u) => {
+      if (!u) url = undefined
+      if (u && ready) setOfficialMissionSource({ url: u, fetch: USE_MOCK ? lazyMockFetch : undefined })
+    })
   }
 }
 
@@ -122,6 +168,9 @@ function planRoute(app: HTMLElement, client: ApiClient): () => void {
   return mountPlanRoute(app, {
     client,
     simEnabled: SIM_EXPORT_ENABLED,
+    simMode: SIM_EXPORT_MODE,
+    // the dev mock answers the API's URLs; static files (sim/official/mission.json) come from the page's origin
+    ...(USE_MOCK ? { simFetch: (url: string) => (url.startsWith(API_BASE) ? lazyMockFetch : fetch) } : {}),
     onLiveState,
     ...(USE_MOCK
       ? { loaderFor: mockLiveLoader(lazyMockFetch), hudDataUrl: (l) => (l.hash === MOCK_OFFICIAL_HASH ? (p: string) => dataUrl(p) : resultDataUrl(l.base)) }
@@ -150,14 +199,16 @@ export function padTool(panel: Element, port: MapPort, client: ApiClient = liveC
       return () => void linkSubs.delete(fn)
     },
   }
-  const mounted = mountPadTool(panel, port, { client, onLiveState, ...loader, route: link })
+  // D116: VITE_ROUTE_EDIT=0 has no Edit-route panel: the card keeps its own "Compute full plan" (still one action)
+  const mounted = mountPadTool(panel, port, { client, onLiveState, ...loader, ...(ROUTE_EDIT_ENABLED ? { route: link } : {}) })
   const { tool, crew } = mounted
-  // R5 (D97): the Edit-route panel in the Plan rail, on the same console map (lazy, live builds only)
+  // R5 (D97): the Edit-route panel in the Plan rail, on the same console map (lazy, live builds only).
+  // D116: VITE_ROUTE_EDIT=0 skips it, and with it the map waypoints the panel installs (WP6).
   let offRoute: (() => void) | null = null
   let offHandle: (() => void) | null = null
   let gone = false
   const cmap = (port as MapPort & { consoleMap?: RouteConsoleMap }).consoleMap ?? null
-  void import('./route/mount').then((m) => {
+  if (ROUTE_EDIT_ENABLED) void import('./route/mount').then((m) => {
     if (gone) return
     offRoute = m.mountRoutePanel({
       client,
@@ -166,6 +217,8 @@ export function padTool(panel: Element, port: MapPort, client: ApiClient = liveC
       ...loader,
       pad: { pad: () => validSpot(tool.state), subscribe: (fn) => onSpot(tool, fn) },
       crew: crew ? { jobInputs: () => crew.jobInputs(), blocked: () => crewBlockedText(crew.state), subscribe: (fn) => crew.subscribe(() => fn()) } : null,
+      // S1 (D110): "Send to simulator" in the route result box (done and infeasible results only)
+      resultSlot: SIM_EXPORT_ENABLED ? (c) => routeSimSlot(client, c.result.hash, (c.stage?.data as StageResult | undefined)?.manifest ?? null) : null,
       onReady: (h) => {
         handle = h
         offHandle = h.subscribe(linkChanged)
@@ -180,6 +233,18 @@ export function padTool(panel: Element, port: MapPort, client: ApiClient = liveC
     handle = null
     mounted.cleanup()
   }
+}
+
+/** S1's self-contained control for a live route result (hooks data-sim-export, data-origin, data-state). */
+function routeSimSlot(client: ApiClient, hash: string, manifest: StageResult['manifest'] | null) {
+  return h(SendToSimulator, {
+    base: client.resultBase({ hash, result_url: null }),
+    manifest,
+    origin: 'computed_live',
+    mode: SIM_EXPORT_MODE,
+    // the dev mock answers the API's URLs (as planRoute's simFetch)
+    ...(USE_MOCK ? { fetchFor: (url: string) => (url.startsWith(API_BASE) ? lazyMockFetch : fetch) } : {}),
+  })
 }
 
 /** The pad tool's spot while it is a checked, valid pad (else null: the plan in use). */

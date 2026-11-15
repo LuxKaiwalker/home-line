@@ -411,6 +411,18 @@ describe('WP12: one compute action, stable rows, reasons', () => {
     expect(text(q('hl-route__result')[0])).toContain(ROUTE_TEXT.computedLabel)
   })
 
+  it('S1 slot: the result box carries "Send to simulator" for done (and infeasible) results, nothing while running', async () => {
+    const slots: string[] = []
+    await setup({ resultSlot: (c) => (slots.push(c.result.hash), <span class="sim-slot" data-sim-export="checking" data-origin="computed_live" data-hash={c.result.hash} />) })
+    check('S2')
+    click(q('hl-route__compute')[0])
+    expect(q('sim-slot')).toHaveLength(0) // running: no slot
+    await until(() => q('hl-route__result').length > 0, 'the result')
+    const slot = q('sim-slot')[0]
+    expect(slot.getAttribute('data-hash')).toBe(q('hl-route__result')[0].getAttribute('data-hash'))
+    expect(slot.getAttribute('data-origin')).toBe('computed_live')
+  })
+
   it('W-7: ticking S4 then S1 at the same screen positions ticks both, in that order; rows do not move', async () => {
     await setup()
     const before = rowsShown()

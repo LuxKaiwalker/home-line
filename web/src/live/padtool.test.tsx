@@ -142,10 +142,11 @@ describe('pad tool: instant preview', () => {
     expect(t).toContain('S2 yes 34.2 min 36.9 min')
     expect(t).toContain('S4 no unknown unknown')
     expect(t).toContain('Best route estimate: pad → S1 → S2 → S6 → pad, 212.5 min')
-    // WP12 (L6 W-1): labelled "Estimate"; the card's one button hands the compute to Edit route
+    // WP12 (L6 W-1): labelled "Estimate"; without an Edit-route panel in the build (D116
+    // VITE_ROUTE_EDIT=0) the card keeps its own compute (the WP12 test below covers the panel's)
     expect(t).toContain('Instant preview Estimate')
-    expect(t).toContain(ROUTE_TEXT.cardCompute)
-    expect(t).not.toContain('Compute full plan')
+    expect(t).toContain('Compute full plan')
+    expect(t).not.toContain(ROUTE_TEXT.cardCompute)
     // preview numbers are flagged as screening estimates (no manifest in the PadScreen contract)
     expect(html(tool)).toContain('class="num num-screen"')
     expect(calls.pads.at(-1)).toEqual({ ...MOCK_PAD_VALID, valid: true })
@@ -156,7 +157,7 @@ describe('pad tool: instant preview', () => {
     tool.setLive({ kind: 'ready', health: { ...HEALTH_WARM, heavy_jobs: 'off' } })
     tool.click(MOCK_PAD_VALID)
     await until(() => tool.state.preview.kind === 'done')
-    expect(html(tool)).toMatch(new RegExp(`<button[^>]*disabled[^>]*>${ROUTE_TEXT.cardCompute}`))
+    expect(html(tool)).toMatch(/<button[^>]*disabled[^>]*>Compute full plan/)
     expect(text(tool)).toContain('Full plans are switched off on the server right now.')
     tool.computePlan()
     expect(callsTo('/jobs')).toEqual([])

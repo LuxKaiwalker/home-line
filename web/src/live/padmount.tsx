@@ -45,7 +45,7 @@ export function mountPadTool(panel: Element, port: MapPort, opts: MountPadToolOp
           actions={tool}
           engineHref={engineHref}
           computeBlocked={crew ? crewBlockedText(crew.state) : null}
-          route={route ? { status: route.status(), compute: () => route.compute() } : null}
+          route={route ? { status: route.status(), compute: () => route.compute() } : undefined}
         />
       </>,
       panel,

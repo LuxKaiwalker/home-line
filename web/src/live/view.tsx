@@ -64,10 +64,13 @@ export interface RouteLinkView {
 
 const WHY_CARD = 'live-why-compute'
 
-function PreviewCard({ screen, route, heavyOff, blocked }: { screen: PadScreen; route: RouteLinkView | null; heavyOff: boolean; blocked: string | null }) {
-  const running = route?.status === 'running'
+function PreviewCard({ screen, route, heavyOff, blocked, ownCompute, actions }: { screen: PadScreen; route: RouteLinkView | null | undefined; heavyOff: boolean; blocked: string | null; ownCompute: boolean; actions: PadToolActions }) {
+  // D116: a build without the Edit-route panel (VITE_ROUTE_EDIT=0, route undefined) keeps the card's own
+  // "Compute full plan": still the one compute action of that build
+  const legacy = route === undefined
+  const running = legacy ? false : route?.status === 'running'
   // a press while the job runs is allowed: it only brings the panel's progress into view
-  const why = running ? null : heavyOff ? 'Full plans are switched off on the server right now.' : blocked ? blocked : !route || route.status === 'unavailable' ? ROUTE_TEXT.cardNoRoute : null
+  const why = legacy ? (heavyOff ? 'Full plans are switched off on the server right now.' : blocked) : running ? null : heavyOff ? 'Full plans are switched off on the server right now.' : blocked ? blocked : !route || route.status === 'unavailable' ? ROUTE_TEXT.cardNoRoute : null
   return (
     <section class="live-card live-preview" data-trust="estimate">
       <h3>
@@ -109,10 +112,18 @@ function PreviewCard({ screen, route, heavyOff, blocked }: { screen: PadScreen; 
         <p class="muted">No route estimate.</p>
       )}
       <p class="muted">{screen.label}</p>
-      <p class="muted live-route-note">{ROUTE_TEXT.cardNote}</p>
-      <button type="button" class="live-btn live-compute" data-compute-in="route" disabled={!!why} title={why ?? undefined} aria-describedby={why ? WHY_CARD : undefined} onClick={() => route?.compute()}>
-        {ROUTE_TEXT.cardCompute}
-      </button>
+      {legacy ? (
+        <button type="button" class="live-btn live-compute" disabled={!ownCompute} title={why ?? undefined} aria-describedby={why ? WHY_CARD : undefined} onClick={() => actions.computePlan()}>
+          Compute full plan
+        </button>
+      ) : (
+        <>
+          <p class="muted live-route-note">{ROUTE_TEXT.cardNote}</p>
+          <button type="button" class="live-btn live-compute" data-compute-in="route" disabled={!!why} title={why ?? undefined} aria-describedby={why ? WHY_CARD : undefined} onClick={() => route?.compute()}>
+            {ROUTE_TEXT.cardCompute}
+          </button>
+        </>
+      )}
       {running ? (
         <p class="muted live-route-running" role="status">
           {ROUTE_TEXT.cardRunning}
@@ -204,12 +215,12 @@ export interface PadToolPanelProps {
   engineHref: string
   /** Why the compute is blocked (the crew panel: a field is not a number), or null. */
   computeBlocked?: string | null
-  /** WP12: the Edit-route panel that computes the plan (null: not there yet) */
+  /** WP12: the Edit-route panel that computes the plan (null: not there yet; undefined: none in this build) */
   route?: RouteLinkView | null
 }
 
 /** null while live planning is offline, warming or checking: the controls hide behind U1's banner. */
-export function PadToolPanel({ state, actions, engineHref, computeBlocked = null, route = null }: PadToolPanelProps) {
+export function PadToolPanel({ state, actions, engineHref, computeBlocked = null, route }: PadToolPanelProps) {
   const banner = bannerFor(state.live)
   if (!banner.controls) return null
   const { pad, check, preview, plan } = state
@@ -241,7 +252,14 @@ export function PadToolPanel({ state, actions, engineHref, computeBlocked = null
         </p>
       ) : null}
       {valid && preview.kind === 'done' ? (
-        <PreviewCard screen={preview.screen} route={route} heavyOff={!banner.heavyJobs} blocked={computeBlocked} />
+        <PreviewCard
+          screen={preview.screen}
+          route={route}
+          heavyOff={!banner.heavyJobs}
+          blocked={computeBlocked}
+          ownCompute={banner.heavyJobs && plan.kind !== 'running' && !computeBlocked}
+          actions={actions}
+        />
       ) : null}
       {plan.kind !== 'idle' ? <PlanView plan={plan} record={state.record} actions={actions} /> : null}
     </section>
