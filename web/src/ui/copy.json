@@ -457,9 +457,20 @@
       "landmarks": "Landmarks",
       "coordinates": "Coordinates",
       "layers": "Layers",
-      "commands": "Commands"
+      "commands": "Commands",
+      "areas": "Map layers and areas",
+      "legs": "Route legs",
+      "events": "Timeline events",
+      "scenarios": "Scenarios",
+      "report": "Report and evidence",
+      "glossary": "Glossary terms"
     },
-    "distanceFromPad": "{distance} from the rover pad"
+    "distanceFromPad": "{distance} from the rover pad",
+    "events": {
+      "depart": "Departure from the rover",
+      "arrive": "Arrival",
+      "return": "Back at the rover"
+    }
   },
 
   "shortcuts": {
