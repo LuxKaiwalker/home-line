@@ -304,7 +304,7 @@ describe('config/design.yaml and copy.json cross-check (when present on this bra
       performance: { fps_3d_min: number }
     }
     expect(TERRAIN.elevationFactor).toBe(d.scale.elevation_factor)
-    expect({ ...TERRAIN.exaggeration, step: TERRAIN.exaggerationStep }).toEqual(d.exaggeration)
+    expect({ ...TERRAIN.exaggeration, step: TERRAIN_PENDING.exaggerationStep }).toEqual(d.exaggeration)
     expect(TERRAIN.pitch3d).toBe(d.camera.presets.isometric.pitch)
     expect(TERRAIN.maxPitch3d).toBe(d.camera.presets.low.pitch)
     expect(TERRAIN.fps3dMin).toBe(d.performance.fps_3d_min)
