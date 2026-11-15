@@ -2,10 +2,11 @@
 // 'plan-bottom' along the bottom map edge, in the L2-shell slot `.plan-layout__bottom`. User 22:59 (F7):
 // the drawer holds ONLY the replay, one tab:
 //   timeline     the timeline dock body (ui/timeline/install.tsx installTimelineDock → dockContent)
-// Kept but not mounted (code below, not in the drawer): the plan-table tab (PlanTableTab: the console's
-// planned route and stations table and the sections that explain them) and the D142 "Compare plans"
-// link (ComparePlansLink; #/trade stays reachable by URL). The table sections are still claimed, so they
-// wait in the hidden stash (numbers stay in the page) instead of returning to the side panel.
+// User 23:28 (F7): the Plan table (PlanTableTab: the console's planned route and stations table and the
+// sections that explain them, parking options included) lives in the LEFT rail (sheet over the map in
+// Plan) as rail section 'plan-table'; its opener is the rail toggle (ctx.reveal, values snapshot). While
+// the rail is closed the sections wait in the hidden stash (numbers stay in the page). The D142 "Compare
+// plans" link stays removed (ComparePlansLink kept, not mounted; #/trade stays reachable by URL).
 // Collapsed it is one line: the plan summary (the route at a glance, from the same files) and the slim
 // timeline scrubber (play, scrub, EVA time). Expanded at most 40 % of the map (L1, layout.css).
 // While mounted the Plan map view hosts the timeline ('timeline' in shell.hosted), so the shell dock
@@ -20,7 +21,7 @@ import { missionClock } from '../state/mission'
 import { IconButton, TrustChip } from '../ui/components'
 import { t } from '../ui/copy'
 import { BottomDrawer, layoutInsets, onLayoutChange, type LayoutInsets } from '../ui/layout'
-import { dockContent, hostIn } from '../ui/shell/store'
+import { dockContent, hostIn, registerRailSection } from '../ui/shell/store'
 import { fmtEva } from '../ui/timeline/model'
 import { ReplaySourceBar, UserReplayReadout } from '../ui/timeline/userReplay'
 import { userReplay } from '../state/userReplay'
@@ -100,7 +101,12 @@ function TimelineTab() {
   return <div class="plan-timeline">{content ? content() : <p class="muted">{t('states.error.notAvailable', { what: t('timeline.marginCurve') })}</p>}</div>
 }
 
-/** Plan-table tab, not mounted since user 22:59 (F7): the claimed console sections in the old order. */
+/** Rail section id of the Plan table (user 23:28: left rail; it was the drawer's plan-table tab). */
+export const RAIL_TABLE = 'plan-table'
+/** What tools/values_snapshot.ts presses to show a plan-table control: open the left rail (sheet). */
+export const TABLE_REVEAL = ['.hl-rail__toggle[aria-controls="hl-rail-body"][aria-expanded="false"]']
+
+/** The Plan table (left rail section since user 23:28): the claimed console sections in the old order. */
 export function PlanTableTab({ ctx }: { ctx: PlanMountCtx }) {
   return (
     <div class="plan-table">
@@ -146,8 +152,10 @@ function PlanBottom({ ctx }: { ctx: PlanMountCtx }) {
 
 /** Mount the bottom drawer into the L2-shell slot; returns cleanup. */
 export function mountPlanBottom(ctx: PlanMountCtx): () => void {
-  // the table sections stay claimed (hidden stash, numbers in the page); no opener shows them any more
   ctx.claim([...TABLE_SECTIONS, 'summary'])
+  // user 23:28: the Plan table is a left-rail section; the rail toggle reveals its controls
+  for (const n of TABLE_SECTIONS) ctx.reveal(n, TABLE_REVEAL)
+  const unrail = registerRailSection({ id: RAIL_TABLE, modes: ['plan'], title: 'planBottom.planTable', icon: 'file-text', render: () => <PlanTableTab ctx={ctx} /> })
   const unhost = hostIn('timeline')
   const host = ctx.el.bottom
   // RR1 issue 1: a side panel that overlays the map (tablet / phone sidebar) ends above the drawer
@@ -157,6 +165,7 @@ export function mountPlanBottom(ctx: PlanMountCtx): () => void {
   const off = onLayoutChange(inset)
   render(<PlanBottom ctx={ctx} />, host)
   return () => {
+    unrail()
     off()
     render(null, host)
     shellEl?.style.setProperty(INSET_VAR, '') // '' removes it
