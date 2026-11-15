@@ -57,6 +57,8 @@ export class StoryStage {
   /** M10c: a live story pauses the label placement (4 Hz) and the furniture loops until restore() */
   private readonly paused: boolean
   private cover: HTMLDivElement | null = null
+  /** the chrome state the storyboard asks for (written to <html> by writeChrome) */
+  private chromeWant: 'hide' | 'show' = 'show'
 
   constructor(cmap: ConsoleMap, chrome: ChromePolicy) {
     this.cmap = cmap
@@ -94,11 +96,22 @@ export class StoryStage {
 
   private setChrome(v: 'hide' | 'reveal' | undefined): void {
     const hide = this.chrome === 'hidden' ? v !== 'reveal' : this.chrome === 'story' ? v === 'hide' : false
-    const val = hide ? 'hide' : 'show'
+    this.chromeWant = hide ? 'hide' : 'show'
+    this.writeChrome()
+  }
+
+  /**
+   * html[data-story-chrome] = the chrome state of the story that is playing. M10d: not written while the
+   * warm-up cover is up (html[data-story-warm] hides the chrome then, story.css), only when the clock
+   * starts. 'hide' therefore means the intro is playing, not that the page is still linking programs
+   * and decoding the field under the cover (long main-thread tasks in software GL).
+   */
+  private writeChrome(): void {
+    if (this.cover) return
     // only on change: an attribute write on <html> restyles the whole page
-    if (val === this.last.chrome) return
-    this.last.chrome = val
-    document.documentElement.dataset.storyChrome = val
+    if (this.chromeWant === this.last.chrome) return
+    this.last.chrome = this.chromeWant
+    document.documentElement.dataset.storyChrome = this.chromeWant
   }
 
   /** M10c warm-up: hide the map canvas and its markers while layers and tiles load out of sight. */
@@ -117,6 +130,7 @@ export class StoryStage {
     // html[data-story-warm]: the story has not started its clock yet (tests, measurements)
     if (on) document.documentElement.dataset.storyWarm = 'on'
     else delete document.documentElement.dataset.storyWarm
+    if (!on) this.writeChrome() // M10d: the chrome state of frame 0 lands with t = 0
   }
 
   /** True when the relief backdrop the state asks for is still loading (capture waits for it). */

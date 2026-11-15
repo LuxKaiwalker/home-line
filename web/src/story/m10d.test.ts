@@ -42,6 +42,45 @@ describe('M10d: the stage start/end hooks suspend and resume the 3D fps watch', 
   }
 })
 
+describe('M10d: html[data-story-chrome] is written when the clock starts, not under the warm-up cover', () => {
+  const html = { dataset: {} as Record<string, string> }
+  const el = () => ({ className: '', hidden: false, textContent: '', style: {} as Record<string, string>, setAttribute() {}, remove() {}, append() {} })
+  beforeEach(() => {
+    html.dataset = {}
+    ;(globalThis as { document?: unknown }).document = { documentElement: html, createElement: el }
+  })
+  afterEach(() => {
+    delete (globalThis as { document?: unknown }).document
+    setFpsWatchSuspended(false)
+  })
+
+  it('frame 0 hides the chrome during the warm-up: the marker waits for the cover to lift', async () => {
+    const { StoryStage } = await import('./stage')
+    const map = { getCenter: () => ({ lng: 137.4, lat: -4.8 }), getZoom: () => 13, getBearing: () => 0, getPitch: () => 0, getContainer: () => el(), jumpTo: vi.fn(), easeTo: vi.fn() }
+    const stage = new StoryStage({ map, layerVisible: () => true, setVisible: () => undefined, setStoryPaused: () => undefined } as never, 'story')
+    expect(html.dataset.storyChrome).toBe('show')
+    stage.setCanvasHidden(true)
+    ;(stage as unknown as { setChrome(v: 'hide'): void }).setChrome('hide') // warm-up apply of frame 0 (ui: hide)
+    expect(html.dataset.storyWarm).toBe('on')
+    expect(html.dataset.storyChrome).toBe('show')
+    stage.setCanvasHidden(false) // t = 0
+    expect(html.dataset.storyWarm).toBeUndefined()
+    expect(html.dataset.storyChrome).toBe('hide')
+    stage.restore(false)
+    expect(html.dataset.storyChrome).toBeUndefined()
+  })
+
+  it('story.css hides the chrome under the warm-up cover exactly as html[data-story-chrome=hide] does', () => {
+    const css = readFileSync(resolve(REPO, 'web/src/story/story.css'), 'utf8')
+    const rule = css.slice(0, css.indexOf('opacity: 0;'))
+    const sel = rule.slice(rule.lastIndexOf('}') + 1)
+    for (const part of ['.hl-ui', '.maplibregl-control-container', '.console-panel']) {
+      expect(sel).toContain(`html[data-story-chrome='hide'] ${part}`)
+      expect(sel).toContain(`html[data-story-warm] ${part}`)
+    }
+  })
+})
+
 describe('M10d: warm-up caps come from config/design.yaml', () => {
   const design = parse(readFileSync(resolve(REPO, 'config/design.yaml'), 'utf8')) as { intro: { warmup_max_ms: number; warmup_extra_ms: number } }
 
