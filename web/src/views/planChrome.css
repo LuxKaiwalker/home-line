@@ -1,0 +1,45 @@
+/* Plan map chrome (L2f, D111). Tokens only (kit rule 2). */
+
+/* the chrome slot: same box as the map, ends at the bottom drawer (like the edge slot) */
+.plan-layout > .plan-layout__chrome { bottom: var(--plan-inset-bottom, 0); z-index: 27; }
+
+/* data notes (dummy data, data problems, loading): a one-line banner at the top left, only when it says something */
+.plan-notes {
+  position: absolute; top: var(--space-2); left: var(--space-2);
+  max-width: min(calc(var(--layout-sidebar) + var(--space-7)), calc(100% - var(--space-7) - var(--space-7)));
+  padding: var(--space-1) var(--space-2);
+  border: 1px solid var(--color-card-border); border-radius: var(--radius-chip);
+  background: var(--color-card); color: var(--color-text);
+  font-size: var(--font-size-small); line-height: var(--line-height-small);
+}
+.plan-notes:not(:has(.plan-section > *)) { display: none; }
+.plan-notes .plan-section > * { margin: 0; }
+.plan-notes h2 { font-size: var(--font-size-small); margin: 0; }
+
+/* cursor chip: the cursor readout on one line, bottom left beside the legend chip; passive (L7a) */
+.plan-cursor {
+  position: absolute; left: calc(var(--space-2) + var(--space-6) + var(--space-2)); bottom: calc(var(--space-2) + var(--space-6));
+  max-width: calc(75% - var(--space-7)); pointer-events: none;
+}
+.plan-layout > [data-plan-slot] > .plan-cursor { pointer-events: none; }
+.plan-cursor .hl-cursor-readout {
+  display: flex; flex-wrap: nowrap; align-items: baseline; gap: var(--space-2);
+  margin: 0; float: none; white-space: nowrap; overflow: hidden;
+  padding: var(--space-1) var(--space-2); border-radius: var(--radius-chip);
+}
+.plan-cursor .hl-cursor-readout[hidden] { display: none; }
+.plan-cursor .hl-cursor-readout__row { display: inline-flex; gap: var(--space-1); }
+.plan-cursor .hl-cursor-readout__value { text-align: left; }
+
+/* tool column additions (Rover, Full screen) look like the layers opener */
+.plan-tools .plan-tools__btn { flex: none; }
+
+/* L3's Edit-route button joins the bottom of the tool column (mount writes --plan-tools-bottom) */
+.console--layout .hl-editroute__edge {
+  top: calc(var(--plan-tools-bottom, var(--space-7)) + var(--space-1)); bottom: auto;
+  right: calc(var(--plan-inset-right, 0px) + var(--space-2));
+}
+
+/* the rover card (views/planStation.tsx): its title already says "Rover pad" */
+.plan-card__roverpad > .plan-section > section > h3:first-child { display: none; }
+.plan-card__roverpad.panel-body, .plan-card__padtool { padding: 0; }

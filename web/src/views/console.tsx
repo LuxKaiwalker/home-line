@@ -36,6 +36,9 @@ import './planBottom' // L2b: the plan-bottom drawer (plan table + timeline tabs
 import './planLayers' // L2c (D111): layers popover, legend chip, map-edge tools (registers its Plan mount)
 import { HeadlineStrip } from './planStrip' // L2a: the headline strip (registers its Plan mount)
 import './planStation' // L2d: station + rover marker cards
+import './planChrome' // L2f: data notes, cursor chip, Rover + Full screen tools (no console or live aside in Plan)
+import { setRoverPadTool } from '../state/roverCard'
+import { closeContainer, layout, openContainer } from '../ui/layout'
 
 const LAYER_LABELS: Record<LayerGroup, string> = {
   basemap: 'Basemap',
@@ -52,12 +55,16 @@ const LAYER_LABELS: Record<LayerGroup, string> = {
 const NO_ISOCHRONES: IsochroneFC = { type: 'FeatureCollection', features: [] }
 
 export const view: View = async (el) => {
-  el.innerHTML = `<div class="console"><div class="console-map"></div><aside class="console-panel"></aside></div>`
-  const mapEl = el.querySelector<HTMLElement>('.console-map')!
-  const panelEl = el.querySelector<HTMLElement>('.console-panel')!
   // L2 (D111): every side-panel section renders into its own element (planSlots.tsx), in the old order;
   // inside the app shell the declutter packages move them into the layout containers over the map.
+  // L2f: in the shell frame there is no side panel any more (every section lives in a container over the
+  // map); its element only holds the hidden stash, so every number stays in the page. ?legacy=1 keeps the aside.
   const shellFrame = !!el.closest('.hl-shell')
+  el.innerHTML = shellFrame
+    ? `<div class="console"><div class="console-map"></div><div class="console-sections" hidden></div></div>`
+    : `<div class="console"><div class="console-map"></div><aside class="console-panel"></aside></div>`
+  const mapEl = el.querySelector<HTMLElement>('.console-map')!
+  const panelEl = el.querySelector<HTMLElement>(shellFrame ? '.console-sections' : '.console-panel')!
   const sections = makeSections(panelEl)
   await ensureManifest()
   let onStation: ((id: string) => void) | null = null
@@ -80,7 +87,15 @@ export const view: View = async (el) => {
   let alive = true
   let disposeLive: (() => void) | undefined
   // X3 (e2e H5-2): the live aside gets the side panel's fixed width, so its text never resizes the map.
+  // L2f (L0 row 8): in the shell frame there is no live aside: the pad tool renders into an element the
+  // Plan rover card shows (state/roverCard.ts, views/planStation.tsx); ?legacy=1 keeps the aside.
   const liveAside = () => Object.assign(panelEl.parentElement!.appendChild(document.createElement('aside')), { className: 'console-panel console-live' })
+  const padHost = (): HTMLElement => {
+    if (!shellFrame) return liveAside()
+    const e = Object.assign(document.createElement('div'), { className: 'plan-padtool' })
+    setRoverPadTool(e)
+    return e
+  }
   // L3 (D111): the Edit-route drawer and its map-edge opener mount inside the map (before the pad tool,
   // so the crew panel goes into the drawer), only with route editing on (D116 ROUTE_EDIT_ENABLED) and the
   // drawer flag set (J1f VITE_EDIT_ROUTE_DRAWER=1; default hidden: route planning is in the Mission Planer);
@@ -90,10 +105,33 @@ export const view: View = async (el) => {
     // shell frame only (?legacy=1 keeps its old layout: no D111 containers); L2-shell's live slot when present
     const liveSlot = el.closest('.hl-shell') ? (mapEl.querySelector<HTMLElement>('[data-plan-slot=live]') ?? mapEl) : null
     const offEdit = liveSlot ? er.mountEditRoute(liveSlot, { store: ps.createPlansStore(), View: pv.MyPlans }, { enabled: m.PLAN_ROUTE_EDIT, simMode: m.SIM_EXPORT_MODE }) : () => {}
-    const offPad = m.padTool(liveAside(), m.consoleMapPort(cmap))
+    const padEl = padHost()
+    const port = m.consoleMapPort(cmap)
+    // L2f: a pad-tool map click (live planner ready: the panel shows something) opens the rover card and its
+    // "Custom pad" section, which show its result, unless the click opened a selection card (L2e)
+    const padPort = shellFrame
+      ? {
+          ...port,
+          onClick: (cb: Parameters<typeof port.onClick>[0]) =>
+            port.onClick((p) => {
+              cb(p)
+              setTimeout(() => {
+                const o = layout.open.peek()
+                if (!alive || !padEl.childElementCount || o.station || o.selection) return
+                if (!o.rover) openContainer('rover', null)
+                openContainer('custom-pad', null) // its result shows in the card's "Custom pad" section
+              }, 0)
+            }),
+        }
+      : port
+    const offPad = m.padTool(padEl, padPort)
     disposeLive = () => {
       offPad()
       offEdit()
+      if (shellFrame) {
+        closeContainer('rover', { restoreFocus: false })
+        setRoverPadTool(null)
+      }
     }
   })
   return () => {

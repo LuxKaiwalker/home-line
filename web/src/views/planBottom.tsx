@@ -29,7 +29,8 @@ export const TAB_TIMELINE = 'timeline'
 const INSET_VAR = '--hl-plan-bottom'
 
 /** Console sections shown in the plan table, in the old side-panel order. */
-export const TABLE_SECTIONS: readonly SectionName[] = ['headline', 'padpicker', 'route', 'roverpad', 'siting', 'stations']
+// L2f: 'roverpad' went to the rover card (views/planStation.tsx)
+export const TABLE_SECTIONS: readonly SectionName[] = ['headline', 'padpicker', 'route', 'siting', 'stations']
 
 /** What tools/values_snapshot.ts presses to show a plan-table control: expand, then pick the tab. */
 const TABLE_REVEAL = [`[aria-controls="hl-lay-${PLAN_BOTTOM}"][aria-expanded="false"]`, `#hl-lay-${PLAN_BOTTOM}-tab-${TAB_TABLE}[aria-selected="false"]`]
