@@ -19,5 +19,4 @@
 tools/discovery/
 contracts/bundle/fixtures/
 server/ops/
-!server/ops/git-identity.sh
 !server/ops/healthcheck.py
