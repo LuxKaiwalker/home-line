@@ -85,8 +85,7 @@ test.describe('pad switch', () => {
     expect(errors).toEqual([])
   })
 
-  // TODO(I1): I2's installPlanningActivity in mountPlanPort (requests-I1.md "I5" 1); fails at the Undo press until then.
-  test.fixme('the Route panel pad picker switches the pad (one undo step)', async ({ page }) => {
+  test('the Route panel pad picker switches the pad (one undo step)', async ({ page }) => {
     await openPlan(page)
     await openRoutePanel(page)
     const radio = page.locator(S.padRadio('rank3'))
@@ -140,8 +139,7 @@ test.describe('add stops', () => {
 
 test.describe('drag a point', () => {
   // TODO(I1): R3 install() + setEditing; handles are DOM markers (.hl-r3-handle[data-r3-stop]).
-  // TODO(I1): I2's installPlanningActivity (requests-I1.md "I5" 1); the drag itself passes, the Undo press fails until then.
-  test.fixme('dragging a waypoint moves it, re-routes, and is one undo step', async ({ page }) => {
+  test('dragging a waypoint moves it, re-routes, and is one undo step', async ({ page }) => {
     await openPlan(page)
     await openRoutePanel(page)
     const spot = await emptySpot(page)
@@ -273,8 +271,7 @@ test.describe('legacy redirect', () => {
     expect(await stopLabels(page)).toEqual(['S4'])
   })
 
-  // TODO(I1): I2's installPlanningActivity (requests-I1.md "I5" 1) for the Undo press.
-  test.fixme('#/?route=…&add=S4 appends S4 to the linked route (one undo step)', async ({ page }) => {
+  test('#/?route=…&add=S4 appends S4 to the linked route (one undo step)', async ({ page }) => {
     await openPlan(page, `${routeHash(OFFICIAL_PAD_ID, [station('S1')])}&add=S4`)
     await openRoutePanel(page)
     expect(await stopLabels(page)).toEqual(['S1', 'S4'])
@@ -286,6 +283,8 @@ test.describe('legacy redirect', () => {
 
 test.describe('undo', () => {
   // TODO(I2): planningUndoSource wired into edit/route/undo.ts createSharedUndo on the Plan view.
+  // TODO(I5, 22:08 on dbea906): times out (90 s) at the U2 "Delete S7" click; cause not yet known (an
+  // overlay intercepting the click is the first suspect). The other undo tests pass.
   test.fixme('Ctrl/Cmd+Z undoes the last plan edit and Ctrl/Cmd+Shift+Z redoes it', async ({ page }) => {
     await openPlan(page, routeHash(OFFICIAL_PAD_ID, [station('S1'), station('S7')]))
     await openRoutePanel(page)
