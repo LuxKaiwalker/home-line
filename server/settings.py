@@ -166,6 +166,20 @@ class Ranges(_Strict):
         return v
 
 
+class Route(_Strict):
+    """D97 waypoint block: limits on plan_inputs route (all assumed)."""
+
+    max_stops: int = Field(ge=1)
+    max_free_points: int = Field(ge=0)
+    min_stop_spacing_m: float = Field(gt=0)
+
+    @model_validator(mode="after")
+    def _free_within_stops(self):
+        if self.max_free_points > self.max_stops:
+            raise ValueError("route.max_free_points must be <= route.max_stops")
+        return self
+
+
 class Pads(_Strict):
     rule: dict[str, Any]  # resolved from site.siting (D21 rule)
 
@@ -274,6 +288,7 @@ class BackendConfig(_Strict):
     cache: Cache
     limits: Limits
     ranges: Ranges
+    route: Route
     pads: Pads
     plans: Plans
     sessions: Sessions

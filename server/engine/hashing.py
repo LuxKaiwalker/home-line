@@ -15,6 +15,10 @@ then:
   points (``custom: []``). An omitted field and its explicit default therefore hash the same;
 - ``title`` removed (D57) and ``pad.id`` removed (team-lead decision 11: the pad's lon/lat, which
   stay in, are what changes a result; a picked pad and the same point typed in hash the same);
+- ``route`` (v1.2.0, D97): a missing route and ``mode: auto`` are the same plan and the route is
+  removed, so every v1.1 hash (official, picker, cached results) is unchanged; an ``ordered`` route
+  stays in with its stops in the given order (order changes the result) and each free point's
+  ``label`` removed (D57, like ``title``);
 - every number as a float rounded to 6 decimals, ``-0.0`` written as ``0.0`` (75 == 75.0);
 - JSON with sorted keys, no spaces (``separators=(",", ":")``), UTF-8 (``ensure_ascii=False``).
   Floats are written by ``json.dumps`` (Python's shortest round-trip repr of the rounded value).
@@ -124,6 +128,13 @@ def canonical_inputs(plan_inputs: dict, cfg: BackendConfig | None = None) -> dic
     st = doc["stations"]
     st.setdefault("custom", [])
     st["dwell_min"] = {**_default_dwell(st["custom"]), **st.get("dwell_min", {})}
+    route = doc.get("route")
+    if route is not None:
+        if route.get("mode", "auto") == "auto":
+            doc.pop("route")  # D97: missing route = auto; v1.1 hashes unchanged
+        else:
+            for stop in route.get("stops", []):
+                stop.pop("label", None)  # D57: a label never changes a result
     for path in NOT_HASHED:
         parent = doc
         for key in path[:-1]:
