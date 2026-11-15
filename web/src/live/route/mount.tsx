@@ -29,6 +29,7 @@ import { data } from '../../data/loader'
 import type { Station } from '../../data/types'
 import { activeField, VARIANT_OF } from '../../map/field'
 import { mission } from '../../state/mission'
+import { officialPart } from '../../state/official'
 import { effect, signal } from '../../state/signal'
 import { offlineNoteText, RouteOfflineNote } from '../../edit/route/offline'
 import { dockContent, registerRailSection, setDockContent, setRailCollapsed, shell, type Render } from '../../ui/shell/store'
@@ -223,6 +224,12 @@ export function mountRoutePanel(o: MountRouteOptions): () => void {
       canCompute: live,
       blocked,
     }))
+    // W-9 (L7b, T9): the top bar's "Official plan" clears a shown route result or a running job
+    const op = officialPart('live-route', () => c.reset())
+    offs.push(
+      effect(() => op.set(c.compute.value.kind !== 'idle')),
+      op.dispose,
+    )
     // WP12: setRouteDraft (edit/route/store.ts, for the search route builder) writes to this panel
     offs.push(registerRouteDraftTarget(c.draftTarget()))
     const undo = createSharedUndo({ ctl: c, planKey: missionPlanKey(catalog), win: o.win === undefined ? (typeof window !== 'undefined' ? window : null) : o.win })

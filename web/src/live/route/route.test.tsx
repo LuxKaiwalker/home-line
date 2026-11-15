@@ -423,6 +423,20 @@ describe('WP12: one compute action, stable rows, reasons', () => {
     expect(slot.getAttribute('data-origin')).toBe('computed_live')
   })
 
+  it('W-9 (T9): with a route result shown, "Official plan" clears it (and the map gets the static plan back)', async () => {
+    const { returnToOfficial, differsFromOfficial } = await import('../../state/official')
+    const { restored } = await setup()
+    check('S2')
+    click(q('hl-route__compute')[0])
+    await until(() => q('hl-route__result').length > 0, 'the result')
+    expect(differsFromOfficial.peek()).toBe(true)
+    act(() => void returnToOfficial())
+    expect(q('hl-route__result')).toHaveLength(0)
+    expect(q('hl-route')[0].getAttribute('data-state')).toBe('idle')
+    expect(restored.n).toBe(1)
+    expect(differsFromOfficial.peek()).toBe(false)
+  })
+
   it('W-7: ticking S4 then S1 at the same screen positions ticks both, in that order; rows do not move', async () => {
     await setup()
     const before = rowsShown()
