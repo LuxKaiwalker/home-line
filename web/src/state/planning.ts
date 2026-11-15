@@ -12,7 +12,11 @@
 // Official numbers never come from here: this store only holds the user's choices; the official plan
 // stays the precomputed scenario files (value snapshot unchanged).
 import { batch, computed, signal, useSignalValue, type ReadSignal } from './signal'
-import type { PlanRoute, RouteStop } from '../edit/route/model'
+
+// The route core's shapes (edit/route/model.ts RouteStop / PlanRoute), restated structurally: the static
+// bundle must not import edit/route (live/route/route.test.tsx isolation tests); TS checks they fit.
+export type RouteStop = { station: string } | { lon: number; lat: number; label?: string }
+export type PlanRoute = { mode: 'auto' | 'ordered'; stops: readonly RouteStop[] }
 
 // ---- types ---------------------------------------------------------------------------------------
 
@@ -90,8 +94,8 @@ export const EMPTY_ROUTE: PlanningRoute = { stops: [], startUtc: null, storm: fa
 export const DEFAULT_VIEW: PlanningView = { showOfficial: true, showMine: true }
 export const initialPlanning = (): PlanningState => ({ padId: OFFICIAL_PAD_ID, route: EMPTY_ROUTE, view: DEFAULT_VIEW })
 
-/** Same as edit/route/model.ts ROUTE_LIMITS.maxStops (config/backend.yaml route.max_stops). */
-export { ROUTE_LIMITS } from '../edit/route/model'
+// Route limits: edit/route/model.ts ROUTE_LIMITS (config/backend.yaml route.*); not re-exported here
+// (isolation), and the store does not enforce them: the UI refuses with a notice.
 
 // ---- pure reducers (one action = one function; tested in planning.test.ts) -----------------------
 

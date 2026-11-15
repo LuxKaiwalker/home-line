@@ -3,6 +3,7 @@ import { createPlanningStore, decodeLegacyPlan, decodeRouteParam, encodeRoutePar
 import { encodePlan } from '../mission/share'
 import { createSharedUndo } from '../edit/route/undo'
 import { copyFrom } from '../ui/copy'
+import type { PlanRoute as CorePlanRoute } from '../edit/route/model'
 
 const strip = (d: PlanningDoc) => ({ ...d, route: { ...d.route, stops: d.route.stops.map(({ id: _id, ...s }) => s) } })
 
@@ -58,7 +59,8 @@ describe('planning store actions', () => {
 
   it('maps onto the route core shapes', () => {
     const s = createPlanningStore()
-    expect(toPlanRoute(s.state.peek().route)).toEqual({ mode: 'auto', stops: [] })
+    const core: CorePlanRoute = toPlanRoute(s.state.peek().route) // the restated shape fits the core's
+    expect(core).toEqual({ mode: 'auto', stops: [] })
     s.addStop({ kind: 'station', station: 'a' })
     s.addStop({ kind: 'point', lon: 1, lat: 2, name: 'Rock' })
     expect(toPlanRoute(s.state.peek().route)).toEqual({ mode: 'ordered', stops: [{ station: 'a' }, { lon: 1, lat: 2, label: 'Rock' }] })
