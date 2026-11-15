@@ -13,7 +13,7 @@ import { expect, test, type Page } from 'playwright/test'
 const card = (page: Page) => page.locator('.hl-sidebar__body')
 
 async function rover(page: Page): Promise<{ x: number; y: number }> {
-  await page.goto('/?intro=0#/')
+  await page.goto('/?intro=0&view=2d#/')
   const el = page.locator('.hl-edit-rover')
   await el.waitFor({ timeout: 60_000 })
   await expect(el).toHaveAttribute('data-select-pad', 'rank1')
