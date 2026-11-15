@@ -17,8 +17,11 @@ rounded:
 - legs: one per ``route_{sid}.geojson`` LineString (``to`` = "pad" is the ``home`` leg);
   an infeasible ordered route has only the legs the engine planned (no home leg);
 - path: one row per route vertex (the engine's 3 m grid, not resampled) with the engine's
-  ``times_min``; O2 used is known at each leg's ends only (the engine writes O2 per leg), so
-  inner vertices carry null; z and the fields come from ``rasters`` (null without them);
+  ``times_min``; O2 used on every row (as the Mission Planer's export): the engine writes O2 per
+  leg only (``o2_L``; its per-vertex O2 is not in the route file), so a leg's ends carry the leg
+  values and inner vertices are linear in ``times_min`` between them (``_o2_rows``; null only
+  where a leg end or a time is unknown); z and the fields come from ``rasters`` (null without
+  them);
 - timeline: the engine's timeline events (turn_back rows are latest departures, not planned
   states: they go to ``waypoints[].turn_back_t_min``), O2_home from the field at the event's
   position; null when a value is unknown (schema: every timeline cell is a number);
@@ -263,6 +266,26 @@ def _stations(tree: Path) -> dict[str, dict]:
     return {s["id"]: s for s in rows}
 
 
+def _o2_rows(times: list, start_o2: float | None, end_o2: float | None) -> list:
+    """O2 used (L since EVA start) at each vertex of one leg: ``start_o2`` / ``end_o2`` at the
+    ends (exactly, so the leg values are unchanged), inner vertices linear in the engine's
+    ``times_min`` between them. The engine writes a leg's O2 as one number (``o2_L``), not per
+    vertex, so the rate over the leg is its mean (``o2_L / t_min``); recomputing the per-step
+    VO2 would re-run the engine's walker here. An inner vertex is null when an end or a time is
+    unknown, or when the leg takes no time."""
+    n = len(times)
+    out: list = [None] * n
+    if n:
+        out[0], out[-1] = start_o2, end_o2
+    t0, t1 = (times[0], times[-1]) if n else (None, None)
+    if start_o2 is None or end_o2 is None or t0 is None or t1 is None or not t1 > t0:
+        return out
+    for k in range(1, n - 1):
+        if times[k] is not None:
+            out[k] = start_o2 + (end_o2 - start_o2) * (times[k] - t0) / (t1 - t0)
+    return out
+
+
 # ---------------------------------------------------------------------------- builder ----
 def build_mission(tree: Path, *, inputs: dict, scenario: str, origin: str, origin_label: str,
                   planner: dict, created_utc: str | None = None,
@@ -384,13 +407,13 @@ def build_mission(tree: Path, *, inputs: dict, scenario: str, origin: str, origi
             start_o2 = o2_at
         end_o2 = _add(start_o2, p.get("o2_L"))
         first = len(rows)
+        o2s = _o2_rows(times, start_o2, end_o2)
         s = 0.0
         for k, (x, y) in enumerate(xy):
             if k:
                 s += math.hypot(x - xy[k - 1][0], y - xy[k - 1][1])
-            o2 = start_o2 if k == 0 else end_o2 if k == len(xy) - 1 else None
             rows.append([p["leg"], _r(s, 2), _r(x, 2), _r(y, 2), _r(z[k], 2), _r(times[k], 3),
-                         _r(o2, 3), _r(th[k], 2), _r(oh[k], 3)])
+                         _r(o2s[k], 3), _r(th[k], 2), _r(oh[k], 3)])
             if times[k] is not None:
                 vertices.append((float(times[k]), x, y))
         leg_end_xy[p["to"]] = xy[-1]

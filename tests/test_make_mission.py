@@ -143,6 +143,53 @@ def test_the_official_numbers_are_carried_unchanged(official, scenario):
         assert w["z_m"] is not None
 
 
+# --- O2 used on every path row (WP9e; Unity import test P1: null rows -> false REPLAN) ----------
+PRE_WP9E = "fd79a2b"  # main before WP9e: o2_used_l only at leg ends (1764 of 1774 rows null)
+
+
+def test_o2_used_on_every_path_row_linear_in_time(official):
+    rows = official["path"]["rows"]
+    assert [i for i, r in enumerate(rows) if r[6] is None] == []
+    # cumulative: never decreases
+    assert all(a[6] <= b[6] for a, b in zip(rows[:-1], rows[1:], strict=True))
+    leave = {f"wp{w['index']}": w["o2_used_at_leave_l"] for w in official["waypoints"]}
+    for leg in official["legs"]:
+        seg = rows[leg["first_row"]:leg["first_row"] + leg["n_rows"]]
+        (t0, o0), (t1, o1) = (seg[0][5], seg[0][6]), (seg[-1][5], seg[-1][6])
+        assert o0 == (0 if leg["from"] == "pad" else leave[leg["from"]]), leg["leg"]
+        assert o1 - o0 == pytest.approx(leg["o2_l"], abs=1e-3), leg["leg"]
+        for r in seg:  # the leg's mean rate: linear in t_eva_min between the leg's ends
+            assert r[6] == pytest.approx(o0 + (o1 - o0) * (r[5] - t0) / (t1 - t0), abs=6e-4)
+
+
+def test_wp9e_only_filled_the_null_o2_cells(official):
+    """Against the file before WP9e (same official build): every value is unchanged except the
+    inner o2_used_l cells, which were null and are now numbers, and mission_id (a content
+    hash). Skipped where git or that commit is not available (shallow clone)."""
+    try:
+        old = json.loads(subprocess.run(
+            ["git", "show", f"{PRE_WP9E}:web/public/sim/official/mission.json"], cwd=REPO,
+            capture_output=True, check=True).stdout)
+    except (OSError, subprocess.CalledProcessError):
+        pytest.skip(f"commit {PRE_WP9E} not available")
+    if (old["created_utc"], old["planner"]["source_sha256"]) != (
+            official["created_utc"], official["planner"]["source_sha256"]):
+        pytest.skip("the official plan was rebuilt from other data since WP9e")
+    filled = []
+    for i, (a, b) in enumerate(zip(old["path"]["rows"], official["path"]["rows"], strict=True)):
+        assert a[:6] == b[:6] and a[7:] == b[7:], i
+        if a[6] is None:
+            filled.append(i)
+            assert isinstance(b[6], (int, float)), i
+        else:
+            assert b[6] == a[6], i  # leg ends: unchanged
+    assert len(filled) == 1764
+    rest = lambda d: {k: v for k, v in d.items() if k not in ("mission_id", "path")}  # noqa: E731
+    assert rest(official) == rest(old)
+    assert {k: v for k, v in official["path"].items() if k != "rows"} == \
+        {k: v for k, v in old["path"].items() if k != "rows"}
+
+
 def test_raster_sources_are_recorded(official):
     files, sha = official["planner"]["files"], official["planner"]["source_sha256"]
     assert files["elev"] == "data/interim/terrain/elev_3m.tif"

@@ -29,6 +29,7 @@ from server.engine import results  # noqa: E402
 from server.engine.hashing import EngineIdentity, official_hash  # noqa: E402
 from server.settings import settings  # noqa: E402
 from server.tests.test_app import API_ID, OPENAPI, REGISTRY, assert_valid  # noqa: E402
+from tools import make_mission  # noqa: E402
 from tools.validate_contracts import match_schema  # noqa: E402
 
 REPO = Path(__file__).resolve().parents[2]
@@ -169,6 +170,21 @@ def test_web_public_data_is_never_written(client):
 
 
 # --------------------------------------------------------------- precomputed run record ----
+def test_tree_times_leave_out_the_picker_pad_rows(tmp_path):
+    """The I2 picker-pad field rows (fields/pads/, built after the official run) do not move the
+    run record's started/finished times (WP9e; tools/make_mission.py build_time)."""
+    (tmp_path / "manifest.json").write_text(json.dumps({
+        "dummy": False,
+        "a": {"file": "route_nom_104.geojson", "utc": "2026-11-14T10:00:00Z"},
+        "b": {"file": "timeline_nom_104.json", "utc": "2026-11-15T10:28:08Z"},
+        "c": {"file": "fields/pads/rank2/t_home.png", "utc": "2026-11-15T13:26:11Z"},
+        "d": {"file": "fields/pads/rank3/t_home.png", "utc": "2026-11-13T09:00:00Z"},
+        "e": {"file": "fields/padsx.json", "utc": "2026-11-14T09:00:00Z"},  # not under the dir
+    }))
+    assert results._tree_times(tmp_path) == ("2026-11-14T09:00:00Z", "2026-11-15T10:28:08Z")
+    assert make_mission.build_time(tmp_path) == "2026-11-15T10:28:08Z"
+
+
 def test_official_run_record_is_synthesised_and_valid(client):
     r = get(client, OFFICIAL, "run_record.json")
     assert r.status_code == 200
@@ -185,8 +201,10 @@ def test_official_run_record_is_synthesised_and_valid(client):
     assert rec["label"] == settings().labels.precomputed == "Precomputed · official plan"
     assert "title" not in rec["inputs"] and "id" not in rec["inputs"]["pad"]  # what was hashed
     manifest = json.loads((DATA / "manifest.json").read_text())
-    times = sorted(v["utc"] for v in manifest.values() if isinstance(v, dict) and "utc" in v)
+    times = sorted(v["utc"] for v in manifest.values() if isinstance(v, dict) and "utc" in v
+                   and not v["file"].startswith("fields/pads/"))  # I2 picker pads: not the run
     assert (rec["started_utc"], rec["finished_utc"]) == (times[0], times[-1])
+    assert rec["finished_utc"] == make_mission.build_time()  # = the official mission.json's
     files = {f["path"]: f for f in rec["files"]}
     assert sorted(files) == tracked_data_files()  # every file, no run_record.json, no .gitkeep
     pad = (DATA / "pad.json").read_bytes()
