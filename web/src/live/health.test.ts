@@ -49,7 +49,7 @@ describe('health check', () => {
     expect(bannerFor(await checkHealth(client({ ...HEALTH_WARM, heavy_jobs: 'off' }))).heavyJobs).toBe(false)
   })
 
-  it('watchHealth moves checking -> warming -> ready and then stops polling', async () => {
+  it('watchHealth moves checking -> warming -> ready and keeps polling while ready (H2 step 3)', async () => {
     const fetch = createMockFetch({ health: [HEALTH_COLD, HEALTH_COLD, HEALTH_WARM] })
     const c = createApiClient({ base: 'http://api.test', fetch })
     const states: string[] = []
@@ -60,9 +60,15 @@ describe('health check', () => {
     expect(states).toEqual(['checking', 'warming', 'warming'])
     await vi.advanceTimersByTimeAsync(1000)
     expect(states).toEqual(['checking', 'warming', 'warming', 'ready'])
-    await vi.advanceTimersByTimeAsync(10_000)
+    // ready: re-checked every CLIENT.healthPollMs (3 s), no longer at warmPollMs
+    await vi.advanceTimersByTimeAsync(2999)
     expect(fetch.calls.filter((c) => c.path === '/health')).toHaveLength(3)
+    await vi.advanceTimersByTimeAsync(1)
+    expect(fetch.calls.filter((c) => c.path === '/health')).toHaveLength(4)
+    expect(states.at(-1)).toBe('ready')
     stop()
+    await vi.advanceTimersByTimeAsync(10_000)
+    expect(fetch.calls.filter((c) => c.path === '/health')).toHaveLength(4)
   })
 
   it('watchHealth stop() ends a pending check silently', async () => {

@@ -60,6 +60,11 @@ export const CLIENT = {
   pollMaxErrors: 3,
   /** Health re-check interval while the engine is warming up. */
   warmPollMs: 3_000,
+  /**
+   * Health re-check interval while ready or offline (H2 step 3, kit rule 4: a server that dies
+   * mid-session brings the offline banner back within this plus the 2 s health timeout).
+   */
+  healthPollMs: 3_000,
 } as const
 
 type EnvValue = string | boolean | undefined

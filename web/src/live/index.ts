@@ -32,7 +32,7 @@ import { mockLiveLoader } from './result'
 
 export { ApiError, createApiClient, type ApiClient, type ApiClientOptions } from './client'
 export { API_BASE, LIVE_ENABLED, LIVE_LABEL, OFFLINE_LABEL, WARMING_LABEL } from './config'
-export { bannerFor, checkHealth, watchHealth, type Banner, type LiveState } from './health'
+export { bannerFor, checkHealth, watchHealth, type Banner, type HealthWatch, type LiveState } from './health'
 export { startJob, type JobCallbacks, type JobHandle, type JobOptions, type JobOutcome } from './jobs'
 export { liveLoader } from './result'
 export { consoleMapPort, type ConsoleMapLike, type MapPort } from './mapPort'
@@ -74,8 +74,9 @@ export function onLiveState(fn: (s: LiveState) => void): () => void {
 }
 
 /**
- * Insert the live status line after `anchor` and start the health check. The line shows the
- * offline or warming text and is hidden once the engine is ready. Returns a cleanup function.
+ * Insert the live status line after `anchor` and start the health watch (polled in every state, so
+ * the line follows a server that dies or returns mid-session). The line shows the offline or
+ * warming text and is hidden while the engine is ready. Returns a cleanup function.
  */
 export function mountLive(anchor: Element, client: ApiClient = liveClient()): () => void {
   const line = document.createElement('p')
@@ -86,7 +87,7 @@ export function mountLive(anchor: Element, client: ApiClient = liveClient()): ()
   // #/plan routes (F28, F35): only when the app shell's .outlet is next to the anchor.
   const app = (anchor as Partial<Element>).parentElement
   const stopPlan = app && typeof window !== 'undefined' ? planRoute(app, client) : () => {}
-  const stop = watchHealth(client, (s) => {
+  const watch = watchHealth(client, (s) => {
     current = s
     const b = bannerFor(s)
     line.hidden = b.text === null
@@ -95,8 +96,11 @@ export function mountLive(anchor: Element, client: ApiClient = liveClient()): ()
     line.dataset.state = s.kind
     for (const fn of listeners) fn(s)
   })
+  // A live request that gets no answer or a 5xx checks /health now instead of at the next poll.
+  const offFailure = client.onFailure(() => watch.check())
   return () => {
-    stop()
+    offFailure()
+    watch()
     stopPlan()
     line.remove()
   }
@@ -107,6 +111,7 @@ function planRoute(app: HTMLElement, client: ApiClient): () => void {
   return mountPlanRoute(app, {
     client,
     simEnabled: SIM_EXPORT_ENABLED,
+    onLiveState,
     ...(USE_MOCK
       ? { loaderFor: mockLiveLoader(lazyMockFetch), hudDataUrl: (l) => (l.hash === MOCK_OFFICIAL_HASH ? (p: string) => dataUrl(p) : resultDataUrl(l.base)) }
       : {}),
