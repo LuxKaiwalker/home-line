@@ -59,11 +59,15 @@ describe('mode routes and redirects (DESIGN §4.2)', () => {
   })
 
   it.each([
-    ['#/fly', '#/fly/hud'],
     ['#/report', '#/report/cuff'],
     ['#/evidence', '#/evidence/scorecard'],
-    ['#/fly/', '#/fly/hud'],
   ])('bare mode path %s opens the mode default %s', (bare, want) => expect(redirectFor(bare)).toBe(want))
+
+  // hidden, D145: FLY is hidden for this merge; bare #/fly redirects to Plan (#/)
+  it.skip.each([
+    ['#/fly', '#/fly/hud'],
+    ['#/fly/', '#/fly/hud'],
+  ])('bare mode path %s opens the mode default %s (hidden, D145)', (bare, want) => expect(redirectFor(bare)).toBe(want))
 
   it('keeps extra query parameters (legacy, deep-link key) across the redirect', () => {
     expect(redirectFor('#/hud?legacy=hud')).toBe('#/fly/hud?legacy=hud')

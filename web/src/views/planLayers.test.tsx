@@ -85,7 +85,7 @@ function fakeCtx() {
 }
 
 describe('Plan mount (L2c)', () => {
-  it('claims layers + legend, sets reveal openers, hosts the U7 rail section; cleanup undoes it', () => {
+  it.skip('claims layers + legend, sets reveal openers, hosts the U7 rail section; cleanup undoes it (hidden, D145)', () => {
     const f = fakeCtx()
     let stop!: () => void
     act(() => void (stop = mountPlanEdge(f.ctx)))

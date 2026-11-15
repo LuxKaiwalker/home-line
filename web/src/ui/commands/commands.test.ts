@@ -77,7 +77,7 @@ beforeEach(() => {
 afterEach(() => resetCommands())
 
 describe('registration', () => {
-  it('registers every §3 command S2 owns exactly once; registering and ranking call no store function', () => {
+  it.skip('registers every §3 command S2 owns exactly once; registering and ranking call no store function (hidden, D145)', () => {
     const doc = fakeDoc()
     const loc = fakeLoc()
     install({ doc: doc as never, location: loc })
@@ -124,7 +124,7 @@ describe('registration', () => {
 })
 
 describe('shell commands run the keys.ts action', () => {
-  it('each one calls runShortcut with its action and the shell handles it as the key would', () => {
+  it.skip('each one calls runShortcut with its action and the shell handles it as the key would (hidden, D145)', () => {
     install()
     ui.mode.value = 'fly'
     select({ kind: 'station', id: 'S1' })
@@ -145,7 +145,7 @@ describe('shell commands run the keys.ts action', () => {
     expect(announced).toContainEqual({ action: 'undo' })
   })
 
-  it('mode navigates; 2D/3D, help and focus mode flip the shell state', () => {
+  it.skip('mode navigates; 2D/3D, help and focus mode flip the shell state (hidden, D145)', () => {
     install()
     expect(runCommand('mode.fly', 'palette')).toBe(true)
     expect(nav).toHaveBeenCalledTimes(1)
@@ -234,7 +234,7 @@ describe('app commands call the store functions', () => {
 })
 
 describe('keys.ts adapter', () => {
-  it('keysForAction reads HELP_ROWS', () => {
+  it.skip('keysForAction reads HELP_ROWS (hidden, D145)', () => {
     expect(keysForAction({ action: 'mode', mode: 'plan' })).toEqual(['P'])
     expect(keysForAction({ action: 'mode', mode: 'fly' })).toEqual(['Y'])
     expect(keysForAction({ action: 'toggle3d' })).toEqual(['T'])

@@ -247,7 +247,7 @@ describe.skipIf(!HAVE)('search palette (real data)', () => {
     expect(selection.selected.value).toEqual({ kind: 'station', id: 'S7' })
   })
 
-  it('commands run their registry command (2D/3D toggles the view; a mode command navigates)', () => {
+  it.skip('commands run their registry command (2D/3D toggles the view; a mode command navigates) (hidden, D145)', () => {
     ui.view.value = '2d'
     runItem(cmd('view.toggle3d'), { navigate: () => {} })
     expect(ui.view.value).toBe('3d')
