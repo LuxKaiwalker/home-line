@@ -31,11 +31,37 @@ async function center(page: Page): Promise<Pt> {
   return { x: b.x + b.width / 2, y: b.y + b.height / 2 }
 }
 
+/** Centre of the map canvas: the map keeps its centre lon/lat when the sidebar opens or closes. */
+async function mapCenter(page: Page): Promise<Pt> {
+  const b = (await page.locator('.maplibregl-canvas').first().boundingBox())!
+  return { x: b.x + b.width / 2, y: b.y + b.height / 2 }
+}
+
+/** The rover relative to the map centre (independent of the sidebar resizing the map). */
+async function rel(page: Page): Promise<Pt> {
+  const [r, m] = await Promise.all([center(page), mapCenter(page)])
+  return { x: r.x - m.x, y: r.y - m.y }
+}
+const dist = (a: Pt, b: Pt) => Math.hypot(a.x - b.x, a.y - b.y)
+
 async function open(page: Page): Promise<Pt> {
   await page.goto('/?intro=0#/')
   await roverEl(page).waitFor({ timeout: 60_000 })
   await expect(roverEl(page)).toHaveAttribute('data-select-pad', 'rank1')
-  return center(page)
+  return settled(page)
+}
+
+/** The rover's screen position once the map has stopped moving (first camera ease, layout). */
+async function settled(page: Page): Promise<Pt> {
+  let last = await center(page)
+  let same = 0
+  for (let i = 0; i < 80 && same < 4; i++) {
+    await page.waitForTimeout(250)
+    const now = await center(page)
+    same = dist(now, last) < 0.5 ? same + 1 : 0
+    last = now
+  }
+  return last
 }
 
 /** Press on the rover and move it to `to` without releasing (the readout shows while held). */
@@ -49,6 +75,7 @@ async function hold(page: Page, from: Pt, to: Pt): Promise<void> {
 
 test('T9: "Official plan" is disabled with its reason on the official plan, and brings a kept rover move back', async ({ page }) => {
   const at = await open(page)
+  const home = await rel(page)
   const btn = page.locator(OFFICIAL_BTN)
   await expect(btn).toBeVisible()
   await expect(btn).toHaveText('Official plan')
@@ -68,8 +95,7 @@ test('T9: "Official plan" is disabled with its reason on the official plan, and 
   await expect(roverEl(page)).not.toHaveAttribute('data-select-pad', 'rank1')
   await expect(btn).toBeEnabled()
   await expect(btn).toHaveAttribute('title', /^Back to the official plan/)
-  const moved = await center(page)
-  expect(Math.hypot(moved.x - at.x, moved.y - at.y)).toBeGreaterThan(5)
+  expect(dist(await rel(page), home)).toBeGreaterThan(5)
 
   // select something, then return to the official plan
   await roverEl(page).click()
@@ -77,14 +103,14 @@ test('T9: "Official plan" is disabled with its reason on the official plan, and 
   await btn.click()
   await expect(roverEl(page)).toHaveAttribute('data-select-pad', 'rank1')
   await expect(btn).toBeDisabled()
-  const back = await center(page)
-  expect(Math.hypot(back.x - at.x, back.y - at.y)).toBeLessThan(2)
+  await expect.poll(async () => dist(await rel(page), home), { timeout: 5_000 }).toBeLessThan(2)
   await expect(card(page)).not.toContainText('Parking option')
   await expect(card(page)).not.toContainText('What this change costs')
 })
 
 test('T9: "Official plan" discards a released draft that was not kept', async ({ page }) => {
   const at = await open(page)
+  const home = await rel(page)
   await page.mouse.move(at.x, at.y)
   await page.mouse.down()
   await page.mouse.move(at.x - 60, at.y + 10, { steps: 12 })
@@ -93,8 +119,7 @@ test('T9: "Official plan" discards a released draft that was not kept', async ({
   await page.locator(OFFICIAL_BTN).click()
   await expect(card(page)).not.toContainText('What this change costs', { timeout: 5_000 })
   await expect(page.locator(OFFICIAL_BTN)).toBeDisabled()
-  const back = await center(page)
-  expect(Math.hypot(back.x - at.x, back.y - at.y)).toBeLessThan(2)
+  await expect.poll(async () => dist(await rel(page), home), { timeout: 5_000 }).toBeLessThan(2)
 })
 
 test('T2: the drag readout is truthful about the live planner (off vs ready), with no "computing…" rows', async ({ page }) => {
@@ -144,11 +169,13 @@ async function cycleTo(page: Page, id: string): Promise<Pt> {
   await expect(card(page)).toContainText('What this change costs', { timeout: 10_000 })
   await expect.poll(async () => (await page.locator('.hl-edit-delta').textContent()) ?? '', { timeout: 5_000 }).not.toBe('')
   void id
-  return center(page)
+  await settled(page)
+  return rel(page)
 }
 
 test('T2: dropping next to P5 says why P5 is refused, and the rover still snaps to a valid pad', async ({ page }) => {
-  const at = await open(page)
+  await open(page)
+  const at = await rel(page)
   // three known screen points (rank1, rank2, rank4) from the keyboard alternative (arrow keys cycle the valid pads)
   await roverEl(page).click()
   await expect(card(page)).toContainText('Official rover pad', { timeout: 5_000 })
@@ -169,7 +196,9 @@ test('T2: dropping next to P5 says why P5 is refused, and the rover still snaps 
   const fx = solve(at.x, p2.x, p4.x)
   const fy = solve(at.y, p2.y, p4.y)
   const p5 = pad('pad_default')
-  const target = { x: fx(p5.lon, p5.lat), y: fy(p5.lon, p5.lat) }
+  await settled(page)
+  const m = await mapCenter(page)
+  const target = { x: m.x + fx(p5.lon, p5.lat), y: m.y + fy(p5.lon, p5.lat) }
   const vp = page.viewportSize()!
   expect(target.x, 'P5 on screen').toBeGreaterThan(0)
   expect(target.y, 'P5 on screen').toBeLessThan(vp.height)
@@ -177,6 +206,7 @@ test('T2: dropping next to P5 says why P5 is refused, and the rover still snaps 
   const start = await center(page)
   await hold(page, start, target)
   const refused = page.locator('.hl-edit-drag__refused')
+  console.log('P5 drop', JSON.stringify({ at, p2, p4, target }), await page.locator('.hl-edit-drag').textContent())
   await expect(refused).toHaveAttribute('data-refused', 'pad_default')
   await expect(refused).toHaveText(/^P5 is not a valid rover pad: slope up to \d+\.\d° on the 20 × 20 m block \(limit 5°\)/)
   // snapping unchanged: the target is another pad
