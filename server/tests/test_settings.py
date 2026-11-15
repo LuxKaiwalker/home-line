@@ -31,7 +31,7 @@ def test_repo_config_loads():
     c = st.load()
     assert c.api.prefix == "/api/v1" and c.api.health_timeout_s == 2
     assert c.compute.workers == 2 and c.compute.queue_max_waiting == 20
-    assert c.compute.job_timeout_s == 180 and c.cache.max_gb == 20
+    assert c.compute.job_timeout_s == 600 and c.cache.max_gb == 20
     assert c.compute.hash.algo == "sha256" and c.compute.hash.hex_chars == 16
     assert c.limits.guest_heavy_jobs.count == 6 and c.limits.guest_heavy_jobs.window_min == 10
     assert c.limits.user_heavy_jobs.count == 30 and c.limits.telemetry_posts_per_s == 2
@@ -87,7 +87,7 @@ def test_assumed_list_known_answer():
     c = st.load()
     assert c.assumed == ["limits.title_max_chars", "limits.notes_max_chars",
                          "ranges.start_lmst_h", "ranges.reserve_min", "sessions.message_max_chars",
-                         "limits.proxy_max_body_bytes"]
+                         "limits.proxy_max_body_bytes", "compute.job_timeout_s"]
     for path in c.assumed:
         node = c
         for part in path.split("."):

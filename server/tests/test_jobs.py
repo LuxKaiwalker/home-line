@@ -43,7 +43,7 @@ from server.tests.test_app import API_ID, OPENAPI, REGISTRY  # noqa: E402
 PREFIX = settings().api.prefix
 IDENT = EngineIdentity("a" * 40, "sha256:" + "b" * 64, "sha256:" + "c" * 64)
 WAIT_S = 20.0
-TIMEOUT_S = 1.0  # test override of compute.job_timeout_s (config: 180 s)
+TIMEOUT_S = 1.0  # test override of compute.job_timeout_s (config: 600 s)
 
 
 # ------------------------------------------------------------------------------- helpers ----
@@ -134,7 +134,7 @@ def test_runner_limits_come_from_config():
     c = settings().compute
     assert (r.workers, r.queue_max_waiting, r.job_timeout_s) == (c.workers, c.queue_max_waiting,
                                                                  c.job_timeout_s)
-    assert (c.workers, c.queue_max_waiting, c.job_timeout_s) == (2, 20, 180)  # spec §4.1
+    assert (c.workers, c.queue_max_waiting, c.job_timeout_s) == (2, 20, 600)  # spec §4.1; 600 s: D81
 
 
 def test_job_types_are_the_contract_names():
