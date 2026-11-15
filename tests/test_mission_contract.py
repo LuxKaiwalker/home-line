@@ -1,9 +1,11 @@
-"""contracts/bundle/mission.schema.json: the simulator plan format (D103, bundle family v1.1.0).
+"""contracts/bundle/mission.schema.json: the simulator plan format (D103, bundle family v1.1.1).
 
-Known answers: the schema is valid draft 2020-12 and versioned 1.1.0 while every v1 bundle
-schema stays 1.0.0; the README states the same versions; the committed example (written by the
+Known answers: the schema is valid draft 2020-12 and versioned 1.1.1 (D110: origin also
+precomputed) while a mission file's schema_version stays 1.1.0 and every v1 bundle schema stays
+1.0.0; the README states the same versions; the committed example (written by the
 Mission Planer's export.ts from its known-answer input) validates and its mission_id follows the
-id rule; a computed_live variant (WP9b) validates; required fields, wrong origins and broken fixed
+id rule; a computed_live variant (WP9b) and a precomputed variant (WP9c, the official plan)
+validate; required fields, wrong origins and broken fixed
 blocks are refused; the D39 dose block and an unrouted mission validate. D76: no contracts/sim/,
 route_package* or compiled_plan* files.
 """
@@ -24,7 +26,8 @@ REPO = Path(__file__).resolve().parents[1]
 B = REPO / "contracts" / "bundle"
 SCHEMA_PATH = B / "mission.schema.json"
 EXAMPLE = B / "examples" / "mission.mission_planer.json"
-FAMILY_VERSION = "1.1.0"
+FAMILY_VERSION = "1.1.1"  # x-contract-version of the bundle family (D110)
+DOC_VERSION = "1.1.0"  # schema_version inside a mission file: unchanged, so 1.1.0 files stay valid
 V1_SCHEMAS = ["bundle", "config_snapshot", "plan", "points", "route_local", "storm", "sun"]
 
 
@@ -52,13 +55,17 @@ def planer() -> dict:
     return _load(EXAMPLE)
 
 
-def live_variant(doc: dict) -> dict:
-    """The same mission as a live engine job (WP9b): engine grid, live label from config."""
+def _labels() -> dict:
     backend = (REPO / "config" / "backend.yaml").read_text(encoding="utf-8")
-    labels = yaml.safe_load(backend)["labels"]
+    return yaml.safe_load(backend)["labels"]
+
+
+def live_variant(doc: dict, origin: str = "computed_live", label: str = "live") -> dict:
+    """The same mission as a live engine job (WP9b): engine grid, live label from config. With
+    origin precomputed and label precomputed: the official plan's shape (WP9c, D110)."""
     d = copy.deepcopy(doc)
-    d["origin"] = "computed_live"
-    d["origin_label"] = labels["live"]
+    d["origin"] = origin
+    d["origin_label"] = _labels()[label]
     files = {"route": "route_nom_104.geojson", "timeline": "timeline_nom_104.json"}
     d["planner"].update(routing_grid_res_m=3, elevation_res_m=1, files=files)
     d["mission_id"] = mission_id(d)
@@ -72,10 +79,18 @@ def test_schema_valid_and_versioned():
     assert SCHEMA["$schema"] == "https://json-schema.org/draft/2020-12/schema"
     assert SCHEMA["$id"] == "homeline/contracts/bundle/mission.schema.json"
     assert SCHEMA["x-contract-version"] == FAMILY_VERSION
-    assert SCHEMA["properties"]["schema_version"] == {"const": FAMILY_VERSION}
+    assert SCHEMA["properties"]["schema_version"] == {"const": DOC_VERSION}
     for key in ("title", "description", "x-source", "x-status"):
         assert SCHEMA.get(key)
     assert "D103" in SCHEMA["description"] and "D103" in SCHEMA["x-status"]
+    assert "D110" in SCHEMA["x-status"] and "precomputed" in SCHEMA["description"]
+
+
+def test_origin_enum_is_the_three_origins():
+    # D110: one additive value; the existing two stay
+    assert SCHEMA["properties"]["origin"] == {
+        "enum": ["mission_planer", "computed_live", "precomputed"],
+        "description": SCHEMA["properties"]["origin"]["description"]}
 
 
 @pytest.mark.parametrize("name", V1_SCHEMAS)
@@ -95,8 +110,12 @@ def test_readme_states_the_versions():
     title = re.search(r"^# Simulator bundle contracts \(D41\) — v(\S+)$", text, re.M)
     assert title[1] == FAMILY_VERSION
     assert re.search(r"^## Mission file \(v(\S+), D103\)$", text, re.M)[1] == FAMILY_VERSION
-    assert re.search(rf"^\| {re.escape(FAMILY_VERSION)} \| 2026-11-15 \| D103", text, re.M)
+    assert re.search(r"^\| 1\.1\.0 \| 2026-11-15 \| D103", text, re.M)
+    v = re.escape(FAMILY_VERSION)
+    assert re.search(rf"^\| {v} \| 2026-11-15 \| D110, additive", text, re.M)
     assert "superseded for routes" in text and "computed_live" in text
+    row = r"^\| `precomputed` \|.*labels\.precomputed`: \"Precomputed · official plan\" \|$"
+    assert re.search(row, text, re.M)
 
 
 def test_mission_schema_stays_out_of_the_web_family():
@@ -115,7 +134,7 @@ def test_d76_forbidden_names_absent():
 def test_mission_planer_example_validates(planer):
     assert errors(planer) == []
     assert planer["origin"] == "mission_planer"
-    assert planer["schema_version"] == FAMILY_VERSION
+    assert planer["schema_version"] == DOC_VERSION
 
 
 def test_example_known_answers(planer):
@@ -183,7 +202,16 @@ def test_waypoint_field_refused_when_missing(planer, key):
     assert errors(d)
 
 
-@pytest.mark.parametrize("origin", ["precomputed", "Mission_Planer", "live", None])
+def test_precomputed_variant_validates(planer):
+    # D110 (WP9c): the official plan, origin precomputed with config labels.precomputed
+    pre = live_variant(planer, "precomputed", "precomputed")
+    assert errors(pre) == []
+    assert pre["origin_label"] == "Precomputed · official plan"
+    assert pre["schema_version"] == DOC_VERSION
+    assert len({pre["mission_id"], live_variant(planer)["mission_id"], planer["mission_id"]}) == 3
+
+
+@pytest.mark.parametrize("origin", ["Precomputed", "official", "Mission_Planer", "live", None])
 def test_other_origins_refused(planer, origin):
     assert errors(dict(planer, origin=origin))
 

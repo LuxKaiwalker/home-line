@@ -1,6 +1,6 @@
 # HOMELINE pipeline entry points. Stub targets print a message until the owning workstream
 # adds its CLI (ownership: AGENTS.md "Folder ownership"; this file is owned by C).
-.PHONY: all terrain engine horizons conditions conditions-fetch nav fields fp3d fp3d-check web web-plan bundle bundle-fixture bundle-check serve stack-up stack-down serverdata parity parity-synthetic server-test dummy test lint validate kats h0 clean
+.PHONY: all terrain engine horizons conditions conditions-fetch nav fields fp3d fp3d-check web web-plan bundle bundle-fixture bundle-check mission-official serve stack-up stack-down serverdata parity parity-synthetic server-test dummy test lint validate kats h0 clean
 
 PY := uv run --no-sync python
 
@@ -48,6 +48,8 @@ bundle-fixture:  ## C: rebuild the committed official-pad fixture (contracts/bun
 	$(PY) tools/make_bundle.py --fixture
 bundle-check:  ## C: unzip + sha256 + schema check of the committed fixture zips
 	$(PY) tools/make_bundle.py --check contracts/bundle/fixtures/official_pad_v1/*.zip
+mission-official:  ## WP9c: official plan's mission.json (origin precomputed, D110) -> web/public/sim/official/ (web/public/data read-only)
+	$(PY) tools/make_mission.py --official
 # --- Backend (optional live layer, D48; docs/backend.md). Server data lives in $(HL_SERVER_DATA).
 # server-test and parity-synthetic only name paths that exist ($(wildcard)) and treat pytest exit 5
 # ("no tests collected") as success, so CI stays green before server/ and the parity tests land;
