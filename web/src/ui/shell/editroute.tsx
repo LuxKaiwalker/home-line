@@ -135,16 +135,16 @@ export function EditRouteHost<Snap>({ plans, simMode = 'off' }: { plans: MyPlans
   const edgeStyle = { marginBottom: `${bottom}px` }
   if (!route)
     return (
-      <div class="hl-editroute__edge" style={edgeStyle}>
+      <div class="hl-ui hl-editroute__edge" style={edgeStyle}>
         <EditRouteOfflineNoteSlot />
       </div>
     )
   return (
     <>
-      <div class="hl-editroute__edge" style={edgeStyle}>
+      <div class="hl-ui hl-editroute__edge" style={edgeStyle}>
         <EditRouteButton />
       </div>
-      <Drawer id={EDIT_ROUTE_ID} title={EDIT_ROUTE_TITLE}>
+      <Drawer id={EDIT_ROUTE_ID} title={EDIT_ROUTE_TITLE} class="hl-ui hl-editroute__drawer">
         {route()}
         <EditRouteSimSlot mode={simMode} />
         {crew ? (
