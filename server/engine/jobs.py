@@ -647,6 +647,16 @@ class JobRunner:
                 return self._jobs[jid].status
         return DONE if result_done(h, identity) else None
 
+    def deadline_in(self, job_id: str) -> float | None:
+        """Seconds until a running job's job_timeout_s deadline (it is done or killed by then);
+        None for a job that is not running (queued, finished or unknown). Read-only (D115: the
+        retry time of the per-address concurrency limit, server.api.auth.limits)."""
+        with self._lock:
+            job = self._jobs.get(job_id)
+            if job is None or job.status != RUNNING or job.deadline is None:
+                return None
+            return max(0.0, job.deadline - time.monotonic())
+
     def clean_stale(self) -> list[Path]:
         """Remove the temp dirs no running job can own (start-up, or any periodic cleanup): owner
         gone, or older than 2 x job_timeout_s. Never the dir of a live owner (H1-1)."""

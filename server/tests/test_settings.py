@@ -88,7 +88,8 @@ def test_assumed_list_known_answer():
     assert c.assumed == ["limits.title_max_chars", "limits.notes_max_chars",
                          "ranges.start_lmst_h", "ranges.reserve_min", "sessions.message_max_chars",
                          "limits.proxy_max_body_bytes", "compute.job_timeout_s",
-                         "route.max_stops", "route.max_free_points", "route.min_stop_spacing_m"]
+                         "route.max_stops", "route.max_free_points", "route.min_stop_spacing_m",
+                         "limits.guest_concurrent_heavy_jobs"]
     for path in c.assumed:
         node = c
         for part in path.split("."):

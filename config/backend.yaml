@@ -36,6 +36,8 @@ cache:
 
 limits:                            # section 8
   guest_heavy_jobs: {count: 6, window_min: 10}
+  guest_concurrent_heavy_jobs: 1      # assumed: true (D115, planning UI plan section 10.7 check 2: "ONE heavy
+                                   # job at a time per visitor"): queued-or-running new jobs per address
   user_heavy_jobs: {count: 30, window_min: 10}
   telemetry_posts_per_s: 2
   upload_max_bytes: 1048576        # plan.json import, 1 MB
@@ -115,4 +117,5 @@ gates_local:                       # D50: backend starts Sat evening, gates shif
 
 assumed: [limits.title_max_chars, limits.notes_max_chars, ranges.start_lmst_h, ranges.reserve_min,
           sessions.message_max_chars, limits.proxy_max_body_bytes, compute.job_timeout_s,
-          route.max_stops, route.max_free_points, route.min_stop_spacing_m]
+          route.max_stops, route.max_free_points, route.min_stop_spacing_m,
+          limits.guest_concurrent_heavy_jobs]

@@ -105,6 +105,20 @@ def cfg_override(**compute):
     return cfg.model_copy(update={"compute": cfg.compute.model_copy(update=compute)})
 
 
+# D115: one new job at a time per address (limits.guest_concurrent_heavy_jobs), known answers in
+# test_limits_concurrent.py. The tests here and in the other limit files start several jobs at once
+# from one test client to test other rules (de-duplication, queue cap, rate window, kill switch),
+# so their app allows more at once unless a test asks for the config value.
+MANY_AT_ONCE = 1000
+
+
+def app_cfg(concurrent: int = MANY_AT_ONCE):
+    """The app config with limits.guest_concurrent_heavy_jobs = ``concurrent``."""
+    cfg = settings()
+    return cfg.model_copy(update={"limits": cfg.limits.model_copy(
+        update={"guest_concurrent_heavy_jobs": concurrent})})
+
+
 @pytest.fixture
 def server_data(tmp_path, monkeypatch):
     sd = tmp_path / "server"
@@ -119,7 +133,7 @@ def live(workers: int = 2, queue: int = 2, timeout_s: float = TIMEOUT_S):
     runner = jobs.JobRunner.from_config(
         cfg_override(workers=workers, queue_max_waiting=queue, job_timeout_s=timeout_s),
         job_types={"plan": TEST_JOB})
-    app = create_app(warmup=lambda: None, jobs=runner)
+    app = create_app(warmup=lambda: None, jobs=runner, cfg=app_cfg())
     app.dependency_overrides[identity_provider] = lambda: (lambda: IDENT)
     with TestClient(app) as c:
         c.runner = runner

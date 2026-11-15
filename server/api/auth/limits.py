@@ -29,6 +29,15 @@ sliding window over the start times (exact for "the seventh in 10 minutes"), kep
   429s share the Error shape with ``retry_after_s``, which the web client honours.
 - After each accepted new job, ``on_new_job`` runs (cache eviction with pinning, see
   server.api.plans.pinning).
+- **One job at a time (D115).** Besides the rate, an address may have at most
+  ``limits.guest_concurrent_heavy_jobs`` (1, assumed) new jobs queued or running at once
+  (``ActiveJobs``; section 10.7 check 2: "ONE heavy job at a time per visitor"). A submit that would
+  start another is refused with 429 ``job_in_progress``, ``retry_after_s`` and a Retry-After header:
+  the seconds until that job's job_timeout_s deadline (it is done or killed by then), or a full
+  job_timeout_s while it still waits for a worker. It is checked before the rate, so such a refusal
+  does not use the rate quota; the same passes as for the rate apply (attaches and cached results,
+  also to the address's own job). Without the rule, one address could fill both workers and most of
+  the queue with its six new jobs.
 """
 
 from __future__ import annotations
@@ -139,6 +148,69 @@ class SlidingWindow:
             return len(self._hits)
 
 
+class ActiveJobs:
+    """At most ``limit`` alive (queued or running) new jobs per key, the jobs this limiter saw
+    start. ``alive(job_id)`` is asked at each reserve, so a finished job frees its key's slot
+    without a callback. Like ``SlidingWindow``, a request reserves first, then confirms (with the
+    id of the job it started) or releases; while only pending reservations fill the limit the answer
+    is "ask again", so a burst of new jobs never passes it."""
+
+    def __init__(self, limit: int):
+        if limit < 1:
+            raise ValueError("limit >= 1")
+        self.limit = limit
+        self._lock = threading.Lock()
+        self._jobs: dict[str, list[str]] = {}  # key -> job ids started from it (maybe ended)
+        self._pending: dict[str, int] = {}  # key -> reservations not settled yet
+
+    def reserve(self, key: str, alive: Callable[[str], bool]) -> tuple[bool, list[str]]:
+        """(True, []): reserved; (False, ids): refused, ``ids`` = the key's alive jobs;
+        (False, []): undecided while other reservations of the key settle, ask again."""
+        with self._lock:
+            for k in list(self._jobs):  # prune ended jobs, and keys left with none
+                live = [j for j in self._jobs[k] if alive(j)]
+                if live:
+                    self._jobs[k] = live
+                else:
+                    del self._jobs[k]
+            live = self._jobs.get(key, [])
+            if len(live) >= self.limit:
+                return False, list(live)
+            if len(live) + self._pending.get(key, 0) >= self.limit:
+                return False, []
+            self._pending[key] = self._pending.get(key, 0) + 1
+            return True, []
+
+    def _settle(self, key: str) -> None:
+        n = self._pending.get(key, 0) - 1
+        if n > 0:
+            self._pending[key] = n
+        else:
+            self._pending.pop(key, None)
+
+    def confirm(self, key: str, job_id: str | None) -> None:
+        """The reservation started job ``job_id`` (None: a job whose id could not be read)."""
+        with self._lock:
+            self._settle(key)
+            if job_id is not None:
+                self._jobs.setdefault(key, []).append(job_id)
+
+    def release(self, key: str) -> None:
+        """Give back a reservation (the request started no job)."""
+        with self._lock:
+            self._settle(key)
+
+    def record(self, key: str, job_id: str | None) -> None:
+        """A job start that held no reservation (passed as an attach or a cached result)."""
+        if job_id is not None:
+            with self._lock:
+                self._jobs.setdefault(key, []).append(job_id)
+
+    def keys(self) -> int:
+        with self._lock:
+            return len(set(self._jobs) | set(self._pending))
+
+
 def started_new_job(status: int | None, body: bytes) -> bool:
     """True when a POST /jobs answer says a new job was queued (202, attached false)."""
     if status != 202:
@@ -211,6 +283,39 @@ def rate_limited(retry_after_s: int, count: int, window_min: float) -> tuple[int
     return 429, headers, json.dumps(body).encode("utf-8")
 
 
+def job_id(body: bytes) -> str | None:
+    """The ``id`` of a POST /jobs 202 body, or None when it cannot be read."""
+    try:
+        doc = json.loads(body)
+    except ValueError:
+        return None
+    jid = doc.get("id") if isinstance(doc, dict) else None
+    return jid if isinstance(jid, str) else None
+
+
+def job_in_progress(retry_after_s: int, limit: int, status: str) -> tuple[int, dict, bytes]:
+    jobs_word = "job" if limit == 1 else "jobs"
+    body = {"error": "job_in_progress",
+            "detail": f"at most {limit} heavy {jobs_word} at a time from one address; yours is "
+                      f"{status}; retry in {retry_after_s} s",
+            "retry_after_s": retry_after_s}
+    headers = {"content-type": "application/json", "cache-control": "no-store",
+               "retry-after": str(retry_after_s)}
+    return 429, headers, json.dumps(body).encode("utf-8")
+
+
+ALIVE = frozenset({"queued", "running"})
+
+
+def _runner(scope: Scope):
+    return getattr(getattr(scope.get("app"), "state", None), "jobs", None)
+
+
+def _status(runner, jid: str) -> str | None:
+    view = runner.status(jid) if runner is not None else None
+    return view.get("status") if isinstance(view, dict) else None
+
+
 class HeavyJobLimiter:
     """ASGI middleware: the guest heavy-job limit on POST {prefix}/jobs (see the module doc)."""
 
@@ -223,6 +328,7 @@ class HeavyJobLimiter:
         self.path = f"{cfg.api.prefix}/jobs"
         self.count, self.window_min = lim.count, lim.window_min
         self.window = SlidingWindow(lim.count, lim.window_min * 60, clock)
+        self.active = ActiveJobs(cfg.limits.guest_concurrent_heavy_jobs)
         self.on_new_job = on_new_job
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
@@ -236,23 +342,51 @@ class HeavyJobLimiter:
         if submit_lookup(scope, body) in NO_NEW_JOB:  # attach or cached result: no slot (H1-2)
             await self._run(scope, receive, send, key, None)
             return
+        runner = _runner(scope)
+
+        def alive(jid: str) -> bool:
+            return _status(runner, jid) in ALIVE
+
+        while True:  # one job at a time (D115), before the rate: a refusal here costs no quota
+            ok, busy = self.active.reserve(key, alive)
+            if ok or busy:
+                break
+            await anyio.sleep(SETTLE_POLL_S)  # another submit from this address is in flight
+        if not ok:
+            await self._refuse(send, *self._busy(runner, busy))
+            return
         while True:
             token, retry = self.window.reserve(key)
             if token is not None or retry is not None:
                 break
             await anyio.sleep(SETTLE_POLL_S)  # other submits from this address are in flight
         if token is None:
-            status, headers, body = rate_limited(retry, self.count, self.window_min)
-            await send({"type": "http.response.start", "status": status,
-                        "headers": [(k.encode(), v.encode()) for k, v in headers.items()]})
-            await send({"type": "http.response.body", "body": body})
+            self.active.release(key)
+            await self._refuse(send, *rate_limited(retry, self.count, self.window_min))
             return
         await self._run(scope, receive, send, key, token)
+
+    def _busy(self, runner, busy: list[str]) -> tuple[int, dict, bytes]:
+        """The job_in_progress answer: retry when the address's running job closest to its
+        deadline has ended, or after a full job timeout while its jobs still wait."""
+        running = [d for d in (runner.deadline_in(j) for j in busy) if d is not None] \
+            if runner is not None and hasattr(runner, "deadline_in") else []
+        timeout = getattr(runner, "job_timeout_s", None) or settings().compute.job_timeout_s
+        retry = max(1, math.ceil(min(running) if running else timeout))
+        status = "running" if running else "queued"
+        return job_in_progress(retry, self.active.limit, status)
+
+    @staticmethod
+    async def _refuse(send: Send, status: int, headers: dict, body: bytes) -> None:
+        await send({"type": "http.response.start", "status": status,
+                    "headers": [(k.encode(), v.encode()) for k, v in headers.items()]})
+        await send({"type": "http.response.body", "body": body})
 
     async def _run(self, scope: Scope, receive: Receive, send: Send, key: str,
                    token: int | None) -> None:
         """Run the route; count the submit when it started a new job (with its reservation, or
-        without one when it passed as an attach or a cached result), else give the slot back."""
+        without one when it passed as an attach or a cached result), else give the slot back.
+        The same for the one-job-at-a-time reservation (held exactly when ``token`` is)."""
         seen: dict = {"status": None, "body": bytearray()}
 
         async def watch(message: Message) -> None:
@@ -267,12 +401,16 @@ class HeavyJobLimiter:
             await self.app(scope, receive, watch)
             new = started_new_job(seen["status"], bytes(seen["body"]))
         finally:
+            jid = job_id(bytes(seen["body"])) if new else None
             if token is None:
                 if new:
                     self.window.record(key)
+                    self.active.record(key, jid)
             elif new:
                 self.window.confirm(key, token)
+                self.active.confirm(key, jid)
             else:
                 self.window.release(key, token)
+                self.active.release(key)
         if new and self.on_new_job is not None:
             self.on_new_job(scope)
