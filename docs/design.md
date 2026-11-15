@@ -209,7 +209,7 @@ $$
 **Implementation.**
 
 1. Storyboards as JSON (`web/public/story/*.json`, schema in §6.3): timed steps of camera keyframes, layer changes, clock positions, field mode and collapse value, captions.
-2. Flythrough camera: smoothed route (centripetal Catmull-Rom over 20 m samples), camera `behind_m` behind and `above_m` above the look-at point at 1× (scaled with exaggeration), look-ahead `lookahead_m` (`config/design.yaml` `camera.flythrough`, read by `web/src/story/config.ts`; 250 / 120 / 150 m on main, the follow preset `camera.presets.follow` the same); the library computes the camera from a camera point and a look-at point.
+2. Flythrough camera: smoothed route (centripetal Catmull-Rom over 20 m samples), camera 250 m behind and 120 m above the look-at point at 1× (scaled with exaggeration), look-ahead 150 m; the library computes the camera from a camera point and a look-at point.
 3. Descent: low-zoom relief from the far-field elevation (CTX 20 m, MOLA–HRSC 200 m) exported as z6–10 tiles over Gale (§6.1).
 4. Intro shown once per browser (stored setting, wrapped so it never fails), never under reduced motion.
 
