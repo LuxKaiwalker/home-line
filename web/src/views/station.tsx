@@ -13,6 +13,7 @@ import { CfgNum, Num } from '../components/Num'
 import { DragNote } from '../components/DragNote'
 import { Page, preactView, Show, useLoad } from './page'
 import { FAR_NOT_VALIDATED, scopeText } from './validation'
+import { indexWords, OBJECTIVE_SOURCE, SCORING, selectionFor, STATIONS_SOURCE } from './stationsWhy'
 
 import { STORM_TIMING_NOTE, compassTick, homeFor, isHiddenLandmark, landmarkNote, marginLabel, type Landmark } from './decisions'
 export { MARGIN_LABEL, marginLabel } from './decisions'
@@ -96,6 +97,7 @@ function CardBody({ d }: { d: StationData }) {
     <div class="card-grid">
       <section class="card-main">
         {s.objective && <p class="objective">{s.objective}</p>}
+        <WhyStation s={s} />
         {s.reachability_label && <p class="finding">{s.reachability_label} in every scenario (D26).</p>}
         {d.cardError != null && <DataProblem error={d.cardError} what={`Station card ${cf}`} />}
         {!card && d.cardError == null && <p class="muted">Station card file {NO_CARD}: Navcam, panorama, landmarks and timeline are missing; values below come from stations.json.</p>}
@@ -446,5 +448,51 @@ function Compass({ landmarks, station }: { landmarks: Landmark[]; station: strin
         {landmarks.length > hidden.length ? ' Solid ticks: above the computed skyline.' : ''}
       </figcaption>
     </figure>
+  )
+}
+
+/** Why this station was chosen (stations.yaml rule, F7 score) and the way into the Mission Planer. */
+function WhyStation({ s }: { s: Station }) {
+  const why = selectionFor(s.id)
+  const W = SCORING.weights
+  const src = STATIONS_SOURCE
+  return (
+    <section class="kv mp-card st-why-card">
+      <h3>Why this station</h3>
+      {why.objective && !s.objective && (
+        <p class="objective">
+          {why.objective} <span class="muted">({OBJECTIVE_SOURCE})</span>
+        </p>
+      )}
+      <p>
+        {why.kind === 'named' ? (
+          <>
+            Named in the science plan and placed by its own rule: <i>{why.rule}</i>.
+          </>
+        ) : why.kind === 'extra' ? (
+          <>
+            Not hand-named: found by the score as {why.rule}.
+          </>
+        ) : (
+          <span class="muted">No selection rule for {s.id} in {src}.</span>
+        )}
+      </p>
+      <p>
+        Score <Num v={s.value} file="stations.json" k={`stations.${s.id}.value`} /> ={' '}
+        <CfgNum v={W.crism} source={src} /> × mineral signal ({indexWords(why.crismIndex) ?? 'unknown index'}, MRO CRISM) + <CfgNum v={W.ridge_density} source={src} /> × boxwork ridge density
+        within <CfgNum v={SCORING.ridgeRadiusM} units="m" source={src} /> + <CfgNum v={W.manual} source={src} /> × priority
+        {why.manualPriority !== null && (
+          <>
+            {' '}
+            (<CfgNum v={why.manualPriority} source={src} /> here)
+          </>
+        )}
+        . {SCORING.weightsAssumed && <AssumedTag note="F7 weights are a team choice (D32), labelled assumed" />}
+      </p>
+      <div class="st-actions">
+        <a href={href({ name: 'mission', add: s.id })}>+ Add to Mission Planer</a>
+        <a href={href({ name: 'stations' })}>All science stations</a>
+      </div>
+    </section>
   )
 }

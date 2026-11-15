@@ -1,10 +1,11 @@
 // Hash router (SPEC F17). Hash routes survive GitHub Pages (no SPA fallback) and work logged out.
-// Pages: / (planning console), /mission (Mission Planer), /station/:id, /trade, /conditions, /scorecard, /cuff, /about.
+// Pages: / (planning console), /mission (Mission Planer), /stations (Science stations), /station/:id, /trade, /conditions, /scorecard, /cuff, /about.
 // Mount slots for other workstreams: /hud (WS7), /hud3d (WS8), /nav (WS9).
 
 export type Route =
   | { name: 'console' }
   | { name: 'station'; id: string }
+  | { name: 'stations' }
   | { name: 'trade' }
   | { name: 'conditions' }
   | { name: 'scorecard'; key?: string }
@@ -17,7 +18,7 @@ export type Route =
   | { name: 'mission'; plan?: string; add?: string }
   | { name: 'notfound'; path: string }
 
-const SIMPLE = ['trade', 'conditions', 'cuff', 'about', 'hud', 'hud3d', 'nav'] as const
+const SIMPLE = ['stations', 'trade', 'conditions', 'cuff', 'about', 'hud', 'hud3d', 'nav'] as const
 
 export function parseRoute(hash: string): Route {
   const raw = hash.replace(/^#/, '')
@@ -73,6 +74,7 @@ export function href(route: Route): string {
 export const NAV_ITEMS: { route: Route; label: string }[] = [
   { route: { name: 'console' }, label: 'Plan' },
   { route: { name: 'mission' }, label: 'Mission Planer' },
+  { route: { name: 'stations' }, label: 'Science stations' },
   { route: { name: 'trade' }, label: 'Trade' },
   { route: { name: 'conditions' }, label: 'Conditions' },
   { route: { name: 'cuff' }, label: 'Cuff card' },
