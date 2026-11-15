@@ -279,12 +279,18 @@ def test_job_end_to_end_with_test_exporter(server_data):
         served = c.get(f"{PREFIX}/results/{h}/{entry['file']}")
         assert served.status_code == 200 and served.content == b"probe\n"
         assert "immutable" in served.headers["cache-control"]  # complete now
+        # D110: the registered mission exporter ran in the worker too, and is served
+        m = manifest["export.mission.mission.json"]
+        assert (m["kind"], m["file"]) == ("sim_plan", "mission.json") and "mission.json" in paths
+        sim = c.get(f"{PREFIX}/results/{h}/mission.json")
+        assert sim.status_code == 200 and sim.json()["origin"] == "computed_live"
 
         again = c.post(f"{PREFIX}/jobs", json={"type": "plan", "inputs": doc}).json()
         assert again["status"] == "done" and again["attached"] is True
     assert not [p for p in (server_data / settings().cache.dir).iterdir()
                 if p.name.startswith(".job-")]
-    assert exporters.EXPORTERS == {}  # the test exporter lived only in the worker
+    # the test exporter lived only in the worker; "mission" is registered (D110)
+    assert sorted(exporters.EXPORTERS) == ["mission"]
 
 
 def test_official_hash_never_runs_a_job(server_data):
