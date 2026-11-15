@@ -833,7 +833,7 @@
 
   "activity": {
     "reason": {
-      "jobRunning": "A plan is still computing: its partial result cannot be played. Play and the intro are available when it is ready",
+      "jobRunning": "A plan is still computing: its partial result cannot be played. Play, Flythrough and the intro are available when it is ready",
       "jobBusy": "Another plan is already computing in this view: wait for it, or change the inputs to cancel it",
       "busy": "Another player is running: stop it first"
     },

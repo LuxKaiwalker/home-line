@@ -86,7 +86,7 @@ export interface HelpRow {
 }
 export const HELP_ROWS: readonly HelpRow[] = [
   { keys: ['Ctrl+K', '/'], label: 'shortcuts.search', ready: true }, // U17 (ui/search, A8)
-  { keys: [HIDDEN_MODES.has('fly') ? '1–4' : '1–5'], label: 'shortcuts.cameraPresets', ready: true }, // U16 (map/camera, M9); 5 = follow crew, hidden with FLY (D145)
+  { keys: ['1–5'], label: 'shortcuts.cameraPresets', ready: true }, // U16 (map/camera, M9); 5 = follow crew (Plan's Flythrough)
   { keys: ['F'], label: 'shortcuts.focusMode', ready: true },
   { keys: ['Space'], label: 'shortcuts.playPause', ready: true }, // FLY
   { keys: ['←', '→'], label: 'shortcuts.scrub', ready: true }, // FLY

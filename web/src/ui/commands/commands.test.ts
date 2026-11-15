@@ -85,13 +85,13 @@ describe('registration', () => {
     expect(new Set(ids).size).toBe(ids.length)
     const expected = [
       'mode.plan', 'mode.science', 'view.toggle3d', 'view.focusMode', 'timeline.playPause', 'timeline.back', 'timeline.forward',
-      'camera.overhead', 'camera.isometric', 'camera.low', 'camera.focus', 'selection.back', 'selection.forward', 'app.help',
+      'camera.overhead', 'camera.isometric', 'camera.low', 'camera.focus', 'camera.follow', 'selection.back', 'selection.forward', 'app.help',
       ...OVERLAYS.map((o) => `map.layer.${o.id}`), 'map.layers.reset', 'map.exaggeration.more', 'map.exaggeration.less', 'map.exaggeration.reset',
       'story.storm', 'edit.undo', 'edit.redo', 'story.intro', 'view.fullscreen',
-    ] // prettier-ignore (D145: FLY hidden, so no mode.fly and no camera.follow)
+    ] // prettier-ignore (D145: the Fly tab is hidden, so no mode.fly; camera.follow stays for Plan's Flythrough)
     expect([...ids].sort()).toEqual([...expected].sort())
     // never registered by S2: waypoint-owned or no callable outside live/edit-route code
-    for (const id of ['mode.fly', 'camera.follow', 'route.open', 'route.compute', 'plan.exportJson', 'sim.send', 'plans.open', 'plan.copyPermalink', 'plan.official', 'escape', 'search']) expect(ids).not.toContain(id)
+    for (const id of ['mode.fly', 'route.open', 'route.compute', 'plan.exportJson', 'sim.send', 'plans.open', 'plan.copyPermalink', 'plan.official', 'escape', 'search']) expect(ids).not.toContain(id)
     const items = commandItems()
     for (const q of ['l', 'la', 'lay', 'laye', 'layer', '3', '3d', 'undo', 'storm', 'camera low', 'full', 'intro', 'ridge', 'exag']) rank(items, q, (i) => (i.label ? t(i.label) : i.name))
     for (const s of spies) expect(s).not.toHaveBeenCalled()
@@ -140,8 +140,8 @@ describe('shell commands run the keys.ts action', () => {
       expect(runShortcutSpy, c.id).toHaveBeenCalledTimes(1)
       expect(runShortcutSpy.mock.calls[0][0], c.id).toEqual(c.shortcut)
     }
-    // announced like the key, so the camera, sidebar and plan-edit listeners answer (D145: preset 5, follow crew, is hidden with FLY)
-    expect(announced).toContainEqual({ action: 'camera', preset: 4 })
+    // announced like the key, so the camera, sidebar and plan-edit listeners answer
+    expect(announced).toContainEqual({ action: 'camera', preset: 5 })
     expect(announced).toContainEqual({ action: 'undo' })
   })
 
@@ -249,7 +249,7 @@ describe('keys.ts adapter', () => {
     expect(keysForAction({ action: 'scrub', minutes: -1 })).toEqual(['←'])
     expect(keysForAction({ action: 'scrub', minutes: 10 })).toEqual(['Shift+→'])
     expect(keysForAction({ action: 'camera', preset: 3 })).toEqual(['3'])
-    expect(HELP_ROWS.find((r) => r.label === 'shortcuts.cameraPresets')?.keys).toEqual(['1–4']) // D145: 5 (follow crew) hidden with FLY
+    expect(HELP_ROWS.find((r) => r.label === 'shortcuts.cameraPresets')?.keys).toEqual(['1–5']) // 5 = follow crew (Plan's Flythrough)
     expect(keysForAction({ action: 'playPause' })).toEqual(['Space'])
     expect(keysForAction({ action: 'help' })).toEqual(['?'])
     expect(keysForAction({ action: 'focusMode' })).toEqual(['F'])

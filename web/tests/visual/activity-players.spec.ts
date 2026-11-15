@@ -60,6 +60,7 @@ async function advancing(page: Page): Promise<void> {
 async function openPlan(page: Page, drawer: Drawer): Promise<void> {
   await page.goto('/?intro=0#/')
   await play(page).waitFor({ timeout: 60_000 })
+  await fly(page).waitFor({ timeout: 60_000 })
   await storm(page).waitFor({ timeout: 60_000 })
   await expect(page.locator(GRIP)).toHaveAttribute('aria-expanded', 'false') // collapsed by default
   if (drawer === 'collapsed') {
@@ -105,7 +106,7 @@ async function expectRunning(page: Page, p: P, moving = true): Promise<void> {
     await expect(play(page)).toHaveAttribute('aria-pressed', 'false')
   } else {
     await expect(play(page)).toHaveAttribute('aria-pressed', 'true')
-    await expect(fly(page)).toHaveCount(0) // D145: no Flythrough button while FLY is hidden
+    await expect(fly(page)).toHaveAttribute('aria-pressed', 'false')
     await expect(storm(page)).toHaveAttribute('aria-pressed', String(p === 'storm'))
   }
   if (moving) await advancing(page)
@@ -130,9 +131,7 @@ test.describe('pairs: start A, then B', () => {
     for (const a of players)
       for (const b of players) {
         if (a === b) continue
-        // hidden, D145: the Flythrough button is hidden with FLY
-        const flies = a === 'flythrough' || b === 'flythrough'
-        ;(flies ? test.skip : test)(`${a} -> ${b} (${drawer})${flies ? ' (hidden, D145)' : ''}`, async ({ page }) => {
+        test(`${a} -> ${b} (${drawer})`, async ({ page }) => {
           await openPlan(page, drawer)
           await startPlayer(page, a)
           await expectRunning(page, a)
@@ -149,7 +148,7 @@ test.describe('pairs: start A, then B', () => {
   test.describe('the intro, then B', () => {
     test.use({ reducedMotion: 'no-preference' }) // the intro never plays under reduced motion
     for (const b of ['replay', 'flythrough', 'storm'] as const)
-      (b === 'flythrough' ? test.skip : test)(`intro -> ${b}${b === 'flythrough' ? ' (hidden, D145)' : ''}`, async ({ page }) => {
+      test(`intro -> ${b}`, async ({ page }) => {
         await page.goto('/#/')
         await page.locator('html[data-story-chrome="hide"]').waitFor({ state: 'attached', timeout: 60_000 })
         await expect(html(page)).toHaveAttribute('data-activity', 'intro')
@@ -200,8 +199,7 @@ for (const drawer of DRAWERS)
 
 for (const drawer of DRAWERS)
   for (const p of ['replay', 'flythrough'] as const)
-    // hidden, D145: the flythrough variant needs the Flythrough button
-    (p === 'flythrough' ? test.skip : test)(`a mode switch stops the ${p} (${drawer})${p === 'flythrough' ? ' (hidden, D145)' : ''}`, async ({ page }) => {
+    test(`a mode switch stops the ${p} (${drawer})`, async ({ page }) => {
       await openPlan(page, drawer)
       await startPlayer(page, p)
       await expectRunning(page, p)

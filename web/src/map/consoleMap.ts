@@ -18,7 +18,6 @@ import { edgeLabelPoints } from './labels'
 import { binEdges, stepColorExpression } from './legend'
 import { MarsScaleControl } from './scale'
 import { effect, ui } from '../state'
-import { HIDDEN_MODES } from '../state/ui'
 import { collapseFade, collapseHeadline, collapseQuery, padGridMetres, playCollapse, setCollapse } from './field/collapse'
 import { CollapseHeadlineOverlay, CollapseToggle } from './field/collapseUi'
 import { MapFurniture, MARKER_LAYERS, ROUTE_LAYERS } from './furniture'
@@ -269,9 +268,9 @@ export class ConsoleMap {
     this.applyVisibility()
     void this.initLabels()
     // L10 (D111): the flythrough shows the route (with the crew marker) and the stations while it flies
-    // D145: Fly is hidden for this merge (state/ui HIDDEN_MODES): no Flythrough button (nor its "Your route"
-    // toggle); the code stays and the intro / ?demo=1 story drive their own camera (story/), not this control
-    if (!HIDDEN_MODES.has('fly')) this.map.addControl(new FlythroughControl({ get: (g) => this.layerVisible(g), set: (g, on) => this.setVisible(g, on) }), 'top-right')
+    // D145 (narrowed, F13): only the top-bar Fly tab is hidden; the Plan map keeps its Flythrough button
+    // ("Your route" stays off: flythrough/control.ts FLY_MINE_TOGGLE)
+    this.map.addControl(new FlythroughControl({ get: (g) => this.layerVisible(g), set: (g, on) => this.setVisible(g, on) }), 'top-right')
     this.stopStorm = installStorm(this.map)
     // PORT I1 (R3): the extensions install before MapSelection, so their 'click' listener runs first; a click
     // an edit handler consumed (originalEvent.preventDefault()) selects nothing underneath (map/select.ts)

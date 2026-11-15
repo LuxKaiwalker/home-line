@@ -35,8 +35,7 @@ test.describe('descent intro: the first click skips it and reaches its target', 
     { name: 'map Flythrough button', sel: '.hl-fly-btn:not(.hl-fly-speed)', after: async () => undefined },
   ]
   for (const tg of targets) {
-    // hidden, D145: the Flythrough button is hidden with FLY
-    ;(tg.name === 'map Flythrough button' ? test.skip : test)(tg.name === 'map Flythrough button' ? `${tg.name} (hidden, D145)` : tg.name, async ({ page }) => {
+    test(tg.name, async ({ page }) => {
       await introPlaying(page)
       await watch(page, tg.sel)
       await page.locator(tg.sel).first().click({ timeout: 5_000 })

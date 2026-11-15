@@ -9,8 +9,9 @@ export type Mode = 'plan' | 'science' | 'fly' | 'report' | 'evidence'
 export const MODES: readonly Mode[] = ['plan', 'science', 'fly', 'report', 'evidence']
 /** Modes left out of this build's interface (no tab, key, command or nav link); their routes still
  *  work by URL and the code stays, so a mode comes back by taking it out of this set. REPORT and EVIDENCE: user, 2026-11-15
- *  (N0CEO 6f6f555, 78928a8). FLY: hidden for this merge (D145, team lead 22:24): no tab, key, command,
- *  help row, Flythrough button or link; bare #/fly redirects to Plan, #/fly/hud and #/hud still open by URL. */
+ *  (N0CEO 6f6f555, 78928a8). FLY: hidden for this merge (D145, team lead 22:24; narrowed
+ *  by the user 23:15): no tab, Y key, mode command, help row or link; bare #/fly redirects to Plan, #/fly/hud and
+ *  #/hud still open by URL. The Plan map keeps its Flythrough button and camera.follow (key 5). */
 export const HIDDEN_MODES: ReadonlySet<Mode> = new Set<Mode>(['report', 'evidence', 'fly'])
 /** The modes the interface offers, in display order. */
 export const SHOWN_MODES: readonly Mode[] = MODES.filter((m) => !HIDDEN_MODES.has(m))
