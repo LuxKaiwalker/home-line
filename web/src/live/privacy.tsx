@@ -11,7 +11,11 @@
 //   least recently used trees removed when the cache is full (server/api/plans/pinning.py evict);
 // - rate limit: salted SHA-256 of the address, salt random per process, in memory (server/api/auth/limits.py);
 // - access logs: uvicorn and Caddy defaults to stdout, with the client address (Makefile serve,
-//   server/ops/Dockerfile, server/ops/Caddyfile);
+//   server/ops/Dockerfile, server/ops/Caddyfile); deleted after judging ends: a team-lead decision
+//   (D86), policy rather than code;
+// - API docs page: /api/docs (config/backend.yaml api.docs_path) is FastAPI's Swagger UI page with its
+//   default asset URLs (server/api/plans/apidocs.py, fastapi 0.163.0 in uv.lock): script and stylesheet
+//   from cdn.jsdelivr.net, icon from fastapi.tiangolo.com (D86);
 // - not sold or shared: the server makes no outbound request with this data;
 // - static site without the server: the live layer is lazy and optional (main.ts, isolation.test.ts).
 
@@ -22,8 +26,9 @@ export const PRIVACY_TEXT: readonly string[] = [
   'The live server keeps the plan inputs it computes (with their title) and the results, filed by a hash of the inputs, each with a run record: engine version, stages and timings.',
   'The least recently used results are removed when its cache is full.',
   'To limit how many computations one address can start, it keeps salted hashes of addresses, in memory only, cleared on restart.',
-  'Its standard access logs list client addresses and are kept on the build machine.',
+  'Its standard access logs list client addresses and are deleted after judging ends.',
   'Nothing is sold or shared.',
+  'The API documentation page (/api/docs) loads its script and styles from cdn.jsdelivr.net and its icon from fastapi.tiangolo.com, so opening it contacts those third parties.',
   'The static site works without the live server.',
 ]
 

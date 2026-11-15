@@ -1,5 +1,6 @@
 // H3 (D71): the privacy note on /about appears only in live builds (VITE_LIVE=1). Known answers:
-// - the note's text says only what the code does (each statement is pinned to its source below);
+// - the note's text says only what the code does (each statement is pinned to its source below),
+//   except the access log retention, which the team lead decided (D86) and is marked as policy;
 // - mountPrivacy puts the note before the about page's "Licences" heading, once, and nowhere else;
 // - the about view mounts it with the flag on and never touches src/live with the flag off.
 import { readdirSync, readFileSync, statSync } from 'node:fs'
@@ -107,8 +108,8 @@ describe('privacy note text', () => {
       /restart/i,
       /access logs?/i,
       /addresses/i,
-      /kept on the build machine/i,
       /nothing is sold or shared/i,
+      /\/api\/docs\) loads .*cdn\.jsdelivr\.net/i,
       /static site works without the (live )?server/i,
     ])
       expect(text).toMatch(re)
@@ -175,7 +176,7 @@ describe('privacy note text', () => {
     const rr = JSON.parse(read('contracts/backend/run_record.schema.json'))
     expect(rr.additionalProperties).toBe(false)
     expect(Object.keys(rr.properties).sort()).toEqual(
-      ['contract_version', 'hash', 'origin', 'label', 'inputs', 'engine', 'terrain_hash', 'status', 'started_utc', 'finished_utc', 'stages', 'files', 'range_flags', 'infeasible', 'error', 'dummy'].sort(),
+      ['contract_version', 'hash', 'origin', 'label', 'inputs', 'engine', 'terrain_hash', 'status', 'started_utc', 'finished_utc', 'stages', 'files', 'range_flags', 'route_mode', 'feasibility', 'infeasible', 'error', 'dummy'].sort(),
     )
   })
 
@@ -184,6 +185,26 @@ describe('privacy note text', () => {
     expect(read('Makefile')).not.toMatch(/--no-access-log/)
     expect(read('server/ops/Dockerfile')).not.toMatch(/--no-access-log/)
     expect(read('server/ops/Caddyfile')).toMatch(/log \{\s*output stdout/)
+  })
+
+  // Policy, not code: the team lead decided (D86) that the access logs are deleted after judging ends.
+  // Nothing in the repo deletes them, so this checks only that the note states the decision.
+  it('access logs retention: deleted after judging ends (decided by the team lead, D86; not checked against code)', () => {
+    expect(text).toMatch(/access logs list client addresses and are deleted after judging ends\./)
+    expect(text).not.toMatch(/kept on the build machine/i)
+  })
+
+  it('API docs page: /api/docs is Swagger UI with FastAPI\'s default assets from cdn.jsdelivr.net (and its icon from fastapi.tiangolo.com)', () => {
+    expect(read('config/backend.yaml')).toMatch(/^\s*docs_path: \/api\/docs\s/m)
+    const src = read('server/api/plans/apidocs.py')
+    // the page is FastAPI's get_swagger_ui_html with no asset URL overridden, so FastAPI's defaults apply
+    expect(src).toMatch(/return get_swagger_ui_html\(openapi_url=spec_url, title="HOMELINE live API"\)/)
+    expect(src).not.toMatch(/swagger_(js|css|favicon)_url/)
+    // those defaults, in the locked FastAPI 0.163.0 (fastapi/openapi/docs.py), are
+    //   https://cdn.jsdelivr.net/npm/swagger-ui-dist@5/swagger-ui-bundle.js and .../swagger-ui.css,
+    //   https://fastapi.tiangolo.com/img/favicon.png; a FastAPI upgrade must revisit the note
+    expect(read('uv.lock')).toMatch(/name = "fastapi"\nversion = "0\.163\.0"\n/)
+    expect(text).toMatch(/\(\/api\/docs\) loads its script and styles from cdn\.jsdelivr\.net and its icon from fastapi\.tiangolo\.com/)
   })
 })
 

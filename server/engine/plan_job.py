@@ -19,11 +19,10 @@ otherwise the job fails with ``UnsupportedInputs`` naming the fields, never sile
 them. Inputs outside the config ranges (config/backend.yaml ``ranges``) are reported as
 run-record ``range_flags`` (anchored_flag_note); nothing is clamped and the plan runs.
 
-Station fields (F26): for a non-default crew the server data's fields (default crew) do not
-apply; before the summary stage the job fills the crew's station-field cache
-(server.engine.crew.ensure_station_fields) for the scenarios build_plan routes (the default
-scenario), reused by every later job with the same crew. build_plan cannot take them yet
-(server.engine.crew LIMITATION).
+Station fields (F26, D84): a custom-crew job computes no crew station fields. build_plan takes no
+precomputed station fields (its route runs its own station searches with the crew), so the E10
+crew cache ($HL_SERVER_DATA/cache/station_fields/) cost ~42 s and ~280 MB per new crew for
+nothing; it was removed. It returns when WS2 adds a station-field input to build_plan.
 
 Stages (D81: the map fills in early; job.schema.json ``stages_done``):
 1. ``nominal``: a preview build_plan call with the default scenario only (partner line on, so the
@@ -359,15 +358,6 @@ def run_plan_job(inputs: dict, ctx: JobContext) -> dict:
           on_stage=on_stage, **common)
     if len(ctx.done) < STAGES.index("summary"):  # a build_plan stage was skipped (no stations)
         flush(STAGES[STAGES.index("summary") - 1])
-
-    # F26: a custom crew's station fields, on demand and cached by crew hash (reused by later
-    # jobs with the same crew); the default crew's are the server data's fields/
-    crew = crew_mod.overrides(inputs)
-    if crew is not None and (terrain / "stations.json").is_file():
-        from pipeline.engine.config import load
-
-        crew_mod.ensure_station_fields(grid, terrain / "stations.json",
-                                       [load("variants")["scenarios"]["default"]], crew)
 
     # 5. summary: the final index (the full call's), exporters (D76), the final manifest.json (the
     # merge of the full call's fragments), then the runner's run record
