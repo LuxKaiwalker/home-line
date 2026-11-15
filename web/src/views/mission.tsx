@@ -28,6 +28,7 @@ import { boundaryOptions, defaultBoundary, legPairs, moveWaypoint, removeWaypoin
 import { LegRouter, type Leg } from '../mission/router'
 import { scenarioParams } from '../mission/physio'
 import type { LegsReply, LegsRequest } from '../mission/legsRoute'
+import { ACCESS_RADIUS_M, legInComponent, padCellOf, reachableFrom, stopCell, type StopCell } from '../mission/reach'
 import { decodePlan, encodePlan } from '../mission/share'
 import { stationWaypoint } from '../mission/stations'
 import { data } from '../data/loader'
@@ -204,19 +205,21 @@ function MissionPanel({ mmap, handlers, mapsEl, layersEl, initial }: { mmap: Mis
       if (legsWorker.current?.w === w) legsWorker.current = null
     }
   }, [d])
+  // J1i (as I1a): the pad snaps to its nearest walkable cell; its reachable component (router move rules)
+  // is computed once per loaded pad, and every stop is routed from the nearest cell of it within the
+  // access radius (mission/reach.ts). A stop with none is "not reachable from this pad" and never routed.
   const padCell = useMemo(() => {
     if (!d) return -1
     const p = d.tHome.pixelOf(d.pad.lon, d.pad.lat)
-    return p ? p.row * d.tHome.width + p.col : -1
+    return padCellOf(d.grid, p ? p.row * d.tHome.width + p.col : null)
   }, [d])
+  const comp = useMemo(() => (d && padCell >= 0 ? reachableFrom(d, padCell) : null), [d, padCell])
   const options = useMemo(() => (d ? boundaryOptions(d.bands, d.isochrones, d.edges) : []), [d])
 
-  /** Grid cell of a spot, or why it cannot be a waypoint. */
-  const cellAt = (lon: number, lat: number): number | 'outside' | 'blocked' => {
+  /** Routing cell of a spot (the nearest cell of the pad's component within the access radius), or why it cannot be a waypoint. */
+  const cellAt = (lon: number, lat: number): StopCell => {
     const p = d!.tHome.pixelOf(lon, lat)
-    if (!p) return 'outside'
-    const cell = p.row * d!.tHome.width + p.col
-    return d!.grid.passable[cell] ? cell : 'blocked'
+    return stopCell(d!, comp, p ? p.row * d!.tHome.width + p.col : null)
   }
 
   /** Snap a click to the routing grid: null + a notice when the spot cannot be walked from. */
@@ -229,6 +232,10 @@ function MissionPanel({ mmap, handlers, mapsEl, layersEl, initial }: { mmap: Mis
     }
     if (c === 'blocked') {
       setNotice(t('mission.notices.blocked', { scenario: d.scenario.id }))
+      return null
+    }
+    if (c === 'unreachable') {
+      setNotice(t('mission.notices.unreachable', { radius: ACCESS_RADIUS_M }))
       return null
     }
     setNotice(null)
@@ -258,6 +265,7 @@ function MissionPanel({ mmap, handlers, mapsEl, layersEl, initial }: { mmap: Mis
     if (no === 'full') return { list, msg: t('mission.notices.routeFull', { id, n: MAX_STOPS }) }
     const w = stationWaypoint(s, d!.scenario.id)
     const c = w ? cellAt(w.lon, w.lat) : 'blocked'
+    if (c === 'unreachable') return { list, msg: t('mission.notices.stationUnreachable', { id, radius: ACCESS_RADIUS_M }) }
     if (!w || typeof c !== 'number') return { list, msg: t('mission.notices.stationNoAccess', { id, scenario: d!.scenario.id }) }
     return { list: [...list, { ...w, id: nextId.current++, cell: c }], msg: t('mission.notices.stationAdded', { id, n: list.length + 1, stop_min: w.stopMin }) }
   }
@@ -333,10 +341,15 @@ function MissionPanel({ mmap, handlers, mapsEl, layersEl, initial }: { mmap: Mis
     if (!caches.current.has(key)) caches.current.set(key, new Map())
     const cache = caches.current.get(key)!
     const lw = legsWorker.current
-    if (!lw) return routeLegs(legPairs(padCell, wps), (a, b) => router.route(a, b), cache)
+    // J1i: an end outside the pad's component has no route: null at once, never sent to A*
+    if (!lw) return routeLegs(legPairs(padCell, wps), (a, b) => (legInComponent(comp, a, b) ? router.route(a, b) : null), cache)
     return legPairs(padCell, wps).map(([a, b]) => {
       const k = `${a}-${b}`
       if (cache.has(k)) return cache.get(k)!
+      if (!legInComponent(comp, a, b)) {
+        cache.set(k, null)
+        return null
+      }
       if (!lw.asked.has(k)) {
         lw.asked.add(k)
         const req: LegsRequest = { type: 'route', a, b }
@@ -344,7 +357,7 @@ function MissionPanel({ mmap, handlers, mapsEl, layersEl, initial }: { mmap: Mis
       }
       return undefined
     })
-  }, [router, padCell, wps, legTick])
+  }, [router, padCell, comp, wps, legTick])
   const routingN = legsNow.filter((l) => l === undefined).length
   // While a leg is routing, the rest of the panel sees it as unknown (null): no totals, margin or export.
   const legs = useMemo<(Leg | null)[]>(() => legsNow.map((l) => l ?? null), [legsNow])

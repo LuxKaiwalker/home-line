@@ -32,6 +32,8 @@ export interface MissionData {
   pointer: PointerField | null
   grid: RouteGrid
   model: GradeModel
+  /** J1i: the pad's reachable component of `grid` (mission/reach.ts reachableFrom), keyed by pad cell, filled lazily */
+  components: Map<number, Uint8Array>
   tilejson: TileJson | null
   bands: BandsFC | null
   isochrones: IsochroneFC | null
@@ -178,6 +180,7 @@ export async function loadMissionData(scenarioId?: string, onStep?: (what: strin
     pointer,
     grid: { width: tHome.width, height: tHome.height, resM: tHome.resM, elev, passable },
     model: gradeModel(scenarioParams(sid)),
+    components: new Map(),
     tilejson,
     bands,
     isochrones,
