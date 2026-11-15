@@ -577,6 +577,12 @@ export class ConsoleMap {
     this.applyVisibility()
   }
 
+  /** Where the rover (the pad marker) stands, or null before the pad loads (L2f: the rover card's anchor). */
+  padLngLat(): [number, number] | null {
+    const p = this.padMarker?.getLngLat()
+    return p ? [p.lng, p.lat] : this.lastPad ? [this.lastPad.lon, this.lastPad.lat] : null
+  }
+
   setPad(p: { lon: number; lat: number; label: string; title: string }): void {
     if (this.destroyed) return
     this.lastPad = p

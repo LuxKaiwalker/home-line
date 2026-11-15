@@ -2,8 +2,9 @@
 // 5, 7, 16, Q3). Mount points only (L2-shell slot ctx.el.edge, views/planSlots.tsx): no layer logic, no
 // number logic, the "preliminary" tags and trust chips come with the components as they are.
 //   map-edge tools (right edge, top; follows the right drawer's edge, z above the cards, so never covered)
-//     compass (MapFurniture) · Layers popover · 2D/3D (terrain control, L13 owns T and the view state)
-//     · Flythrough (icon) · Storm replay (icon)
+//     zoom (L2f) · compass (MapFurniture) · Layers popover · 2D/3D (terrain control, L13 owns T and the
+//     view state) · Flythrough (icon) · Storm replay (icon) · Rover card + Full screen (L2f, planChrome.tsx)
+//     · Edit route under the column (L3's button, placed by planChrome.css)
 //   popover "layers"  (L5 id)  map view (3D exaggeration slider, Flat vs real) · the console's layer
 //                              checkboxes (first layer group, L0 Q3) · the U7 layer manager (LayerPanel)
 //   popover "legend"  (L5 id)  the console's legend, as a corner chip (bottom left, above the scale bar)
@@ -16,6 +17,7 @@ import { LayerPanel } from '../map/overlays/LayerPanel'
 import { t } from '../ui/copy'
 import { Popover, useLayoutInsets } from '../ui/layout'
 import { hostIn } from '../ui/shell/store'
+import { FullscreenButton, RoverButton } from './planChrome' // L2f: the last map-edge tools
 import { registerPlanMount, SectionHost, type PlanMountCtx, type Sections } from './planSlots'
 import './planLayers.css'
 
@@ -25,6 +27,7 @@ export const LEGEND_ID = 'legend'
 
 /** The MapLibre controls shown at the map edge or in the layers popover (selectors inside the map). */
 export const EDGE_CONTROLS = {
+  zoom: '.maplibregl-ctrl-group:has(> .maplibregl-ctrl-zoom-in)',
   compass: '.hl-compass',
   view: '.hl-terrain-ctrl',
   flythrough: '.hl-fly',
@@ -100,6 +103,7 @@ export function PlanEdge({ sections, mapEl }: { sections: Sections; mapEl: HTMLE
   return (
     <>
       <div class="plan-tools" role="group" aria-label={t('layers.manager.tools')} style={{ right: `${insets.right}px` }}>
+        <Borrow root={mapEl} sel={EDGE_CONTROLS.zoom} class="plan-tools__zoom" />
         <Borrow root={mapEl} sel={EDGE_CONTROLS.compass} class="plan-tools__compass" />
         <Popover id={LAYERS_ID} icon="layers" label={label} title={label} edge="right-top" class="plan-pop plan-pop--layers">
           <LayersBody sections={sections} mapEl={mapEl} />
@@ -107,6 +111,8 @@ export function PlanEdge({ sections, mapEl }: { sections: Sections; mapEl: HTMLE
         <Borrow root={mapEl} sel={EDGE_CONTROLS.view} class="plan-tools__view" />
         <Borrow root={mapEl} sel={EDGE_CONTROLS.flythrough} class="plan-tools__fly" />
         <Borrow root={mapEl} sel={EDGE_CONTROLS.storm} class="plan-tools__storm" />
+        <RoverButton />
+        <FullscreenButton />
       </div>
       <Popover id={LEGEND_ID} icon="info" label={legend} title={legend} edge="bottom-left" class="plan-pop plan-pop--legend">
         <SectionHost name="legend" sections={sections} />
