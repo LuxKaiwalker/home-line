@@ -20,7 +20,7 @@ import type { Loader } from '../../data/loader'
 import { tr } from './copy'
 import { RouteEstimates } from './Estimates'
 import { PadPicker } from './PadPicker'
-import { ROUTE_PANEL_ID, routePanelCollapsed, setRoutePanelCollapsed } from './panelState'
+import { ROUTE_PANEL_ID, routePanelCollapsed, routePanelOpen, setRoutePanelCollapsed } from './panelState'
 import { PadReach } from './Reach'
 import { ROUTE_PANEL_SECTIONS, useRoutePanelSection, type RoutePanelSectionName } from './sections'
 import './routePanel.css'
@@ -45,6 +45,7 @@ export interface RoutePanelProps {
 
 export function RoutePanel({ store = planning, loader }: RoutePanelProps) {
   const collapsed = useSignalValue(routePanelCollapsed)
+  const open = useSignalValue(routePanelOpen)
   const hasRoute = usePlanning(selectHasRoute, store)
   const estId = domId(ROUTE_PANEL_ID, 'est')
   return (
@@ -70,7 +71,9 @@ export function RoutePanel({ store = planning, loader }: RoutePanelProps) {
             {tr('panel.estimates.title')}
           </h3>
           {hasRoute ? <RouteEstimates store={store} /> : <p class="hl-rp__empty" data-empty>{tr('panel.empty')}</p>}
-          <PadReach store={store} loader={loader} />
+          {/* backed numbers only while open: the closed drawer stays mounted (hidden), and the value
+              snapshot must not see the strip's reach keys a second time while the panel is closed */}
+          {open && <PadReach store={store} loader={loader} />}
         </section>
         {ROUTE_PANEL_SECTIONS.map((n) => (
           <SectionRegion key={n} name={n} store={store} />

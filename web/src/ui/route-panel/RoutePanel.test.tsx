@@ -107,6 +107,9 @@ describe('Route panel: render with mocks', () => {
     expect(reach).toContain('23')
     expect(reach).toContain('60-min reach')
     expect(reach).toContain('51.5')
+    // closed: the reach numbers leave the DOM (the hidden drawer stays mounted)
+    act(() => closeRoutePanel())
+    expect(attr('data-reach')).toHaveLength(0)
     // no sub-package registered: no slot regions
     expect(attr('data-route-section')).toHaveLength(0)
   })
