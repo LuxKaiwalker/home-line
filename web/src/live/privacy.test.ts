@@ -3,7 +3,7 @@
 //   except the access log retention, which the team lead decided (D86) and is marked as policy;
 // - mountPrivacy puts the note before the about page's "Licences" heading, once, and nowhere else;
 // - the about view mounts it with the flag on and never touches src/live with the flag off.
-import { readdirSync, readFileSync, statSync } from 'node:fs'
+import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
 import { join, resolve, sep } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { mountPrivacy, PRIVACY_TEXT, PRIVACY_TITLE } from './privacy'
@@ -86,6 +86,30 @@ function aboutPage() {
 }
 const headings = (page: FakeNode) => page.children.map((c) => (c.tagName === 'SECTION' ? `[${c.children.map((k) => k.textContent).join(' | ')}]` : c.textContent))
 
+// The two sanctioned browser storage users (the note names both): "My plans" (live/plans/, D97) and the
+// layout store's remembered panels and 2D/3D view (ui/layout/store.ts, D111, design W-8). The layout
+// store comes with design's L1 (#134); until it is on the branch its own check is skipped, and any other
+// storage user still fails.
+const PLANS_DIR = resolve(__dirname, 'plans') + sep
+const LAYOUT_STORE = resolve(__dirname, '../ui/layout/store.ts')
+const hasLayoutStore = existsSync(LAYOUT_STORE)
+// The layout store reads storage only through the accessor it is bound to, and calls that accessor inside
+// try; the shell binds it once with exactly this form, so that mention is the layout store's use.
+const LAYOUT_BINDING = /bindLayoutStorage\(\(\) => (?:globalThis\.|window\.)?localStorage\)/g
+const stripComments = (src: string) => src.replace(/\/\/.*$/gm, '').replace(/\/\*\*?[\s\S]*?\*\//g, '')
+/** Every match of `re` in `body` sits inside exactly one try block; returns how many there are. */
+function expectInsideTry(body: string, re: RegExp, file: string): number {
+  const uses = [...body.matchAll(re)]
+  for (const m of uses) {
+    const before = body.slice(0, m.index)
+    const opened = (before.match(/\btry \{/g) ?? []).length
+    const closed = (before.match(/\} catch\b/g) ?? []).length
+    expect(opened - closed, `${file}: ${m[0]} at offset ${m.index} is not inside try`).toBe(1)
+  }
+  return uses.length
+}
+const SENDS = /fetch\(|client\.|XMLHttpRequest|sendBeacon/
+
 // --- the text --------------------------------------------------------------------------------------
 describe('privacy note text', () => {
   const text = PRIVACY_TEXT.join(' ')
@@ -98,8 +122,7 @@ describe('privacy note text', () => {
 
   it('says each fact once, in plain words', () => {
     for (const re of [
-      /no accounts or logins/i,
-      /no cookies/i,
+      /no accounts, logins or cookies/i,
       /plan inputs/i,
       /by (a )?hash/i,
       /run record/i,
@@ -116,7 +139,7 @@ describe('privacy note text', () => {
   })
 
   // Each statement against the code it describes (a change there must revisit the note).
-  it('no cookies: the server sets none and the web app reads or writes none; browser storage only in live/plans/ (D97)', () => {
+  it('no cookies: the server sets none and the web app reads or writes none; browser storage only in live/plans/ (D97) and ui/layout/store.ts (D111)', () => {
     const py = (dir: string): string[] =>
       readdirSync(resolve(REPO, dir)).flatMap((n) => {
         const p = join(dir, n)
@@ -132,35 +155,38 @@ describe('privacy note text', () => {
         if (statSync(p).isDirectory()) return ts(p)
         return /\.(ts|tsx)$/.test(n) && !/\.test\.tsx?$/.test(n) ? [p] : []
       })
-    const plansDir = resolve(__dirname, 'plans') + sep
     const storageUsers: string[] = []
     for (const f of ts(resolve(__dirname, '..'))) {
       const src = readFileSync(f, 'utf8')
       expect(src, f).not.toMatch(/document\.cookie|sessionStorage|indexedDB|serviceWorker/)
-      if (/localStorage/.test(src)) storageUsers.push(f)
+      // handing localStorage to the layout store (as its accessor) is the layout store's use, not this file's
+      const own = hasLayoutStore && f !== LAYOUT_STORE ? src.replace(LAYOUT_BINDING, '') : src
+      if (/localStorage/.test(own)) storageUsers.push(f)
     }
-    // the one sanctioned exception: "My plans" (live/plans/), nowhere else
-    expect(storageUsers.length).toBeGreaterThan(0)
-    for (const f of storageUsers) expect(f.startsWith(plansDir), `${f} uses browser storage outside live/plans/`).toBe(true)
+    // the two sanctioned exceptions: "My plans" (live/plans/) and the layout store, nowhere else
+    expect(storageUsers.some((f) => f.startsWith(PLANS_DIR))).toBe(true)
+    for (const f of storageUsers)
+      expect(f.startsWith(PLANS_DIR) || f === LAYOUT_STORE, `${f} uses browser storage outside live/plans/ and ui/layout/store.ts`).toBe(true)
   })
 
   it('"My plans": the note says saved plans stay in this browser; the store touches storage only inside try', () => {
-    expect(text).toMatch(/saved plans stay in this browser only/i)
+    expect(text).toMatch(/saved plans, and which panels and view you left open, stay in this browser;/i)
     expect(text).toMatch(/nothing else uses browser storage/i)
-    const src = read('web/src/live/plans/store.ts')
     // the storage object is obtained in one place, inside try, and every getItem/setItem call sits in a try block
-    const body = src.replace(/\/\/.*$/gm, '').replace(/\/\*\*?[\s\S]*?\*\//g, '')
-    const uses = [...body.matchAll(/localStorage|\.getItem\(|\.setItem\(|storage\(\)/g)]
-    expect(uses.length).toBeGreaterThanOrEqual(4)
-    for (const m of uses) {
-      const before = body.slice(0, m.index)
-      const opened = (before.match(/\btry \{/g) ?? []).length
-      const closed = (before.match(/\} catch\b/g) ?? []).length
-      expect(opened - closed, `${m[0]} at offset ${m.index} is not inside try`).toBe(1)
-    }
+    const body = stripComments(read('web/src/live/plans/store.ts'))
+    expect(expectInsideTry(body, /localStorage|\.getItem\(|\.setItem\(|storage\(\)/g, 'plans/store.ts')).toBeGreaterThanOrEqual(4)
     // nothing in plans/ sends anything
     for (const n of readdirSync(resolve(__dirname, 'plans')).filter((f) => !/\.test\./.test(f)))
-      expect(readFileSync(resolve(__dirname, 'plans', n), 'utf8'), n).not.toMatch(/fetch\(|client\.|XMLHttpRequest|sendBeacon/)
+      expect(readFileSync(resolve(__dirname, 'plans', n), 'utf8'), n).not.toMatch(SENDS)
+  })
+
+  // Skipped while design's L1 (#134) is not on the branch; the scan above still fails any other storage user.
+  it.skipIf(!hasLayoutStore)('layout store: the note says which panels and view you left open stay in this browser; storage only inside try', () => {
+    expect(text).toMatch(/which panels and view you left open, stay in this browser;/i)
+    // the accessor is called, and every getItem/setItem (and any direct localStorage) sits, inside a try block
+    const body = stripComments(readFileSync(LAYOUT_STORE, 'utf8'))
+    expect(expectInsideTry(body, /localStorage|\.getItem\(|\.setItem\(|getStorage\(\)/g, 'ui/layout/store.ts')).toBeGreaterThanOrEqual(4)
+    expect(body, 'ui/layout/store.ts').not.toMatch(SENDS)
   })
 
   it('rate limit: salted hashes of the address, salt random per process, kept in memory', () => {
