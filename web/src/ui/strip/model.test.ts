@@ -83,14 +83,17 @@ describe('shownFor', () => {
     expect(shownFor(0, ready, 'official')).toEqual({ kind: 'official' })
   })
   it('your route: stops, rounded margin, fast label', () => {
-    expect(shownFor(4, ready, 'official')).toEqual({ kind: 'mine', stops: 4, marginMin: 41, computing: false, fast: true, unreachableStop: null })
+    expect(shownFor(4, ready, 'official')).toEqual({ kind: 'mine', stops: 4, marginMin: 41, computing: false, fast: true, unreachable: null })
   })
   it('results of another pad or idle count as computing (no stale margin)', () => {
     expect(shownFor(2, { ...ready, padId: 'rank2' }, 'official')).toMatchObject({ marginMin: null, computing: true, fast: false })
     expect(shownFor(2, { ...ready, status: 'idle' }, 'official')).toMatchObject({ marginMin: null, computing: true })
   })
-  it('first infeasible leg names the unreachable stop', () => {
-    expect(shownFor(3, MOCK_ROUTE_RESULTS, 'official')).toMatchObject({ unreachableStop: 3 })
+  it('first infeasible leg names the unreachable stop, or the way home (leg n = back to the pad)', () => {
+    // mock: 3 legs, leg index 2 infeasible
+    expect(shownFor(3, MOCK_ROUTE_RESULTS, 'official')).toMatchObject({ unreachable: 3 })
+    expect(shownFor(2, MOCK_ROUTE_RESULTS, 'official')).toMatchObject({ unreachable: 'home' })
+    expect(shownFor(2, { ...MOCK_ROUTE_RESULTS, firstInfeasibleLeg: 0 }, 'official')).toMatchObject({ unreachable: 1 })
   })
 })
 

@@ -60,8 +60,8 @@ export type Shown =
       marginMin: number | null
       computing: boolean
       fast: boolean
-      /** 1-based stop that cannot be reached (the first infeasible leg's target), else null */
-      unreachableStop: number | null
+      /** the first infeasible leg's target: a 1-based stop, 'home' (the return leg to the pad), else null */
+      unreachable: number | 'home' | null
     }
 
 /** What the map shows: the official plan, or the user's route with its estimate (§9 route results). */
@@ -69,14 +69,15 @@ export function shownFor(stops: number, r: RouteResults, padId: PadId): Shown {
   if (stops <= 0) return { kind: 'official' }
   const current = r.padId === padId && r.status !== 'idle' && r.status !== 'error'
   const computing = !current || r.status === 'computing'
-  const bad = current && r.firstInfeasibleLeg !== null ? r.firstInfeasibleLeg + 1 : null
+  // legs run pad → stop 1 → … → stop n → pad: leg i ends at stop i+1, leg n is the way home
+  const bad = current && r.firstInfeasibleLeg !== null ? r.firstInfeasibleLeg : null
   return {
     kind: 'mine',
     stops,
     marginMin: current && r.marginMin !== null && Number.isFinite(r.marginMin) ? Math.round(r.marginMin) : null,
     computing,
     fast: current && r.fastRoute,
-    unreachableStop: bad !== null && bad <= stops ? bad : null,
+    unreachable: bad === null ? null : bad < stops ? bad + 1 : 'home',
   }
 }
 

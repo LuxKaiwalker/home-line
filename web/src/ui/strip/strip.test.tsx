@@ -99,9 +99,11 @@ describe('ContextLine', () => {
     expect(byClass(root, 'hl-ctx__plan')).toHaveLength(0)
   })
 
-  it('names the unreachable stop', () => {
+  it('names the unreachable stop or the way home', () => {
     draw(<ContextLine strip={strip} padId={null} pads={[]} shown={shownFor(3, MOCK_ROUTE_RESULTS, 'official')} sections={null} onPlanRoute={null} />)
     expect(text()).toContain(tp('unreachable', { n: 3 }))
+    draw(<ContextLine strip={strip} padId={null} pads={[]} shown={shownFor(2, MOCK_ROUTE_RESULTS, 'official')} sections={null} onPlanRoute={null} />)
+    expect(text()).toContain(tp('unreachableHome'))
   })
 
   it('Plan a route calls the handler (named button)', () => {

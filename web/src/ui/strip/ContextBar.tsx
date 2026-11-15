@@ -113,8 +113,8 @@ function Mine({ s }: { s: Extract<Shown, { kind: 'mine' }> }) {
       {SEP}
       <span>{tp(s.stops === 1 ? 'stop' : 'stops', { n: s.stops })}</span>
       {SEP}
-      {s.unreachableStop !== null ? (
-        <span class="hl-ctx__bad">{tp('unreachable', { n: s.unreachableStop })}</span>
+      {s.unreachable !== null ? (
+        <span class="hl-ctx__bad">{s.unreachable === 'home' ? tp('unreachableHome') : tp('unreachable', { n: s.unreachable })}</span>
       ) : s.marginMin !== null ? (
         <span class="hl-ctx__margin">
           {tp('marginValue', { value: s.marginMin })}

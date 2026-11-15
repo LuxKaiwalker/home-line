@@ -12,6 +12,7 @@
   "marginTitle": "Tightest margin of the official route",
   "marginPending": "margin computing",
   "unreachable": "stop {n} not reachable",
+  "unreachableHome": "way home not reachable",
   "estimate": "Estimate",
   "fast": "Fast route",
   "fastTitle": "Fast route · may not be the fastest",
