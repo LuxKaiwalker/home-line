@@ -5,7 +5,8 @@
 import { LIVE_LABEL } from './config'
 import { bannerFor } from './health'
 import { LiveNum, planHref, ScreenNum } from './num'
-import type { PadToolActions, PadToolState, PlanState } from './padtool'
+import type { PadToolActions, PadToolState, PlanState, RecordState } from './padtool'
+import { RangeFlags } from './rangeflags'
 import type { StageResult } from './stage'
 import type { PadCheck, PadReason, PadScreen } from './types'
 
@@ -50,7 +51,7 @@ function CheckView({ check, actions }: { check: PadCheck; actions: PadToolAction
   )
 }
 
-function PreviewCard({ screen, canCompute, heavyOff, actions }: { screen: PadScreen; canCompute: boolean; heavyOff: boolean; actions: PadToolActions }) {
+function PreviewCard({ screen, canCompute, heavyOff, blocked, actions }: { screen: PadScreen; canCompute: boolean; heavyOff: boolean; blocked: string | null; actions: PadToolActions }) {
   return (
     <section class="live-card live-preview">
       <h3>Instant preview</h3>
@@ -93,6 +94,11 @@ function PreviewCard({ screen, canCompute, heavyOff, actions }: { screen: PadScr
         Compute full plan
       </button>
       {heavyOff ? <p class="muted">Full plans are switched off on the server right now.</p> : null}
+      {blocked ? (
+        <p class="live-failed" role="alert">
+          {blocked}
+        </p>
+      ) : null}
     </section>
   )
 }
@@ -117,7 +123,16 @@ function Headline({ r, hash }: { r: StageResult; hash: string }) {
   )
 }
 
-function PlanView({ plan, actions }: { plan: Exclude<PlanState, { kind: 'idle' }>; actions: PadToolActions }) {
+/** Range flags of the finished plan, from its run record (read once the job is done). */
+function RecordFlags({ record }: { record: RecordState }) {
+  if (record.kind === 'loading') return <p class="muted">Reading the run record…</p>
+  if (record.kind === 'error') return <p class="live-failed">Run record not shown: {record.message}</p>
+  if (record.kind !== 'done') return null
+  const flags = record.record.range_flags ?? []
+  return flags.length ? <RangeFlags flags={flags} title="Range flags (run record)" /> : <p class="live-ok live-no-flags">No range flags: every input is inside its validated range.</p>
+}
+
+function PlanView({ plan, record, actions }: { plan: Exclude<PlanState, { kind: 'idle' }>; record: RecordState; actions: PadToolActions }) {
   const job = plan.job
   const r = plan.result
   return (
@@ -141,7 +156,9 @@ function PlanView({ plan, actions }: { plan: Exclude<PlanState, { kind: 'idle' }
         </p>
       ) : null}
       {plan.kind === 'cancelled' ? <p class="muted">Cancelled.</p> : null}
+      {job && (plan.kind === 'running' || plan.kind === 'done') && plan.attached ? <p class="muted live-attached">Same inputs as an earlier run: attached to plan {job.hash} (not computed again).</p> : null}
       {job && job.stages_done.length ? <p class="live-stages">Stages on the map: {job.stages_done.join(', ')}</p> : null}
+      {plan.kind === 'done' ? <RecordFlags record={record} /> : null}
       {r && job ? <Headline r={r} hash={job.hash} /> : null}
       {r && r.errors.length ? (
         <ul class="live-errors">
@@ -161,10 +178,12 @@ export interface PadToolPanelProps {
   actions: PadToolActions
   /** Provenance before a job exists: the engine identity that answers (client.root + /engine/version). */
   engineHref: string
+  /** Why "Compute full plan" is blocked (the crew panel: a field is not a number), or null. */
+  computeBlocked?: string | null
 }
 
 /** null while live planning is offline, warming or checking: the controls hide behind U1's banner. */
-export function PadToolPanel({ state, actions, engineHref }: PadToolPanelProps) {
+export function PadToolPanel({ state, actions, engineHref, computeBlocked = null }: PadToolPanelProps) {
   const banner = bannerFor(state.live)
   if (!banner.controls) return null
   const { pad, check, preview, plan } = state
@@ -196,9 +215,9 @@ export function PadToolPanel({ state, actions, engineHref }: PadToolPanelProps) 
         </p>
       ) : null}
       {valid && preview.kind === 'done' ? (
-        <PreviewCard screen={preview.screen} canCompute={banner.heavyJobs && plan.kind !== 'running'} heavyOff={!banner.heavyJobs} actions={actions} />
+        <PreviewCard screen={preview.screen} canCompute={banner.heavyJobs && plan.kind !== 'running' && !computeBlocked} heavyOff={!banner.heavyJobs} blocked={computeBlocked} actions={actions} />
       ) : null}
-      {plan.kind !== 'idle' ? <PlanView plan={plan} actions={actions} /> : null}
+      {plan.kind !== 'idle' ? <PlanView plan={plan} record={state.record} actions={actions} /> : null}
     </section>
   )
 }
