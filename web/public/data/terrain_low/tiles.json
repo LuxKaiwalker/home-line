@@ -5,6 +5,7 @@
  "scheme": "xyz",
  "tile_px": 256,
  "factor": 1.878,
+ "vertical_offset_m": 7028.0,
  "tiles": [
   "terrain_low/{z}/{x}/{y}.png"
  ],
@@ -22,7 +23,7 @@
   "data/interim/terrain/mola_hrsc_200m.tif"
  ],
  "source_hash": "4527e503a074c666df912dfa426ea64233be6335a1d3c48c318dbe2956b2368a",
- "total_bytes": 5120643,
+ "total_bytes": 5121720,
  "budget_bytes": 5242880,
  "tile_count": {
   "6": 2,
