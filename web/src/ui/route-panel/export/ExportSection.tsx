@@ -3,7 +3,9 @@
 //   secondary one. Send: served by MARVIS = POST through the bridge (MARVIS then hides the planner and
 //   starts the EVA); inside MARVIS's planner window = the download the window catches; MARVIS not
 //   detected yet = try the bridge on the click (detect, then sendMission, as the Mission Planer did);
-//   any failure says why and offers "Download mission.json instead". The probe never blocks the panel.
+//   MARVIS not reachable = the SAME button downloads mission.json with the notice "MARVIS not reachable:
+//   mission.json downloaded" (orchestrator 23:12, user: essential). MARVIS refusing = the reason plus
+//   "Download mission.json instead". The probe never blocks the panel.
 //   Payload: payload.ts (the core exporter's mission.json of your route; no route = the pad's official plan).
 //   Share link: #/?route=… copied with a confirmation; no clipboard -> the link shown selected.
 import { useEffect, useMemo, useState } from 'preact/hooks'
@@ -94,7 +96,8 @@ export function ExportSection({ store = planning, core, marvis = BRIDGE, save = 
         const r = await marvis.send(p.doc)
         setMsg(r.ok ? { ok: true, text: t('route.export.result.sent') } : { ok: false, text: t('route.export.result.refused', { reason: r.error || t('route.export.result.noReason') }), fallback: true })
       } else {
-        setMsg({ ok: false, text: t('route.export.result.notFound'), fallback: true })
+        download(p)
+        setMsg({ ok: true, text: t('route.export.result.notFound') })
       }
     } catch (e) {
       setMsg({ ok: false, text: exportErrorText(e), fallback: how === 'send' })

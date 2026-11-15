@@ -110,7 +110,7 @@ describe('ExportSection', () => {
     expect(text(root)).toContain('Sent: MARVIS starts the EVA.')
   })
 
-  it('Send while MARVIS is not found: the reason, no download, and "Download mission.json instead" saves the file', async () => {
+  it('Send while MARVIS is not reachable: the SAME button downloads mission.json and says so', async () => {
     const store = createPlanningStore()
     store.addStop({ kind: 'station', station: 'S4' })
     const save = vi.fn()
@@ -119,11 +119,10 @@ describe('ExportSection', () => {
     await settle()
     await click(action('marvis'))
     expect(m.send).not.toHaveBeenCalled()
-    expect(save).not.toHaveBeenCalled()
-    expect(text(root)).toContain('MARVIS was not found')
-    expect(text(action('download-fallback')!)).toBe('Download mission.json instead')
-    await click(action('download-fallback'))
+    expect(save).toHaveBeenCalledTimes(1)
     expect(save).toHaveBeenCalledWith(JSON.stringify(ROUTE_DOC, null, 1), 'homeline-mission-01234567.json')
+    expect(text(root)).toContain('MARVIS not reachable: mission.json downloaded')
+    expect(action('download-fallback')).toBeUndefined()
   })
 
   it('Download is always available, also when MARVIS is detected (no send)', async () => {
