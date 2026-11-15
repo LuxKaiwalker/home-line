@@ -4,7 +4,7 @@
 // plan-edit undo) handle a chosen row exactly as they handle the key. Esc is not a command: the layout
 // store's closeTopmost() owns it. Owner 'shell' = keys.ts never delegates back here (no recursion).
 import { canGoBack, canGoForward } from '../../state/selection'
-import { SHOWN_MODES, ui, type Mode } from '../../state/ui'
+import { HIDDEN_MODES, SHOWN_MODES, ui, type Mode } from '../../state/ui'
 import type { IconName } from '../components'
 import { runShortcut, type ShortcutAction } from '../shell/keys'
 import { isMapMode } from '../shell/store'
@@ -114,8 +114,9 @@ export function shellCommands(): Command[] {
       shortcut: { action: 'camera', preset: 4 },
       ...mapOnly,
     }),
-    // follow crew = M10's flythrough (same button, spec Q1): one command, keyword flythrough
-    shortcutCommand({
+    // follow crew = M10's flythrough (same button, spec Q1): one command, keyword flythrough.
+    // D145: hidden with FLY (no Flythrough button to drive)
+    ...(HIDDEN_MODES.has('fly') ? [] : [shortcutCommand({
       id: 'camera.follow',
       label: 'commands.followCrew',
       keywords: ['flythrough', 'follow', 'crew', 'camera', 'fly'],
@@ -123,7 +124,7 @@ export function shellCommands(): Command[] {
       group: 'map',
       shortcut: { action: 'camera', preset: 5 },
       ...mapOnly,
-    }),
+    })]),
     shortcutCommand({
       id: 'selection.back',
       label: 'commands.selection.back',

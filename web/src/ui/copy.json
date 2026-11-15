@@ -617,7 +617,7 @@
     "escape": "Clear selection, cancel ghost, exit focus mode",
     "undoRedo": "Undo / redo",
     "history": "Previous / next selection",
-    "modes": "Plan, Fly, Report, Evidence",
+    "modes": "Plan, Science",
     "toggle3d": "2D / 3D",
     "help": "Shortcut help",
     "mouseSelect": "Map: select (drag the rover to move it)",

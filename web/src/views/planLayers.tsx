@@ -20,6 +20,7 @@ import { hostIn } from '../ui/shell/store'
 import { FullscreenButton, RoverButton } from './planChrome' // L2f: the last map-edge tools
 import { MapControls } from './planPortSlots'
 import { registerPlanMount, SectionHost, type PlanMountCtx, type Sections } from './planSlots'
+import { HIDDEN_MODES } from '../state/ui'
 import './planLayers.css'
 
 /** Layout store ids (L5 selector contract: DOM id hl-lay-<id>, opener aria-controls="hl-lay-<id>"). */
@@ -112,7 +113,7 @@ export function PlanEdge({ sections, mapEl }: { sections: Sections; mapEl: HTMLE
           <LayersBody sections={sections} mapEl={mapEl} />
         </Popover>
         <Borrow root={mapEl} sel={EDGE_CONTROLS.view} class="plan-tools__view" />
-        <Borrow root={mapEl} sel={EDGE_CONTROLS.flythrough} class="plan-tools__fly" />
+        {!HIDDEN_MODES.has('fly') && <Borrow root={mapEl} sel={EDGE_CONTROLS.flythrough} class="plan-tools__fly" />}
         <Borrow root={mapEl} sel={EDGE_CONTROLS.storm} class="plan-tools__storm" />
         <RoverButton />
         <FullscreenButton />

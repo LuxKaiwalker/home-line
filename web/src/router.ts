@@ -14,6 +14,8 @@
 // (redirectFor), so every old link and deep link keeps working. href() still writes the old paths,
 // which every layout understands (the legacy layout never redirects).
 
+import { HIDDEN_MODES } from './state/ui'
+
 export type Route =
   | { name: 'console' }
   | { name: 'station'; id: string }
@@ -136,6 +138,8 @@ export function canonicalHref(route: Route): string {
  * not redirected (they render "Not found", and #/plan/... stays with the live layer).
  */
 export function redirectFor(hash: string): string | null {
+  // D145: FLY is hidden (state/ui HIDDEN_MODES); its bare mode path opens Plan. #/fly/hud, #/hud stay reachable.
+  if (HIDDEN_MODES.has('fly') && /^#?\/?fly\/?(\?.*)?$/.test(hash)) return '#/'
   const route = parseRoute(hash)
   if (route.name === 'notfound') return null
   const [pathPart, query = ''] = hash.replace(/^#/, '').split('?', 2)
