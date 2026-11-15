@@ -84,7 +84,7 @@ describe('registration', () => {
     const ids = commands.value.map((c) => c.id)
     expect(new Set(ids).size).toBe(ids.length)
     const expected = [
-      'mode.plan', 'mode.fly', 'mode.report', 'mode.evidence', 'view.toggle3d', 'view.focusMode', 'timeline.playPause', 'timeline.back', 'timeline.forward',
+      'mode.plan', 'mode.fly', 'mode.report', 'view.toggle3d', 'view.focusMode', 'timeline.playPause', 'timeline.back', 'timeline.forward',
       'camera.overhead', 'camera.isometric', 'camera.low', 'camera.focus', 'camera.follow', 'selection.back', 'selection.forward', 'app.help',
       ...OVERLAYS.map((o) => `map.layer.${o.id}`), 'map.layers.reset', 'map.exaggeration.more', 'map.exaggeration.less', 'map.exaggeration.reset',
       'story.storm', 'edit.undo', 'edit.redo', 'story.intro', 'view.fullscreen',
@@ -147,7 +147,7 @@ describe('shell commands run the keys.ts action', () => {
 
   it('mode navigates; 2D/3D, help and focus mode flip the shell state', () => {
     install()
-    expect(runCommand('mode.evidence', 'palette')).toBe(true)
+    expect(runCommand('mode.report', 'palette')).toBe(true)
     expect(nav).toHaveBeenCalledTimes(1)
     runCommand('view.toggle3d', 'palette')
     expect(ui.view.value).toBe('3d')
@@ -236,7 +236,7 @@ describe('app commands call the store functions', () => {
 describe('keys.ts adapter', () => {
   it('keysForAction reads HELP_ROWS', () => {
     expect(keysForAction({ action: 'mode', mode: 'plan' })).toEqual(['P'])
-    expect(keysForAction({ action: 'mode', mode: 'evidence' })).toEqual(['E'])
+    expect(keysForAction({ action: 'mode', mode: 'report' })).toEqual(['R'])
     expect(keysForAction({ action: 'toggle3d' })).toEqual(['T'])
     expect(keysForAction({ action: 'search' })).toEqual(['Ctrl+K', '/'])
     expect(keysForAction({ action: 'undo' })).toEqual(['Ctrl+Z'])

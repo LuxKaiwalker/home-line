@@ -6,7 +6,7 @@ import { useEffect, useRef, useState } from 'preact/hooks'
 import { canonicalHref, LANDING_HASH, type Route } from '../../router'
 import { listenLiveStatus } from '../../state/live'
 import { effect, useSignalValue } from '../../state/signal'
-import { MODES, ui, type Mode } from '../../state/ui'
+import { SHOWN_MODES, ui, type Mode } from '../../state/ui'
 import { cx, Icon, IconButton } from '../components'
 import { t } from '../copy'
 import { bindBrowserStorage, installLayoutKeys } from '../layout'
@@ -65,7 +65,7 @@ export function SkipLink() {
 export function ModeTabs({ mode }: { mode: Mode }) {
   return (
     <ul class="hl-modes" role="list">
-      {MODES.map((m) => (
+      {SHOWN_MODES.map((m) => (
         <li key={m}>
           <a class={cx('hl-modes__tab', m === mode && 'is-active')} href={modeHash(m)} aria-current={m === mode ? 'page' : undefined} aria-keyshortcuts={MODE_KEY[m]}>
             <span>{t(`modes.${m}.label`)}</span>

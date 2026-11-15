@@ -94,7 +94,8 @@ describe.skipIf(!HAVE)('search index (real data)', () => {
   })
 
   it('commands: switch mode, 2D/3D, play/pause (copy.json labels)', () => {
-    expect(rank(all, 'evidence', label)[0].item.command).toEqual({ action: 'mode', mode: 'evidence' })
+    expect(rank(all, 'report', label)[0].item.command).toEqual({ action: 'mode', mode: 'report' })
+    expect(all.some((i) => i.id === 'cmd:mode:evidence')).toBe(false) // hidden modes have no command
     expect(rank(all, '3d', label)[0].item.command).toEqual({ action: 'toggle3d' })
     expect(rank(all, 'play', label)[0].item.command).toEqual({ action: 'playPause' })
   })
